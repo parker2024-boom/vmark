@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import "@/styles/index.css";
 import "@/plugins/codePreview/code-preview.css";
 import "@/lib/formats/adapters/mermaid-preview.css";
-import { renderMermaid } from "./plugin";
-import { setupMermaidPanZoom } from "./mermaidPanZoom";
+import { renderMermaid } from "../mermaid/plugin";
+import { setupMermaidPanZoom } from "../mermaid/mermaidPanZoom";
 import { cleanupDescendants } from "@/plugins/shared/diagramCleanup";
 import { sanitizeSvg } from "@/utils/sanitize";
 
