@@ -12,6 +12,7 @@
  * @coordinates-with sourcePeekHeader.ts (createEditHeader)
  * @coordinates-with sourcePeekEditor.ts (createCodeMirrorEditor, cleanupCMView)
  * @coordinates-with sourcePeekActions.ts (action functions, EDITING_STATE_CHANGED)
+ * @module plugins/sourcePeekInline/tiptap
  */
 
 import { Extension } from "@tiptap/core";

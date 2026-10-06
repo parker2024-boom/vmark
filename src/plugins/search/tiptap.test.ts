@@ -200,7 +200,7 @@ describe("searchExtension", () => {
     it("returns null for invalid regex patterns gracefully", () => {
       let result: RegExp | null;
       try {
-        // eslint-disable-next-line no-invalid-regexp
+        // eslint-disable-next-line no-invalid-regexp -- the pattern is deliberately invalid; the test pins that constructing it throws
         result = new RegExp("[invalid", "gi");
       } catch {
         result = null;
@@ -1383,7 +1383,7 @@ describe("search plugin view lifecycle", () => {
     viewResult.destroy!();
   });
 
-  it("handleReplaceCurrent calls findNext after rAF", () => {
+  it("handleReplaceCurrent does not step with findNext (the rescan picks the next match)", () => {
     vi.useFakeTimers();
     const plugin = getPlugin();
     const doc = createDoc(["hello world"]);
@@ -1408,9 +1408,9 @@ describe("search plugin view lifecycle", () => {
     window.dispatchEvent(new Event("search:replace-current"));
     expect(mockDispatch).toHaveBeenCalled();
 
-    // findNext is called inside rAF
+    // The rescan picks the next place (replaceResume.test.ts pins where).
     vi.runAllTimers();
-    expect(mockSearchState.findNext).toHaveBeenCalled();
+    expect(mockSearchState.findNext).not.toHaveBeenCalled();
 
     viewResult.destroy!();
     vi.useRealTimers();

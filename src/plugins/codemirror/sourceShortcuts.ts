@@ -11,9 +11,9 @@
  *   - Smart select-all lives in `sourceSmartSelect.ts` — the one binding
  *     with state and logic; this file is a flat key-to-action table
  *   - EVERY document mutation routes through the shared executor
- *     (runEditorAction, the menu's path — NOT executeCommand; WI-4.2). The last
+ *     (runEditorAction, the menu's path — NOT executeCommand). The last
  *     exception, `unlink`, had no `editor.*` action though both adapters
- *     implemented it; adding the ActionId closed the gap (WI-2.1). Direct
+ *     implemented it; adding the ActionId closed the gap. Direct
  *     handlers remain only for non-mutations — find/search, copy-as-HTML —
  *     gated by `__tests__/dispatchBoundary.test.ts`
  *   - Helper functions are extracted to sourceShortcutsHelpers.ts to keep this file focused
@@ -50,7 +50,7 @@ import {
 /**
  * CodeMirror command running an action through the shared executor
  * (`runEditorAction`, the menu's path — NOT `executeCommand`, whose stricter
- * palette gate would drop keyboard formatting; WI-4.2).
+ * palette gate would drop keyboard formatting).
  *
  * Takes a TYPED `ActionId`. It previously took a `"editor.foo"` string and cast
  * the remainder with `as ActionId`, which defeated the action system's whole

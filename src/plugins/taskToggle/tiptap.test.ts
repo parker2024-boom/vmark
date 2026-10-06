@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from "vitest";
 import StarterKit from "@tiptap/starter-kit";
 import { getSchema } from "@tiptap/core";
-import { DOMSerializer, DOMParser as PMDOMParser } from "@tiptap/pm/model";
+import { DOMSerializer, DOMParser as PMDOMParser, Schema } from "@tiptap/pm/model";
 import { EditorState, TextSelection } from "@tiptap/pm/state";
 import { taskListItemExtension } from "./tiptap";
 
@@ -559,9 +559,7 @@ describe("taskListItem toggle logic", () => {
     // so toggleTaskCheckbox returns false (line 52)
     const _schema = createSchema();
     // Construct a state whose schema lacks listItem by using a bare schema
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Schema: PmSchema } = require("@tiptap/pm/model");
-    const bareSchema = new PmSchema({
+    const bareSchema = new Schema({
       nodes: {
         doc: { content: "paragraph+" },
         paragraph: { group: "block", content: "text*" },

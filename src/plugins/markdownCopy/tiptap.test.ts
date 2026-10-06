@@ -1,153 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { cleanMarkdownForClipboard, cleanTextForClipboard } from "./tiptap";
+import { cleanTextForClipboard } from "./tiptap";
 
 // Mock debug utilities
 vi.mock("@/utils/debug", () => ({
   clipboardWarn: vi.fn(),
   markdownCopyWarn: vi.fn(),
 }));
-
-describe("cleanMarkdownForClipboard", () => {
-  describe("backslash escape stripping", () => {
-    it("strips escaped dollar signs", () => {
-      expect(cleanMarkdownForClipboard("Price is \\$99.99")).toBe(
-        "Price is $99.99"
-      );
-    });
-
-    it("strips escaped tildes", () => {
-      expect(cleanMarkdownForClipboard("\\~20% off")).toBe("~20% off");
-    });
-
-    it("strips escaped at signs", () => {
-      expect(cleanMarkdownForClipboard("user\\@example.com")).toBe(
-        "user@example.com"
-      );
-    });
-
-    it("strips escaped brackets", () => {
-      expect(cleanMarkdownForClipboard("\\[not a link]")).toBe("[not a link]");
-    });
-
-    it("strips escaped asterisks", () => {
-      expect(cleanMarkdownForClipboard("5 \\* 3 = 15")).toBe("5 * 3 = 15");
-    });
-
-    it("strips escaped underscores", () => {
-      expect(cleanMarkdownForClipboard("snake\\_case")).toBe("snake_case");
-    });
-
-    it("strips escaped colons", () => {
-      expect(cleanMarkdownForClipboard("https\\://example.com")).toBe(
-        "https://example.com"
-      );
-    });
-
-    it("strips escaped ampersands", () => {
-      expect(cleanMarkdownForClipboard("foo\\&bar")).toBe("foo&bar");
-    });
-
-    it("converts double backslash to single", () => {
-      expect(cleanMarkdownForClipboard("C:\\\\Users\\\\foo")).toBe(
-        "C:\\Users\\foo"
-      );
-    });
-
-    it("does not strip backslash before newline", () => {
-      expect(cleanMarkdownForClipboard("line1\\\nline2")).toBe(
-        "line1\\\nline2"
-      );
-    });
-
-    it("handles multiple escapes in one line", () => {
-      expect(
-        cleanMarkdownForClipboard("\\$99 is \\~20% off\\!")
-      ).toBe("$99 is ~20% off!");
-    });
-  });
-
-  describe("autolink collapsing", () => {
-    it("collapses URL autolinks", () => {
-      expect(
-        cleanMarkdownForClipboard(
-          "[https://example.com/path](https://example.com/path)"
-        )
-      ).toBe("https://example.com/path");
-    });
-
-    it("collapses mailto autolinks", () => {
-      expect(
-        cleanMarkdownForClipboard(
-          "[user@example.com](mailto:user@example.com)"
-        )
-      ).toBe("user@example.com");
-    });
-
-    it("collapses autolinks with escaped chars in text", () => {
-      // Serializer escapes @ in text but not in URL
-      expect(
-        cleanMarkdownForClipboard(
-          "[user\\@example.com](mailto:user@example.com)"
-        )
-      ).toBe("user@example.com");
-    });
-
-    it("collapses URL autolinks with escaped colons", () => {
-      expect(
-        cleanMarkdownForClipboard(
-          "[https\\://example.com](https://example.com)"
-        )
-      ).toBe("https://example.com");
-    });
-
-    it("preserves real links where text differs from URL", () => {
-      expect(
-        cleanMarkdownForClipboard("[click here](https://example.com)")
-      ).toBe("[click here](https://example.com)");
-    });
-  });
-
-  describe("preserves markdown syntax", () => {
-    it("preserves bold", () => {
-      expect(cleanMarkdownForClipboard("**bold**")).toBe("**bold**");
-    });
-
-    it("preserves italic", () => {
-      expect(cleanMarkdownForClipboard("*italic*")).toBe("*italic*");
-    });
-
-    it("preserves strikethrough", () => {
-      expect(cleanMarkdownForClipboard("~~deleted~~")).toBe("~~deleted~~");
-    });
-
-    it("preserves code spans", () => {
-      expect(cleanMarkdownForClipboard("`code`")).toBe("`code`");
-    });
-
-    it("preserves headings", () => {
-      expect(cleanMarkdownForClipboard("## Heading")).toBe("## Heading");
-    });
-
-    it("preserves fenced code blocks", () => {
-      const input = "```js\nconst x = 1;\n```";
-      expect(cleanMarkdownForClipboard(input)).toBe(input);
-    });
-  });
-
-  describe("does not strip unknown escapes", () => {
-    it("preserves backslash before letters", () => {
-      expect(cleanMarkdownForClipboard("\\n \\t")).toBe("\\n \\t");
-    });
-
-    it("preserves backslash before digits", () => {
-      expect(cleanMarkdownForClipboard("item \\1")).toBe("item \\1");
-    });
-
-    it("preserves backslash before space", () => {
-      expect(cleanMarkdownForClipboard("foo\\ bar")).toBe("foo\\ bar");
-    });
-  });
-});
 
 describe("cleanTextForClipboard", () => {
   it("trims trailing whitespace from each line", () => {
@@ -264,91 +122,6 @@ describe("markdownCopyExtension structure", () => {
     } as never);
     const plugin = plugins[0] as { props: { handleDOMEvents?: { mouseup?: unknown } } };
     expect(plugin.props.handleDOMEvents?.mouseup).toBeDefined();
-  });
-});
-
-describe("ensureBlockContent via cleanMarkdownForClipboard integration", () => {
-  it("handles input with only markdown formatting", () => {
-    expect(cleanMarkdownForClipboard("**bold** *italic* `code`")).toBe(
-      "**bold** *italic* `code`"
-    );
-  });
-
-  it("handles escaped exclamation mark", () => {
-    expect(cleanMarkdownForClipboard("\\!important")).toBe("!important");
-  });
-
-  it("handles consecutive escapes", () => {
-    expect(cleanMarkdownForClipboard("\\$\\$math\\$\\$")).toBe("$$math$$");
-  });
-});
-
-describe("cleanMarkdownForClipboard — additional edge cases", () => {
-  it("handles empty string", () => {
-    expect(cleanMarkdownForClipboard("")).toBe("");
-  });
-
-  it("strips escaped hash marks", () => {
-    expect(cleanMarkdownForClipboard("\\# Not a heading")).toBe("# Not a heading");
-  });
-
-  it("strips escaped pipes", () => {
-    expect(cleanMarkdownForClipboard("col1 \\| col2")).toBe("col1 | col2");
-  });
-
-  it("strips escaped parentheses", () => {
-    expect(cleanMarkdownForClipboard("fn\\(x\\)")).toBe("fn(x)");
-  });
-
-  it("strips escaped closing bracket", () => {
-    expect(cleanMarkdownForClipboard("\\[foo\\]")).toBe("[foo]");
-  });
-
-  it("strips escaped plus sign", () => {
-    expect(cleanMarkdownForClipboard("\\+ item")).toBe("+ item");
-  });
-
-  it("strips escaped dot", () => {
-    expect(cleanMarkdownForClipboard("1\\. not ordered")).toBe("1. not ordered");
-  });
-
-  it("strips escaped greater-than", () => {
-    expect(cleanMarkdownForClipboard("\\> not blockquote")).toBe("> not blockquote");
-  });
-
-  it("strips escaped hyphen/dash", () => {
-    expect(cleanMarkdownForClipboard("\\- not list")).toBe("- not list");
-  });
-
-  it("strips escaped backtick", () => {
-    expect(cleanMarkdownForClipboard("\\`not code\\`")).toBe("`not code`");
-  });
-
-  it("handles combined escape stripping and autolink collapse", () => {
-    const input = "Visit [https\\://example.com](https://example.com) for \\$5 off";
-    expect(cleanMarkdownForClipboard(input)).toBe(
-      "Visit https://example.com for $5 off"
-    );
-  });
-
-  it("handles multiple autolinks in one string", () => {
-    const input =
-      "[https://a.com](https://a.com) and [https://b.com](https://b.com)";
-    expect(cleanMarkdownForClipboard(input)).toBe(
-      "https://a.com and https://b.com"
-    );
-  });
-
-  it("does not collapse link with different text and URL", () => {
-    expect(
-      cleanMarkdownForClipboard("[Example](https://example.com)")
-    ).toBe("[Example](https://example.com)");
-  });
-
-  it("handles nested markdown formatting", () => {
-    expect(cleanMarkdownForClipboard("**bold and *italic***")).toBe(
-      "**bold and *italic***"
-    );
   });
 });
 
@@ -782,8 +555,8 @@ describe("getSelectionText with copyFormat=markdown (lines 123-125)", () => {
   });
 });
 
-describe("createDocFromSlice catch path (line 46)", () => {
-  it("falls back to createAndFill when docType.create throws", async () => {
+describe("a throw while building the copied document", () => {
+  it("copies no markdown, so ProseMirror copies the plain text", async () => {
     testCopyFormat = "markdown";
     testCopyOnSelect = false;
 
@@ -797,86 +570,26 @@ describe("createDocFromSlice catch path (line 46)", () => {
       },
     });
 
-    // Monkey-patch topNodeType.create to throw, forcing the catch path
     const origCreate = testSchema.topNodeType.create.bind(testSchema.topNodeType);
-    let callCount = 0;
-    testSchema.topNodeType.create = function (...args: Parameters<typeof origCreate>) {
-      callCount++;
-      // The first call is from createDocFromSlice — make it throw.
-      // Subsequent calls (from the catch fallback) should succeed.
-      if (callCount === 1) throw new RangeError("Invalid content for node doc");
-      return origCreate(...args);
-    } as typeof origCreate;
-
-    const { markdownCopyExtension } = await import("./tiptap");
-    const plugins = markdownCopyExtension.config.addProseMirrorPlugins!.call({
-      editor: {}, name: "markdownCopy", options: copyOptions(), storage: {}, type: undefined, parent: undefined,
-    } as never);
-    const plugin = plugins[0] as { props: { clipboardTextSerializer: (slice: unknown, view: unknown) => string } };
-
-    const para = testSchema.node("paragraph", null, [testSchema.text("hello")]);
-    const slice = new Slice(Fragment.from(para), 0, 0);
-
-    const { EditorState } = await import("@tiptap/pm/state");
-    const doc = testSchema.node("doc", null, [
-      testSchema.node("paragraph", null, [testSchema.text("body")]),
-    ]);
-    const state = EditorState.create({ doc, schema: testSchema });
-
-    const result = plugin.props.clipboardTextSerializer(slice, { state });
-    // Should return a string from the createAndFill fallback
-    expect(typeof result).toBe("string");
-    // Verify the create was called (and threw on first call)
-    expect(callCount).toBeGreaterThanOrEqual(1);
-  });
-});
-
-describe("createDocFromSlice — createAndFill returns null path (line 46 ?? branch)", () => {
-  it("falls back to docType.create() when createAndFill returns null", async () => {
-    testCopyFormat = "markdown";
-    testCopyOnSelect = false;
-
-    const { Schema, Slice, Fragment } = await import("@tiptap/pm/model");
-
-    const testSchema = new Schema({
-      nodes: {
-        doc: { content: "paragraph+" },
-        paragraph: { content: "text*", group: "block" },
-        text: { inline: true },
-      },
-    });
-
-    // Monkey-patch: first call to create throws, createAndFill returns null, second create succeeds
-    const origCreate = testSchema.topNodeType.create.bind(testSchema.topNodeType);
-    const origCreateAndFill = testSchema.topNodeType.createAndFill?.bind(testSchema.topNodeType);
-    let createCallCount = 0;
-    testSchema.topNodeType.create = function (...args: Parameters<typeof origCreate>) {
-      createCallCount++;
-      if (createCallCount === 1) throw new RangeError("Invalid content");
-      return origCreate(...args);
-    } as typeof origCreate;
-    // createAndFill returns null to exercise the ?? branch
-    testSchema.topNodeType.createAndFill = () => null;
-
-    const { markdownCopyExtension } = await import("./tiptap");
-    const plugins = markdownCopyExtension.config.addProseMirrorPlugins!.call({
-      editor: {}, name: "markdownCopy", options: copyOptions(), storage: {}, type: undefined, parent: undefined,
-    } as never);
-    const plugin = plugins[0] as { props: { clipboardTextSerializer: (slice: unknown, view: unknown) => string } };
-
-    const para = testSchema.node("paragraph", null, [testSchema.text("hello")]);
-    const slice = new Slice(Fragment.from(para), 0, 0);
-    const { EditorState } = await import("@tiptap/pm/state");
     const doc = origCreate(null, [testSchema.node("paragraph", null, [testSchema.text("body")])]);
+    testSchema.topNodeType.create = () => {
+      throw new RangeError("Invalid content for node doc");
+    };
+
+    const { markdownCopyExtension } = await import("./tiptap");
+    const plugins = markdownCopyExtension.config.addProseMirrorPlugins!.call({
+      editor: {}, name: "markdownCopy", options: copyOptions(), storage: {}, type: undefined, parent: undefined,
+    } as never);
+    const plugin = plugins[0] as { props: { clipboardTextSerializer: (slice: unknown, view: unknown) => string } };
+
+    const para = testSchema.node("paragraph", null, [testSchema.text("hello")]);
+    const slice = new Slice(Fragment.from(para), 0, 0);
+    const { EditorState } = await import("@tiptap/pm/state");
     const state = EditorState.create({ doc, schema: testSchema });
 
-    // Should not throw — falls back to docType.create() without args
-    const result = plugin.props.clipboardTextSerializer(slice, { state });
-    expect(typeof result).toBe("string");
-
-    // Restore
+    // An empty result is what tells ProseMirror to fall back to the text.
+    expect(plugin.props.clipboardTextSerializer(slice, { state })).toBe("");
     testSchema.topNodeType.create = origCreate;
-    if (origCreateAndFill) testSchema.topNodeType.createAndFill = origCreateAndFill;
   });
 });
 

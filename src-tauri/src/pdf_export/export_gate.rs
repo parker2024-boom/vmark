@@ -1,4 +1,4 @@
-//! One PDF export at a time (#198, #199).
+//! One PDF export at a time.
 //!
 //! Purpose: `export_pdf` renders, then read-modify-writes the output twice
 //! (outline, page numbers), and reports progress to ONE window as stage-only

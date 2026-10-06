@@ -1,5 +1,5 @@
 /**
- * Breakdown store (WI-1.9b).
+ * Breakdown store.
  *
  * Holds the pull-based coherence breakdown: the live stale/diverged
  * dependency edges of the current workspace, as returned by the Rust
@@ -102,19 +102,19 @@ export interface LogbookView {
   reopenedEdges: number;
 }
 
-/** Mirror of the Rust `ProvenanceCandidate` (WI-3.2). */
+/** Mirror of the Rust `ProvenanceCandidate`. */
 export interface ProvenanceCandidate {
   path: string;
   proposed: number;
 }
 
-/** Mirror of the Rust `ProposedInput` (WI-3.2). */
+/** Mirror of the Rust `ProposedInput`. */
 export interface ProposedInput {
   path: string;
   role: "direct" | "contextual";
 }
 
-/** Mirror of the Rust `DelegationRow` (WI-3.4). */
+/** Mirror of the Rust `DelegationRow`. */
 export interface DelegationRow {
   grant: string;
   delegate: string;
@@ -122,13 +122,13 @@ export interface DelegationRow {
   expires: string;
 }
 
-/** Mirror of the Rust `MergeNotice` (WI-3.7). */
+/** Mirror of the Rust `MergeNotice`. */
 export interface MergeNotice {
   sha: string;
   time: string;
 }
 
-/** Mirror of the Rust `BranchCandidate` (WI-3.6). */
+/** Mirror of the Rust `BranchCandidate`. */
 export interface BranchCandidate {
   branch: string;
   context: string | null;
@@ -149,17 +149,17 @@ export interface ContextRow {
 interface BreakdownState {
   /** Rust-owned live rows — refreshed on demand, never persisted. */
   rows: EdgeRow[];
-  /** Known contexts (WI-2b.7); the implicit default is always present. */
+  /** Known contexts; the implicit default is always present. */
   contexts: ContextRow[];
   /** The context the breakdown projects; null = the implicit default. */
   selectedContext: string | null;
-  /** Orphaned-but-recoverable artifacts (WI-3.2, pull-only). */
+  /** Orphaned-but-recoverable artifacts (pull-only). */
   provenance: ProvenanceCandidate[];
-  /** Live agent delegations (WI-3.4). */
+  /** Live agent delegations. */
   delegations: DelegationRow[];
-  /** Pull-only branch-context candidate for THIS branch (WI-3.6), or null. */
+  /** Pull-only branch-context candidate for THIS branch, or null. */
   branchCandidate: BranchCandidate | null;
-  /** Latest completed-merge notice for the dismissible banner (WI-3.7). */
+  /** Latest completed-merge notice for the dismissible banner. */
   mergeNotice: MergeNotice | null;
   /** Whether the Breakdown panel is open in THIS window. */
   panelOpen: boolean;
@@ -181,7 +181,7 @@ interface BreakdownState {
   reset: () => void;
 }
 
-// No persistence (audit T17): `rows` is Rust-owned live data; `panelOpen`
+// No persistence: `rows` is Rust-owned live data; `panelOpen`
 // is per-window ephemeral UI state — a shared storage key would leak
 // open-state across windows, and a pull-based panel has nothing worth
 // resurrecting on reload.

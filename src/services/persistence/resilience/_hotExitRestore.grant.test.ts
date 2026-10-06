@@ -16,10 +16,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const otherCommands = (cmd: string): Promise<unknown> =>
   Promise.resolve(cmd === "hot_exit_window_restore_complete");
 
-const { mockInvoke, mockPull, mockRestoreInstances } = vi.hoisted(() => ({
+const { mockInvoke, mockPull } = vi.hoisted(() => ({
   mockInvoke: vi.fn((_cmd: string, _args?: unknown): Promise<unknown> => Promise.resolve(true)),
   mockPull: vi.fn((_label: string): Promise<unknown> => Promise.resolve(null)),
-  mockRestoreInstances: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mockInvoke }));
@@ -31,10 +30,6 @@ vi.mock("../hotExit/restoreHelpers", () => ({
   MAX_STATE_RETRIES: 5,
   pullWindowStateWithRetry: mockPull,
   restoreWindowState: vi.fn(() => Promise.resolve(new Map())),
-}));
-vi.mock("../hotExit/workspaceInstances", () => ({
-  restoreWindowWorkspaceInstances: mockRestoreInstances,
-  reconcileRestoredWindowWorkspaceInstances: vi.fn(),
 }));
 vi.mock("@/services/workspaces/switchWorkspaceInstance", () => ({
   beginWindowContextRestore: vi.fn(),
@@ -48,6 +43,11 @@ vi.mock("@/services/persistence/hotExit/instanceContextState", () => ({
 }));
 
 import { RESTORED_GRANT_WAIT_MS, restoreMainWindowState } from "./_hotExitRestore";
+import { useSettingsStore } from "@/stores/settingsStore";
+import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
+
+/** The workspaces the restore has put on the main window's rail (real store). */
+const restoredInstances = () => useWorkspaceInstancesStore.getState().windows.main?.workspaceInstanceIds ?? [];
 
 const SLOW = "/Volumes/slow/proj";
 
@@ -93,10 +93,13 @@ const asked = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   mockInvoke.mockImplementation(otherCommands);
+  useSettingsStore.getState().updateGeneralSetting("workspaceRailMode", true);
+  useWorkspaceInstancesStore.setState({ instances: {}, windows: {} });
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  useSettingsStore.getState().updateGeneralSetting("workspaceRailMode", false);
 });
 
 describe("hot-exit restore waits for restored workspaces' grants (#38)", () => {
@@ -107,12 +110,12 @@ describe("hot-exit restore waits for restored workspaces' grants (#38)", () => {
     const restoring = restoreMainWindowState();
     await vi.waitFor(() => expect(asked()).toEqual([{ path: SLOW }]));
     for (let i = 0; i < 10; i++) await Promise.resolve();
-    expect(mockRestoreInstances).not.toHaveBeenCalled();
+    expect(restoredInstances()).toEqual([]);
 
     release();
     await restoring;
 
-    expect(mockRestoreInstances).toHaveBeenCalledTimes(1);
+    expect(restoredInstances()).toEqual(["w0", "w1"]);
   });
 
   it("waits a bounded time: a dead mount does not stall the restore", async () => {
@@ -122,11 +125,11 @@ describe("hot-exit restore waits for restored workspaces' grants (#38)", () => {
 
     const restoring = restoreMainWindowState();
     await vi.advanceTimersByTimeAsync(RESTORED_GRANT_WAIT_MS - 1);
-    expect(mockRestoreInstances).not.toHaveBeenCalled();
+    expect(restoredInstances()).toEqual([]);
     await vi.advanceTimersByTimeAsync(1);
     await restoring;
 
-    expect(mockRestoreInstances).toHaveBeenCalledTimes(1);
+    expect(restoredInstances()).toEqual(["w0"]);
   });
 
   it("asks once per distinct root, and not at all when nothing is a workspace", async () => {

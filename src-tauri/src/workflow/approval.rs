@@ -1,4 +1,4 @@
-//! Approval gate (ADR-4 / WI-3.1).
+//! Approval gate (ADR-4).
 //!
 //! When a workflow step's effective `approval` resolves to "ask", the runner
 //! emits `workflow:approval-request` to the frontend and parks on a
@@ -132,7 +132,7 @@ mod tests {
         assert!(!reg.respond(&key, true));
     }
 
-    // --- poison tolerance (WI-0.5, P3) ---
+    // --- poison tolerance (P3) ---
 
     #[test]
     fn registry_tolerates_poisoned_lock() {

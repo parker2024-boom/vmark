@@ -1,3 +1,10 @@
+/**
+ * useActiveWorkspaceScope — React hook that resolves the active workspace
+ * scope for a document window from the settings and workspace stores.
+ *
+ * @module hooks/useActiveWorkspaceScope
+ */
+
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useWorkspaceInstancesStore, selectActiveWorkspaceInstance } from "@/stores/workspaceInstancesStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";

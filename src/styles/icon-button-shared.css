@@ -1,5 +1,5 @@
 /**
- * Shared icon-button primitive (WI-UI2.3, D2/R7/R9).
+ * Shared icon-button primitive (D2/R7/R9).
  *
  * `.vm-icon-btn` is the canonical icon-only square. VMark had ~33 bespoke
  * icon-square classes that each re-derived "a quiet square that lights up on
@@ -30,7 +30,7 @@
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
-  cursor: var(--cursor-interactive, default); /* D7, platform-scoped (WI-UA15) */
+  cursor: var(--cursor-interactive, default); /* D7, platform-scoped */
   user-select: none;
   flex-shrink: 0;
   transition:

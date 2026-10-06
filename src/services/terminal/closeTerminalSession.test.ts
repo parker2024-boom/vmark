@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
-import { resetTerminalSessionStore, useUIStore } from "@/stores/uiStore";
+import { useUIStore } from "@/stores/uiStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import {
   createWorkspaceInstance,
   createWorkspaceRootIdentity,
@@ -36,7 +37,7 @@ function addWorkspace(id: string, rootPath: string): void {
 }
 
 function createOwned(owner?: string): string {
-  const created = useUIStore
+  const created = useTerminalStore
     .getState()
     .terminalCreateSession(owner ? { ownerInstanceId: owner } : undefined);
   if (!created) throw new Error("cap hit in test setup");
@@ -47,7 +48,7 @@ function showPanel(): void {
   if (!useUIStore.getState().terminalVisible) useUIStore.getState().toggleTerminal();
 }
 
-const term = () => useUIStore.getState().terminal;
+const term = () => useTerminalStore.getState();
 
 beforeEach(() => {
   resetTerminalSessionStore();
@@ -112,7 +113,7 @@ describe("removeTerminalSessionWithPanelPolicy", () => {
     const hidden = createOwned("wsi-b");
     const a1 = createOwned("wsi-a");
     const a2 = createOwned("wsi-a");
-    useUIStore.getState().terminalSetActiveSession(a2);
+    useTerminalStore.getState().terminalSetActiveSession(a2);
     showPanel();
 
     removeTerminalSessionWithPanelPolicy(a2, { onlyIfVisible: true });

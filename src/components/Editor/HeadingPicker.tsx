@@ -3,6 +3,8 @@
  *
  * Popup for selecting a document heading to create bookmark links.
  * Shows all headings with indentation by level and filter support.
+ *
+ * @module components/Editor/HeadingPicker
  */
 
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -67,7 +69,7 @@ export function HeadingPicker() {
   // render (#1063).
   useEffect(() => {
     const editorContainer = document.querySelector('.editor-container') as HTMLElement | null;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the portal target is read from the DOM after mount
     setPortalTarget(editorContainer);
   }, []);
 
@@ -162,7 +164,7 @@ export function HeadingPicker() {
   // Calculate popup position when opening. Legitimate setState-in-effect: depends
   // on DOM measurement (portalTarget.getBoundingClientRect) that is only valid
   // after layout, not during render (#1063).
-  /* eslint-disable react-hooks/set-state-in-effect */
+  /* eslint-disable react-hooks/set-state-in-effect -- the popup position comes from post-layout DOM measurement */
   useEffect(() => {
     if (!isOpen) return;
 

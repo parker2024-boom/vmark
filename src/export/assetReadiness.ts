@@ -73,7 +73,7 @@ export function checkImages(container: HTMLElement): { ready: boolean; pending: 
  * The LaTeX preview while its render is pending: `createLatexPreviewWidget`
  * sets both classes, and replaces the placeholder class on success and on
  * failure (`mermaid-error`). The LIFECYCLE CLASS is the signal, never the
- * placeholder's text (audit #349): the text is localized, so a non-English
+ * placeholder's text: the text is localized, so a non-English
  * placeholder read as ready, and the terminal error ("Failed to render math")
  * read as pending until the timeout.
  */

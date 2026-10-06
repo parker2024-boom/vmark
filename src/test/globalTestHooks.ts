@@ -13,6 +13,7 @@
  */
 import { vi, beforeEach, afterEach } from "vitest";
 import { signalMenuCommandsMounted } from "@/services/commands/menuCommandsReady";
+import { signalCloseListenersMounted } from "@/services/windowClose/closeListenersReady";
 
 // The window-ready handshake waits for the menu listener to mount before it
 // tells Rust (and the DOM) that the window is listening — see
@@ -26,11 +27,18 @@ import { signalMenuCommandsMounted } from "@/services/commands/menuCommandsReady
 // next test that renders a provider. The three suites that are ABOUT the
 // handshake call `resetMenuCommandsForTest()` in their own `beforeEach`, which
 // runs after this one and therefore wins.
+//
+// The handshake waits on a second fact for the same reason — the close and
+// quit listeners `useWindowClose` registers (`closeListenersReady.ts`) — and a
+// provider rendered alone mounts that hook no more than it mounts the menu
+// bootstrap, so it gets the same stand-in. The suites about that barrier
+// reset it themselves.
 beforeEach(() => {
   // `true`: the stand-in is for a mount that SUCCEEDED. The signal carries the
   // outcome since audit #359, and a `false` here would make every provider
   // render log a failed menu mount.
   signalMenuCommandsMounted(true);
+  signalCloseListenersMounted(true);
 });
 
 // Real timers are the DEFAULT after every test, not a courtesy each file pays

@@ -5,7 +5,7 @@
  * backspace pair deletion, and safeDispatch edge cases.
  */
 
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
@@ -15,6 +15,16 @@ vi.mock("@/utils/imeGuard", () => ({
 }));
 
 import { createMarkdownAutoPairPlugin, markdownPairBackspace } from "../markdownAutoPair";
+
+// The plugin decides single-vs-double on a timer (and inserts the closing
+// pair on a zero-delay one); the tests drive that clock instead of sleeping.
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 function simulateTyping(view: EditorView, char: string): void {
   const pos = view.state.selection.main.head;
@@ -53,7 +63,7 @@ describe("delay-based chars (*, ~, _)", () => {
     simulateTyping(activeView, "*");
     expect(activeView.state.doc.toString()).toBe("*");
 
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
 
     expect(activeView.state.doc.toString()).toBe("**");
     expect(activeView.state.selection.main.head).toBe(1);
@@ -65,7 +75,7 @@ describe("delay-based chars (*, ~, _)", () => {
     simulateTyping(activeView, "*");
     simulateTyping(activeView, "*");
 
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
 
     // Double typed quickly -> inserts closing pair
     const content = activeView.state.doc.toString();
@@ -77,7 +87,7 @@ describe("delay-based chars (*, ~, _)", () => {
 
     simulateTyping(activeView, "~");
 
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
 
     expect(activeView.state.doc.toString()).toBe("~~");
     expect(activeView.state.selection.main.head).toBe(1);
@@ -89,7 +99,7 @@ describe("delay-based chars (*, ~, _)", () => {
     simulateTyping(activeView, "~");
     simulateTyping(activeView, "~");
 
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
 
     expect(activeView.state.doc.toString()).toBe("~~~~");
   });
@@ -99,7 +109,7 @@ describe("delay-based chars (*, ~, _)", () => {
 
     simulateTyping(activeView, "_");
 
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
 
     expect(activeView.state.doc.toString()).toBe("__");
     expect(activeView.state.selection.main.head).toBe(1);
@@ -114,7 +124,7 @@ describe("delay-based chars (*, ~, _)", () => {
     // Move cursor away before delay
     activeView.dispatch({ selection: { anchor: 0 } });
 
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
 
     // Should not insert closing pair since cursor moved away from expected position
     // Content should be "text *" (no extra pair)
@@ -128,7 +138,7 @@ describe("delay-based chars (*, ~, _)", () => {
     // Type _ before delay expires — cancels * pending
     simulateTyping(activeView, "_");
 
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
 
     // * should not be paired, _ should be paired
     const content = activeView.state.doc.toString();
@@ -151,7 +161,7 @@ describe("always-double chars (=)", () => {
 
     simulateTyping(activeView, "=");
 
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
 
     // Single = should stay as-is (no pairing for single =)
     expect(activeView.state.doc.toString()).toBe("=");
@@ -163,7 +173,7 @@ describe("always-double chars (=)", () => {
     simulateTyping(activeView, "=");
     simulateTyping(activeView, "=");
 
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
 
     expect(activeView.state.doc.toString()).toBe("====");
   });
@@ -298,6 +308,6 @@ describe("plugin destroy", () => {
     parent.remove();
 
     // Should not throw after destroy
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
   });
 });

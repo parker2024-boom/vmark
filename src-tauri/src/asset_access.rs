@@ -108,7 +108,7 @@ fn is_media_extension(path: &std::path::Path) -> bool {
 /// `Err`, and `MediaView` falls back on the 403 that follows.
 ///
 /// `async` and off the IPC thread: resolving a path on a dead network mount
-/// blocks for the mount's timeout (audit #470).
+/// blocks for the mount's timeout.
 #[tauri::command]
 pub async fn grant_asset_access<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,

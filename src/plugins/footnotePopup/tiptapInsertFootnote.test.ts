@@ -1,450 +1,207 @@
 /**
- * Footnote Insertion Tests
+ * Footnote insertion — insertFootnoteAndOpenPopup against a real editor.
  *
- * Tests for insertFootnoteAndOpenPopup including:
- * - Inserting reference + renumbering
- * - Finding nearest reference
- * - Opening popup via store
- * - Edge cases: missing node types, empty doc
+ * The real footnote nodes and the real renumbering run: the assertions read
+ * the document the command leaves behind and the request it sends the host.
+ * - Inserting a reference and the definition it needs
+ * - Renumbering references and definitions around the insertion
+ * - Asking the host to open the popup for the inserted footnote, a frame later
+ * - A schema without footnote nodes
  */
 
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { Editor, getSchema } from "@tiptap/core";
+import StarterKit from "@tiptap/starter-kit";
+import type { Node as PMNode } from "@tiptap/pm/model";
 import { bindHostPopups } from "@/plugins/shared/hostPopups";
-import { describe, it, expect, vi, beforeEach } from "vitest";
-
-const mockOpenPopup = vi.fn();
-
-// Opening the footnote editor is asked of the HOST now (ADR-015): the toolbar
-// action lives in another plugin, so routing it through an extension option
-// would move the coupling rather than remove it.
-bindHostPopups({ openFootnotePopup: (r) => mockOpenPopup(r) });
-
-// Mock createRenumberTransaction and getDefinitionInfo
-const mockCreateRenumberTransaction = vi.fn();
-const mockGetDefinitionInfo = vi.fn();
-vi.mock("./tiptapCleanup", () => ({
-  createRenumberTransaction: (...args: unknown[]) => mockCreateRenumberTransaction(...args),
-  getDefinitionInfo: (...args: unknown[]) => mockGetDefinitionInfo(...args),
-}));
-
+import { installFakeAnimationFrames, type FakeAnimationFrames } from "@/test/fakeAnimationFrames";
+import { footnoteDefinitionExtension, footnoteReferenceExtension } from "./tiptapNodes";
 import { insertFootnoteAndOpenPopup } from "./tiptapInsertFootnote";
 
-function createMockEditor(options: {
-  hasRefType?: boolean;
-  hasDefType?: boolean;
-  selectionTo?: number;
-} = {}) {
-  const { hasRefType = true, hasDefType = true, selectionTo = 5 } = options;
+const openFootnotePopup = vi.fn();
 
-  const refCreate = vi.fn((attrs: Record<string, unknown>) => ({
-    type: { name: "footnote_reference" },
-    attrs,
-  }));
-  const defCreate = vi.fn();
+// Opening the footnote editor is asked of the HOST (ADR-015): the toolbar
+// action lives in another plugin, so the host port is the seam.
+bindHostPopups({ openFootnotePopup: (request) => openFootnotePopup(request) });
 
-  const schema = {
-    nodes: {
-      footnote_reference: hasRefType ? { create: refCreate } : undefined,
-      footnote_definition: hasDefType ? { create: defCreate } : undefined,
-    },
-  };
+const extensions = [StarterKit, footnoteReferenceExtension, footnoteDefinitionExtension];
+const schema = getSchema(extensions);
 
-  const insertFn = vi.fn().mockReturnThis();
-  const tr = { insert: insertFn };
+const ref = (label: string) => schema.nodes.footnote_reference.create({ label });
+const para = (...content: Array<string | PMNode>) =>
+  schema.nodes.paragraph.create(
+    null,
+    content.filter((c) => c !== "").map((c) => (typeof c === "string" ? schema.text(c) : c)),
+  );
+const def = (label: string, text: string) => schema.nodes.footnote_definition.create({ label }, para(text));
 
-  const state = {
-    schema,
-    selection: { to: selectionTo },
-    tr,
-  };
+let frames: FakeAnimationFrames;
+let editor: Editor | null = null;
 
-  const dispatchFn = vi.fn();
-
-  // After dispatch, view.state should be updated for the second read
-  const postDispatchDoc = {
-    descendants: vi.fn((callback: (node: { type: { name: string }; attrs: Record<string, unknown> }, pos: number) => boolean | void) => {
-      // Simulate a doc with a footnote_reference at position near selectionTo
-      callback(
-        { type: { name: "footnote_reference" }, attrs: { label: "1" } },
-        selectionTo
-      );
-    }),
-  };
-
-  const postDispatchState = {
-    ...state,
-    doc: postDispatchDoc,
-  };
-
-  // Track dispatch calls to swap state
-  let dispatchCallCount = 0;
-  const view = {
-    state,
-    dispatch: vi.fn(() => {
-      dispatchCallCount++;
-      // After first dispatch (insert), update view.state
-      if (dispatchCallCount === 1) {
-        view.state = postDispatchState as typeof view.state;
-      }
-    }),
-    dom: {
-      querySelector: vi.fn(() => null),
-    },
-  };
-
-  return {
-    editor: { state, view } as unknown as Parameters<typeof insertFootnoteAndOpenPopup>[0],
-    view,
-    refCreate,
-    dispatchFn,
-  };
+function editorWith(nodes: PMNode[], withFootnotes = true): Editor {
+  const place = document.createElement("div");
+  document.body.appendChild(place);
+  editor = new Editor({
+    element: place,
+    extensions: withFootnotes ? extensions : [StarterKit],
+    content: schema.nodes.doc.create(null, nodes).toJSON(),
+  });
+  return editor;
 }
 
+/** Position just after the first occurrence of `text` in the document. */
+function after(doc: PMNode, text: string): number {
+  let found = -1;
+  doc.descendants((node, pos) => {
+    if (found < 0 && node.isText && node.text?.includes(text)) {
+      found = pos + node.text.indexOf(text) + text.length;
+    }
+  });
+  if (found < 0) throw new Error(`text not found: ${text}`);
+  return found;
+}
+
+/** Every footnote node in document order, as `ref:label` / `def:label=text`. */
+function footnotes(doc: PMNode): string[] {
+  const out: string[] = [];
+  doc.descendants((node) => {
+    if (node.type.name === "footnote_reference") out.push(`ref:${node.attrs.label}`);
+    if (node.type.name === "footnote_definition") out.push(`def:${node.attrs.label}=${node.textContent}`);
+  });
+  return out;
+}
+
+function positionOf(doc: PMNode, typeName: string, label: string): number {
+  let found = -1;
+  doc.descendants((node, pos) => {
+    if (found < 0 && node.type.name === typeName && node.attrs.label === label) found = pos;
+  });
+  return found;
+}
+
+beforeEach(() => {
+  openFootnotePopup.mockClear();
+  frames = installFakeAnimationFrames();
+});
+
+afterEach(() => {
+  editor?.destroy();
+  editor = null;
+  document.body.innerHTML = "";
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
 describe("insertFootnoteAndOpenPopup", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockCreateRenumberTransaction.mockReturnValue(null);
-    mockGetDefinitionInfo.mockReturnValue([]);
+  it("declines, and leaves the document alone, when the schema has no footnote nodes", () => {
+    const e = editorWith([para("plain")], false);
+    const before = e.state.doc;
+
+    expect(insertFootnoteAndOpenPopup(e)).toBe(false);
+
+    expect(e.state.doc.eq(before)).toBe(true);
+    frames.runFrame();
+    expect(openFootnotePopup).not.toHaveBeenCalled();
   });
 
-  it("does nothing when footnote_reference type is missing", () => {
-    const { editor, view } = createMockEditor({ hasRefType: false });
-    insertFootnoteAndOpenPopup(editor);
-    expect(view.dispatch).not.toHaveBeenCalled();
+  it("inserts reference 1 at the cursor and appends its empty definition", () => {
+    const e = editorWith([para("hello world")]);
+    e.commands.setTextSelection(after(e.state.doc, "hello"));
+
+    expect(insertFootnoteAndOpenPopup(e)).toBe(true);
+
+    expect(footnotes(e.state.doc)).toEqual(["ref:1", "def:1="]);
+    const paragraph = e.state.doc.child(0);
+    expect(paragraph.child(0).text).toBe("hello");
+    expect(paragraph.child(1).type.name).toBe("footnote_reference");
+    expect(paragraph.child(2).text).toBe(" world");
   });
 
-  it("does nothing when footnote_definition type is missing", () => {
-    const { editor, view } = createMockEditor({ hasDefType: false });
-    insertFootnoteAndOpenPopup(editor);
-    expect(view.dispatch).not.toHaveBeenCalled();
+  it("inserts at the END of a non-empty selection", () => {
+    const e = editorWith([para("hello world")]);
+    e.commands.setTextSelection({ from: 1, to: after(e.state.doc, "hello") });
+
+    insertFootnoteAndOpenPopup(e);
+
+    expect(e.state.doc.child(0).child(0).text).toBe("hello");
+    expect(e.state.doc.child(0).child(1).type.name).toBe("footnote_reference");
   });
 
-  it("inserts a reference with _new_ label at selection position", () => {
-    const { editor, view, refCreate } = createMockEditor();
-    insertFootnoteAndOpenPopup(editor);
+  it("numbers a footnote inserted BEFORE an existing one 1, and shifts the old one to 2 with its text", () => {
+    const e = editorWith([para("first second", ref("1")), def("1", "旧脚注 old note")]);
+    e.commands.setTextSelection(after(e.state.doc, "first"));
 
-    expect(refCreate).toHaveBeenCalledWith({ label: "_new_" });
-    expect(view.dispatch).toHaveBeenCalled();
+    insertFootnoteAndOpenPopup(e);
+
+    expect(footnotes(e.state.doc)).toEqual(["ref:1", "ref:2", "def:1=", "def:2=旧脚注 old note"]);
   });
 
-  it("dispatches renumber transaction when one is created", () => {
-    const mockTr = { docChanged: true };
-    mockCreateRenumberTransaction.mockReturnValue(mockTr);
+  it("numbers a footnote inserted AFTER an existing one 2 and keeps the first untouched", () => {
+    const e = editorWith([para("first", ref("1"), " second"), def("1", "note one")]);
+    e.commands.setTextSelection(after(e.state.doc, "second"));
 
-    const { editor, view } = createMockEditor();
-    insertFootnoteAndOpenPopup(editor);
+    insertFootnoteAndOpenPopup(e);
 
-    // First dispatch: insert, second dispatch: renumber
-    expect(view.dispatch).toHaveBeenCalledTimes(2);
-    expect(view.dispatch).toHaveBeenLastCalledWith(mockTr);
+    expect(footnotes(e.state.doc)).toEqual(["ref:1", "ref:2", "def:1=note one", "def:2="]);
   });
 
-  it("skips renumber dispatch when createRenumberTransaction returns null", () => {
-    mockCreateRenumberTransaction.mockReturnValue(null);
+  it("asks the host to open the popup for the inserted footnote, focused, one frame later", () => {
+    const e = editorWith([para("first", ref("1"), " second"), def("1", "note one")]);
+    e.commands.setTextSelection(after(e.state.doc, "second"));
 
-    const { editor, view } = createMockEditor();
-    insertFootnoteAndOpenPopup(editor);
+    insertFootnoteAndOpenPopup(e);
+    // The reference's DOM is read after the editor has painted it.
+    expect(openFootnotePopup).not.toHaveBeenCalled();
+    frames.runFrame();
 
-    // Only the insert dispatch
-    expect(view.dispatch).toHaveBeenCalledTimes(1);
-  });
-
-  it("calls getDefinitionInfo to find definition position", () => {
-    mockGetDefinitionInfo.mockReturnValue([{ label: "1", pos: 20, size: 10 }]);
-
-    const { editor } = createMockEditor();
-    insertFootnoteAndOpenPopup(editor);
-
-    expect(mockGetDefinitionInfo).toHaveBeenCalled();
-  });
-
-  it("uses requestAnimationFrame to open popup after DOM update", () => {
-    const rafSpy = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb) => {
-      cb(0);
-      return 0;
-    });
-
-    mockGetDefinitionInfo.mockReturnValue([{ label: "1", pos: 20, size: 10 }]);
-
-    const { editor } = createMockEditor();
-    insertFootnoteAndOpenPopup(editor);
-
-    expect(rafSpy).toHaveBeenCalled();
-    rafSpy.mockRestore();
-  });
-
-  it("opens popup when ref element is found in DOM", () => {
-    const mockRect = { top: 100, left: 200, width: 20, height: 16 };
-    const mockRefEl = {
-      getBoundingClientRect: () => mockRect,
-    };
-
-    const rafSpy = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb) => {
-      cb(0);
-      return 0;
-    });
-
-    mockGetDefinitionInfo.mockReturnValue([{ label: "1", pos: 20, size: 10 }]);
-
-    const { editor, view } = createMockEditor();
-    view.dom.querySelector = vi.fn(() => mockRefEl);
-
-    insertFootnoteAndOpenPopup(editor);
-
-    expect(mockOpenPopup).toHaveBeenCalledWith({
-      label: "1",
-      content: "",
-      anchorRect: mockRect,
-      definitionPos: 20,
-      referencePos: 5,
-      autoFocus: true,
-    });
-
-    rafSpy.mockRestore();
-  });
-
-  it("returns early when findNearestReference returns null (no refs in doc after insert)", () => {
-    // Post-dispatch doc has no footnote_reference nodes
-    const { editor, view } = createMockEditor();
-
-    // Override post-dispatch doc descendants to return no refs
-    const postDoc = {
-      descendants: vi.fn((_callback: unknown) => {
-        // Don't call callback with any footnote_reference
-      }),
-    };
-
-    let dispatchCount = 0;
-    view.dispatch = vi.fn(() => {
-      dispatchCount++;
-      if (dispatchCount === 1) {
-        (view as unknown as { state: { doc: unknown } }).state = {
-          ...view.state,
-          doc: postDoc,
-        };
-      }
-    });
-
-    insertFootnoteAndOpenPopup(editor);
-    // openPopup should NOT be called since ref is null
-    expect(mockOpenPopup).not.toHaveBeenCalled();
-  });
-
-  it("returns early when nearest ref has empty label (line 52 guard)", () => {
-    const { editor, view } = createMockEditor();
-
-    // Post-dispatch doc has a ref with empty label
-    const postDoc = {
-      descendants: vi.fn((callback: (node: { type: { name: string }; attrs: Record<string, unknown> }, pos: number) => boolean | void) => {
-        callback(
-          { type: { name: "footnote_reference" }, attrs: { label: "" } },
-          5
-        );
-      }),
-    };
-
-    let dispatchCount = 0;
-    view.dispatch = vi.fn(() => {
-      dispatchCount++;
-      if (dispatchCount === 1) {
-        (view as unknown as { state: { doc: unknown } }).state = {
-          ...view.state,
-          doc: postDoc,
-        };
-      }
-    });
-
-    insertFootnoteAndOpenPopup(editor);
-    expect(mockOpenPopup).not.toHaveBeenCalled();
-  });
-
-  it("findNearestReference picks the closest ref among multiple (lines 22-27)", () => {
-    const { editor, view } = createMockEditor({ selectionTo: 10 });
-
-    // Post-dispatch doc has multiple refs — the one closest to insertPos should win
-    const postDoc = {
-      descendants: vi.fn((callback: (node: { type: { name: string }; attrs: Record<string, unknown> }, pos: number) => boolean | void) => {
-        // First ref far away
-        callback(
-          { type: { name: "footnote_reference" }, attrs: { label: "1" } },
-          1
-        );
-        // Second ref closer to insertPos (10)
-        callback(
-          { type: { name: "footnote_reference" }, attrs: { label: "2" } },
-          9
-        );
-        // Third ref slightly farther
-        callback(
-          { type: { name: "footnote_reference" }, attrs: { label: "3" } },
-          15
-        );
-      }),
-    };
-
-    mockGetDefinitionInfo.mockReturnValue([{ label: "2", pos: 30, size: 10 }]);
-
-    let dispatchCount = 0;
-    view.dispatch = vi.fn(() => {
-      dispatchCount++;
-      if (dispatchCount === 1) {
-        (view as unknown as { state: { doc: unknown } }).state = {
-          ...view.state,
-          doc: postDoc,
-        };
-      }
-    });
-
-    const rafSpy = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb) => {
-      cb(0);
-      return 0;
-    });
-
-    const mockRefEl = { getBoundingClientRect: () => ({ top: 100, left: 200, width: 20, height: 16 }) };
-    view.dom.querySelector = vi.fn(() => mockRefEl);
-
-    insertFootnoteAndOpenPopup(editor);
-
-    // Should pick label "2" as closest
-    expect(mockOpenPopup).toHaveBeenCalledWith({
+    expect(openFootnotePopup).toHaveBeenCalledTimes(1);
+    const request = openFootnotePopup.mock.calls[0][0];
+    expect(request).toMatchObject({
       label: "2",
       content: "",
-      anchorRect: expect.anything(),
-      definitionPos: 30,
-      referencePos: 9,
       autoFocus: true,
+      referencePos: positionOf(e.state.doc, "footnote_reference", "2"),
+      definitionPos: positionOf(e.state.doc, "footnote_definition", "2"),
     });
-    rafSpy.mockRestore();
+    expect(request.anchorRect).toBeDefined();
   });
 
-  it("findNearestReference skips non-footnote_reference nodes (line 22 early return)", () => {
-    const { editor, view } = createMockEditor({ selectionTo: 5 });
+  it("opens the popup for the NEW footnote when an existing reference sits right beside it", () => {
+    const e = editorWith([para("word", ref("1")), def("1", "note one")]);
+    // Directly before the existing reference: the new one takes label 1.
+    e.commands.setTextSelection(after(e.state.doc, "word"));
 
-    // Post-dispatch doc has a mix of node types — findNearestReference should skip non-refs
-    const postDoc = {
-      descendants: vi.fn((callback: (node: { type: { name: string }; attrs: Record<string, unknown> }, pos: number) => boolean | void) => {
-        // Non-footnote node — should be skipped (line 22)
-        callback(
-          { type: { name: "paragraph" }, attrs: {} },
-          1
-        );
-        // Another non-footnote node
-        callback(
-          { type: { name: "text" }, attrs: {} },
-          3
-        );
-        // Actual footnote reference
-        callback(
-          { type: { name: "footnote_reference" }, attrs: { label: "2" } },
-          5
-        );
-      }),
-    };
+    insertFootnoteAndOpenPopup(e);
+    frames.runFrame();
 
-    mockGetDefinitionInfo.mockReturnValue([{ label: "2", pos: 20, size: 10 }]);
-
-    let dispatchCount = 0;
-    view.dispatch = vi.fn(() => {
-      dispatchCount++;
-      if (dispatchCount === 1) {
-        (view as unknown as { state: { doc: unknown } }).state = {
-          ...view.state,
-          doc: postDoc,
-        };
-      }
-    });
-
-    const rafSpy = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb) => {
-      cb(0);
-      return 0;
-    });
-
-    const mockRefEl = { getBoundingClientRect: () => ({ top: 100, left: 200, width: 20, height: 16 }) };
-    view.dom.querySelector = vi.fn(() => mockRefEl);
-
-    insertFootnoteAndOpenPopup(editor);
-
-    expect(mockOpenPopup).toHaveBeenCalledWith({
-      label: "2",
-      content: "",
-      anchorRect: expect.anything(),
-      definitionPos: 20,
-      referencePos: 5,
-      autoFocus: true,
-    });
-    rafSpy.mockRestore();
-  });
-
-  it("findNearestReference handles label with null attr (line 27 nullish coalescing)", () => {
-    const { editor, view } = createMockEditor({ selectionTo: 5 });
-
-    const postDoc = {
-      descendants: vi.fn((callback: (node: { type: { name: string }; attrs: Record<string, unknown> }, pos: number) => boolean | void) => {
-        // Footnote reference with null label — coalesces to ""
-        callback(
-          { type: { name: "footnote_reference" }, attrs: { label: null } },
-          5
-        );
-      }),
-    };
-
-    let dispatchCount = 0;
-    view.dispatch = vi.fn(() => {
-      dispatchCount++;
-      if (dispatchCount === 1) {
-        (view as unknown as { state: { doc: unknown } }).state = {
-          ...view.state,
-          doc: postDoc,
-        };
-      }
-    });
-
-    insertFootnoteAndOpenPopup(editor);
-    // Empty label should trigger the ref?.label guard (falsy) on line 52
-    expect(mockOpenPopup).not.toHaveBeenCalled();
-  });
-
-  it("handles defPos as null when no matching definition found (line 54)", () => {
-    mockGetDefinitionInfo.mockReturnValue([]); // No matching defs
-
-    const { editor, view } = createMockEditor();
-
-    const rafSpy = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb) => {
-      cb(0);
-      return 0;
-    });
-
-    const mockRefEl = { getBoundingClientRect: () => ({ top: 100, left: 200, width: 20, height: 16 }) };
-    view.dom.querySelector = vi.fn(() => mockRefEl);
-
-    insertFootnoteAndOpenPopup(editor);
-
-    // defPos should be null (no matching definition)
-    expect(mockOpenPopup).toHaveBeenCalledWith({
+    expect(footnotes(e.state.doc)).toEqual(["ref:1", "ref:2", "def:1=", "def:2=note one"]);
+    expect(openFootnotePopup.mock.calls[0][0]).toMatchObject({
       label: "1",
-      content: "",
-      anchorRect: expect.anything(),
-      definitionPos: null,
-      referencePos: 5,
-      autoFocus: true,
+      referencePos: positionOf(e.state.doc, "footnote_reference", "1"),
+      definitionPos: positionOf(e.state.doc, "footnote_definition", "1"),
     });
-    rafSpy.mockRestore();
   });
 
-  it("does not open popup when ref element is not found in DOM", () => {
-    const rafSpy = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb) => {
-      cb(0);
-      return 0;
-    });
+  it("still succeeds, without a popup, when the reference is no longer in the DOM at the next frame", () => {
+    const e = editorWith([para("hello")]);
+    e.commands.setTextSelection(after(e.state.doc, "hello"));
 
-    mockGetDefinitionInfo.mockReturnValue([{ label: "1", pos: 20, size: 10 }]);
+    expect(insertFootnoteAndOpenPopup(e)).toBe(true);
+    e.view.dom.querySelector('sup[data-type="footnote_reference"]')?.remove();
+    frames.runFrame();
 
-    const { editor, view } = createMockEditor();
-    view.dom.querySelector = vi.fn(() => null);
+    expect(openFootnotePopup).not.toHaveBeenCalled();
+    expect(footnotes(e.state.doc)).toEqual(["ref:1", "def:1="]);
+  });
 
-    insertFootnoteAndOpenPopup(editor);
+  it("gives each rapid repeat its own number", () => {
+    const e = editorWith([para("hello")]);
+    e.commands.setTextSelection(after(e.state.doc, "hello"));
 
-    expect(mockOpenPopup).not.toHaveBeenCalled();
+    insertFootnoteAndOpenPopup(e);
+    insertFootnoteAndOpenPopup(e);
+    insertFootnoteAndOpenPopup(e);
 
-    rafSpy.mockRestore();
+    expect(footnotes(e.state.doc)).toEqual(["ref:1", "ref:2", "ref:3", "def:1=", "def:2=", "def:3="]);
   });
 });

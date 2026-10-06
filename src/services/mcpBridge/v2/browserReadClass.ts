@@ -1,5 +1,5 @@
 /**
- * Shared read-class execution for the MCP browser handlers (WI-P1.2 / audit #8).
+ * Shared read-class execution for the MCP browser handlers.
  *
  * `read` and `screenshot` are both non-mutating "read-class" ops with the exact
  * same envelope: feature gate → tab resolution → human-attachment gate → a native
@@ -26,7 +26,7 @@
 
 import { respond } from "@/services/mcpBridge/utils";
 import { useBrowserApprovalStore } from "@/stores/browserApprovalStore";
-import type { BrowserTarget } from "./browserHelpers";
+import type { BrowserTarget, TabIdRead } from "./browserHelpers";
 import { invokeAttached, resolveBrowserTarget } from "./browserAccess";
 import { queueApprovalPrompt } from "./browserApprovalFlow";
 
@@ -72,14 +72,15 @@ export interface ReadClassOp<T> {
  * Run a read-class MCP browser op end-to-end: `browserEnabled` gate, tabId
  * validation, tab resolution, the human-attachment gate, the native invoke, the
  * mirrored attachment spend (reconciled to the driver on a rejection), and the response.
- * The caller supplies only the parts that differ (`op.invoke`, `op.data`).
+ * The caller supplies only the parts that differ (`op.invoke`, `op.data`), and
+ * its request's checked payload read (`readOperationArgsChecked`).
  */
 export async function runReadClass<T>(
   id: string,
-  args: Record<string, unknown>,
+  read: TabIdRead,
   op: ReadClassOp<T>,
 ): Promise<void> {
-  const tab = await resolveBrowserTarget(id, args);
+  const tab = await resolveBrowserTarget(id, read);
   if (!tab) return;
   if (!(await requireHumanAttachment(id, tab))) return;
   // The attachment mirror follows the driver exactly — spent on success, and

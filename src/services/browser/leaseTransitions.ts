@@ -1,5 +1,5 @@
 /**
- * Pure transitions for the browser automation lease (audit round 3, #92).
+ * Pure transitions for the browser automation lease.
  *
  * Purpose: the state arithmetic `lease.ts` composes — who may take a tab, how the
  * takeover epoch moves, how an envelope validates, and how the per-tab canceller

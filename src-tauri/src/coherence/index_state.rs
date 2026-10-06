@@ -85,8 +85,8 @@ impl CoherenceIndex {
     }
 
     /// The index's canonical `idem → winning entry_id` map. Compared against the
-    /// ledger's deduped winners on open (heal-on-open, design-accept-consistency
-    /// #1/#2): a git branch switch can REPLACE the tracked ledger with a
+    /// ledger's deduped winners on open (heal-on-open, design-accept-consistency):
+    /// a git branch switch can REPLACE the tracked ledger with a
     /// same-cardinality-but-different history, and a cross-process double-append
     /// can leave the index on a non-canonical winner — cardinality can't see
     /// either, so `open` reconciles on this exact identity map, never on counts.
@@ -166,7 +166,7 @@ impl CoherenceIndex {
         hash.map(|h| super::types::ContentHash::parse(&h))
             .transpose()
     }
-    /// Look up one origin edge by its ledger coordinates (WI-1.9a).
+    /// Look up one origin edge by its ledger coordinates.
     pub fn edge_by(&self, txf: &Uuid, input: u32) -> Result<Option<OriginEdge>, String> {
         let row = self
             .conn
@@ -209,7 +209,7 @@ impl CoherenceIndex {
     }
 
     /// Kernel-side selection resolution for one object in the all-live
-    /// default context (WI-1.9a needs a single `resolved_against`).
+    /// default context (the resolution write path needs a single `resolved_against`).
     pub fn resolve_live(&self, object: &ObjectId) -> Result<super::dag::Resolved, String> {
         Ok(super::dag::resolve(
             &ContextView::all_live(),

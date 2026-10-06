@@ -14,7 +14,8 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import { startBrowserLeaseWiring } from "@/services/browser/browserLeaseWiring";
-import { useBrowserLeaseStore } from "@/services/browser/lease";
+import { browserLease } from "@/services/browser/lease";
+import { useBrowserLeaseStore } from "@/stores/browserLeaseStore";
 import { notifyTabRemoved } from "@/stores/tabRemovalBus";
 
 const TAB = "browser-9";
@@ -29,13 +30,13 @@ describe("startBrowserLeaseWiring", () => {
   it("native page input reclaims an AI-held tab and cancels its in-flight step", async () => {
     const stop = startBrowserLeaseWiring();
     await Promise.resolve(); // listen() registration settles
-    useBrowserLeaseStore.getState().acquireForAi(TAB);
+    browserLease.acquireForAi(TAB);
     const cancel = vi.fn();
-    useBrowserLeaseStore.getState().setInflightCancel(TAB, cancel);
+    browserLease.setInflightCancel(TAB, cancel);
 
     listeners.get("browser://user-input")!({ payload: { tabId: TAB } });
 
-    expect(useBrowserLeaseStore.getState().currentHolder(TAB)).toBe("human");
+    expect(browserLease.currentHolder(TAB)).toBe("human");
     expect(cancel).toHaveBeenCalledTimes(1);
     stop();
   });
@@ -44,7 +45,7 @@ describe("startBrowserLeaseWiring", () => {
     const stop = startBrowserLeaseWiring();
     await Promise.resolve();
     listeners.get("browser://user-input")!({ payload: { tabId: TAB } });
-    expect(useBrowserLeaseStore.getState().currentHolder(TAB)).toBeNull();
+    expect(browserLease.currentHolder(TAB)).toBeNull();
     stop();
   });
 
@@ -58,14 +59,14 @@ describe("startBrowserLeaseWiring", () => {
 
   it("tab removal clears the lease and cancels in-flight work", () => {
     const stop = startBrowserLeaseWiring();
-    useBrowserLeaseStore.getState().acquireForAi(TAB);
+    browserLease.acquireForAi(TAB);
     const cancel = vi.fn();
-    useBrowserLeaseStore.getState().setInflightCancel(TAB, cancel);
+    browserLease.setInflightCancel(TAB, cancel);
 
     notifyTabRemoved("main", TAB);
 
-    expect(useBrowserLeaseStore.getState().currentHolder(TAB)).toBeNull();
-    expect(useBrowserLeaseStore.getState().epochOf(TAB)).toBe(0); // state dropped entirely
+    expect(browserLease.currentHolder(TAB)).toBeNull();
+    expect(browserLease.epochOf(TAB)).toBe(0); // state dropped entirely
     expect(cancel).toHaveBeenCalledTimes(1);
     stop();
   });
@@ -75,8 +76,8 @@ describe("startBrowserLeaseWiring", () => {
     await Promise.resolve();
     stop();
     expect(unlisten).toHaveBeenCalled();
-    useBrowserLeaseStore.getState().acquireForAi(TAB);
+    browserLease.acquireForAi(TAB);
     notifyTabRemoved("main", TAB);
-    expect(useBrowserLeaseStore.getState().currentHolder(TAB)).toBe("ai"); // no longer listening
+    expect(browserLease.currentHolder(TAB)).toBe("ai"); // no longer listening
   });
 });

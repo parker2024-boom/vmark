@@ -307,7 +307,7 @@ errors:
   workflow.restoreWhileRunning: "Un flux de travail est en cours. Attendez qu’il se termine ou annulez-le avant de restaurer des fichiers."
   workflow.restoreSuperseded: "Un autre flux de travail s’est exécuté depuis cet instantané ; le restaurer pourrait annuler ses modifications. Rien n’a été restauré."
 
-  # === Chemin d'enregistrement (file_write.rs, WI-14 CommandError) ===
+  # === Chemin d'enregistrement (files/write.rs, WI-14 CommandError) ===
   save.parentMissing: "Le dossier de ce fichier n'existe plus : %{dir}"
   save.noParentDirectory: "Le chemin du fichier n'a pas de dossier parent"
   save.symlinkLoop: "L'alias de ce fichier pointe en boucle, le fichier réel est donc introuvable"
@@ -357,7 +357,13 @@ errors:
 
   # === CLI install ===
   cli.noFile: "L'installation semble avoir réussi mais le fichier n'a pas été créé."
-  cli.mismatch: "Installation terminée, mais le contenu du fichier ne correspond pas au script attendu."
+  cli.mismatch: "La commande installée ne correspondait pas au script attendu ; elle a donc été supprimée."
+  cli.mismatchNotRemoved: "Le fichier « %{path} » ne correspond pas au script attendu et n’a pas pu être supprimé. Veuillez le supprimer manuellement."
+
+  # === External editor ===
+  externalEditor.unknownName: "« %{name} » n’est pas un éditeur que VMark reconnaît par son nom : saisissez plutôt le chemin complet de l’éditeur"
+  externalEditor.notAnEditor: "« %{name} » exécute les fichiers qu’il reçoit au lieu de les ouvrir ; il ne peut donc pas servir d’éditeur externe"
+  externalEditor.notPlainPath: "L’éditeur externe doit être un nom d’éditeur ou un chemin complet, sans « .. » ni barre oblique finale"
 
   # === Genies ===
   genie.pathBlocked: "Le chemin Genie se trouve en dehors des répertoires autorisés"
@@ -412,7 +418,7 @@ errors:
   # === Secure store (secure_store.rs) ===
   secureStore.keychainDenied: "L’accès au trousseau a été refusé. Autorisez VMark dans l’invite du trousseau ou accordez-lui l’accès dans Trousseaux d’accès, puis réessayez."
 
-  # === Autorisations des espaces de travail (workspace_grants/commands.rs, WI-LX1.1) ===
+  # === Autorisations des espaces de travail (workspace/grants/commands.rs, WI-LX1.1) ===
   workspaceAccess.notGranted: "VMark n’a pas accès à « %{path} ». Choisissez le dossier avec Fichier → Ouvrir un espace de travail... pour l’autoriser."
   workspaceAccess.pickerBusy: "Une boîte de dialogue de dossier est déjà ouverte"
   workspaceAccess.checkBusy: "VMark vérifie encore l’accès à ce dossier. Réessayez dans un instant"

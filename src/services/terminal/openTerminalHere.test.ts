@@ -1,11 +1,8 @@
 // @vitest-environment node
 // WI-4.2 — "Open Terminal Here" (F2).
 import { describe, it, expect, beforeEach } from "vitest";
-import {
-  useUIStore,
-  resetTerminalSessionStore,
-  MAX_TERMINAL_SESSIONS,
-} from "@/stores/uiStore";
+import { useUIStore } from "@/stores/uiStore";
+import { MAX_TERMINAL_SESSIONS, resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import { openTerminalHere, canOpenTerminalHere } from "./openTerminalHere";
 
 /** Narrow the discriminated result (audit 20260831 #21) — throws on refusal. */
@@ -24,9 +21,9 @@ describe("openTerminalHere (WI-4.2)", () => {
     const result = openTerminalHere("/w/pkg/api");
 
     expect(result.ok).toBe(true);
-    const session = useUIStore
+    const session = useTerminalStore
       .getState()
-      .terminal.sessions.find((s) => s.id === sessionIdOf(result));
+      .sessions.find((s) => s.id === sessionIdOf(result));
     expect(session?.requestedCwd).toBe("/w/pkg/api");
   });
 
@@ -45,29 +42,29 @@ describe("openTerminalHere (WI-4.2)", () => {
 
   it("activates the new session", () => {
     openTerminalHere("/w/a");
-    const first = useUIStore.getState().terminal.activeSessionId;
+    const first = useTerminalStore.getState().activeSessionId;
     const second = openTerminalHere("/w/b");
-    expect(useUIStore.getState().terminal.activeSessionId).toBe(sessionIdOf(second));
+    expect(useTerminalStore.getState().activeSessionId).toBe(sessionIdOf(second));
     expect(sessionIdOf(second)).not.toBe(first);
   });
 
   it("refuses at the session cap instead of silently doing nothing", () => {
     for (let i = 0; i < MAX_TERMINAL_SESSIONS; i++) {
-      useUIStore.getState().terminalCreateSession();
+      useTerminalStore.getState().terminalCreateSession();
     }
     expect(canOpenTerminalHere()).toBe(false);
 
     const result = openTerminalHere("/w/pkg");
 
     expect(result).toEqual({ ok: false, reason: "max-sessions" });
-    expect(useUIStore.getState().terminal.sessions).toHaveLength(
+    expect(useTerminalStore.getState().sessions).toHaveLength(
       MAX_TERMINAL_SESSIONS,
     );
   });
 
   it("does not reveal the panel when the request was refused", () => {
     for (let i = 0; i < MAX_TERMINAL_SESSIONS; i++) {
-      useUIStore.getState().terminalCreateSession();
+      useTerminalStore.getState().terminalCreateSession();
     }
     openTerminalHere("/w/pkg");
     expect(useUIStore.getState().terminalVisible).toBe(false);
@@ -76,22 +73,22 @@ describe("openTerminalHere (WI-4.2)", () => {
   it.each(["", "   "])("refuses a blank path (%j)", (path) => {
     const result = openTerminalHere(path);
     expect(result).toEqual({ ok: false, reason: "no-directory" });
-    expect(useUIStore.getState().terminal.sessions).toHaveLength(0);
+    expect(useTerminalStore.getState().sessions).toHaveLength(0);
   });
 
   it("canOpenTerminalHere is true below the cap", () => {
     expect(canOpenTerminalHere()).toBe(true);
     for (let i = 0; i < MAX_TERMINAL_SESSIONS - 1; i++) {
-      useUIStore.getState().terminalCreateSession();
+      useTerminalStore.getState().terminalCreateSession();
     }
     expect(canOpenTerminalHere()).toBe(true);
   });
 
   it("preserves a path containing spaces and CJK verbatim", () => {
     const result = openTerminalHere("/Users/me/My 项目");
-    const session = useUIStore
+    const session = useTerminalStore
       .getState()
-      .terminal.sessions.find((s) => s.id === sessionIdOf(result));
+      .sessions.find((s) => s.id === sessionIdOf(result));
     expect(session?.requestedCwd).toBe("/Users/me/My 项目");
   });
 
@@ -99,9 +96,9 @@ describe("openTerminalHere (WI-4.2)", () => {
     // " notes " is a legal directory name on macOS and Linux; trimming it
     // would spawn the shell in a different directory, or none.
     const result = openTerminalHere("/w/ notes ");
-    const session = useUIStore
+    const session = useTerminalStore
       .getState()
-      .terminal.sessions.find((s) => s.id === sessionIdOf(result));
+      .sessions.find((s) => s.id === sessionIdOf(result));
     expect(session?.requestedCwd).toBe("/w/ notes ");
   });
 
@@ -111,7 +108,7 @@ describe("openTerminalHere (WI-4.2)", () => {
     const first = openTerminalHere("/w/a");
     const second = openTerminalHere("/w/b");
     expect(sessionIdOf(second)).not.toBe(sessionIdOf(first));
-    expect(useUIStore.getState().terminal.sessions).toHaveLength(2);
+    expect(useTerminalStore.getState().sessions).toHaveLength(2);
   });
 });
 
@@ -124,37 +121,37 @@ describe("requestedCwd peek/clear (WI-4.2)", () => {
     // The spawn path peeks before spawning and clears only on success — a
     // failed first spawn must still be retryable in the requested directory.
     const sessionId = sessionIdOf(openTerminalHere("/w/pkg"));
-    expect(useUIStore.getState().terminalPeekRequestedCwd(sessionId)).toBe("/w/pkg");
-    expect(useUIStore.getState().terminalPeekRequestedCwd(sessionId)).toBe("/w/pkg");
+    expect(useTerminalStore.getState().terminalPeekRequestedCwd(sessionId)).toBe("/w/pkg");
+    expect(useTerminalStore.getState().terminalPeekRequestedCwd(sessionId)).toBe("/w/pkg");
   });
 
   it("clearing releases it, so a later restart resolves normally", () => {
     const sessionId = sessionIdOf(openTerminalHere("/w/pkg"));
-    useUIStore.getState().terminalClearRequestedCwd(sessionId);
-    expect(useUIStore.getState().terminalPeekRequestedCwd(sessionId)).toBeUndefined();
+    useTerminalStore.getState().terminalClearRequestedCwd(sessionId);
+    expect(useTerminalStore.getState().terminalPeekRequestedCwd(sessionId)).toBeUndefined();
   });
 
   it("returns undefined for a session created without one", () => {
-    const session = useUIStore.getState().terminalCreateSession()!;
-    expect(useUIStore.getState().terminalPeekRequestedCwd(session.id)).toBeUndefined();
+    const session = useTerminalStore.getState().terminalCreateSession()!;
+    expect(useTerminalStore.getState().terminalPeekRequestedCwd(session.id)).toBeUndefined();
   });
 
   it("returns undefined for an unknown session id", () => {
-    expect(useUIStore.getState().terminalPeekRequestedCwd("term-nope")).toBeUndefined();
+    expect(useTerminalStore.getState().terminalPeekRequestedCwd("term-nope")).toBeUndefined();
   });
 
   it("clearing an unknown session id is a no-op that does not touch state", () => {
     openTerminalHere("/w/a");
-    const before = useUIStore.getState().terminal.sessions;
-    useUIStore.getState().terminalClearRequestedCwd("term-nope");
+    const before = useTerminalStore.getState().sessions;
+    useTerminalStore.getState().terminalClearRequestedCwd("term-nope");
     // Same array reference: no subscriber should have been woken.
-    expect(useUIStore.getState().terminal.sessions).toBe(before);
+    expect(useTerminalStore.getState().sessions).toBe(before);
   });
 
   it("clearing one session does not disturb another", () => {
     const a = sessionIdOf(openTerminalHere("/w/a"));
     const b = sessionIdOf(openTerminalHere("/w/b"));
-    useUIStore.getState().terminalClearRequestedCwd(a);
-    expect(useUIStore.getState().terminalPeekRequestedCwd(b)).toBe("/w/b");
+    useTerminalStore.getState().terminalClearRequestedCwd(a);
+    expect(useTerminalStore.getState().terminalPeekRequestedCwd(b)).toBe("/w/b");
   });
 });

@@ -1,4 +1,4 @@
-//! The window a platform builds and the caller's timeout closes (#224, #227).
+//! The window a platform builds and the caller's timeout closes.
 //!
 //! Purpose: WebView2 and WebKitGTK expose no way to cancel a print in flight
 //! or a navigation still loading — destroying the webview is the one lever.
@@ -36,7 +36,7 @@ enum Slot {
     /// The platform's close, waiting for a `run` or a `disarm`.
     Armed(Close),
     /// A `run` arrived before any close did — the window was still being
-    /// built on the main thread. The NEXT `arm` runs immediately (#447);
+    /// built on the main thread. The NEXT `arm` runs immediately;
     /// forgetting the request left that window open for the life of the app.
     Run,
 }
@@ -49,7 +49,7 @@ pub(super) struct Teardown(Mutex<Slot>);
 impl Teardown {
     /// The platform's close for the window it just built. One window per
     /// sink, so one arm per sink; a second replaces the first AND closes the
-    /// window the first named, rather than dropping it (#448). An arm that
+    /// window the first named, rather than dropping it. An arm that
     /// finds a `run` already asked for closes the new window on the spot.
     // macOS arms nothing in production (its body drops its own window), so
     // the host build sees this called from tests alone.
@@ -64,7 +64,7 @@ impl Teardown {
                 // the close cannot re-enter this.
                 Slot::Run => Some(close),
                 Slot::Armed(_) => {
-                    // RELEASE the displaced close, do not drop it (#448). This
+                    // RELEASE the displaced close, do not drop it. This
                     // was a `debug_assert!(false, ..)`, which is two different
                     // behaviours: a panic in a test build, and in a RELEASE
                     // build the silent discard of the first window's only

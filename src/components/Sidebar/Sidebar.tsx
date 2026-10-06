@@ -1,7 +1,7 @@
 /**
  * Sidebar Component
  *
- * Purpose: navigation sidebar. Follows the ACTIVE TAB'S KIND (ADR-2, WI-S2.1):
+ * Purpose: navigation sidebar. Follows the ACTIVE TAB'S KIND (ADR-2):
  * a document tab gets Files / Outline / History, a browser tab gets Browsing
  * History / Bookmarks / Site Permissions.
  *
@@ -82,7 +82,7 @@ const BROWSER_VIEW_CHROME: Record<BrowserSidebarView, {
 /** Navigation sidebar with switchable Files, Outline, and History views. */
 export function Sidebar() {
   const { t } = useTranslation("sidebar");
-  // WI-9.1 (D2): sidebar width/view-mode follow the active workspace instance.
+  // D2: sidebar width/view-mode follow the active workspace instance.
   useSidebarInstanceSync(useWindowLabel());
   const sidebarShortcut = useShortcutsStore((state) => state.getShortcut("toggleSidebar"));
   const newFileShortcut = useShortcutsStore((state) => state.getShortcut("newFile"));
@@ -93,7 +93,7 @@ export function Sidebar() {
   const isWorkspaceMode = useWorkspaceStore((state) => state.isWorkspaceMode);
   const viewMode = useUIStore((state) => state.sidebarViewMode);
   const sidebar = useSidebarContext();
-  // WI-2.3 — bind aria-expanded on the close-sidebar button to live state
+  // Bind aria-expanded on the close-sidebar button to live state
   // instead of hardcoding `true`. The button only renders when the sidebar
   // is open, but binding to the store keeps maintainers honest if rendering
   // conditions change.
@@ -145,7 +145,7 @@ export function Sidebar() {
     }
   }, [filePath, t]);
 
-  // Cycle within the ACTIVE KIND's views (WI-S2.1). This used to always advance the
+  // Cycle within the ACTIVE KIND's views. This used to always advance the
   // DOCUMENT view: with a browser tab open, the button silently rewrote the remembered
   // document sub-view (so returning to a document landed you somewhere you never chose)
   // and could never reach bookmarks at all. (Audit finding, High.)
@@ -218,10 +218,10 @@ export function Sidebar() {
       </div>
 
       <div className="vm-scroll--thin sidebar-content">
-        {/* The sidebar follows the active tab's KIND (ADR-2, WI-S2.1): a browser tab gets
+        {/* The sidebar follows the active tab's KIND (ADR-2): a browser tab gets
             browser views, a document tab gets file views, and neither needs a manual
             switch. Each kind remembers its own sub-view, so glancing at a browser and
-            coming back does not cost you the file tree you had open (WI-S2.3). */}
+            coming back does not cost you the file tree you had open. */}
         {sidebar.kind === "browser" ? (
           <>
             {sidebar.view === "browser-history" && <BrowserHistoryView />}
@@ -236,7 +236,7 @@ export function Sidebar() {
               <>
                 <BrowserGrantsList />
                 {/* Saved sessions + named profiles live alongside site permissions —
-                    both are AI browser authority the user manages here (WI-P6.4/P6.5). */}
+                    both are AI browser authority the user manages here. */}
                 <BrowserSessionsList />
               </>
             )}

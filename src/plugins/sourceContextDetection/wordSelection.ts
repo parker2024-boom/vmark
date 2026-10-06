@@ -3,6 +3,8 @@
  *
  * Detects words at cursor position using the shared word segmentation utility.
  * Matches browser-native word selection behavior (double-click).
+ *
+ * @module plugins/sourceContextDetection/wordSelection
  */
 
 import type { EditorView } from "@codemirror/view";

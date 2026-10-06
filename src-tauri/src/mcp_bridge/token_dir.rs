@@ -4,7 +4,7 @@
 //! half of the threat: another local user cannot READ our file. It says
 //! nothing about the other half — if they can WRITE the directory, they can
 //! unlink our file and put their own there, and the sidecar then presents
-//! their token to whatever endpoint they chose (audit round 2, item 1).
+//! their token to whatever endpoint they chose.
 //!
 //! So the two loosenesses get different answers:
 //!

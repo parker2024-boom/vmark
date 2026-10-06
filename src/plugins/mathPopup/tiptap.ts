@@ -14,6 +14,7 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import type { StoreApi } from "zustand";
 import { MathPopupView, type MathPopupState } from "./MathPopupView";
+import { requirePort } from "@/plugins/shared/requirePort";
 import "./math-popup.css";
 
 const mathPopupPluginKey = new PluginKey("mathPopup");
@@ -44,7 +45,7 @@ export interface MathPopupOptions {
    * stopped this plugin shipping standalone (ADR-015); receiving a store that
    * satisfies its own interface does not.
    */
-  store: StoreApi<MathPopupState>;
+  store: StoreApi<MathPopupState> | undefined;
 }
 
 export const mathPopupExtension = Extension.create<MathPopupOptions>({
@@ -54,15 +55,10 @@ export const mathPopupExtension = Extension.create<MathPopupOptions>({
   // misconfigured, and saying so beats a `undefined is not an object` from
   // somewhere inside the view.
   addOptions() {
-    return { store: undefined as unknown as StoreApi<MathPopupState> };
+    return { store: undefined };
   },
   addProseMirrorPlugins() {
-    const { store } = this.options;
-    if (!store) {
-      throw new Error(
-        "mathPopupExtension requires a `store` option — see services/assembly/tiptapExtensions.ts"
-      );
-    }
+    const store = requirePort(this.options.store, "mathPopupExtension", "store");
     return [
       new Plugin({
         key: mathPopupPluginKey,

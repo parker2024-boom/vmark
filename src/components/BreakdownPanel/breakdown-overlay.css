@@ -1,4 +1,4 @@
-/* Breakdown panel mount (WI-1.9b) — floating, top-right, above content. */
+/* Breakdown panel mount — floating, top-right, above content. */
 .breakdown-overlay {
   /* ui-ok(overlay): corner-card ANCHOR — positions only; the panel chrome
      lives on the child .breakdown-panel, and there is no backdrop */

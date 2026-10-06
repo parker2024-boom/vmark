@@ -435,7 +435,7 @@ describe("TabContextMenu", () => {
       expect(item).not.toBeDisabled();
     });
 
-    it("closes all tabs including pinned", async () => {
+    it("closes the pinned tab too once the confirmation is accepted", async () => {
       // Pin tab-1
       useTabStore.getState().togglePin("main", "tab-1");
       expect(useTabStore.getState().tabs.main[0]?.isPinned).toBe(true);
@@ -450,12 +450,12 @@ describe("TabContextMenu", () => {
         />
       );
 
+      mocks.ask.mockResolvedValueOnce(true);
       fireEvent.click(screen.getByRole("menuitem", { name: "Close All" }));
 
-      await waitFor(() => {
-        expect(mocks.closeTabsWithDirtyCheck).toHaveBeenCalledWith("main", ["tab-1", "tab-2"]);
-      });
-      expect(onClose).toHaveBeenCalled();
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(mocks.ask).toHaveBeenCalledTimes(1);
+      expect(mocks.closeTabWithDirtyCheck.mock.calls).toEqual([["main", "tab-2"], ["main", "tab-1"]]);
     });
   });
 
@@ -761,7 +761,7 @@ describe("TabContextMenu", () => {
 
     it("ignores repeat activation while an action is still running", async () => {
       let release!: (value: boolean) => void;
-      mocks.closeTabsWithDirtyCheck.mockImplementationOnce(
+      mocks.closeTabWithDirtyCheck.mockImplementationOnce(
         () => new Promise<boolean>((resolve) => { release = resolve; })
       );
       render(
@@ -779,7 +779,7 @@ describe("TabContextMenu", () => {
       fireEvent.click(closeAll);
       fireEvent.keyDown(screen.getByRole("menu", { name: "Tab actions" }), { key: "Enter" });
 
-      expect(mocks.closeTabsWithDirtyCheck).toHaveBeenCalledTimes(1);
+      expect(mocks.closeTabWithDirtyCheck).toHaveBeenCalledTimes(1);
       await act(async () => { release(true); });
     });
 

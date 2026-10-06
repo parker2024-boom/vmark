@@ -41,6 +41,8 @@
  *     hold either way, and over-including is the safe direction for a guard.
  *   - Each call scans the whole document; a single-pass/syntax-tree rewrite is
  *     deferred (out of scope).
+ *
+ * @module plugins/sourceContextDetection/codeFenceDetection
  */
 
 import type { EditorState, Text } from "@codemirror/state";

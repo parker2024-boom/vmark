@@ -14,7 +14,7 @@
   justify-content: center;
   /* --accent-rgb was never defined anywhere, so the "fallback" 66,133,244 —
      Google blue — was the only value this ever rendered, on every theme
-     (WI-UI0.2 C2e). color-mix on the real accent token replaces it. */
+     (C2e). color-mix on the real accent token replaces it. */
   background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
   border: var(--border-medium) dashed var(--accent-primary, #4285f4);
   border-radius: var(--radius-lg);

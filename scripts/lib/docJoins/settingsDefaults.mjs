@@ -2,7 +2,7 @@
  * Purpose: join the Default columns of website/guide/settings.md and
  *   website/guide/terminal.md to src/stores/settingsStore/defaults.ts, in both
  *   directions, so a documented default cannot drift from the shipped one and a
- *   row cannot appear or vanish unnoticed (WI-FL0.4).
+ *   row cannot appear or vanish unnoticed.
  *
  * Why structural and two-way (Codex objection #7): the previous guard,
  * `terminalDocDefaults.test.ts`, transcribed the terminal table by hand and
@@ -17,9 +17,10 @@
  *   - the value defaults.ts ships, rendered the way that page spells it, equals
  *     the row's Default cell.
  *
- * Rendering is explicit per row (`settingsDefaultsRowMap.mjs`): `true` → On,
- * `0.4` → 40% on settings.md but 40 % on terminal.md, enum values through a
- * value→label map in the page's own vocabulary. A default the code computes at
+ * Rendering is explicit per row (`settingsDefaultsRowMap.mjs`, rendered by
+ * `settingsDefaultsRender.mjs`): `true` → On, `0.4` → 40% on settings.md but
+ * 40 % on terminal.md, enum values through a value→label map in the page's own
+ * vocabulary. A default the code computes at
  * runtime (the language auto-detect) or keeps outside defaults.ts (the two
  * per-workspace file-browser rows) is pinned with `{ expected, reason }`; a
  * documented row that is not a persisted default at all (an action button) is
@@ -32,7 +33,7 @@
  * Measured on adoption: the import succeeds in plain Node — `resolveInitialLanguage()`
  * guards its `navigator` read, and Node ≥ 21 has a `navigator` global anyway.
  * If it ever fails, `loadDefaults` falls back to the textual parse
- * `parseSettingsDefaults` from scripts/gen-feature-ledger.mjs (dotted key →
+ * `parseSettingsDefaults` from scripts/lib/settingsDefaultsSource.mjs (dotted key →
  * literal), JSON-parses each literal, spreads `DEFAULT_CJK_FORMATTING` imported
  * from src/lib/cjkFormatter/types.ts, and marks a non-literal initialiser as
  * `{ unresolved }` so a renderer fails loudly on it. `run()` reports which path
@@ -50,19 +51,21 @@
  *
  * @coordinates-with scripts/lib/docJoins/settingsDefaultsRowMap.mjs — the row map
  * @coordinates-with scripts/lib/docJoins/markdownTables.mjs — the structural table parser
- * @coordinates-with scripts/gen-feature-ledger.mjs — parseSettingsDefaults, the textual fallback
+ * @coordinates-with scripts/lib/docJoins/settingsDefaultsRender.mjs — the value renderers
+ * @coordinates-with scripts/lib/settingsDefaultsSource.mjs — parseSettingsDefaults, the textual fallback
  * @coordinates-with src/pages/settings/__tests__/terminalDocRanges.test.ts — the Range half that stayed in the app tier
  * @module scripts/lib/docJoins/settingsDefaults
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { parseSettingsDefaults } from "../../gen-feature-ledger.mjs";
+import { parseSettingsDefaults } from "../settingsDefaultsSource.mjs";
 import { defaultRows, parseTables, splitRow, stripMarkdown } from "./markdownTables.mjs";
 import { ROW_MAP } from "./settingsDefaultsRowMap.mjs";
+import { RENDERERS, lookup, renderDefault } from "./settingsDefaultsRender.mjs";
 
-/** The table parser and the row map, re-exported so this module is the whole join for its consumers and tests. */
-export { ROW_MAP, defaultRows, parseTables, splitRow, stripMarkdown };
+/** The table parser, the row map and the renderers, re-exported so this module is the whole join for its consumers and tests. */
+export { ROW_MAP, defaultRows, parseTables, splitRow, stripMarkdown, RENDERERS, lookup, renderDefault };
 
 export const id = "settings-defaults";
 
@@ -76,59 +79,6 @@ export const DEFAULT_PATHS = {
 const PAGES = ["settings", "terminal"];
 
 const REPO_ROOT = resolve(import.meta.dirname, "../../..");
-
-// ── Renderers: a defaults.ts value → the string the page writes ────────────
-
-function expectType(value, type, render) {
-  const ok = type === "array" ? Array.isArray(value) : typeof value === type;
-  if (!ok) throw new Error(`renderer "${render}" expects ${type === "array" ? "an array" : `a ${type}`}, got ${JSON.stringify(value)}`);
-  return value;
-}
-
-/** terminal.md writes `13 px` and `40 %`; settings.md writes `13px` and `40%`. */
-const unit = (page, symbol) => (page === "terminal" ? ` ${symbol}` : symbol);
-
-export const RENDERERS = {
-  onOff: (v) => (expectType(v, "boolean", "onOff") ? "On" : "Off"),
-  number: (v) => String(expectType(v, "number", "number")),
-  seconds: (v) => `${expectType(v, "number", "seconds")} seconds`,
-  px: (v, page) => `${expectType(v, "number", "px")}${unit(page, "px")}`,
-  percent: (v, page) => `${Math.round(expectType(v, "number", "percent") * 100)}${unit(page, "%")}`,
-  thousands: (v) => expectType(v, "number", "thousands").toLocaleString("en-US"),
-  text: (v) => expectType(v, "string", "text") || "(empty)",
-  list: (v) => expectType(v, "array", "list").join(", "),
-};
-
-/** Render `value` per a ROW_MAP `render` spec (a renderer name, `{ enum }` or `{ suffix, zero? }`); throws on anything it cannot express. */
-export function renderDefault(render, value, page) {
-  if (typeof render === "string") {
-    const fn = RENDERERS[render];
-    if (!fn) throw new Error(`unknown renderer "${render}"`);
-    return fn(value, page);
-  }
-  if (render && typeof render === "object") {
-    if ("enum" in render) {
-      const label = Object.hasOwn(render.enum, String(value)) ? render.enum[String(value)] : undefined;
-      if (label === undefined) throw new Error(`no label for value ${JSON.stringify(String(value))} in the enum map`);
-      return label;
-    }
-    if ("suffix" in render) {
-      if (value === 0 && render.zero !== undefined) return render.zero;
-      return `${expectType(value, "number", "suffix")}${render.suffix}`;
-    }
-  }
-  throw new Error(`unknown renderer ${JSON.stringify(render)}`);
-}
-
-/** `defaults.terminal.fontSize` for "terminal.fontSize"; undefined for any missing segment (own properties only). */
-export function lookup(defaults, dotted) {
-  let cur = defaults;
-  for (const part of dotted.split(".")) {
-    if (cur === null || typeof cur !== "object" || !Object.hasOwn(cur, part)) return undefined;
-    cur = cur[part];
-  }
-  return cur;
-}
 
 // ── The join ───────────────────────────────────────────────────────────────
 

@@ -56,7 +56,7 @@ vi.mock("@/plugins/shared/popupHostDom", () => ({
 
 // Mock KaTeX loader
 const mockRender = vi.fn();
-vi.mock("@/plugins/latex/katexLoader", () => ({
+vi.mock("@/plugins/shared/katexLoader", () => ({
   loadKatex: vi.fn(() =>
     Promise.resolve({
       default: {
@@ -440,7 +440,7 @@ describe("MathPopupView", () => {
     });
 
     it("shows error when KaTeX loader fails", async () => {
-      const { loadKatex } = await import("@/plugins/latex/katexLoader");
+      const { loadKatex } = await import("@/plugins/shared/katexLoader");
       vi.mocked(loadKatex).mockRejectedValueOnce(new Error("Module not found"));
 
       emitStateChange({ isOpen: true, latex: "x^2", nodePos: 5, anchorRect });
@@ -541,7 +541,7 @@ describe("MathPopupView", () => {
 
   describe("Stale render token handling", () => {
     it("ignores stale loadKatex resolve when token changed (line 185)", async () => {
-      const { loadKatex } = await import("@/plugins/latex/katexLoader");
+      const { loadKatex } = await import("@/plugins/shared/katexLoader");
       let resolveKatex!: (val: unknown) => void;
       vi.mocked(loadKatex).mockImplementationOnce(
         () => new Promise<unknown>((resolve) => { resolveKatex = resolve; })
@@ -566,7 +566,7 @@ describe("MathPopupView", () => {
     });
 
     it("ignores stale loadKatex rejection when token changed (line 197)", async () => {
-      const { loadKatex } = await import("@/plugins/latex/katexLoader");
+      const { loadKatex } = await import("@/plugins/shared/katexLoader");
       let rejectKatex!: (err: unknown) => void;
       vi.mocked(loadKatex).mockImplementationOnce(
         () => new Promise<unknown>((_, reject) => { rejectKatex = reject; })
@@ -591,7 +591,7 @@ describe("MathPopupView", () => {
     });
 
     it("does not resurrect a cleared preview when a stale render resolves after input is emptied", async () => {
-      const { loadKatex } = await import("@/plugins/latex/katexLoader");
+      const { loadKatex } = await import("@/plugins/shared/katexLoader");
       let resolveKatex!: (val: unknown) => void;
       vi.mocked(loadKatex).mockImplementationOnce(
         () => new Promise<unknown>((resolve) => { resolveKatex = resolve; })
@@ -712,7 +712,7 @@ describe("MathPopupView", () => {
 
   describe("renderPreview — loadKatex catch with non-Error (line 198)", () => {
     it("handles non-Error rejection from loadKatex", async () => {
-      const { loadKatex } = await import("@/plugins/latex/katexLoader");
+      const { loadKatex } = await import("@/plugins/shared/katexLoader");
       vi.mocked(loadKatex).mockRejectedValueOnce("string error");
 
       emitStateChange({ isOpen: true, latex: "x^2", nodePos: 5, anchorRect });

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { useDocumentStore, setTabExistenceGuard } from "./documentStore";
 import { useTabStore } from "./tabStore";
 
@@ -236,14 +236,17 @@ describe("documentStore", () => {
       initDocument(WINDOW_LABEL, "Initial");
       setEditorContent(WINDOW_LABEL, "Modified");
 
-      const beforeTime = Date.now();
-      markAutoSaved(WINDOW_LABEL, { editorSnapshot: "Modified", diskSnapshot: "Modified" });
-      const afterTime = Date.now();
+      const savedAt = Date.UTC(2026, 0, 2, 3, 4, 5);
+      vi.setSystemTime(savedAt);
+      try {
+        markAutoSaved(WINDOW_LABEL, { editorSnapshot: "Modified", diskSnapshot: "Modified" });
+      } finally {
+        vi.useRealTimers();
+      }
 
       const doc = getDocument(WINDOW_LABEL);
       expect(doc?.isDirty).toBe(false);
-      expect(doc?.lastAutoSave).toBeGreaterThanOrEqual(beforeTime);
-      expect(doc?.lastAutoSave).toBeLessThanOrEqual(afterTime);
+      expect(doc?.lastAutoSave).toBe(savedAt);
     });
 
     it("keeps isDirty true when content diverged during auto-save (TOCTOU)", () => {
@@ -574,34 +577,6 @@ describe("documentStore", () => {
       removeDocument(WINDOW_LABEL);
 
       expect(getDocument(WINDOW_LABEL)).toBeUndefined();
-    });
-  });
-
-  describe("getAllDirtyDocuments", () => {
-    it("returns all tab IDs with dirty documents", () => {
-      const { initDocument, setEditorContent, getAllDirtyDocuments } = useDocumentStore.getState();
-
-      initDocument("tab-1", "Content 1");
-      initDocument("tab-2", "Content 2");
-      initDocument("tab-3", "Content 3");
-
-      setEditorContent("tab-1", "Modified 1");
-      setEditorContent("tab-3", "Modified 3");
-
-      const dirtyTabs = getAllDirtyDocuments();
-      expect(dirtyTabs).toHaveLength(2);
-      expect(dirtyTabs).toContain("tab-1");
-      expect(dirtyTabs).toContain("tab-3");
-      expect(dirtyTabs).not.toContain("tab-2");
-    });
-
-    it("returns empty array when no documents are dirty", () => {
-      const { initDocument, getAllDirtyDocuments } = useDocumentStore.getState();
-
-      initDocument("tab-1");
-      initDocument("tab-2");
-
-      expect(getAllDirtyDocuments()).toHaveLength(0);
     });
   });
 

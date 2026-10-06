@@ -7,7 +7,7 @@
  * arrive as no event at all, and the user's first act on returning is to look
  * at the tree. Regaining focus therefore asks for a scan.
  *
- * Split out of `useFileTree` (audit R3 #650), where it sat between the loader
+ * Split out of `useFileTree`, where it sat between the loader
  * and the watcher lifecycle as a third, unrelated subscription. Nothing about
  * it is specific to the file tree except its caller — it listens, and it calls
  * back.

@@ -154,7 +154,7 @@ describe("Korean is deliberately untouched by the spacing rules", () => {
   // Korean uses native word spacing, and particles attach directly to the
   // preceding word — `VMark에는`, not `VMark 에는`. Inserting a space is a
   // GRAMMAR error, not a typography preference. Hangul is therefore absent
-  // from CJK_NO_KOREAN and from isCJKLetter, and this pins that so a future
+  // from CJK_LETTER_CLASS and from isCJKLetter, and this pins that so a future
   // reader who notices the omission does not "fix" it.
   it.each([
     ["particles after Latin", "VMark에는 Python으로 iPhone을"],

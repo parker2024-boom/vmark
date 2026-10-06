@@ -186,7 +186,7 @@ export function sourceBlockSpan(lines: readonly string[], fromLine: number, toLi
   // SAFETY rule, not tidiness. A span is a slice of the document, and every
   // downstream protection anchors frontmatter at offset 0 of the text it is
   // handed: `sourceCjkActions` runs `formatMarkdown` over the slice. Since the
-  // opening `---` became a one-line block (#440), a selection INSIDE the
+  // opening `---` became a one-line block, a selection INSIDE the
   // frontmatter produced a slice starting at `title: …`, which reads as
   // ordinary prose — and CJK formatting rewrote the YAML separator into a
   // fullwidth `：`, breaking the document's metadata.

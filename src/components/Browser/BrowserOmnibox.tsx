@@ -37,7 +37,7 @@ export function BrowserOmnibox({ tabId }: { tabId: string }): React.ReactElement
   const { t } = useTranslation("common");
   const urlInput = useBrowserUiStore((s) => s.entries[tabId]?.urlInput ?? "");
   const loading = useBrowserUiStore((s) => s.entries[tabId]?.loading ?? false);
-  // Mirrored from the webview's own back/forward list (WI-S1.6) — a fresh tab has
+  // Mirrored from the webview's own back/forward list — a fresh tab has
   // no history, so these controls must be disabled rather than silently do nothing.
   const canGoBack = useBrowserUiStore((s) => s.entries[tabId]?.canGoBack ?? false);
   const canGoForward = useBrowserUiStore((s) => s.entries[tabId]?.canGoForward ?? false);

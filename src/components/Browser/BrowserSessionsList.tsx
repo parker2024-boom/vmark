@@ -1,12 +1,12 @@
 /**
- * BrowserSessionsList — manage saved sessions and named profiles (WI-P6.4/P6.5).
+ * BrowserSessionsList — manage saved sessions and named profiles.
  *
  * The AI reuses logins by handle (session save/load) and by named profile
  * (persistent contexts). This is where the user sees what has been saved and takes
  * it back — "forget" a saved session (clears the keychain blob via
  * `browser_forget_storage_state`) or "remove" a named profile (revokes its on-disk
  * WebKit store via `browser_forget_profile`, so removal actually cancels the login,
- * not just the list row — sec review WI-P6.1 Medium).
+ * not just the list row).
  *
  * It shows only metadata (handle/profile name + a value-free count summary) — never
  * a credential value.
@@ -29,7 +29,7 @@ export function BrowserSessionsList(): React.ReactElement {
   // Removal is only reported done once the NATIVE side confirms it (the store row is
   // dropped after the invoke resolves, never before). A failed revocation keeps the
   // row and shows why, so the UI never claims a login is gone while it survives on
-  // disk (sec review WI-P6.1 Removal).
+  // disk.
   const [error, setError] = useState<string | null>(null);
 
   const forgetSession = async (handle: string): Promise<void> => {

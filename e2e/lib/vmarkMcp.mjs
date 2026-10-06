@@ -24,11 +24,13 @@
  * @coordinates-with server/mcp/src/cli.ts — the process spawned here
  * @coordinates-with server/mcp/src/utils/portFile.ts — how it finds VMark
  * @coordinates-with src-tauri/tauri.dev.conf.json — the dev profile identifier
+ * @coordinates-with e2e/lib/sidecarBridge.mjs — what "connected" means before a journey runs
  */
 
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createStdioChannel } from "./jsonRpcStdio.mjs";
+import { awaitSidecarBridge } from "./sidecarBridge.mjs";
 import { readFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
@@ -142,7 +144,7 @@ export async function bridgeReady() {
   // Resolved OUTSIDE the catch. A missing dev identifier is a configuration
   // error, not "the bridge is not up yet" — swallowing it made a misconfigured
   // dev profile silently SKIP coverage-required journeys, reporting the same
-  // green as a run that exercised them (audit finding #9). Only the absent
+  // green as a run that exercised them. Only the absent
   // port file below is an expected, suppressible condition.
   const path = portFilePath();
   try {
@@ -232,7 +234,7 @@ export async function startVmarkMcp({ rebuild = true } = {}) {
   }
   channel.notify("notifications/initialized", {});
 
-  return {
+  const client = {
     async listTools() {
       const reply = await channel.send("tools/list", {});
       if (reply.error) throw new Error(`tools/list failed: ${JSON.stringify(reply.error)}`);
@@ -265,4 +267,15 @@ export async function startVmarkMcp({ rebuild = true } = {}) {
 
     close: () => channel.close(),
   };
+
+  // The handshake proves stdio, not the bridge: the sidecar dials VMark only
+  // after serving stdio, so wait until a call crosses it (sidecarBridge.mjs).
+  try {
+    await awaitSidecarBridge((name, args) => client.callTool(name, args));
+  } catch (err) {
+    await channel.close();
+    const stderr = channel.stderr().trim();
+    throw new Error(stderr ? `${err.message}\nstderr:\n${stderr}` : err.message);
+  }
+  return client;
 }

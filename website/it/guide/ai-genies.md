@@ -12,7 +12,7 @@ I Genies IA sono modelli di prompt che trasformano il tuo testo usando l'IA. Sel
 
 ## Il Selettore Genie
 
-Premi `Mod + Y` (o menu **Strumenti > Genies IA**) per aprire un overlay in stile Spotlight con un singolo input unificato.
+Premi `Mod + Y` (o menu **Modifica → Geni → Cerca geni…**) per aprire un overlay in stile Spotlight con un singolo input unificato. Lo stesso sottomenu elenca ogni genie per nome, quindi un genie può anche essere eseguito direttamente dal menu.
 
 **Ricerca e prompt libero** — Inizia a digitare per filtrare i genies per nome, descrizione o categoria. Se nessun genie corrisponde, l'input diventa un campo per prompt libero.
 
@@ -22,17 +22,17 @@ Premi `Mod + Y` (o menu **Strumenti > Genies IA**) per aprire un overlay in stil
 
 **Ciclo ambito** — Premi `Tab` per ciclare tra gli ambiti: selezione → blocco → documento → tutto.
 
-**Cronologia prompt** — In modalità prompt libero (nessun genie corrispondente), premi `ArrowUp` / `ArrowDown` per ciclare tra i prompt precedenti. Premi `Ctrl + R` per aprire un menu a discesa con cronologia ricercabile. Il testo fantasma mostra il prompt corrispondente più recente come suggerimento grigio — premi `Tab` per accettarlo.
+**Cronologia prompt** — In modalità prompt libero (nessun genie corrispondente), premi `ArrowUp` / `ArrowDown` per ciclare tra i prompt precedenti. Premi `Ctrl + R` per aprire un menu a discesa con cronologia ricercabile; il suo pulsante **Cancella cronologia** svuota in un colpo solo la cronologia salvata (fino a 100 prompt), senza chiedere conferma. Il testo fantasma mostra il prompt corrispondente più recente come suggerimento grigio — premi `Tab` per accettarlo, oppure `Escape` per ignorarlo (ricompare quando modifichi ciò che hai digitato).
 
 ### Feedback di Elaborazione
 
 Dopo aver selezionato un genie o inviato un prompt libero, il selettore mostra un feedback inline:
 
 - **In elaborazione** — Un indicatore di pensiero con contatore del tempo trascorso. Premi `Escape` per annullare.
-- **Anteprima** — La risposta IA viene trasmessa in tempo reale. Usa `Accetta` per applicare o `Rifiuta` per scartare.
+- **Anteprima** — La risposta IA compare man mano che arriva: i provider CLI la trasmettono in streaming mentre viene generata, mentre i provider REST consegnano l'intera risposta in una volta quando la richiesta è completata. Usa `Accetta` per applicare o `Rifiuta` per scartare.
 - **Errore** — Se qualcosa va storto, appare il messaggio di errore con un pulsante `Riprova`.
 
-La barra di stato mostra anche i progressi dell'IA — un'icona girevole con il tempo trascorso durante l'esecuzione, un breve flash "Completato" al completamento, o un indicatore di errore con i pulsanti Riprova/Ignora. La barra di stato si mostra automaticamente quando l'IA è attiva, anche se in precedenza l'hai nascosta con `F7`.
+La barra di stato mostra anche i progressi dell'IA — un'icona girevole con il tempo trascorso durante l'esecuzione, un breve flash "Completato" al completamento, o un indicatore di errore con i pulsanti **Riprova** e **Ignora**. **Riprova** esegue di nuovo la richiesta fallita — lo stesso genie o lo stesso prompt, sulla selezione corrente — anche dopo la chiusura del selettore; non compare quando non c'è nulla da ripetere, per esempio senza provider. La barra di stato si mostra automaticamente quando l'IA è attiva, anche se in precedenza l'hai nascosta con `F7`.
 
 ## Genies Integrati
 
@@ -130,11 +130,11 @@ I genies sono memorizzati nella directory dei dati dell'applicazione:
 | Windows | `%APPDATA%\app.vmark\genies\` |
 | Linux | `~/.local/share/app.vmark/genies/` |
 
-Apri questa cartella dal menu **Strumenti > Apri cartella Genies**.
+Apri questa cartella dal menu **Modifica → Geni → Apri cartella geni**; dopo aver aggiunto o modificato dei file, **Modifica → Geni → Ricarica geni** aggiorna l'elenco.
 
 ### Struttura delle Directory
 
-Le sottodirectory diventano **categorie** nel selettore. Puoi organizzare i genies come preferisci:
+Le sottodirectory diventano **categorie** nel selettore, e la scansione è ricorsiva — annida le cartelle a qualsiasi profondità; la categoria di un genie è il percorso della sua cartella relativo a `genies/` (quindi `academic/thesis/abstract.md` finisce in `academic/thesis`), a meno che il frontmatter non imposti `category`. I collegamenti simbolici vengono ignorati. Puoi organizzare i genies come preferisci:
 
 ```text
 genies/
@@ -193,7 +193,7 @@ Il segnaposto `{{content}}` è il nucleo di ogni genie. Quando un genie viene es
 1. **Estrae il testo** in base all'ambito (testo selezionato, blocco corrente o intero documento)
 2. **Sostituisce** ogni `{{content}}` nel tuo template con il testo estratto
 3. **Invia** il prompt compilato al provider IA attivo
-4. **Trasmette** la risposta come suggerimento inline
+4. **Restituisce** la risposta come suggerimento inline — in streaming man mano che viene generata da un provider CLI, in un unico blocco da un provider REST
 
 Per esempio, con questo template:
 
@@ -533,7 +533,7 @@ Quando viene eseguito un passaggio `genie/<name>` di un workflow, il testo del d
 
 **"Nessun provider IA disponibile"** — Apri Impostazioni > Integrazioni e configura un provider. Vedi [Provider IA](/it/guide/ai-providers).
 
-**Il genie non appare nel selettore** — Verifica che il file abbia un'estensione `.md`, un frontmatter valido con delimitatori `---` e si trovi nella directory dei genies. Le sottocartelle vengono analizzate fino a otto livelli di profondità (e al massimo 10.000 voci in totale), e i collegamenti simbolici vengono ignorati.
+**Il genie non appare nel selettore** — Verifica che il file abbia un'estensione `.md` (o `.yml`/`.yaml` per un [genie del workflow](/it/guide/workflow-genies)) e un frontmatter valido con delimitatori `---`. Le sottocartelle vengono analizzate fino a otto livelli di profondità (e al massimo 10.000 voci in totale), e i collegamenti simbolici vengono ignorati. Esegui **Modifica → Geni → Ricarica geni** dopo aver aggiunto dei file.
 
 **L'IA restituisce spazzatura o errori** — Verifica che la tua chiave API sia corretta e che il nome del modello sia valido per il tuo provider. Controlla il terminale/console per i dettagli dell'errore.
 

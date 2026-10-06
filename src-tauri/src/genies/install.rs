@@ -3,7 +3,7 @@
 //! Bundles default genie templates (via `include_str!`) and installs
 //! them into the app data directory on first run.
 //!
-//! A genie is PUBLISHED, never written in place (#153): the bytes go to a
+//! A genie is PUBLISHED, never written in place: the bytes go to a
 //! sibling temp file, and the final name is claimed with an atomic
 //! no-clobber rename (`NamedTempFile::persist_noclobber`), which refuses an
 //! existing target. `create_new` + `write_all` used to reserve the final name
@@ -15,7 +15,12 @@
 //! filesystem with no no-clobber primitive reports an error rather than
 //! renaming over whatever is there.
 //!
-//! What counts as "already installed" is what the picker can list (#154):
+//! The bytes are synced before the claim; the directory is not synced after
+//! it. Install runs at every launch and creates whatever is missing, so a
+//! claim a crash undid is simply made again — and a file that is there is
+//! always complete.
+//!
+//! What counts as "already installed" is what the picker can list:
 //! `scanning.rs` never follows symlinks, so a link squatting on a genie's
 //! name — like a directory or a socket — is reported, not counted. One
 //! squatter does not stop the rest of the bundle from landing.
@@ -142,7 +147,7 @@ fn install_one(base: &Path, canonical_base: &Path, genie: &DefaultGenie) -> Resu
     let target = base.join(genie.path);
 
     // Create parent directories — and refuse one that resolves outside
-    // the genies directory (#152): a category directory replaced by a
+    // the genies directory: a category directory replaced by a
     // symlink would otherwise have the bundled files written wherever it
     // points.
     if let Some(parent) = target.parent() {
@@ -152,12 +157,12 @@ fn install_one(base: &Path, canonical_base: &Path, genie: &DefaultGenie) -> Resu
     }
 
     // Already installed — the common case on every launch after the
-    // first. Only a regular file counts (#154): a directory, a socket, a
+    // first. Only a regular file counts: a directory, a socket, a
     // link squatting on the name is an error, not a genie. The publish
     // below re-checks atomically, so this is only a shortcut around writing
     // thirteen temp files per launch.
     //
-    // ONE stat, and only `NotFound` reaches the publish (#348). `is_ok()`
+    // ONE stat, and only `NotFound` reaches the publish. `is_ok()`
     // followed by a second `symlink_metadata` inside `already_installed` read
     // the name twice: a file deleted between the two reported "exists but is
     // not a readable file: No such file or directory" and left the genie
@@ -188,7 +193,7 @@ fn ensure_inside(parent: &Path, canonical_base: &Path) -> Result<(), String> {
 }
 
 /// What may sit at a genie's final name and count as installed: a regular
-/// file, and nothing else (#154). The scanner never follows links, so a
+/// file, and nothing else. The scanner never follows links, so a
 /// symlink at the name — even one that resolves to a regular file — is a
 /// genie the picker will not list; counting it as installed would leave that
 /// genie missing on every launch, silently. A directory, a socket or a
@@ -216,7 +221,7 @@ fn already_installed(target: &Path, meta: &fs::Metadata) -> Result<(), String> {
 /// filesystem has no such rename, `link` + `unlink`, which refuses an existing
 /// target just the same. Neither tier can overwrite, so nothing that lands on
 /// the name after the installer's check can be lost to the bundle. What the
-/// claim refused to clobber must be a regular file (#154), or the refusal is
+/// claim refused to clobber must be a regular file, or the refusal is
 /// reported rather than counted as installed.
 fn publish_no_clobber(target: &Path, content: &[u8]) -> Result<(), String> {
     publish_with(target, content, claim_no_clobber)
@@ -259,7 +264,7 @@ fn publish_with(
             // `EEXIST` on Unix, `ERROR_ALREADY_EXISTS` on Windows — and, for a
             // directory at the name, some kernels say `EISDIR` instead. What
             // decides is whether something holds the name, not which errno.
-            // One stat, and only a `NotFound` is "nothing is there" (#348).
+            // One stat, and only a `NotFound` is "nothing is there".
             match fs::symlink_metadata(target) {
                 Ok(meta) => already_installed(target, &meta),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {

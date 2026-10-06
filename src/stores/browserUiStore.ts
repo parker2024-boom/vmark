@@ -1,5 +1,5 @@
 /**
- * browserUiStore — transient, per-tab browser navigation UI state (WI-S1.1 / ADR-5).
+ * browserUiStore — transient, per-tab browser navigation UI state (ADR-5).
  *
  * The browser's address-bar text (`urlInput`) and `loading` flag used to live in
  * `BrowserSurface`'s local `useState`. Once the nav chrome moves into the bottom
@@ -13,7 +13,7 @@
  * `tabStore`. Entries are seeded on surface mount and dropped on tab close.
  *
  * Every entry carries the page GENERATION it last accepted, and every mutator that
- * mirrors page state takes an optional generation stamp (audit round 3, #154). Nav
+ * mirrors page state takes an optional generation stamp. Nav
  * events cross the IPC boundary and can arrive out of order: a late `loaded` for a
  * page the tab has left used to rewrite the omnibox and the spinner, because only
  * the handler in `browserTabEvents` guarded it and only the tab record refused it.
@@ -29,7 +29,7 @@
  */
 import { create } from "zustand";
 
-/** How the native side is recovering from a content-process crash (WI-1.8):
+/** How the native side is recovering from a content-process crash:
  *  it is already reloading, or the user has to act. */
 export type CrashAction = "auto-reload" | "manual";
 
@@ -45,12 +45,12 @@ export interface BrowserUiEntry {
   urlInput: string;
   /** True while a load is in flight (drives the reload↔stop control + spinner). */
   loading: boolean;
-  /** WKWebView's back/forward-list state (WI-S1.6). The omnibox disables its
+  /** WKWebView's back/forward-list state. The omnibox disables its
    *  history controls from these — without them they are no-op buttons. */
   canGoBack: boolean;
   canGoForward: boolean;
   /**
-   * The native view is currently hidden by an occluder (WI-SOC.1b).
+   * The native view is currently hidden by an occluder.
    *
    * Hiding it leaves a BLANK rect, which shows through a translucent backdrop or
    * beside a small popup. `BrowserSurface` paints an opaque placeholder while this
@@ -60,7 +60,7 @@ export interface BrowserUiEntry {
    */
   frozen: boolean;
   /**
-   * The last failure on this tab, or null (WI-S0.9).
+   * The last failure on this tab, or null.
    *
    * Every browser command used to swallow its rejection (`.catch(() => {})`), so a
    * failed create or navigate produced a blank viewport and a stale address bar with
@@ -77,18 +77,18 @@ export interface BrowserUiEntry {
    */
   blockedPopup: { url: string; at: number } | null;
   /**
-   * Non-null while a page JS dialog (`alert`/`confirm`) is open (WI-1.7). Held in
+   * Non-null while a page JS dialog (`alert`/`confirm`) is open. Held in
    * the store, not in the surface component (audit 2026-09-03): the event arrives
    * for whichever tab the page belongs to, mounted or not, and a `confirm()` parks
    * the page's JS until someone answers — so the tab is brought forward and the
    * surface renders the dialog from here when it mounts.
    */
   dialog: BrowserDialog | null;
-  /** Non-null while the web content process is down (WI-1.8). Same reasoning. */
+  /** Non-null while the web content process is down. Same reasoning. */
   crash: { action: CrashAction } | null;
   /**
-   * The navigation generation of the newest page event this entry accepted
-   * (audit round 3, #154). Monotonic: a stamped mutator older than this is refused
+   * The navigation generation of the newest page event this entry accepted.
+   * Monotonic: a stamped mutator older than this is refused
    * in the store, so a late event for a page the tab has left cannot rewrite the
    * omnibox, spinner, history flags, error, popup, dialog or crash state.
    */

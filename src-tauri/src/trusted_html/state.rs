@@ -3,7 +3,7 @@
 //! Purpose: hold the documents the user has explicitly authorized to execute,
 //! keyed by an unguessable token and OWNED by the window that authorized them.
 //! `protocol.rs` serves them; `commands.rs` mints and revokes them. Managed
-//! state (`.manage()`, WI-20) rather than a static: every command that reaches
+//! state (`.manage()`) rather than a static: every command that reaches
 //! this carries an `AppHandle`, and a process-global would make one test's
 //! grants visible to every other test in the binary.
 //!
@@ -30,7 +30,7 @@
 //! @coordinates-with ../app_setup.rs — calls `revoke_window` on WindowEvent::Destroyed
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use crate::command_error::{CommandError, ErrorCode};
 use crate::secret_token::generate_secret_token;
@@ -129,7 +129,7 @@ impl TrustedHtmlState {
     /// Drop a grant. Returns whether it existed, so a double revoke is a
     /// no-op rather than an error.
     pub fn revoke(&self, token: &str) -> bool {
-        let Ok(mut reg) = self.lock() else {
+        let Some(mut reg) = self.lock_or_refuse() else {
             return false;
         };
         match reg.docs.remove(token) {
@@ -144,7 +144,7 @@ impl TrustedHtmlState {
     /// Drop every grant owned by `window`, returning how many. Called from the
     /// native `WindowEvent::Destroyed` handler.
     pub fn revoke_window(&self, window: &str) -> usize {
-        let Ok(mut reg) = self.lock() else {
+        let Some(mut reg) = self.lock_or_refuse() else {
             return 0;
         };
         let doomed: Vec<String> = reg
@@ -163,28 +163,46 @@ impl TrustedHtmlState {
 
     /// The document behind a token, if the grant is live.
     pub fn html(&self, token: &str) -> Option<String> {
-        self.lock().ok()?.docs.get(token).map(|g| g.html.clone())
+        let reg = self.lock_or_refuse()?;
+        reg.docs.get(token).map(|g| g.html.clone())
     }
 
     /// Number of live grants. Test-only: production code asks whether a
     /// specific token resolves, never how many exist.
     #[cfg(test)]
     pub fn grant_count(&self) -> usize {
-        self.lock().map(|reg| reg.docs.len()).unwrap_or(0)
+        self.read_through().docs.len()
     }
 
     /// Total resident HTML. Test-only — the accounting is what needs pinning.
     #[cfg(test)]
     pub fn total_bytes(&self) -> usize {
-        self.lock().map(|reg| reg.bytes).unwrap_or(0)
+        self.read_through().bytes
     }
 
     /// A poisoned lock means another thread panicked mid-mutation; the honest
-    /// answer is to refuse rather than serve a half-updated registry.
-    fn lock(&self) -> Result<std::sync::MutexGuard<'_, Registry>, CommandError> {
+    /// answer is to refuse rather than serve a half-updated registry. A
+    /// command gets that refusal as an error.
+    fn lock(&self) -> Result<MutexGuard<'_, Registry>, CommandError> {
         self.inner
             .lock()
             .map_err(|_| CommandError::internal("trusted-HTML registry unavailable"))
+    }
+
+    /// The same refusal for the paths with no error to return — a revoke, the
+    /// protocol handler's lookup. Logged, so "no such grant" is never the only
+    /// trace of a registry that could not be used.
+    fn lock_or_refuse(&self) -> Option<MutexGuard<'_, Registry>> {
+        crate::lock_policy::lock_or_refuse(&self.inner, "the trusted-HTML grant registry")
+    }
+
+    /// The registry as it stands, poisoned or not. Test-only: the accounting
+    /// assertions read the numbers, they do not serve anything.
+    #[cfg(test)]
+    fn read_through(&self) -> MutexGuard<'_, Registry> {
+        self.inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 }
 

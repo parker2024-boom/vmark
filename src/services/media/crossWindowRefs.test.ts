@@ -19,14 +19,14 @@ describe("collectRemoteLiveRefs", () => {
 
   it("passes a complete answer through", async () => {
     vi.mocked(invoke).mockResolvedValue({ complete: true, refs: ["assets/images/x.png"] });
-    const result = await collectRemoteLiveRefs("main");
+    const result = await collectRemoteLiveRefs();
     expect(result.complete).toBe(true);
     expect(result.keys.has("assets/images/x.png")).toBe(true);
   });
 
   it("keeps an incomplete answer incomplete", async () => {
     vi.mocked(invoke).mockResolvedValue({ complete: false, refs: ["assets/images/x.png"] });
-    const result = await collectRemoteLiveRefs("main");
+    const result = await collectRemoteLiveRefs();
     expect(result.complete).toBe(false);
     // Partial refs still protect — they only ever ADD protection.
     expect(result.keys.has("assets/images/x.png")).toBe(true);
@@ -35,7 +35,7 @@ describe("collectRemoteLiveRefs", () => {
   it("fails closed when the command rejects", async () => {
     vi.mocked(invoke).mockRejectedValue(new Error("no such command"));
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect((await collectRemoteLiveRefs("main")).complete).toBe(false);
+    expect((await collectRemoteLiveRefs()).complete).toBe(false);
     spy.mockRestore();
   });
 
@@ -43,7 +43,7 @@ describe("collectRemoteLiveRefs", () => {
     "fails closed on a malformed reply (%j)",
     async (wire) => {
       vi.mocked(invoke).mockResolvedValue(wire as never);
-      expect((await collectRemoteLiveRefs("main")).complete).toBe(false);
+      expect((await collectRemoteLiveRefs()).complete).toBe(false);
     },
   );
 });

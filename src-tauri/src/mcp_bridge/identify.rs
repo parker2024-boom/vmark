@@ -4,9 +4,9 @@
 //! and in connect/disconnect logs, and it deliberately does not touch
 //! `ClientConnection::principal`: a client may send `identify` at any time and
 //! as often as it likes, and it used to be able to name itself into another
-//! client's delegations that way (audit 20260728 §2.1).
+//! client's delegations that way.
 //!
-//! Split out of `server.rs` (#376/#381), and tightened on the way (#375):
+//! Split out of `server.rs`, and tightened on the way:
 //!
 //!   - a payload that does not parse is LOGGED, not discarded in silence — it
 //!     is a client speaking a protocol this build does not, and the only way
@@ -22,15 +22,15 @@
 //!     re-reads the whole client list on each one.
 //!
 //! @coordinates-with mcp_bridge/server.rs — the envelope dispatcher
-//! @coordinates-with mcp_bridge/peer_text.rs — the bound and the escaping
+//! @coordinates-with peer_text.rs — the bound and the escaping
 //! @module mcp_bridge::identify
 
 use tauri::AppHandle;
 use tauri::Emitter;
 
 use super::managed::bridge;
-use super::peer_text::{peer_label, peer_text};
 use super::types::ClientIdentity;
+use crate::peer_text::{peer_label, peer_text};
 
 /// The event the frontend re-reads its client list on.
 const CLIENTS_CHANGED: &str = "mcp-bridge:clients-changed";

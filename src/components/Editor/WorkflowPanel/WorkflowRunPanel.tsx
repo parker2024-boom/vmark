@@ -51,8 +51,8 @@ export function WorkflowRunPanel({ tabId, graph, parseError }: WorkflowRunPanelP
   const { t } = useTranslation(["workflow", "editor"]);
   const controls = useWorkflowRunControls(tabId);
   const { snapshot, restoring, restore } = useRunSnapshot(controls.owned);
-  // The selection is THIS panel's, and belongs to the graph it was made on
-  // (#105): another tab's panel never shares it, and a re-parse — the yaml
+  // The selection is THIS panel's, and belongs to the graph it was made on:
+  // another tab's panel never shares it, and a re-parse — the yaml
   // adapter's local one included — does not carry it onto an edited workflow.
   const [selection, setSelection] = useState<{ stepId: string; graph: WorkflowGraph } | null>(null);
   const activeStepId = selection !== null && selection.graph === graph ? selection.stepId : null;

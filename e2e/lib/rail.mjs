@@ -38,7 +38,7 @@ const DEFAULTS_PATH = "src/stores/settingsStore/defaults.ts";
  * reconciler deep-merges — and it used to push a hardcoded `false`. That is
  * today's default written down twice: flip `defaults.ts` and every journey
  * restores the WRONG live state, silently, on a machine where nothing is
- * watching (audit R3 #3). Reading the literal keeps one source of truth.
+ * watching. Reading the literal keeps one source of truth.
  *
  * It THROWS when the key is gone rather than falling back, because a fallback
  * is the hardcoded default coming back under another name. `source` is an
@@ -97,7 +97,7 @@ export async function withRailMode(client, enabled, fn) {
     // INSIDE the try: `patchPersistedSettings` writes localStorage and then
     // dispatches the storage event, so a transport failure between the two
     // leaves the setting changed with the `finally` never entered — a journey
-    // that silently reconfigures the user's profile (audit R2 #2). Restoration
+    // that silently reconfigures the user's profile. Restoration
     // is idempotent (write the prior value back, or delete a key that is
     // already absent), so attempting it after a failed set is safe.
     await setRailMode(client, enabled);
@@ -116,7 +116,7 @@ export async function withRailMode(client, enabled, fn) {
         // persistence stays presence-faithful. The value is READ from
         // `defaults.ts`, never written here: a literal `false` is the app's
         // default copied into the harness, and a future flip would leave every
-        // journey restoring the wrong live state (audit R3 #3).
+        // journey restoring the wrong live state.
         await setRailMode(client, shippedRailModeDefault());
         await clearRailMode(client);
       }
@@ -152,7 +152,7 @@ export async function getRailInstances(client) {
   // `startsWith` on it, `restoreRail` puts it in a Set, `closeRailInstance`
   // selects by it. A missing attribute is `null`, and the first symptom was a
   // bare `TypeError: Cannot read properties of null` from a one-line arrow
-  // several calls away (audit R3 #6). Fail at the boundary, naming the entry.
+  // several calls away. Fail at the boundary, naming the entry.
   instances.forEach((entry, index) => {
     if (typeof entry.instanceId !== "string" || entry.instanceId === "") {
       throw new Error(
@@ -291,9 +291,9 @@ async function clickRailMenuClose(client, name) {
  * Close — which runs `closeWorkspaceInstance`: the instance is REMOVED, a
  * successor is promoted and hydrated.
  *
- * History, and why this exists: until 2026-09-07 `menu:close-workspace`
- * (`workspace.close`) only nulled the workspace store's root and left the
- * instance registered and ACTIVE with no root. From then on the status-bar tab
+ * History, and why this exists: `menu:close-workspace` (`workspace.close`)
+ * used to only null the workspace store's root and leave the instance
+ * registered and ACTIVE with no root. After such a close the status-bar tab
  * strip, scoped to the active instance, had nothing to show and unmounted, and
  * every new untitled tab was claimed into the inactive "Loose Files" —
  * invisible; after journey 17 ran on a rail-on profile, every document-tab
@@ -340,8 +340,8 @@ export async function closeRailInstance(client, instanceId) {
  * neighbours (`disambiguateWorkspaceDisplayNames`), so a journey-created
  * workspace sharing a basename renames a PRE-EXISTING neighbour for exactly as
  * long as it is open — which the up-front verdict read as a re-root and
- * reported even though closing the journey's own instances put the name back
- * (audit R2 #4). The failure condition is the identity comparison; the
+ * reported even though closing the journey's own instances put the name back.
+ * The failure condition is the identity comparison; the
  * diagnosis only explains it, so it must describe the rail that failed it.
  *
  * Placeholders are never "created" by a journey: the app mints one
@@ -358,7 +358,7 @@ export async function restoreRail(client, railBefore) {
   // EVERY close is attempted, and the failures are collected. Throwing on the
   // first one abandoned the rest of the cleanup — later journey-created
   // instances stayed on the rail, the prior activation was never restored, and
-  // the identity comparison that DIAGNOSES all of it never ran (audit R2 #5).
+  // the identity comparison that DIAGNOSES all of it never ran.
   // A teardown that stops halfway leaks more than one that keeps going.
   const closeFailures = [];
   for (const id of created) {

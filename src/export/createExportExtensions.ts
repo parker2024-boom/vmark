@@ -1,3 +1,11 @@
+/**
+ * createExportExtensions — builds the read-only Tiptap extension set used to
+ * render documents for export, matching the editor's content rendering
+ * without its interactive features.
+ *
+ * @module export/createExportExtensions
+ */
+
 import type { Extensions } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";

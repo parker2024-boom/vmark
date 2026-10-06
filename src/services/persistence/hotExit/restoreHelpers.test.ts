@@ -296,7 +296,7 @@ describe('restoreHelpers', () => {
 
       expect(result).toBe(state);
       expect(mockInvoke).toHaveBeenCalledTimes(1);
-      expect(mockInvoke).toHaveBeenCalledWith('hot_exit_get_window_state', { windowLabel: 'main' });
+      expect(mockInvoke).toHaveBeenCalledWith('hot_exit_get_window_state');
     });
 
     it('should retry when invoke returns null and succeed later', async () => {
@@ -669,11 +669,11 @@ describe('restoreHelpers', () => {
 
       await restoreTabs('main', ws);
 
-      expect(mockRemoveDocument).toHaveBeenCalledTimes(2);
-      expect(mockRemoveDocument).toHaveBeenCalledWith('old-tab-1');
-      expect(mockRemoveDocument).toHaveBeenCalledWith('old-tab-2');
-      expect(mockClearDocument).toHaveBeenCalledTimes(2);
+      // The tabs go through the tab store; the tab-state cleanup frees their
+      // documents (restoreTabsHelpers.clear.test.ts), the restore does not.
       expect(mockRemoveWindow).toHaveBeenCalledWith('main');
+      expect(mockRemoveDocument).not.toHaveBeenCalled();
+      expect(mockClearDocument).not.toHaveBeenCalled();
     });
 
     it('should NOT call removeWindow when no existing tabs', async () => {

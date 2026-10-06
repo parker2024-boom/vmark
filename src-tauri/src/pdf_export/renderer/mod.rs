@@ -18,28 +18,28 @@
 //!     deadlocks WKWebView callbacks when NSRunLoop is spun inside them.
 //!   - The wait is BOUNDED. If a platform closure unwinds before sending, the
 //!     receiver would otherwise hang the calling async task forever.
-//!   - Progress is one sequence on every platform (WI-FL6.2): each backend
+//!   - Progress is one sequence on every platform: each backend
 //!     reports the same three stages through the sink at the equivalent
 //!     points of its own pipeline; `progress.rs` owns the vocabulary.
-//!   - The print dialog's wait is bounded only until the dialog is SHOWN
-//!     (WI-FL6.3). After that the time belongs to the user, and a Print sheet
+//!   - The print dialog's wait is bounded only until the dialog is SHOWN.
+//!     After that the time belongs to the user, and a Print sheet
 //!     left open for three minutes is not a timeout.
 //!   - A timeout and the platform's irreversible step are decided by ONE
-//!     word (#227): the platform claims the sink immediately before it
+//!     word: the platform claims the sink immediately before it
 //!     presents a dialog or starts a print, the caller abandons it when its
 //!     wait ends, and exactly one of them wins — `sink.rs`, `wait.rs`.
-//!   - A render never writes the output path (#224): the platform writes a
+//!   - A render never writes the output path: the platform writes a
 //!     sibling staging file, and only a success DELIVERED to a caller still
 //!     waiting is renamed into place — `staging.rs`. A print that completes
 //!     after its caller's timeout fills a file the sink then deletes.
-//!   - A timeout TEARS DOWN (#224, #227). Neither WebView2 nor WebKitGTK can
+//!   - A timeout TEARS DOWN. Neither WebView2 nor WebKitGTK can
 //!     cancel a print in flight or a load that hangs; destroying the webview
 //!     is the one lever. The platform arms the sink with its window's close
 //!     when it builds the window, and the caller's timeout runs it — a
 //!     render's always, a dialog's only while the platform has not claimed —
 //!     `teardown.rs`, `wait.rs`. macOS arms nothing: its body is synchronous
 //!     and drops its own window on return.
-//!   - Both paths share one shell — `dispatch` (#220): the temp document,
+//!   - Both paths share one shell — `dispatch`: the temp document,
 //!     the outcome channel and the main-thread hop are written once; the two
 //!     waits are `wait.rs`'s; this file keeps only what differs.
 //!
@@ -125,7 +125,7 @@ const PDF_OPERATION_TIMEOUT: Duration = Duration::from_secs(180);
 ///
 /// Safe to run concurrently for DIFFERENT outputs — the smoke harness does —
 /// because each render stages beside its own output. `export_pdf` is what
-/// serializes exports, for the sake of the one progress window (#198, #199).
+/// serializes exports, for the sake of the one progress window.
 pub async fn render_pdf(
     app: AppHandle,
     html: String,
@@ -144,7 +144,7 @@ pub async fn render_pdf(
     // The staging file AppKit is actually handed is a sibling of this path,
     // so the directory it lands in is the one validated here.
     super::commands::validate_output_path(&output_path)?;
-    // And the GEOMETRY, for the same reason and by the same argument (#403).
+    // And the GEOMETRY, for the same reason and by the same argument.
     // `export_pdf` validates it; a caller that reaches the renderer directly
     // — the pdf-smoke harness does, three times — does not, and a NaN or a
     // negative extent then reaches `NSPrintInfo::setPaperSize`,
@@ -152,7 +152,7 @@ pub async fn render_pdf(
     // native value nothing downstream checks.
     page.validate()?;
     log::debug!(
-        "[PDF] render_pdf: {} bytes of HTML, output: {}",
+        "[PDF] render_pdf: {} bytes of HTML, output: {:?}",
         html.len(),
         output_path
     );
@@ -185,7 +185,7 @@ pub async fn render_pdf(
 ///
 /// `parent_label` names the window the command was invoked from; macOS
 /// attaches its print sheet to THAT window rather than to whichever window
-/// happens to be key once the document has loaded (#218). The other two
+/// happens to be key once the document has loaded. The other two
 /// platforms present their own window and ignore it.
 pub async fn print_document(
     app: AppHandle,

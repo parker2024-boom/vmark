@@ -1,6 +1,7 @@
 //! Tests for workspace content search (extracted from content_search.rs
 //! to keep the production file within the size gate).
 
+use super::matching::search_line;
 use super::*;
 use regex::RegexBuilder;
 use std::fs;

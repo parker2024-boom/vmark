@@ -4,8 +4,10 @@
 // rule is unreliable here (the house-standard reason, AppShell.a11y) — real
 // contrast is measured from the theme catalog by `pnpm lint:theme-contrast`,
 // a stronger check than axe-in-jsdom could ever be.
-import { render } from "@testing-library/react";
+import { render as rtlRender } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { WindowContext } from "@/contexts/WindowContext";
 import "@/test/axeMatchers";
 import { axe } from "vitest-axe";
 
@@ -21,17 +23,18 @@ vi.mock("@/utils/dateUtils", () => ({
   formatExactTime: (ts: number) => `time:${ts}`,
 }));
 
-vi.mock("./StatusBarCounts", () => ({
-  StatusBarCounts: () => <span data-testid="status-counts" />,
-}));
-
-vi.mock("./LintBadge", () => ({
-  LintBadge: () => null,
-}));
-
-
-
 import { StatusBarRight, formatMcpTooltip } from "./StatusBarRight";
+
+/** Render inside a document window, so axe sees the real counts and lint badge too. */
+function render(ui: ReactElement) {
+  return rtlRender(ui, {
+    wrapper: ({ children }) => (
+      <WindowContext.Provider value={{ windowLabel: "main", isDocumentWindow: true }}>
+        {children}
+      </WindowContext.Provider>
+    ),
+  });
+}
 
 const AXE_OPTS = {
   rules: {

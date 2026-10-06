@@ -19,7 +19,7 @@
 //!     symptom in #1330 was a window that showed their workspace tree and then
 //!     lost it. `AGENTS.md` records the same hazard from the other direction:
 //!     splitting the dev build's identifier was needed for exactly this reason.
-//!   - Forwarding argv routes the open through `file_open::route_file_opens`,
+//!   - Forwarding argv routes the open through `files::open::route_file_opens`,
 //!     the SAME path macOS takes, rather than a second copy of the policy.
 //!   - A launch carrying no openable file still surfaces a window. Swallowing
 //!     it would make double-clicking the app icon look broken once a VMark is
@@ -36,12 +36,12 @@
 //!     describes; it is not a second mechanism to keep in sync.
 //!   - The routing and the surfacing are generic over the Tauri runtime and
 //!     take the forwarder as a parameter (`second_launch_with`), so
-//!     `single_instance.test.rs` drives them on a mock app (#246): a launch
+//!     `single_instance.test.rs` drives them on a mock app: a launch
 //!     with a file must forward exactly that file and open nothing, a bare
 //!     launch must reveal an existing window or build one.
 //!
 //! Linux runs the guard only when `DBUS_SESSION_BUS_ADDRESS` names an address
-//! the plugin's bus library can PARSE (WI-FL6.1). The plugin's Linux backend
+//! the plugin's bus library can PARSE. The plugin's Linux backend
 //! opens with `zbus::blocking::connection::Builder::session().unwrap()`, and
 //! that call is `Address::from_str` over the raw environment value — so a
 //! malformed address panics VMark at startup, before the log plugin exists to
@@ -55,7 +55,7 @@
 //! The Windows backend has no such dependency (a named mutex plus
 //! `WM_COPYDATA`), which is where #1330 was actually reported.
 //!
-//! @coordinates-with file_open.rs — `route_file_opens`, the shared destination
+//! @coordinates-with files/open.rs — `route_file_opens`, the shared destination
 //! @coordinates-with session_bus.rs — the Linux gate's rules and probes
 //! @coordinates-with app_setup.rs — handles the FIRST launch's argv, logs the skipped guard
 //! @coordinates-with lib.rs — registers the plugin only when `session_bus_present()`
@@ -67,14 +67,14 @@
 
 use tauri::{Manager, Runtime};
 
-use crate::{file_open, quit, supported_files, window_manager};
+use crate::{files, quit, supported_files, window_manager};
 
 /// Linux: is there a session bus for the plugin to connect to? The rules
 /// live in `session_bus.rs`.
 #[cfg(target_os = "linux")]
 pub(crate) fn session_bus_present() -> bool {
     // One line on purpose: `scripts/check-feature-ledger-phase.sh 6` looks for
-    // this read here (WI-FL6.1), and rustfmt wraps the argument form.
+    // this read here, and rustfmt wraps the argument form.
     let address = std::env::var_os("DBUS_SESSION_BUS_ADDRESS");
     crate::session_bus::should_register_single_instance(address)
 }
@@ -102,7 +102,7 @@ pub(crate) fn warn_if_unguarded() {
 /// Handle a second launch: route any openable files in `argv` to this
 /// instance, and surface a window either way.
 ///
-/// Dispatched OFF the callback thread (audit #476). The plugin documents this
+/// Dispatched OFF the callback thread. The plugin documents this
 /// callback as running on the main event loop, and the decision it makes needs
 /// the filesystem: `openable_files_from_argv` STATS every argument
 /// (`is_openable_supported` → `is_file()`). A UNC path to an unreachable host,
@@ -118,11 +118,11 @@ pub(crate) fn warn_if_unguarded() {
 pub(crate) fn handle_second_launch(app: &tauri::AppHandle, argv: Vec<String>) {
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        second_launch_with(&app, argv, file_open::route_file_opens);
+        second_launch_with(&app, argv, files::open::route_file_opens);
     });
 }
 
-/// The second-launch decision, with the forwarder injected (#246): a launch
+/// The second-launch decision, with the forwarder injected: a launch
 /// that carries openable files hands EXACTLY those files to `forward` and
 /// touches no window itself — `route_file_opens` focuses the window it
 /// delivers to — while a bare launch surfaces a window and forwards nothing.
@@ -158,7 +158,7 @@ pub(crate) fn openable_files_from_argv(argv: Vec<String>) -> Vec<String> {
 
 /// Bring an existing document window forward, or create one when none is left.
 ///
-/// Split into a SELECTION and an idempotent reveal (#477): the two answer
+/// Split into a SELECTION and an idempotent reveal: the two answer
 /// different questions, and the second one has to be total. A second launch
 /// that surfaces nothing looks to the user exactly like a launch that was
 /// ignored, which is the bug this whole module exists to prevent.
@@ -179,12 +179,9 @@ pub(crate) fn surface_a_window<R: Runtime>(app: &tauri::AppHandle<R>) {
 /// building a second one beside it.
 fn choose_target<R: Runtime>(app: &tauri::AppHandle<R>) -> Option<String> {
     let live_labels: Vec<String> = app.webview_windows().keys().cloned().collect();
-    let ready = {
-        let state = file_open::FILE_OPEN_STATE
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
-        state.finder_window_target(&live_labels)
-    };
+    let ready = window_manager::file_open_state(app)
+        .lock()
+        .finder_window_target(&live_labels);
     ready.or_else(|| {
         live_labels
             .iter()
@@ -195,7 +192,7 @@ fn choose_target<R: Runtime>(app: &tauri::AppHandle<R>) -> Option<String> {
 }
 
 /// Reveal `label`; if it closed between the snapshot and this lookup, choose
-/// again and, failing that, build a window (#479).
+/// again and, failing that, build a window.
 ///
 /// The old code returned silently here. The window list is a snapshot taken
 /// under no lock, so the user closing the chosen window in that instant made
@@ -215,26 +212,33 @@ pub(crate) fn reveal_or_retry<R: Runtime>(app: &tauri::AppHandle<R>, label: &str
 }
 
 /// Build the main window — and, when another path built it first, surface
-/// THAT one (#478).
+/// THAT one.
 ///
-/// Creation is check-then-create against every other window-creating path in
-/// the process, so losing the race is a real outcome and not an error: the
-/// user asked for a window and there is one. Reporting
-/// `WindowLabelAlreadyExists` to the log and stopping left the second launch
-/// with nothing on screen, which is the same failure #479 describes one step
-/// further on. The same idempotent-creation rule the Settings window follows
-/// (`AGENTS.md`, the window-thread gate).
+/// Every other window-creating path in the process can ask for `main` at the
+/// same moment, so finding it already there is a real outcome and not an
+/// error: the user asked for a window and there is one. Stopping there left
+/// the second launch with nothing on screen, which is the same failure the
+/// closed-window retry above handles one step further on. `ensure_main_window` makes the check and the
+/// build one step, so this path can neither build a second `main` beside
+/// another path's nor mistake theirs for a failure.
 pub(crate) fn create_and_reveal_main<R: Runtime>(app: &tauri::AppHandle<R>) {
+    use window_manager::Ensured;
+
     log::info!("[SingleInstance] no document window left — creating one");
-    let Err(error) = window_manager::create_main_window(app, None) else {
-        return;
-    };
-    if let Some(window) = app.get_webview_window("main") {
-        log::info!("[SingleInstance] another path created the main window first — surfacing it");
-        window_manager::reveal_window(&window, "main");
-        return;
+    match window_manager::ensure_main_window(app, None) {
+        // A new window opens focused; there is nothing more to surface.
+        Ok(Ensured::Created(_)) => {}
+        Ok(Ensured::Existing(window)) => {
+            log::info!(
+                "[SingleInstance] another path created the main window first — surfacing it"
+            );
+            window_manager::reveal_window(&window, window_manager::MAIN_LABEL);
+        }
+        Ok(Ensured::Pending) => {
+            log::info!("[SingleInstance] another path is creating the main window");
+        }
+        Err(error) => log::error!("[SingleInstance] failed to create main window: {error}"),
     }
-    log::error!("[SingleInstance] failed to create main window: {error}");
 }
 
 #[cfg(test)]

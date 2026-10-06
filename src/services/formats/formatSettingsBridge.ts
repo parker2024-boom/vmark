@@ -68,7 +68,7 @@ export function installFormatSettingsSubscription(): () => void {
   );
 
   // Push the action-metadata network toggle into the GHA registry (lib/
-  // cannot read stores per ADR-013; audit 20260612 H28).
+  // cannot read stores per ADR-013).
   setActionMetadataFetchEnabled(
     useSettingsStore.getState().advanced.workflowFetchActionMetadata,
   );
@@ -79,7 +79,7 @@ export function installFormatSettingsSubscription(): () => void {
   // any restored tab had its formatId derived against an empty associations
   // map. Without this one-shot recompute the user's persisted overrides
   // would be silently ignored on every cold start until they touched a
-  // setting. (Audit finding H1.)
+  // setting.
   useTabStore.getState().recomputeAllFormatIds();
 
   let lastToggles = snapshot(useSettingsStore.getState().formats);

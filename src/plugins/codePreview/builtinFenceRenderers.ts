@@ -1,5 +1,5 @@
 /**
- * First-party fence renderers, registered as peers — Phase 5 WI-5.1.
+ * First-party fence renderers, registered as peers.
  *
  * Purpose: register VMark's own diagram renderers into the fence extension point
  * markdown declares (`fenceRegistry.ts`), using the same API a third-party

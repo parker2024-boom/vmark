@@ -1,5 +1,5 @@
 /**
- * Idempotent context hydration (WI-13.1 / plan D6).
+ * Idempotent context hydration (plan D6).
  *
  * Purpose: the startup/repair counterpart to `switchWorkspaceInstance`.
  * Applies the window's CURRENT active instance's context — pane layout,
@@ -7,7 +7,7 @@
  * meaningful "outgoing" context during restore, and stashing a half-built
  * one would corrupt the incoming instance's records).
  *
- * Used after hot-exit restore reconciliation (WI-13.2), after close/remove/
+ * Used after hot-exit restore reconciliation, after close/remove/
  * move picked a structural successor, and whenever a repair needs to make the
  * visible surfaces agree with the active instance again. Safe to call twice.
  *
@@ -15,7 +15,7 @@
  * @coordinates-with syncLegacyWorkspaceContext.ts — sidebar re-root
  * @module services/workspaces/hydrateWorkspaceInstanceContext
  */
-import { useUIStore } from "@/stores/uiStore";
+import { useTerminalStore } from "@/stores/terminalStore";
 import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
 import { isWorkspaceRailEnabled } from "@/services/featureFlags/workspaceRailFeatureFlag";
 import { contextKindOf } from "./workspaceOwnershipKernel";
@@ -37,7 +37,7 @@ export function hydrateWorkspaceInstanceContext(windowLabel: string): Promise<vo
 
   const generation = bumpContextGeneration(windowLabel);
 
-  // Audit R2-F4 + 20260831 #22: hydration restores persisted/stashed splits
+  // Audit 20260831 #22: hydration restores persisted/stashed splits
   // through the SAME shared restoration (and kernel-backed sanitization) the
   // switch coordinator uses — the two paths had grown near-identical copies.
   restoreInstanceVisualContext(windowLabel, activeId);
@@ -48,9 +48,9 @@ export function hydrateWorkspaceInstanceContext(windowLabel: string): Promise<vo
   // and re-deriving activation from the active id cannot clobber it. A
   // placeholder active skips adoption (D-T1 carve-out).
   if (active.kind !== "placeholder") {
-    useUIStore.getState().terminalAdoptUnscopedSessions(activeId);
+    useTerminalStore.getState().terminalAdoptUnscopedSessions(activeId);
   }
-  useUIStore.getState().terminalHydrateScope(activeId);
+  useTerminalStore.getState().terminalHydrateScope(activeId);
 
   return syncLegacyWorkspaceContext(
     windowLabel,

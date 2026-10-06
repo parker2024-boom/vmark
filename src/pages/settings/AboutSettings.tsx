@@ -1,19 +1,23 @@
 /**
  * About Settings Section
  *
- * Shows app info (version, links) and update status.
+ * Shows app info (version, links, the bundled third-party notices) and update
+ * status.
+ *
+ * @module pages/settings/AboutSettings
  */
 
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { getVersion } from "@tauri-apps/api/app";
+import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { SettingRow, SettingsGroup, Button, Toggle, Select } from "./components";
 import type { UpdateCheckFrequency } from "@/stores/settingsTypes";
 import { useMcpStore } from "@/stores/mcpStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useUpdateOperations } from "@/hooks/useUpdateOperations";
-import { CheckCircle2, AlertCircle, Download, Globe } from "lucide-react";
+import { CheckCircle2, AlertCircle, Download, ExternalLink, Globe } from "lucide-react";
 import { GithubMark } from "./GithubMark";
 import { UpdateAvailableCard } from "./UpdateAvailableCard";
 // `?no-inline`: the icon is three flat polygons and compresses under Vite's 4 KB
@@ -22,6 +26,8 @@ import { UpdateAvailableCard } from "./UpdateAvailableCard";
 import appIcon from "@/assets/app-icon.png?no-inline";
 import { appError } from "@/utils/debug";
 import { confirmAction } from "@/services/dialogs/confirmAction";
+import { commandErrorMessage } from "@/services/commands/commandError";
+import { imeToast as toast } from "@/services/ime/imeToast";
 import i18n from "@/i18n";
 
 const WEBSITE_URL = "https://vmark.app";
@@ -46,19 +52,40 @@ function VersionInfo() {
   );
 }
 
+/** Open a web page; a failure is only logged, as before. */
+function openLink(url: string) {
+  return Promise.resolve(openUrl(url)).catch((e) => appError("Failed to open URL:", e));
+}
+
+/**
+ * Open the bundled THIRD_PARTY_LICENSES.txt. Rust resolves and opens the file:
+ * this window has no filesystem permission, and the webview never names a path.
+ */
+function openThirdPartyNotices(failedMessage: string) {
+  return invoke("open_third_party_notices").catch((e: unknown) => {
+    appError("Failed to open third-party notices:", e);
+    toast.error(failedMessage, { description: commandErrorMessage(e) });
+  });
+}
+
 function Links() {
   const { t } = useTranslation("settings");
   const links = [
-    { icon: Globe, label: t("about.website"), url: WEBSITE_URL },
-    { icon: GithubMark, label: t("about.github"), url: GITHUB_URL },
+    { icon: Globe, label: t("about.website"), open: () => openLink(WEBSITE_URL) },
+    { icon: GithubMark, label: t("about.github"), open: () => openLink(GITHUB_URL) },
+    {
+      icon: ExternalLink,
+      label: t("about.thirdPartyNotices"),
+      open: () => openThirdPartyNotices(t("about.thirdPartyNoticesFailed")),
+    },
   ];
 
   return (
     <ul className="space-y-0.5 pt-0.5">
-      {links.map(({ icon: Icon, label, url }) => (
+      {links.map(({ icon: Icon, label, open }) => (
         <li key={label}>
           <button
-            onClick={() => void Promise.resolve(openUrl(url)).catch((e) => appError("Failed to open URL:", e))}
+            onClick={() => void open()}
             className="vm-btn vm-btn--plain flex items-center gap-1.5"
           >
             <Icon className="w-3.5 h-3.5" />

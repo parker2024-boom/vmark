@@ -215,7 +215,7 @@ fn canonical_fixtures() -> serde_json::Value {
     // the SAME `localized_error!` expression the production check uses, so it
     // still verifies fixture byte-stability.
     #[cfg(not(windows))]
-    let parent_missing = crate::file_write::atomic_write_file_sync(
+    let parent_missing = crate::files::write::atomic_write_file_sync(
         std::path::Path::new("/vmark-fixture-no-such-dir/notes/note.md"),
         "hello",
     )

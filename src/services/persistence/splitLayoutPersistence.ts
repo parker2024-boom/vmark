@@ -1,5 +1,5 @@
 /**
- * Split-layout persistence (#1081 Phase 4, stable-root keying WI-17.2).
+ * Split-layout persistence (#1081 Phase 4, stable-root keying).
  *
  * The two-pane split is per-machine UI state (like window size), so it is
  * persisted in localStorage — NOT in the shared `.vmark` workspace config.
@@ -14,7 +14,7 @@
  *
  * A layout is always side-by-side. Records written while the split still had a
  * stacked orientation (`orientation: "vertical"`) load like any other — the
- * field is dropped on parse, never carried into pane state (WI-FL3.10).
+ * field is dropped on parse, never carried into pane state.
  *
  * @coordinates-with stores/paneStore.ts — split state
  * @coordinates-with services/workspaces/workspaceSession.ts — saves on window close
@@ -53,7 +53,7 @@ function paneFileIdentity(path: string, platform: RuntimePlatform): string {
 }
 
 /**
- * A well-typed record can still be malformed (audit #482): `1e999` parses to
+ * A well-typed record can still be malformed: `1e999` parses to
  * Infinity, a fraction can sit outside the pane clamp, a pane path can be
  * blank, and one path can name both panes. Non-finite and blank/duplicate
  * paths are refused; an out-of-range fraction is clamped, as the store would.
@@ -62,7 +62,7 @@ function paneFileIdentity(path: string, platform: RuntimePlatform): string {
  * spellings of one Windows file — `C:\Repo\a.md` and `c:/repo/a.md` — passed a
  * `===` compare and restored a split showing that document in both panes, the
  * A/A state D9 and `resolveWindowSplit` both refuse. POSIX stays byte-exact,
- * exactly as the root key is (WI-17.2), because case there names a real file.
+ * exactly as the root key is, because case there names a real file.
  */
 function parseLayout(raw: string | null, platform: RuntimePlatform): SplitLayoutConfig | null {
   if (!raw) return null;

@@ -1,3 +1,11 @@
+/**
+ * browserHelpers — shared helpers for the MCP browser tools: resolve and
+ * activate the target browser tab, validate arguments, timeouts and script
+ * size, redact URLs, and read a tab's AI state.
+ *
+ * @module services/mcpBridge/v2/browserHelpers
+ */
+
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindowLabel } from "@/services/persistence/workspaceStorage";
 import { useSettingsStore } from "@/stores/settingsStore";
@@ -14,10 +22,23 @@ export interface BrowserTarget {
   windowLabel: string;
 }
 
-export function readTabIdArg(args: Record<string, unknown>): string | undefined | null {
-  if (args.tabId === undefined) return undefined;
-  if (typeof args.tabId !== "string" || args.tabId.trim() === "") return null;
-  return args.tabId;
+/** The part of a checked payload read (`readOperationArgsChecked`) that names a tab. */
+export interface TabIdRead {
+  wire: { tabId?: string };
+  malformed: ReadonlySet<string>;
+}
+
+/**
+ * The tab a request names: `undefined` when it names none (the focused tab is
+ * meant), the id, or `null` when the `tabId` it sent is not a non-empty string.
+ * A malformed id is refused, never read as absent — that would act on whichever
+ * tab has focus.
+ */
+export function readTabIdArg(read: TabIdRead): string | undefined | null {
+  if (read.malformed.has("tabId")) return null;
+  const { tabId } = read.wire;
+  if (tabId === undefined) return undefined;
+  return tabId.trim() === "" ? null : tabId;
 }
 
 export function resolveBrowserTab(tabIdArg?: string): BrowserTarget | null {

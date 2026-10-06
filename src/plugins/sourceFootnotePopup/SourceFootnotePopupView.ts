@@ -3,13 +3,22 @@
  *
  * Popup view for editing footnotes in Source mode (CodeMirror 6).
  * Shows label, textarea for content, goto/save/delete buttons.
+ *
+ * Re-shows while open when the hover moves to another footnote or another
+ * reference to the same one, and positions from its rendered height after the
+ * content is in place — the popup sits above its anchor, so a stale or assumed
+ * height puts it at the wrong distance (#1494).
+ *
+ * @module plugins/sourceFootnotePopup/SourceFootnotePopupView
  */
 
 import type { EditorView } from "@codemirror/view";
+import type { AnchorRect } from "@/utils/popupPosition";
 import i18n from "@/i18n";
-import { SourcePopupView, type StoreApi } from "@/plugins/sourcePopup";
+import { SourcePopupView, type StoreApi } from "@/plugins/shared/SourcePopupView";
 import type { FootnotePopupState } from "@/plugins/shared/popupPorts";
 import { buildPopupIconButton, popupIcons } from "@/utils/popupComponents";
+import { isImeKeyEvent } from "@/utils/imeGuard";
 import {
   saveFootnoteContent,
   gotoFootnoteTarget,
@@ -17,6 +26,8 @@ import {
 } from "./sourceFootnoteActions";
 
 const TEXTAREA_MAX_HEIGHT = 120;
+const DEFAULT_POPUP_WIDTH = 300;
+const DEFAULT_POPUP_HEIGHT = 100;
 
 /** Build a source-footnote popup icon button on the canonical `.popup-icon-btn` surface (WI-DP4.1). */
 function buildSourceFootnoteBtn(iconSvg: string, title: string, onClick: () => void): HTMLButtonElement {
@@ -79,13 +90,30 @@ export class SourceFootnotePopupView extends SourcePopupView<FootnotePopupState>
     return container;
   }
 
+  protected override shouldReshow(prev: FootnotePopupState, state: FootnotePopupState): boolean {
+    return state.label !== prev.label || state.referencePos !== prev.referencePos;
+  }
+
   protected override getPopupDimensions() {
+    const rect = this.container.getBoundingClientRect();
     return {
-      width: 300,
-      height: 100,
+      width: rect.width || DEFAULT_POPUP_WIDTH,
+      height: rect.height || DEFAULT_POPUP_HEIGHT,
       gap: 6,
       preferAbove: true,
     };
+  }
+
+  /** Size the textarea for the current content before measuring the popup. */
+  protected override updatePosition(anchorRect: AnchorRect): void {
+    this.autoResizeTextarea();
+    super.updatePosition(anchorRect);
+  }
+
+  /** Re-anchor at the store's anchor, using the popup's current height. */
+  private reposition(): void {
+    const { anchorRect } = this.store.getState();
+    if (anchorRect) this.updatePosition(anchorRect);
   }
 
   protected override shouldFocusOnShow(): boolean {
@@ -100,7 +128,6 @@ export class SourceFootnotePopupView extends SourcePopupView<FootnotePopupState>
 
     // Set textarea value
     this.textarea.value = state.content;
-    this.autoResizeTextarea();
 
     // Configure goto button based on context
     if (this.openedOnReference) {
@@ -117,6 +144,9 @@ export class SourceFootnotePopupView extends SourcePopupView<FootnotePopupState>
       /* v8 ignore next -- @preserve reason: footnote definition without a reference is an edge case */
       this.gotoBtn.style.display = state.referencePos !== null ? "flex" : "none";
     }
+
+    // The base positions before onShow; re-position now that content is in.
+    this.reposition();
 
     if (state.autoFocus) {
       requestAnimationFrame(() => {
@@ -140,10 +170,13 @@ export class SourceFootnotePopupView extends SourcePopupView<FootnotePopupState>
 
   private handleTextareaInput(): void {
     this.store.getState().setContent(this.textarea.value);
-    this.autoResizeTextarea();
+    // Typing can change the height; re-anchor so the popup keeps its gap.
+    this.reposition();
   }
 
   private handleTextareaKeydown(e: KeyboardEvent): void {
+    // The Enter that confirms an IME candidate is not a save.
+    if (isImeKeyEvent(e)) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       this.handleSave();

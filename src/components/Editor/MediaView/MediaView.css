@@ -43,7 +43,7 @@
 
 .media-view__audio {
   width: 100%;
-  max-width: 576px; /* was 32em @ 18px (WI-UI2.1) */
+  max-width: 576px; /* was 32em @ 18px */
 }
 
 /* Fallback panel: icon + filename + message + actions. */
@@ -80,4 +80,4 @@
   margin-top: var(--spacing-1);
 }
 
-/* The action is the canonical `.vm-btn` (WI-UI2.3). */
+/* The action is the canonical `.vm-btn`. */

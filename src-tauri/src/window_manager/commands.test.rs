@@ -1,14 +1,9 @@
 //! Tests for `window_manager/commands.rs`.
 //!
-//! These commands mostly create real windows, which a mock runtime cannot do
-//! meaningfully — so the coverage here is the branch that needs no window:
-//! `close_window` against a label that names none.
-//!
-//! That branch matters for #1253. The frontend calls `close_window` as the last
-//! step of the close flow and awaits it; if it can reject for a reason the
-//! caller does not distinguish, a close can fail in a way that looks identical
-//! to a hang. Pinning the error CODE (not its message text) is what lets the
-//! caller tell "no such window" from a real failure.
+//! These commands mostly create real windows, which the mock runtime does: the
+//! creation commands' real bodies run below (#249), and `close_window` is driven
+//! through the IPC layer at the end of the file, where the window that sends a
+//! message is a fact the test can choose.
 
 // tauri::test::MockRuntime crashes the test binary at startup on
 // windows-latest (STATUS_ENTRYPOINT_NOT_FOUND); the `test` feature of tauri is
@@ -16,43 +11,15 @@
 // these are cfg-gated to match the other mock-runtime suites in this crate.
 #![cfg(not(target_os = "windows"))]
 
-use super::close_window;
 use crate::command_error::ErrorCode;
 
 /// The fs plugin is registered because the creation commands extend its
-/// scope (`allow_fs_read`) before they build a window; `close_window` needs
-/// nothing, and the extra plugin does not change what it sees.
+/// scope (`allow_fs_read`) before they build a window.
 fn mock_app() -> tauri::App<tauri::test::MockRuntime> {
     tauri::test::mock_builder()
         .plugin(tauri_plugin_fs::init())
         .build(tauri::test::mock_context(tauri::test::noop_assets()))
         .expect("build mock app")
-}
-
-#[test]
-fn close_window_reports_not_found_for_an_unknown_label() {
-    let app = mock_app();
-
-    let err = close_window(app.handle().clone(), "doc-does-not-exist".into())
-        .expect_err("closing a label that names no window must fail");
-
-    // The CODE is the contract — a caller branching on message text breaks the
-    // day someone rewords it (see .claude/rules/50-codebase-conventions.md).
-    assert_eq!(err.code(), ErrorCode::NotFound);
-}
-
-#[test]
-fn close_window_error_names_the_label_for_diagnosis() {
-    let app = mock_app();
-
-    let err = close_window(app.handle().clone(), "doc-42".into())
-        .expect_err("closing a label that names no window must fail");
-
-    assert!(
-        err.message().contains("doc-42"),
-        "the error should name the label it could not find, got: {}",
-        err.message()
-    );
 }
 
 // -- #249: the three creation commands, on a mock runtime --------------------
@@ -359,4 +326,63 @@ fn a_workspace_root_reaches_the_window_canonicalized_too() {
         decoded.contains(judged.to_str().unwrap()),
         "the window is scoped to the directory validation judged: {decoded}"
     );
+}
+
+// -- WI-RA7C.5: the window that asks is the window that closes ----------------
+
+mod caller_identity {
+    use crate::ipc_caller::{app_with, invoke_from, window};
+
+    fn app() -> tauri::App<tauri::test::MockRuntime> {
+        app_with(tauri::generate_handler![super::super::close_window])
+    }
+
+    /// Invoke `close_window` from `caller` with `args`; its answer, and the
+    /// window it reported destroying. The mock runtime drops a destroyed window
+    /// from its own table but never tells the app, so the command's
+    /// destroy-result line — written after `destroy()` returned, naming the
+    /// window it was called on — is where the test reads which one went.
+    fn close_from(
+        caller: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        args: serde_json::Value,
+    ) -> (Result<serde_json::Value, serde_json::Value>, Vec<String>) {
+        let mut answer = Ok(serde_json::Value::Null);
+        let lines = crate::peer_text::log_capture::captured_logs(|| {
+            answer = invoke_from(caller, "close_window", args);
+        });
+        let destroyed = lines
+            .iter()
+            .filter(|line| line.contains("destroy result: Ok"))
+            .cloned()
+            .collect();
+        (answer, destroyed)
+    }
+
+    /// The label used to be an argument, so any webview could close any
+    /// window by writing its name. The page's words about which window it is
+    /// are now ignored: the caller is the window the message came from.
+    #[test]
+    fn a_webview_closes_itself_whatever_label_it_names() {
+        let app = app();
+        let caller = window(&app, "doc-1");
+        let _other = window(&app, "doc-2");
+
+        let (answer, destroyed) = close_from(&caller, serde_json::json!({ "label": "doc-2" }));
+
+        assert!(answer.is_ok(), "{answer:?}");
+        assert_eq!(destroyed.len(), 1, "{destroyed:?}");
+        assert!(destroyed[0].contains(r#""doc-1""#), "{destroyed:?}");
+    }
+
+    #[test]
+    fn a_webview_that_names_no_window_still_closes_itself() {
+        let app = app();
+        let caller = window(&app, "doc-3");
+
+        let (answer, destroyed) = close_from(&caller, serde_json::json!({}));
+
+        assert!(answer.is_ok(), "{answer:?}");
+        assert_eq!(destroyed.len(), 1, "{destroyed:?}");
+        assert!(destroyed[0].contains(r#""doc-3""#), "{destroyed:?}");
+    }
 }

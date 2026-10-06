@@ -49,12 +49,13 @@ describe("shortcutsStore", () => {
       expect(uniqueIds.size).toBe(ids.length);
     });
 
-    it("has no duplicate defaultKey bindings within the same scope", () => {
-      // Invariant: two shortcuts with the same key + same scope would silently
-      // block one another at runtime. Per `.claude/rules/41-keyboard-shortcuts.md`
-      // this must fail CI, not user discovery. Empty defaults are excluded —
-      // they mean "unbound by default", and unbinding never collides.
-      const keysByScope = new Map<string, Map<string, string>>();
+    it("has no duplicate defaultKey bindings", () => {
+      // Invariant: two shortcuts with the same key would silently block one
+      // another at runtime. Per `.claude/rules/41-keyboard-shortcuts.md` this
+      // must fail CI, not user discovery. Empty defaults are excluded — they
+      // mean "unbound by default", and unbinding never collides.
+      // ShortcutDefinition has no scope field: every default shares one space.
+      const seen = new Map<string, string>();
       const collisions: string[] = [];
 
       function normalizeKey(key: string): string {
@@ -66,16 +67,13 @@ describe("shortcutsStore", () => {
 
       for (const s of DEFAULT_SHORTCUTS) {
         if (!s.defaultKey) continue;
-        const scope = s.scope ?? "editor";
         const norm = normalizeKey(s.defaultKey);
-        const seen = keysByScope.get(scope) ?? new Map();
         const prior = seen.get(norm);
         if (prior) {
-          collisions.push(`scope=${scope} key="${s.defaultKey}": ${prior} ↔ ${s.id}`);
+          collisions.push(`key="${s.defaultKey}": ${prior} ↔ ${s.id}`);
         } else {
           seen.set(norm, s.id);
         }
-        keysByScope.set(scope, seen);
       }
 
       expect(collisions, `DEFAULT_SHORTCUTS contains duplicate bindings:\n  ${collisions.join("\n  ")}`).toEqual([]);
@@ -311,14 +309,14 @@ describe("shortcutsStore", () => {
       const { importConfig } = useShortcutsStore.getState();
       const result = importConfig("not valid json");
       expect(result.success).toBe(false);
-      expect(result.errors).toBeDefined();
+      expect(result.errors).toEqual([{ code: "parse", detail: expect.stringMatching(/\S/) }]);
     });
 
     it("rejects config without customBindings", () => {
       const { importConfig } = useShortcutsStore.getState();
       const result = importConfig(JSON.stringify({ version: 1 }));
       expect(result.success).toBe(false);
-      expect(result.errors).toContain("Invalid config format");
+      expect(result.errors).toEqual([{ code: "invalidFormat" }]);
     });
 
     it("warns about unknown shortcut IDs", () => {
@@ -328,7 +326,7 @@ describe("shortcutsStore", () => {
         customBindings: { unknownId: "Ctrl-x" },
       }));
       expect(result.success).toBe(false);
-      expect(result.errors?.some((e) => e.includes("Unknown shortcut"))).toBe(true);
+      expect(result.errors).toEqual([{ code: "unknownShortcut", id: "unknownId" }]);
     });
 
     it("warns about invalid key values", () => {
@@ -338,7 +336,7 @@ describe("shortcutsStore", () => {
         customBindings: { bold: 123 }, // Should be string
       }));
       expect(result.success).toBe(false);
-      expect(result.errors?.some((e) => e.includes("Invalid key"))).toBe(true);
+      expect(result.errors).toEqual([{ code: "invalidKey", id: "bold" }]);
     });
 
     // Audit 20260907 (#422): the import validated per entry and applied the

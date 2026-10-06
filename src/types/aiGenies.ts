@@ -3,6 +3,8 @@
  *
  * Core types for the AI genies system — genie definitions,
  * provider configuration, and streaming response chunks.
+ *
+ * @module types/aiGenies
  */
 
 // ============================================================================
@@ -26,7 +28,7 @@ export interface GenieMetadata {
 }
 
 /** Whether a genie is a one-shot markdown prompt or a multi-step YAML workflow.
- *  Mirrors the Rust enum `genies::types::GenieKind` (WI-7.1). */
+ *  Mirrors the Rust enum `genies::types::GenieKind`. */
 type GenieKind = "markdown" | "workflow";
 
 export interface GenieDefinition {

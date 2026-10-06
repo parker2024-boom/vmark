@@ -111,7 +111,11 @@ VMark is fully open source. You can verify everything described here:
 
 - Update endpoint configuration: [`src-tauri/tauri.conf.json`](https://github.com/xiaolai/vmark/blob/main/src-tauri/tauri.conf.json)
 - Machine hash generation: [`src-tauri/src/app_setup.rs`](https://github.com/xiaolai/vmark/blob/main/src-tauri/src/app_setup.rs) — search for `machine_id_hash`
-- Filesystem and asset scope: [`src-tauri/capabilities/default.json`](https://github.com/xiaolai/vmark/blob/main/src-tauri/capabilities/default.json), the `assetProtocol` entry in [`src-tauri/tauri.conf.json`](https://github.com/xiaolai/vmark/blob/main/src-tauri/tauri.conf.json), [`src-tauri/src/fs_scope.rs`](https://github.com/xiaolai/vmark/blob/main/src-tauri/src/fs_scope.rs) and [`src-tauri/src/workspace_grants/`](https://github.com/xiaolai/vmark/tree/main/src-tauri/src/workspace_grants)
+- Filesystem and asset scope: [`src-tauri/capabilities/default.json`](https://github.com/xiaolai/vmark/blob/main/src-tauri/capabilities/default.json), the `assetProtocol` entry in [`src-tauri/tauri.conf.json`](https://github.com/xiaolai/vmark/blob/main/src-tauri/tauri.conf.json), [`src-tauri/src/fs_scope.rs`](https://github.com/xiaolai/vmark/blob/main/src-tauri/src/fs_scope.rs) and [`src-tauri/src/workspace/grants/`](https://github.com/xiaolai/vmark/tree/main/src-tauri/src/workspace/grants)
 - Keychain storage: [`src-tauri/src/secure_store.rs`](https://github.com/xiaolai/vmark/blob/main/src-tauri/src/secure_store.rs)
 - Server-side stats aggregation: [`scripts/vmark-stats-json`](https://github.com/xiaolai/vmark/blob/main/scripts/vmark-stats-json) — the exact script that runs on our server to produce the [public stats](https://log.vmark.app/api/stats)
 - The network call sites are the ones listed above — search the repository for `reqwest` (Rust) and `fetch(` (TypeScript) to check for yourself
+
+## Reporting a security issue
+
+If you find a vulnerability in VMark, such as in the MCP bridge, the embedded browser, the updater or file handling, please report it privately through [GitHub's private vulnerability reporting](https://github.com/xiaolai/vmark/security/advisories/new) instead of opening a public issue. The [security policy](https://github.com/xiaolai/vmark/blob/main/SECURITY.md) lists what is in scope and what to expect.

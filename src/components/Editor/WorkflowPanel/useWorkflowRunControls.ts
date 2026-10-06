@@ -10,14 +10,14 @@
  *     window `"main"`, so in any other window — or with another tab active —
  *     Run executed a different document, or nothing.
  *   - **A run belongs to the tab that started it** (`preview.runTabId`),
- *     registered WITH the run in one store write (#113/#114) — not bound
+ *     registered WITH the run in one store write — not bound
  *     after `run_workflow` resolves, which left the run nobody's for the
  *     length of the snapshot. Only that tab paints the run's statuses and
  *     offers Cancel, and Cancel names that run's id; any other panel in the
  *     window — or one looking at a workflow genie's run — says Run is busy
  *     instead. A panel remounted mid-start therefore sees its own run. The
  *     runner is one-at-a-time app-wide, so "busy" is the truth.
- *   - The panel subscribes to NOTHING (#115): the window's one event
+ *   - The panel subscribes to NOTHING: the window's one event
  *     subscription is held by the approval dialog, and start/cancel are plain
  *     commands.
  *   - **A refused start is SHOWN** — engine off, invalid YAML, already

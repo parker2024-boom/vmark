@@ -1,5 +1,5 @@
 /**
- * KnowledgeBaseRuntimeState (WI-FL1.1) — the stopped-state body of the
+ * KnowledgeBaseRuntimeState — the stopped-state body of the
  * Knowledge Base panel: what a start would find, and the Start button only
  * when a start could succeed.
  *
@@ -128,8 +128,8 @@ export function KnowledgeBaseRuntimeState({
 }
 
 /**
- * The switch above covers every `RuntimeProbe` phase, and this is what says so
- * (audit R3 #632). Without it a new phase COMPILES and renders nothing: the
+ * The switch above covers every `RuntimeProbe` phase, and this is what says so.
+ * Without it a new phase COMPILES and renders nothing: the
  * panel loses its Start button with no error anywhere, which is the hardest
  * kind of regression to notice.
  *

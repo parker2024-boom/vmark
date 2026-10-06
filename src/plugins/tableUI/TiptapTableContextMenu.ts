@@ -9,6 +9,8 @@
  *   - Imperative DOM rather than React to avoid re-render overhead on every table click
  *   - Uses popup host scoping so the menu positions correctly inside editor container
  *   - Click-outside and Escape dismiss the menu; actions dispatch ProseMirror transactions
+ *   - Placement goes through the shared `clampMenuPosition`, bounded by the viewport
+ *     and the editor's bottom edge; a menu larger than that lands on the near margin
  *
  * @coordinates-with tableActions.tiptap.ts — each menu action delegates to a table command
  * @coordinates-with tiptap.ts — mounts/destroys this menu from the table UI plugin view
@@ -20,6 +22,10 @@ import type { EditorView } from "@tiptap/pm/view";
 import { alignColumn, type TableAlignment, addColLeft, addColRight, addRowAbove, addRowBelow, deleteCurrentColumn, deleteCurrentRow, deleteCurrentTable, formatTable, isCurrentTableFitToWidth, toggleFitToWidth } from "./tableActions.tiptap";
 import { icons } from "@/utils/icons";
 import { getPopupHostForDom, toHostCoordsForDom } from "@/plugins/shared/popupHostDom";
+import { clampMenuPosition, viewportMenuBounds } from "@/utils/menuPosition";
+
+/** Gap kept between the menu and the editor container's bottom edge (~1em). */
+const EDITOR_BOTTOM_GAP = 16;
 
 interface MenuAction {
   label: string;
@@ -144,39 +150,26 @@ export class TiptapTableContextMenu {
     }
 
     requestAnimationFrame(() => {
+      // Measured after layout, in viewport coordinates.
       const rect = this.container.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
+      const bounds = viewportMenuBounds({ width: window.innerWidth, height: window.innerHeight });
 
-      // Find editor container for bottom boundary
+      // The menu must also clear the editor's bottom edge, with a ~1em gap.
       const editorContainer = this.editorView.dom.closest(".editor-container");
       const editorRect = editorContainer?.getBoundingClientRect();
-      // Use editor bottom with 1em margin, or fallback to viewport
-      const bottomMargin = 16; // ~1em
-      const maxBottom = editorRect
-        ? editorRect.bottom - bottomMargin
-        : viewportHeight - 10;
+      if (editorRect) bounds.bottom = editorRect.bottom - EDITOR_BOTTOM_GAP;
 
-      // Adjust if off-screen (always use viewport coords for getBoundingClientRect)
-      if (rect.right > viewportWidth - 10) {
-        const newLeft = viewportWidth - rect.width - 10;
-        if (this.host !== document.body && this.host) {
-          const hostPos = toHostCoordsForDom(this.host, { top: 0, left: newLeft });
-          this.container.style.left = `${hostPos.left}px`;
-        } else {
-          this.container.style.left = `${newLeft}px`;
-        }
-      }
+      // Anchor on the requested point, not the measured box: only the menu's
+      // SIZE needs layout, and the request is what the user pointed at.
+      const clamped = clampMenuPosition({ x, y }, rect, bounds);
+      if (clamped.x === x && clamped.y === y) return;
 
-      if (rect.bottom > maxBottom) {
-        const newTop = maxBottom - rect.height;
-        if (this.host !== document.body && this.host) {
-          const hostPos = toHostCoordsForDom(this.host, { top: newTop, left: 0 });
-          this.container.style.top = `${hostPos.top}px`;
-        } else {
-          this.container.style.top = `${newTop}px`;
-        }
-      }
+      const hostPos =
+        this.host && this.host !== document.body
+          ? toHostCoordsForDom(this.host, { top: clamped.y, left: clamped.x })
+          : { top: clamped.y, left: clamped.x };
+      if (clamped.x !== x) this.container.style.left = `${hostPos.left}px`;
+      if (clamped.y !== y) this.container.style.top = `${hostPos.top}px`;
     });
 
     this.isVisible = true;

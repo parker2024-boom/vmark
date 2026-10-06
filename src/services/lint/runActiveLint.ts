@@ -79,7 +79,7 @@ export function runActiveLint(windowLabel: string): void {
   };
 
   if (isYaml) {
-    // Format-contributed linter (WI-4.3) — the store no longer needs a
+    // Format-contributed linter — the store no longer needs a
     // per-format action, and a third linted format is a registration.
     const yamlDiags = useLintStore
       .getState()

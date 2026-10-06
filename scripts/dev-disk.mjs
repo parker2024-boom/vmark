@@ -9,7 +9,7 @@
  *     `tauri build` script in this repo and no `target/release/bundle/` on a
  *     dev machine that has cut ~30 releases. A post-release cleanup step would
  *     clean something the release never made.
- *   - Measured on 2026-08-07, `src-tauri/target` was 149 GB, of which `debug/`
+ *   - Measured once, `src-tauri/target` was 149 GB, of which `debug/`
  *     was 137 GB (92%) — the daily `tauri dev` / `cargo test` / `cargo clippy`
  *     loop. `release/` was 2.0 GB. The growth tracks TIME and DEPENDENCY CHURN,
  *     not releases: Cargo has no garbage collector, so every Dependabot bump

@@ -7,7 +7,7 @@
 //! placeholder, and the "what counts as a usable token" rule existed in two
 //! copies that can drift; here they cannot.
 //!
-//! What this field is FOR (audit 20260728 §2.1): the bridge's authorization
+//! What this field is FOR: the bridge's authorization
 //! principal used to be `identity.name` from the client's own `identify`
 //! message, which any token-holder could assert and re-assert. The credential
 //! written here is minted by VMark, stored only in the config of the client it

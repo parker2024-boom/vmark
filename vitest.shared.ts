@@ -135,6 +135,20 @@ export function maxWorkers(): number {
 export const LIVENESS_TIMEOUT_MS = 300_000;
 
 /**
+ * Build-time constants the app reads, defined for every tier that runs `src/`
+ * the way `vite.config.ts` defines them for the build.
+ *
+ * A config `define` cannot be undone by a test. The version used to come from
+ * `vi.stubGlobal` in `src/test/setup.ts`, and every `vi.unstubAllGlobals()`
+ * (35 files call it) removed it for the rest of that file, so a module that
+ * reads it at import time threw a ReferenceError. Pinned by
+ * `src/test/versionDefine.test.ts`.
+ */
+export const TEST_DEFINES = {
+  __VMARK_VERSION__: JSON.stringify("0.0.0-test"),
+} as const;
+
+/**
  * The file extensions every tier's include/exclude patterns must agree on.
  *
  * Shared because they drifted: the app tier's `include` accepted eight
@@ -175,4 +189,28 @@ export function sourceAliases(rootDir: string): Record<string, string> {
     "@": resolve(rootDir, "./src"),
     "@shared": resolve(rootDir, "./src/shared"),
   };
+}
+
+/** Time zone every app-tier test runs in. UTC matches the CI runners. */
+export const TEST_TIME_ZONE = "UTC";
+
+/** Default locale every app-tier test formats with (ICU's default locale). */
+export const TEST_LOCALE = "en-US";
+
+/**
+ * Pin the time zone and default locale for the worker processes.
+ *
+ * Unpinned, a test that formats a date or a number reads the developer's
+ * machine settings, so an assertion on the actual string passes on one
+ * machine and fails on the next. This must run in the MAIN process, before
+ * any worker is forked: workers inherit the environment at spawn, and ICU
+ * reads its default locale from `LC_ALL`/`LANG` once per process — setting
+ * it later, from a setup file inside the worker, changes nothing.
+ * `src/test/clockEnvironmentPin.test.ts` asserts the pin reaches the workers.
+ */
+export function pinTestClockEnvironment(env: NodeJS.ProcessEnv = process.env): void {
+  const posixLocale = `${TEST_LOCALE.replace("-", "_")}.UTF-8`;
+  env.TZ = TEST_TIME_ZONE;
+  env.LC_ALL = posixLocale;
+  env.LANG = posixLocale;
 }

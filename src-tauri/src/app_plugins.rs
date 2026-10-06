@@ -38,7 +38,7 @@ pub(crate) fn register(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<ta
     {
         // Linux only with a session-bus address its bus library can parse: the
         // plugin's backend unwraps that parse and aborts the process at
-        // startup otherwise (WI-FL6.1 — see `session_bus.rs` for the evidence;
+        // startup otherwise (see `session_bus.rs` for the evidence;
         // `app_setup` logs the skipped guard once a logger exists). The gate
         // performs no I/O, so it cannot delay this call.
         #[cfg(target_os = "linux")]
@@ -53,6 +53,10 @@ pub(crate) fn register(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<ta
     }
 
     builder = builder
+        // Every webview the app shows, `main` included: it is built by Tauri
+        // from `tauri.conf.json`, so a plugin hook is the only place a
+        // navigation rule can reach it.
+        .plugin(crate::window_manager::navigation_guard::plugin())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
@@ -129,7 +133,7 @@ pub(crate) fn attach_automation_bridge(
     // the automation channel deterministic and clear of the public MCP port.
     //
     // "Base" is the plugin's word, not ours: it scans up to 100 ports above
-    // it when 9323 is busy, and the driver is pinned to 9323 (#157). The port
+    // it when 9323 is busy, and the driver is pinned to 9323. The port
     // is therefore probed first, and a busy 9323 means NO bridge and a line
     // on stderr — the plugin is never handed a base it could slide from.
     {

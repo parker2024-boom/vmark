@@ -7,6 +7,8 @@
  * IMPORTANT: This hook sets a coordination flag that other startup hooks
  * (like useFinderFileOpen) should wait for before processing. This prevents
  * race conditions where Finder-opened files could be lost.
+ *
+ * @module hooks/resilience/_hotExitStartup
  */
 
 import { useEffect, useRef } from 'react';

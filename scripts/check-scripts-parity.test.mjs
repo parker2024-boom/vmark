@@ -13,8 +13,14 @@
  * composition of the groups CI runs. Adding a gate then has one correct home
  * (a group), and CI picks it up for free.
  *
+ * Two further properties live here because they are about the same wiring:
+ * the vitest tiers must partition the test files on disk, and every script
+ * file a `ci.yml` step runs — named in a `run:` line or reached through a
+ * package script — must have a sibling self-test.
+ *
  * @coordinates-with .github/workflows/ci.yml — fe-static / fe-test / fe-coverage / fe-servers / fe-build
  * @coordinates-with scripts/lib/packageScripts.mjs — transitive expansion
+ * @coordinates-with scripts/gate-tests-baseline.json — the untested list, empty and required to stay empty
  * @module scripts/check-scripts-parity.test
  */
 import { describe, it, expect } from "vitest";
@@ -188,6 +194,9 @@ describe("test tiers partition the test files on disk", () => {
   const INFRA_DIRS = new Set([
     "node_modules", "dist", "coverage", "target", "tmp", "reports", "worktrees",
     ".git", ".vitest-reports", ".vitest-attachments", ".playwright-mcp",
+    // Stryker's sandbox: a copy of a fixture that another test creates and
+    // deletes while this walk runs, so reading it races (ENOENT).
+    ".stryker-tmp",
   ]);
 
   /**
@@ -517,51 +526,128 @@ describe("test tiers partition the test files on disk", () => {
   });
 });
 
-// ── WI-UI0.4 (C12) — every check:static gate has a self-test ────────────────
+// ── Every script CI runs has a self-test ─────────────────────────────────────
+//
+// The census used to be "gates reachable from `check:static`". The two gates
+// that guard the dependency supply chain are not reachable from it: they are
+// named directly in `ci.yml` `run:` lines because they need the network or a
+// PR base ref. Both blocked merges, and neither had a test, and this check
+// could not see either. The census is now everything a `ci.yml` step runs —
+// a script file named in a `run:` line, or named by any package script such a
+// line invokes, however deep.
 
-describe("C12: every check:static gate naming a scripts/ file has a sibling test", () => {
-  /** The root-scripts file a gate command runs, if any. Anchored so
-   *  `server/mcp/scripts/…` (another package's tooling) does not count. */
-  function gateScriptOf(command) {
-    const m = /(?:^|[\s"'])scripts\/([\w.-]+\.(?:mjs|ts|sh))\b/.exec(command ?? "");
-    return m ? m[1] : null;
+describe("every script file CI runs has a sibling self-test", () => {
+  /**
+   * Root `scripts/` files named in a command. ALL of them, not the first.
+   * Anchored on what may precede the path, so `server/mcp/scripts/x.mjs`
+   * (another package's tooling) does not count but `./scripts/x.sh` does.
+   */
+  function scriptFilesIn(command) {
+    const re = /(?:^|[\s"'=(;&|])(?:\.\/)?scripts\/([\w./-]+\.(?:mjs|cjs|js|ts|sh))(?![\w.-])/g;
+    return [...String(command ?? "").matchAll(re)].map((m) => m[1]);
   }
+
+  /** Root package scripts a command invokes: `pnpm x`, `pnpm run x`, with or without arguments. */
+  function packageScriptsIn(command, scripts) {
+    return [...String(command ?? "").matchAll(/\bpnpm\s+(?:run\s+)?([\w:.-]+)/g)]
+      .map((m) => m[1])
+      .filter((name) => typeof scripts[name] === "string");
+  }
+
+  /** Every script file reachable from a set of commands, with what reaches it. */
+  function census(commands, scripts) {
+    const files = new Map(); // file -> the package script or CI job that names it
+    const seen = new Set();
+    const visit = (command, via) => {
+      for (const file of scriptFilesIn(command)) if (!files.has(file)) files.set(file, via);
+      for (const name of packageScriptsIn(command, scripts)) {
+        if (seen.has(name)) continue;
+        seen.add(name);
+        visit(scripts[name], name);
+      }
+    };
+    for (const [via, command] of commands) visit(command, via);
+    return files;
+  }
+
+  const ciRuns = Object.entries(ciDoc.jobs).flatMap(([job, def]) =>
+    (def.steps ?? []).filter((s) => typeof s.run === "string").map((s) => [`ci.yml job ${job}`, s.run]),
+  );
+  const named = census(ciRuns, pkg.scripts);
 
   const baseline = JSON.parse(
     readFileSync(path.join(REPO, "scripts", "gate-tests-baseline.json"), "utf8"),
   );
 
-  const gates = new Map(); // script file name -> leaf script name
-  for (const leaf of invokedScripts(pkg.scripts, "check:static")) {
-    const file = gateScriptOf(pkg.scripts[leaf]);
-    if (file) gates.set(file, leaf);
-  }
-
   const hasSibling = (file) => {
-    const stem = file.replace(/\.(mjs|ts|sh)$/, "");
+    const stem = file.replace(/\.(mjs|cjs|js|ts|sh)$/, "");
     return ["mjs", "ts", "tsx"].some((ext) =>
       existsSync(path.join(REPO, "scripts", `${stem}.test.${ext}`)),
     );
   };
 
-  it("finds a meaningful number of gates (the census itself is alive)", () => {
-    expect(gates.size).toBeGreaterThan(20);
-  });
-
-  it("an untested gate is either baselined or a failure — a 10th untested gate fails", () => {
-    const untested = [...gates.keys()].filter((f) => !hasSibling(f)).sort();
-    const baselined = [...baseline.untested].sort();
-    // Exact equality gives both directions at once: a NEW untested gate fails
-    // (not in the baseline), and a STALE entry fails (gate gained a test or
-    // left check:static) so the win gets recorded.
-    expect(untested).toEqual(baselined);
-  });
-
-  it("every baselined entry still names a wired-in gate", () => {
-    for (const file of baseline.untested) {
-      expect(gates.has(file), `${file} is baselined as untested but no check:static gate runs it`).toBe(
-        true,
-      );
+  it("the census is alive: it finds the check:static gates AND scripts named only in ci.yml", () => {
+    expect(named.size).toBeGreaterThan(30);
+    // Everything the old census saw is still in it…
+    for (const leaf of invokedScripts(pkg.scripts, "check:static")) {
+      for (const file of scriptFilesIn(pkg.scripts[leaf])) {
+        expect(named.has(file), `${file} (via ${leaf}) fell out of the census`).toBe(true);
+      }
     }
+    // …and so are files no package script names. Without at least one of
+    // these the widening is not being exercised and could regress unnoticed.
+    const viaPackage = census(Object.entries(pkg.scripts), pkg.scripts);
+    const ciOnly = [...named.keys()].filter((f) => !viaPackage.has(f));
+    expect(ciOnly.length, "no script is named only by a ci.yml run: line").toBeGreaterThan(0);
+  });
+
+  it("every script file CI runs exists", () => {
+    const missing = [...named].filter(([file]) => !existsSync(path.join(REPO, "scripts", file)));
+    expect(missing.map(([file, via]) => `${file} (via ${via})`)).toEqual([]);
+  });
+
+  it("a script CI runs without a self-test fails — the untested list is empty and stays empty", () => {
+    const untested = [...named].filter(([file]) => !hasSibling(file)).map(([file, via]) => `${file} (via ${via})`);
+    expect(untested.sort(), "write scripts/<stem>.test.* for each of these").toEqual([]);
+    // The list is the ratchet's floor. It reached zero; a non-empty list would
+    // be a new exemption, which is the thing this test exists to refuse.
+    expect(baseline.untested).toEqual([]);
+  });
+
+  it("scriptFilesIn reads every shape a run: line uses, and ignores other packages' scripts", () => {
+    const cases = [
+      ["node scripts/a.mjs", ["a.mjs"]],
+      ["bash scripts/b.sh origin/main", ["b.sh"]],
+      ["tsx scripts/c.ts --flag", ["c.ts"]],
+      ["./scripts/d.sh", ["d.sh"]],
+      ['node "scripts/e.mjs"', ["e.mjs"]],
+      ["node scripts/lib/f.mjs", ["lib/f.mjs"]],
+      ["node scripts/a.mjs && bash scripts/b.sh", ["a.mjs", "b.sh"]],
+      ["pnpm install\nnode scripts/g.mjs /tmp/x.json\n", ["g.mjs"]],
+      ["FOO=scripts/h.mjs node $FOO", ["h.mjs"]],
+      ["node server/mcp/scripts/other.mjs", []],
+      ["node myscripts/x.mjs", []],
+      ["echo scripts/readme.md", []],
+      ["node scripts/a.mjs.bak", []],
+      ["", []],
+    ];
+    for (const [command, expected] of cases) {
+      expect(scriptFilesIn(command), command).toEqual(expected);
+    }
+  });
+
+  it("census follows package scripts transitively, through arguments and `pnpm run`", () => {
+    const scripts = {
+      outer: "pnpm inner && pnpm run other -- --flag",
+      inner: "node scripts/inner.mjs",
+      other: "pnpm deep --watch",
+      deep: "bash scripts/deep.sh",
+      loop: "pnpm loop && node scripts/loop.mjs",
+      unreached: "node scripts/unreached.mjs",
+    };
+    const found = census([["job", "pnpm outer\npnpm --dir website build\npnpm loop\nnode scripts/direct.mjs"]], scripts);
+    expect([...found.keys()].sort()).toEqual(["deep.sh", "direct.mjs", "inner.mjs", "loop.mjs"]);
+    expect(found.get("deep.sh")).toBe("deep");
+    expect(found.get("direct.mjs")).toBe("job");
   });
 });

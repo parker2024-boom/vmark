@@ -124,7 +124,7 @@ const NEVER_OPENABLE_SCHEMES = new Set([
  * Open an external link via the OS opener, iff its scheme is allowlisted:
  * the built-in safe schemes plus the user's configured custom protocols
  * (settings -> advanced -> customLinkProtocols). Blocks file:, javascript:,
- * smb:, and anything else a hostile document could plant (audit 20260612).
+ * smb:, and anything else a hostile document could plant.
  * Returns true when the open was attempted.
  */
 export async function openExternalLink(href: string): Promise<boolean> {

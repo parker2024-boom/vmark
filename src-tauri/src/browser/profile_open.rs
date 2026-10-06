@@ -1,4 +1,4 @@
-//! Per-use profile-open authorization (WI-P6.1 H1).
+//! Per-use profile-open authorization.
 //!
 //! Opening a named persistent context could otherwise let a malicious AI open a
 //! guessed profile (`github-work`) and read authenticated page content with no

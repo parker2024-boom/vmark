@@ -4,8 +4,8 @@
  * registry, the owner claims, the availability check and dispatch.
  *
  * Every rule here is one an audit finding named, and each is worth testing
- * without a registry: a getter that throws must not take down the palette
- * (#880), and two spellings of one string must compare equal (#882).
+ * without a registry: a getter that throws must not take down the palette,
+ * and two spellings of one string must compare equal.
  *
  * @coordinates-with services/commands/CommandBus.ts — resolves + ranks through this
  * @coordinates-with components/CommandPalette/CommandPalette.tsx — renders resolved labels
@@ -24,7 +24,7 @@ export type LocalizedString = string | (() => string);
 /**
  * Resolve a LocalizedString to a plain string at the moment of display.
  *
- * NEVER THROWS (audit #880). A getter exists precisely because commands
+ * NEVER THROWS. A getter exists precisely because commands
  * register before their i18n namespace is loaded, so calling one can fail —
  * and both consumers are whole-list operations: `searchCommands` walks every
  * command, and the palette renders every row. One faulty getter therefore took

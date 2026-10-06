@@ -3,6 +3,8 @@
  *
  * Listens for capture requests from Rust coordinator and responds with
  * current window state (tabs, documents, UI state).
+ *
+ * @module hooks/resilience/_hotExitCapture
  */
 
 import { useEffect } from 'react';
@@ -131,8 +133,8 @@ function captureDocumentState(
 /**
  * Capture complete window state.
  *
- * Exported for direct unit testing of the capture payload (WI-1A.13:
- * format_id / editing_enabled / active_schema_id population). The hook
+ * Exported for direct unit testing of the capture payload
+ * (format_id / editing_enabled / active_schema_id population). The hook
  * uses this internally to respond to capture requests from Rust.
  */
 export function captureWindowState(windowLabel: string, isMainWindow: boolean): WindowState {
@@ -140,7 +142,7 @@ export function captureWindowState(windowLabel: string, isMainWindow: boolean): 
   const documentStore = useDocumentStore.getState();
   const historyStore = useUnifiedHistoryStore.getState();
 
-  // Get tabs for this window. Browser tabs (WI-1.1 / R1) carry no document
+  // Get tabs for this window. Browser tabs carry no document
   // content to crash-recover; they are restored from the workspace session
   // config (`sessionTabs`), not from this crash snapshot — so capture only
   // document tabs here.
@@ -164,7 +166,7 @@ export function captureWindowState(windowLabel: string, isMainWindow: boolean): 
       title: tab.title,
       is_pinned: tab.isPinned,
       document: captureDocumentState(tab.filePath, tab.title, doc, historyStore, tab.id),
-      // Multi-format fields (WI-1A.13). `formatId` is always present on
+      // Multi-format fields. `formatId` is always present on
       // the in-memory Tab; the other two have store-defined defaults.
       format_id: tab.formatId,
       editing_enabled: tab.editingEnabled ?? true,
@@ -188,7 +190,7 @@ export function captureWindowState(windowLabel: string, isMainWindow: boolean): 
     ui_state: getUiStateSafe(),
     geometry: captureWindowGeometry(),
     ...captureWindowWorkspaceInstances(windowLabel),
-    // WI-9.4: per-instance UI state, scoped reopen history, and window
+    // Per-instance UI state, scoped reopen history, and window
     // browser records — optional additive fields, opaque to Rust.
     ...captureInstanceContextState(windowLabel),
   };

@@ -6,9 +6,9 @@
  * and, on failure, delete every path it had written. A re-export over a
  * previous export OVERWROTE index.html, the reader assets and the images
  * first and then, when a later write failed, deleted them — the previous
- * export destroyed rather than restored (#334). And two exports to one
+ * export destroyed rather than restored. And two exports to one
  * folder — two windows can each run one — raced on the same file names, and
- * the failing one's cleanup removed the other's output (#332).
+ * the failing one's cleanup removed the other's output.
  *
  * The shape here is crash recovery's (`crashRecovery.ts`): write EVERYTHING
  * under a private staging directory inside the destination, publish each
@@ -24,19 +24,19 @@
  * them wrong in round 3:
  *   - **The lock is released on every exit.** It is taken before the staging
  *     root is made, so a failure there left it behind and the folder was
- *     un-exportable until the stale timeout five minutes later (#335). The
+ *     un-exportable until the stale timeout five minutes later. The
  *     acquire-to-return span is therefore wrapped: either a stage owns the
  *     lock, or this function has released it.
  *   - **A backup that could not be restored outlives the export.** `discard`
  *     removes the staging tree, and the backups of files the publish replaced
  *     live IN that tree — so removing it after a failed rollback deleted the
  *     user's only copy, which is the data loss the staging design exists to
- *     prevent (#334). `retainedBackups` is how the publish says so.
+ *     prevent. `retainedBackups` is how the publish says so.
  *
  * Concurrency has two layers, because one is not enough: `runExclusive`
  * serializes exports within a webview, and `exportLock` takes a lock FILE in
  * the destination so a second window cannot publish into the same folder
- * (#332) — a JS queue is per-webview and VMark opens a window per document.
+ * — a JS queue is per-webview and VMark opens a window per document.
  *
  * Staging INSIDE the destination, not in the OS temp dir, so the rename
  * never crosses a device — the one case where `rename` degrades to a copy.
@@ -103,7 +103,7 @@ export async function openStage(destination: string): Promise<ExportStage> {
     owner = await acquireExportLock(destination);
   } catch (error) {
     // An export that never started leaves nothing behind, the folder it just
-    // made included (#335) — otherwise a contended destination accumulates
+    // made included — otherwise a contended destination accumulates
     // empty directories from every attempt.
     if (createdDestination) await removeQuietly(destination);
     throw error;
@@ -113,7 +113,7 @@ export async function openStage(destination: string): Promise<ExportStage> {
     return await stageUnder(destination, owner, createdDestination);
   } catch (error) {
     // Every path out of this function either returns a stage that owns the
-    // lock or gives it back here (#335). The lock file lives inside the
+    // lock or gives it back here. The lock file lives inside the
     // destination, so it goes first or the folder cannot be removed.
     await releaseExportLock(destination, owner);
     if (createdDestination) await removeQuietly(destination);
@@ -153,7 +153,7 @@ async function stageUnder(
       // The lock is advisory: a holder that outlives the stale threshold can
       // have it taken over. Publishing without it would interleave two
       // windows' files in one folder, which is the only thing the lock is for
-      // — so refuse, and let the caller discard this tree (#332). It shrinks
+      // — so refuse, and let the caller discard this tree. It shrinks
       // the exposure from the whole export down to the publish itself.
       if (!(await holdsExportLock(destination, owner))) {
         throw new Error(takenOverMessage(destination));

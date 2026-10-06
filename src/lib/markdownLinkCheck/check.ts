@@ -209,7 +209,7 @@ export async function checkLocalLinks(
       try {
         return { abs, status: (await exists(abs)) ? "ok" : "missing" } as const;
       } catch {
-        // Codex audit MED-5: a thrown exists() call is an operational
+        // A thrown exists() call is an operational
         // failure (permission denied, capability scope error, transient
         // I/O), not proof that the file is missing. Distinguish so we
         // don't surface false-positive "not found" diagnostics.

@@ -21,7 +21,7 @@ use super::ledger_lines::{
 /// Spec §5.1 rotation threshold.
 const MAX_SEGMENT_BYTES: u64 = 8 * 1024 * 1024;
 
-/// Per-line read cap (re-review #3): `read_all` streams each segment line with
+/// Per-line read cap: `read_all` streams each segment line with
 /// this bound, so a single pathological or hostile line — an externally
 /// corrupted ledger, or an entry from a build whose field caps this one does not
 /// share — is quarantined instead of read whole into memory. The cap sits far
@@ -29,8 +29,8 @@ const MAX_SEGMENT_BYTES: u64 = 8 * 1024 * 1024;
 /// it is a memory-safety backstop, not a format rule.
 ///
 /// (It formerly cited the group-commit `MAX_PREPARE_BYTES` prepare as the
-/// largest legal line. That subsystem was severed — see
-/// dev-docs/plans/20260806-coherence-runtime-landing.md — but the backstop is
+/// largest legal line. That subsystem was severed from the
+/// coherence runtime landing, but the backstop is
 /// independent of it and is deliberately unchanged: lowering a read cap because
 /// today's writers are smaller would weaken the hostile-input guarantee.)
 pub(super) const MAX_LINE_BYTES: usize = 16 * 1024 * 1024;
@@ -160,14 +160,14 @@ impl Ledger {
             Ok(entries) => entries,
             // Only a MISSING ledger dir is an empty history; permission
             // or IO failures must surface, or a rebuild could wipe the
-            // derived index of visible history (audit R8).
+            // derived index of visible history.
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(read),
             Err(e) => return Err(format!("ledger dir unreadable: {e}")),
         };
         let mut raw: Vec<Envelope> = Vec::new();
         let mut segments: Vec<PathBuf> = Vec::new();
         for entry in dir_entries {
-            // Iterator errors surface (audit A13): silently skipping a
+            // Iterator errors surface: silently skipping a
             // segment would let a rebuild wipe its visible history.
             let entry = entry.map_err(|e| format!("ledger dir entry unreadable: {e}"))?;
             let path = entry.path();
@@ -181,7 +181,7 @@ impl Ledger {
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            // Stream the segment line-by-line with a per-line memory cap (#3), so
+            // Stream the segment line-by-line with a per-line memory cap, so
             // no single line — however large or hostile — is read whole into RAM.
             let file = match fs::File::open(&seg) {
                 Ok(f) => f,
@@ -243,7 +243,7 @@ impl Ledger {
         let bad = qdir.join(format!("{segment}.bad"));
         let line_str = String::from_utf8_lossy(line);
         if let Ok(existing) = fs::read_to_string(&bad) {
-            // Exact-line match (audit R24): substring containment could
+            // Exact-line match: substring containment could
             // conflate a line with a superset line.
             if existing.lines().any(|l| l == line_str.as_ref()) {
                 return;

@@ -1,5 +1,5 @@
 /**
- * Full-text workspace search (Phase 4, WI-4.2).
+ * Full-text workspace search (Phase 4).
  *
  * Node-side search over the indexed docs. Self-contained (no cross-process call
  * to Rust `content_search`) so the served site works wherever the content

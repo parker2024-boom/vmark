@@ -2,6 +2,8 @@
  * Editor Settings Section
  *
  * Typography, display, behavior, and whitespace configuration.
+ *
+ * @module pages/settings/EditorSettings
  */
 
 import { useTranslation } from "react-i18next";
@@ -145,7 +147,7 @@ export function EditorSettings() {
             onChange={(v) => updateGeneralSetting("tabSize", Number(v))}
           />
         </SettingRow>
-        {/* fix(#946) — open existing files in a new tab */}
+        {/* Open existing files in a new tab */}
         <SettingRow
           label={t("editor.openInNewTab.label")}
           description={t("editor.openInNewTab.description")}

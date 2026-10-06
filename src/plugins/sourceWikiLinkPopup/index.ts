@@ -2,6 +2,8 @@
  * Source Wiki Link Popup Plugin
  *
  * Exports for wiki link editing popup in Source mode.
+ *
+ * @module plugins/sourceWikiLinkPopup
  */
 
 import "./source-wiki-link-popup.css";

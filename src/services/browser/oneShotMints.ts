@@ -7,7 +7,7 @@
  * THAT mint (`mintOneShotConfirmed`) instead of minting a second copy; and
  * `revokeOneShot` withdraws a mint that confirmed after its run was cancelled, by
  * the mint's FULL identity — script included — so revoking one payload-bound
- * one-shot never takes an unrelated one for the same target (round 3, #124).
+ * one-shot never takes an unrelated one for the same target.
  *
  * @coordinates-with services/browser/grantSync.ts — the subscription that calls `pushOneShot`
  * @coordinates-with src-tauri browser_add_one_shot / browser_revoke_one_shot — the driver's mirror
@@ -88,12 +88,12 @@ export function pushOneShot(shot: OneShotApproval): void {
 }
 
 /**
- * Await the driver's confirmation that `shot` is minted (WI-NB5.3, reworked).
+ * Await the driver's confirmation that `shot` is minted.
  *
  * Callers consume their frontend one-shot and then MUST await this before
  * invoking the driver: acting before the mint lands gets refused as unauthorized
- * (Codex review F4), and re-minting instead of awaiting left a duplicate behind
- * (audit A-04). Resolves `false` when the driver refused (a stale generation, a
+ * (Codex review F4), and re-minting instead of awaiting left a duplicate behind.
+ * Resolves `false` when the driver refused (a stale generation, a
  * missing script): the action must fail, never proceed unauthorized. The recorded
  * outcome is consumed here, so a later identical approval is a fresh mint.
  */
@@ -108,7 +108,7 @@ export async function mintOneShotConfirmed(shot: OneShotApproval): Promise<boole
 }
 
 /**
- * Withdraw a one-shot the driver holds for a run that is gone (round 3, #124): the
+ * Withdraw a one-shot the driver holds for a run that is gone: the
  * counterpart of a mint that confirmed AFTER its run was cancelled. Best effort —
  * a lapsed one-shot (the tab navigated) is already gone, and a failed revoke is
  * logged, not thrown: the caller has nothing left to do with it.

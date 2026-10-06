@@ -6,8 +6,7 @@
  * Key decisions:
  *   - Every row tracks `committedKey` — the key of its last queued
  *     with.set. A rename chain (a → b → c) cancels set(b) when c commits;
- *     without this the intermediate set(b) leaked into the saved YAML
- *     (Codex audit finding 1).
+ *     without this the intermediate set(b) leaked into the saved YAML.
  *   - A commit whose (trimmed) key is already held by another row plans
  *     `duplicate` instead of queueing: with.set targets dedup by key, so
  *     two rows sharing a key would silently collapse to one entry while
@@ -98,7 +97,7 @@ function cancelSet(ctx: WithRowContext, key: string): IRPatch {
  * committedKey (patch-ownership guard). `stepWith` is the PRE-EDIT `with:`
  * block, the source of truth for "did the value actually change" — pass the
  * preview's and a row that was just committed reads as unchanged, cancelling
- * the edit it had queued (audit R2, #1020).
+ * the edit it had queued.
  */
 export function planWithRowCommit(
   ctx: WithRowContext,

@@ -2,14 +2,17 @@ name: Rust drift check
 
 # The Rust gate on a CLOCK, because the PR-tier one runs on a PATH.
 #
-# `ci.yml`'s `rust-test` is path-filtered to `src-tauri/**` and `Cargo.lock`,
-# which is correct — a docs-only PR should not compile three OSes. But it means
+# `ci.yml`'s `rust-test` is path-filtered to `src-tauri/**` plus the few files
+# outside it that the crate reads, which is correct — a docs-only PR should not
+# compile three OSes. But it means
 # Rust CI only runs when someone touches Rust, while the things it checks drift
 # on their own schedule:
 #
 #   - `dtolnay/rust-toolchain@stable` follows the channel, so a new release adds
 #     lints that `-D warnings` turns into errors with no code change;
-#   - `cargo machete` and the dependency graph move under the lockfile.
+#   - `cargo machete` and the dependency graph move under the lockfile;
+#   - RustSec publishes advisories against crates already in the lockfile, and
+#     crates get yanked, with no change here at all (the `rust-audit` job).
 #
 # That gap is not hypothetical. On 2026-08-20 a PR that changed nothing but
 # version strings failed `rust-test` on two clippy 1.98 errors
@@ -116,3 +119,89 @@ jobs:
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
       - run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  # The same gate as ci.yml's `rust-audit`, which only runs when a pull request
+  # touches Rust. An advisory published in between is otherwise first seen by
+  # whoever next edits src-tauri, as a failure unrelated to their change.
+  rust-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@7623a79cdfecb99d681017af368ca353d9f49bb5 # v2.87.19
+        with:
+          tool: cargo-audit
+
+      - name: Security audit (Rust)
+        run: node scripts/check-cargo-audit.mjs
+
+  # The header declares `on-failure: rolling-issue`; these two jobs are what
+  # make that true. A scheduled run gates no pull request, so without them a
+  # red drift check is visible only to someone who opens the Actions tab.
+  #
+  # They are the ONLY jobs with `issues: write`, and they check out nothing and
+  # run no project code. `if: failure()` on a job with `needs` fires exactly
+  # when one of those jobs failed, so a cancelled run reports nothing.
+  report:
+    name: Report failures in the tracking issue
+    needs: [rust-drift, rust-audit]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Create or update the rolling issue
+        env:
+          # No checkout here, so gh is told the repository explicitly rather
+          # than inferring it from a git remote.
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          TITLE="Rust drift check failed"
+          BODY="The weekly Rust drift check failed on $(date -u +%Y-%m-%d): $RUN_URL (commit ${GITHUB_SHA}). The toolchain, the dependency graph or the RustSec database moved under an unchanged tree; the job log says which."
+          NUMBER=$(gh issue list --state open --search "\"$TITLE\" in:title" \
+            --json number,title --jq ".[] | select(.title == \"$TITLE\") | .number" | head -n1)
+          if [ -n "$NUMBER" ]; then
+            gh issue comment "$NUMBER" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --body "$BODY"
+          fi
+
+  resolve:
+    # A rolling issue needs both edges: without this one a fixed failure stays
+    # open and the next reader re-investigates a solved problem.
+    name: Close the tracking issue once the drift check passes
+    needs: [rust-drift, rust-audit]
+    if: success()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Close the rolling issue
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          TITLE="Rust drift check failed"
+          NUMBER=$(gh issue list --state open --search "\"$TITLE\" in:title" \
+            --json number,title --jq ".[] | select(.title == \"$TITLE\") | .number" | head -n1)
+          if [ -z "$NUMBER" ]; then
+            echo "No open tracking issue — nothing to close."
+            exit 0
+          fi
+          gh issue close "$NUMBER" --reason completed --comment \
+            "Drift check passed on $(date -u +%Y-%m-%d): $RUN_URL (commit ${GITHUB_SHA}). Closing automatically; a later failure opens a fresh issue."

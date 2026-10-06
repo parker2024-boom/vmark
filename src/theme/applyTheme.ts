@@ -40,8 +40,8 @@ export function tokensToCssEntries(theme: ThemeTokens): Entries {
   const out: Entries = [];
   // `terminal` is JS-side data consumed at xterm-instance creation
   // (buildXtermTheme) — no stylesheet reads a --terminal-* var, and emitting
-  // 18 dead custom properties per theme made the tokens.ts comment a lie
-  // (WI-UI4.9). Excluded here so the comment is TRUE.
+  // 18 dead custom properties per theme made the tokens.ts comment a lie.
+  // Excluded here so the comment is TRUE.
   const { terminal: _terminal, ...cssFacing } = theme as unknown as Record<string, unknown> & {
     terminal: unknown;
   };

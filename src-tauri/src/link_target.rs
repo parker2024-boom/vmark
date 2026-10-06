@@ -1,12 +1,13 @@
 //! Resolving a save target through symlinks.
 //!
-//! Split out of `atomic_replace.rs` to keep that file under the size gate; it
-//! is the DOCUMENT-save half of the policy and is deliberately not called by
-//! the replacement core, so an app-private write cannot be redirected by a
-//! planted link.
+//! Split out of `atomic_replace.rs` to keep that file under the size gate. It
+//! is called for files the USER pointed at — a document, a CLI's own config —
+//! and deliberately not by the replacement core, so an app-private write
+//! cannot be redirected by a planted link.
 //!
-//! @coordinates-with atomic_replace.rs — the replacement core
-//! @coordinates-with file_write.rs — the only caller
+//! @coordinates-with atomic_replace.rs — the replacement core, which re-exports this
+//! @coordinates-with files/write.rs — resolves a document before saving it
+//! @coordinates-with terminal_transcript/config.rs — resolves a CLI settings file before rewriting it
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -33,8 +34,8 @@ pub(crate) enum LinkResolveError {
 ///
 /// Saving is a temp-file + rename, and a rename onto a symlink REPLACES the
 /// link with a regular file: the alias stops being an alias and the real
-/// document keeps its old bytes, while the save reports success (audit
-/// 20260906, B2). Resolving first means the replacement lands on the referent
+/// document keeps its old bytes, while the save reports success.
+/// Resolving first means the replacement lands on the referent
 /// and the link survives.
 ///
 /// Deliberately NOT applied to internal writes (`app_paths`, the MCP token

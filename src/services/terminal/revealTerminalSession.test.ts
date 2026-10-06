@@ -7,11 +7,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
-import {
-  MAX_TERMINAL_SESSIONS,
-  resetTerminalSessionStore,
-  useUIStore,
-} from "@/stores/uiStore";
+import { useUIStore } from "@/stores/uiStore";
+import { MAX_TERMINAL_SESSIONS, resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import {
   createWorkspaceInstance,
   createWorkspaceRootIdentity,
@@ -43,14 +40,14 @@ function addWorkspace(id: string, rootPath: string): void {
 }
 
 function createOwned(owner?: string): string {
-  const created = useUIStore
+  const created = useTerminalStore
     .getState()
     .terminalCreateSession(owner ? { ownerInstanceId: owner } : undefined);
   if (!created) throw new Error("cap hit in test setup");
   return created.id;
 }
 
-const term = () => useUIStore.getState().terminal;
+const term = () => useTerminalStore.getState();
 
 beforeEach(() => {
   resetTerminalSessionStore();
@@ -78,7 +75,7 @@ describe("reuseOrCreateTerminalSession", () => {
   it("falls back past a STALE HIDDEN active to the first visible session (R2-4)", () => {
     const a1 = createOwned("wsi-a");
     const b1 = createOwned("wsi-b"); // hidden — wsi-a is active
-    useUIStore.getState().terminalSetActiveSession(b1); // the stale state
+    useTerminalStore.getState().terminalSetActiveSession(b1); // the stale state
 
     const chosen = reuseOrCreateTerminalSession();
 

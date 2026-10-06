@@ -4,7 +4,7 @@
  */
 
 /* Backdrop, panel, input, rows and selection all come from the shared
-   overlay shell (`overlay-shared.css`, WI-UI3.1); this file keeps only the
+   overlay shell (`overlay-shared.css`); this file keeps only the
    palette's own layout. */
 
 .command-palette__list {

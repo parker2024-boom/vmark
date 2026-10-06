@@ -4,12 +4,12 @@
  * Purpose: turns an `EditorContextMenuSnapshot` (normalized editor state
  * captured at right-click time) into the section/item model the renderer
  * displays. Pure data-in/data-out: no store reads, no editor objects, so
- * every context is table-testable (WI-1.2).
+ * every context is table-testable.
  *
  * Key decisions (plan ADR-6):
  *   - Explicit descriptors, nothing derived from TOOLBAR_GROUPS at
  *     runtime — the toolbar and the menu use different vocabularies for
- *     ids/shortcuts. Drift is caught by menuModel.test.ts (WI-1.3).
+ *     ids/shortcuts. Drift is caught by menuModel.test.ts.
  *   - Hide vs disable: a section (or policy-gated item) inapplicable to
  *     the snapshot is hidden; an individually inapplicable item inside an
  *     applicable section renders disabled.
@@ -67,7 +67,7 @@ export interface EditorMenuSection {
   items: EditorMenuItem[];
 }
 
-/** Static descriptor an item is built from (WI-1.3 drift-guard surface). */
+/** Static descriptor an item is built from (the drift-guard surface). */
 export interface ContextMenuItemDescriptor {
   id: string;
   labelKey: string;
@@ -139,7 +139,7 @@ const REMOVE_LINK_ITEM: ContextMenuItemDescriptor = {
   id: "removeLink", labelKey: "contextMenu.removeLink", run: { type: "link", command: "removeLink" }, iconId: "unlink", shortcutId: "unlink",
 };
 
-/** Every descriptor, exported for the WI-1.3 drift tests. */
+/** Every descriptor, exported for the drift tests in menuModel.test.ts. */
 export const CONTEXT_MENU_DESCRIPTORS: ContextMenuItemDescriptor[] = [
   ...CLIPBOARD_ITEMS,
   SELECT_ALL_ITEM,

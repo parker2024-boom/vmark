@@ -14,7 +14,7 @@ vi.mock("@/lib/formats/registry", () => ({
   ],
 }));
 
-import { useUIStore, resetTerminalSessionStore } from "./uiStore";
+import { useUIStore } from "./uiStore";
 import {
   bumpContextGeneration,
   resetContextGenerations,
@@ -34,7 +34,6 @@ function reset() {
       isSearching: false, error: null, totalMatches: 0, totalFiles: 0,
     },
   });
-  resetTerminalSessionStore();
   invokeMock.mockReset();
 }
 
@@ -338,128 +337,5 @@ describe("contentSearch slice actions", () => {
     await useUIStore.getState().contentSearchRun("/root", []);
     expect(useUIStore.getState().contentSearch.error).toBe("backend down");
     expect(useUIStore.getState().contentSearch.isSearching).toBe(false);
-  });
-});
-
-describe("terminal slice actions", () => {
-  it("terminalCreateSession adds a session and marks it active", () => {
-    const session = useUIStore.getState().terminalCreateSession();
-    expect(session).not.toBeNull();
-    const t = useUIStore.getState().terminal;
-    expect(t.sessions).toHaveLength(1);
-    expect(t.activeSessionId).toBe(session!.id);
-    expect(session!.isAlive).toBe(true);
-  });
-
-  it("terminalRemoveSession picks the last remaining session as active", () => {
-    const a = useUIStore.getState().terminalCreateSession()!;
-    const b = useUIStore.getState().terminalCreateSession()!;
-    useUIStore.getState().terminalRemoveSession(b.id);
-    expect(useUIStore.getState().terminal.activeSessionId).toBe(a.id);
-  });
-
-  it("terminalRemoveSession sets active to null when no sessions remain", () => {
-    const a = useUIStore.getState().terminalCreateSession()!;
-    useUIStore.getState().terminalRemoveSession(a.id);
-    expect(useUIStore.getState().terminal.activeSessionId).toBeNull();
-  });
-
-  it("terminalRemoveSession leaves active untouched when removing a non-active session", () => {
-    const a = useUIStore.getState().terminalCreateSession()!;
-    const b = useUIStore.getState().terminalCreateSession()!;
-    useUIStore.getState().terminalRemoveSession(a.id);
-    expect(useUIStore.getState().terminal.activeSessionId).toBe(b.id);
-  });
-
-  it("terminalSetActiveSession switches to an existing session only", () => {
-    const a = useUIStore.getState().terminalCreateSession()!;
-    const b = useUIStore.getState().terminalCreateSession()!;
-    useUIStore.getState().terminalSetActiveSession(a.id);
-    expect(useUIStore.getState().terminal.activeSessionId).toBe(a.id);
-    useUIStore.getState().terminalSetActiveSession("does-not-exist");
-    expect(useUIStore.getState().terminal.activeSessionId).toBe(a.id);
-    expect(b.id).toBeTruthy();
-  });
-
-  it("terminalMarkActivity flags a session, and activating it clears the flag (WI-4.3)", () => {
-    const a = useUIStore.getState().terminalCreateSession()!;
-    const b = useUIStore.getState().terminalCreateSession()!;
-    // b is active (most recent). Mark activity on the background session a.
-    useUIStore.getState().terminalMarkActivity(a.id);
-    let sessions = useUIStore.getState().terminal.sessions;
-    expect(sessions.find((s) => s.id === a.id)?.hasActivity).toBe(true);
-    expect(sessions.find((s) => s.id === b.id)?.hasActivity).toBeFalsy();
-
-    // Activating a clears its activity flag.
-    useUIStore.getState().terminalSetActiveSession(a.id);
-    sessions = useUIStore.getState().terminal.sessions;
-    expect(sessions.find((s) => s.id === a.id)?.hasActivity).toBe(false);
-  });
-
-  it("terminalMarkActivity is a no-op for the active session (audit-fix)", () => {
-    useUIStore.getState().terminalCreateSession();
-    const b = useUIStore.getState().terminalCreateSession()!;
-    // b is active — marking activity on it must not set a stale flag that
-    // would show an activity dot after switching away.
-    useUIStore.getState().terminalMarkActivity(b.id);
-    const session = useUIStore
-      .getState()
-      .terminal.sessions.find((s) => s.id === b.id);
-    expect(session?.hasActivity).toBeFalsy();
-  });
-
-  it("terminalMarkSessionDead / Alive flip the isAlive flag", () => {
-    const s = useUIStore.getState().terminalCreateSession()!;
-    useUIStore.getState().terminalMarkSessionDead(s.id);
-    expect(useUIStore.getState().terminal.sessions[0].isAlive).toBe(false);
-    useUIStore.getState().terminalMarkSessionAlive(s.id);
-    expect(useUIStore.getState().terminal.sessions[0].isAlive).toBe(true);
-  });
-
-  it("terminalRenameSession updates the label", () => {
-    const s = useUIStore.getState().terminalCreateSession()!;
-    useUIStore.getState().terminalRenameSession(s.id, "renamed");
-    expect(useUIStore.getState().terminal.sessions[0].label).toBe("renamed");
-  });
-
-  it("terminalRenameSession sets isUserRenamed so program title can't override (G4/WI-3.2)", () => {
-    const s = useUIStore.getState().terminalCreateSession()!;
-    expect(useUIStore.getState().terminal.sessions[0].isUserRenamed).toBeFalsy();
-    useUIStore.getState().terminalRenameSession(s.id, "renamed");
-    expect(useUIStore.getState().terminal.sessions[0].isUserRenamed).toBe(true);
-  });
-
-  it("terminalSetProgramTitle stores the program title on the session (G4/WI-3.2)", () => {
-    const s = useUIStore.getState().terminalCreateSession()!;
-    useUIStore.getState().terminalSetProgramTitle(s.id, "vim");
-    expect(useUIStore.getState().terminal.sessions[0].programTitle).toBe("vim");
-  });
-
-  it("terminalSetProgramTitle is a no-op for an unknown session id", () => {
-    useUIStore.getState().terminalCreateSession();
-    useUIStore.getState().terminalSetProgramTitle("does-not-exist", "vim");
-    expect(useUIStore.getState().terminal.sessions[0].programTitle).toBeUndefined();
-  });
-
-  it("terminalSetProgramTitle strips control chars, collapses whitespace, and caps length (audit-fix)", () => {
-    const s = useUIStore.getState().terminalCreateSession()!;
-    // A hostile program can emit control chars / huge titles via OSC 0/2.
-    const NUL = String.fromCharCode(0);
-    const ESC = String.fromCharCode(27);
-    const DEL = String.fromCharCode(127);
-    useUIStore.getState().terminalSetProgramTitle(s.id, `ok${NUL}${ESC}[31m  bad${DEL}`);
-    expect(useUIStore.getState().terminal.sessions[0].programTitle).toBe("ok[31m bad");
-    useUIStore.getState().terminalSetProgramTitle(s.id, "x".repeat(500));
-    expect(useUIStore.getState().terminal.sessions[0].programTitle).toHaveLength(256);
-  });
-
-  it("terminalSetProgramTitle strips C1 controls and bidi overrides too (audit 20260831 #3)", () => {
-    const s = useUIStore.getState().terminalCreateSession()!;
-    const C1 = "\u0085";
-    const RLO = "\u202E";
-    const LRI = "\u2066";
-    const PDI = "\u2069";
-    useUIStore.getState().terminalSetProgramTitle(s.id, `${RLO}dm.txet${PDI}${C1}vim ${LRI}\u65E5\u672C\u8A9E`);
-    expect(useUIStore.getState().terminal.sessions[0].programTitle).toBe("dm.txetvim \u65E5\u672C\u8A9E");
   });
 });

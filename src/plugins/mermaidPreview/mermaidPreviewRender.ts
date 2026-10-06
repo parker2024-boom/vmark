@@ -3,6 +3,8 @@
  *
  * Dispatches diagram rendering for mermaid, markmap, and SVG blocks.
  * Manages render tokens to discard stale async results.
+ *
+ * @module plugins/mermaidPreview/mermaidPreviewRender
  */
 
 import i18n from "@/i18n";

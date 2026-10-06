@@ -1,4 +1,4 @@
-//! Human-edit provenance (WI-3.1; design-3.md D1, spec §5.4.1a rev 2).
+//! Human-edit provenance (design-3.md D1, spec §5.4.1a rev 2).
 //! Proposals are computed, never stored: the prior-input-set heuristic
 //! walks the head's ancestry for the most recent transformation that
 //! carried inputs, preserving roles (R24). Confirmation is the sole

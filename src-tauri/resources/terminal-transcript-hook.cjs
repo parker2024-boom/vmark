@@ -3,7 +3,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const token = process.env.VMARK_TRANSCRIPT_TOKEN;
 const root = __dirname;
-if (!/^[a-f0-9-]{36}$/i.test(token || '') || !fs.existsSync(path.join(root, 'enabled'))) process.exit(0);
+// The one spelling VMark issues and reads back: lowercase, hyphenated 8-4-4-4-12.
+const issued = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+if (!issued.test(token || '') || !fs.existsSync(path.join(root, 'enabled'))) process.exit(0);
 let input = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', chunk => { input += chunk; if (input.length > 65536) process.exit(0); });

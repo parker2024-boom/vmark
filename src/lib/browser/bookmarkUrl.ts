@@ -1,5 +1,5 @@
 /**
- * Bookmark identity (WI-S3.1).
+ * Bookmark identity.
  *
  * A bookmark is a promise to take the user back to exactly what they saw. Canonicalization
  * therefore normalizes only what is genuinely meaningless, and preserves everything else —

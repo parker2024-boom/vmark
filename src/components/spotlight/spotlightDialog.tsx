@@ -5,8 +5,8 @@
  * (QuickOpen, ContentSearch). Both render a centered, portal-mounted
  * `role="dialog" aria-modal="true"` surface with the same focus, scroll,
  * and dismiss behavior. This module collapses the duplicated inline SVG
- * icons and the Tab focus-trap logic into one tested place. Since WI-UI3.1
- * the CSS shell is shared too: every spotlight overlay renders
+ * icons and the Tab focus-trap logic into one tested place. The CSS
+ * shell is shared too: every spotlight overlay renders
  * `.vm-overlay.vm-overlay--top > .vm-overlay__panel` (overlay-shared.css).
  *
  * @coordinates-with QuickOpen.tsx — uses SpotlightFileIcon/SpotlightFolderIcon, focus trap

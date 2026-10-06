@@ -9,6 +9,7 @@ use objc2_web_kit::WKNavigation;
 use tauri::Manager;
 
 use super::NavDelegate;
+use crate::browser::locks;
 use crate::browser::nav_ring;
 use crate::browser::surface::BrowserSurface;
 
@@ -25,10 +26,7 @@ impl NavDelegate {
             .app
             .try_state::<BrowserSurface>()
             .and_then(|state| {
-                state
-                    .registry
-                    .lock()
-                    .ok()
+                locks::registry(&state)
                     .and_then(|reg| reg.navigation_ticket(&ivars.tab_id).map(|t| t.id.clone()))
             })
             .unwrap_or_else(|| format!("legacy-{}", ivars.tab_id))
@@ -77,8 +75,8 @@ impl NavDelegate {
     }
 
     /// Does a delegate callback carrying `navigation` belong to the CURRENT
-    /// navigation? The rule is `nav_ring::decide` (audit round 2 #19, round 4 —
-    /// see its doc); this supplies the ring and the registry's word on the live
+    /// navigation? The rule is `nav_ring::decide` (see its
+    /// doc); this supplies the ring and the registry's word on the live
     /// ticket. Used by the redirect and commit callbacks so neither can mark or
     /// un-load the live navigation.
     pub(crate) fn callback_is_current(&self, navigation: Option<&WKNavigation>) -> bool {
@@ -93,7 +91,7 @@ impl NavDelegate {
             .app
             .try_state::<BrowserSurface>()
             .and_then(|state| {
-                state.registry.lock().ok().map(|reg| {
+                locks::registry(&state).map(|reg| {
                     reg.navigation_ticket(&self.ivars().tab_id)
                         .map(|ticket| ticket.id == navigation_id)
                         .unwrap_or(false)

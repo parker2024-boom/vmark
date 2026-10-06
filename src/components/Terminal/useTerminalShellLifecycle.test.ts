@@ -9,7 +9,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useTerminalShellLifecycle } from "./useTerminalShellLifecycle";
-import { useUIStore, resetTerminalSessionStore } from "@/stores/uiStore";
+import { useUIStore } from "@/stores/uiStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import { spawnPty } from "./spawnPty";
 import type { SessionEntry } from "./terminalSessionTypes";
 import type { TerminalInstance } from "./createTerminalInstance";
@@ -81,13 +82,11 @@ async function startAndCaptureExit(
 }
 
 function seedStore(sessionIds: string[], terminalVisible: boolean): void {
-  useUIStore.setState({
-    terminalVisible,
-    terminal: {
-      sessions: sessionIds.map((id, i) => ({ id, label: id, ordinal: i + 1, isAlive: true })),
-      activeSessionId: sessionIds[sessionIds.length - 1] ?? null,
-      lastActiveByScope: {},
-    },
+  useUIStore.setState({ terminalVisible });
+  useTerminalStore.setState({
+    sessions: sessionIds.map((id, i) => ({ id, label: id, ordinal: i + 1, isAlive: true })),
+    activeSessionId: sessionIds[sessionIds.length - 1] ?? null,
+    lastActiveByScope: {},
   });
 }
 
@@ -147,8 +146,7 @@ describe("useTerminalShellLifecycle — shell exit (#1103)", () => {
     const onExit = await startAndCaptureExit(sessionsRef, "term-1");
     act(() => onExit(0));
 
-    const { terminal } = useUIStore.getState();
-    expect(terminal.sessions.map((s) => s.id)).toEqual(["term-2"]);
+    expect(useTerminalStore.getState().sessions.map((s) => s.id)).toEqual(["term-2"]);
   });
 
   it("hides the panel when the last session exits cleanly", async () => {
@@ -159,9 +157,8 @@ describe("useTerminalShellLifecycle — shell exit (#1103)", () => {
     const onExit = await startAndCaptureExit(sessionsRef, "term-1");
     act(() => onExit(0));
 
-    const state = useUIStore.getState();
-    expect(state.terminal.sessions).toHaveLength(0);
-    expect(state.terminalVisible).toBe(false);
+    expect(useTerminalStore.getState().sessions).toHaveLength(0);
+    expect(useUIStore.getState().terminalVisible).toBe(false);
   });
 
   it("does not re-show a hidden panel when the last session exits cleanly", async () => {
@@ -195,10 +192,10 @@ describe("useTerminalShellLifecycle — shell exit (#1103)", () => {
     writeMock.mockClear();
     act(() => onExit(1));
 
-    const state = useUIStore.getState();
-    expect(state.terminal.sessions.map((s) => s.id)).toEqual(["term-1"]);
-    expect(state.terminal.sessions[0].isAlive).toBe(false);
-    expect(state.terminalVisible).toBe(true);
+    const sessions = useTerminalStore.getState().sessions;
+    expect(sessions.map((s) => s.id)).toEqual(["term-1"]);
+    expect(sessions[0].isAlive).toBe(false);
+    expect(useUIStore.getState().terminalVisible).toBe(true);
     // Exit notice + press-any-key prompt written to the buffer (the modes
     // side of this path is covered against real xterm in the .reset test).
     const written = writeMock.mock.calls.map(([data]) => String(data)).join("");
@@ -217,7 +214,7 @@ describe("useTerminalShellLifecycle — shell exit (#1103)", () => {
     entry.spawnGen++; // simulate a restart superseding this PTY
     act(() => onExit(0));
 
-    expect(useUIStore.getState().terminal.sessions).toHaveLength(1);
+    expect(useTerminalStore.getState().sessions).toHaveLength(1);
     expect(useUIStore.getState().terminalVisible).toBe(true);
   });
 
@@ -230,7 +227,7 @@ describe("useTerminalShellLifecycle — shell exit (#1103)", () => {
     entry.disposed = true;
     act(() => onExit(0));
 
-    expect(useUIStore.getState().terminal.sessions).toHaveLength(1);
+    expect(useTerminalStore.getState().sessions).toHaveLength(1);
   });
 });
 
@@ -267,8 +264,10 @@ describe("restart during an in-flight spawn (audit fix)", () => {
     const { entry } = makeEntry();
     const sessions = new Map([["term-1", entry]]);
     const sessionsRef = { current: sessions };
-    useUIStore.setState({
-      terminal: { sessions: [{ id: "term-1", label: "Terminal 1", ordinal: 1, isAlive: true }], activeSessionId: "term-1", lastActiveByScope: {} },
+    useTerminalStore.setState({
+      sessions: [{ id: "term-1", label: "Terminal 1", ordinal: 1, isAlive: true }],
+      activeSessionId: "term-1",
+      lastActiveByScope: {},
     });
 
     const first = deferredSpawn();
@@ -301,8 +300,10 @@ describe("restart during an in-flight spawn (audit fix)", () => {
   it("kills the superseded PTY when it finally arrives, rather than installing it", async () => {
     const { entry } = makeEntry();
     const sessionsRef = { current: new Map([["term-1", entry]]) };
-    useUIStore.setState({
-      terminal: { sessions: [{ id: "term-1", label: "Terminal 1", ordinal: 1, isAlive: true }], activeSessionId: "term-1", lastActiveByScope: {} },
+    useTerminalStore.setState({
+      sessions: [{ id: "term-1", label: "Terminal 1", ordinal: 1, isAlive: true }],
+      activeSessionId: "term-1",
+      lastActiveByScope: {},
     });
 
     const first = deferredSpawn();

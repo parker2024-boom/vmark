@@ -13,7 +13,7 @@ export interface MarkdownPipelineOptions {
    * When true, re-emit captured inter-block blank-line runs (the
    * `blankLinesBefore` PM attribute) instead of collapsing them to a single
    * blank line. Default false = legacy output. See
-   * dev-docs/plans/20260721-blank-line-preservation.md.
+   * .claude/adr/plans/20260721-blank-line-preservation.md.
    */
   preserveBlankLines?: boolean;
 }
@@ -92,7 +92,14 @@ export interface Toc {
 export interface Details {
   type: "details";
   open?: boolean;
+  /** The summary's source text. Read as inline markdown when parsed. */
   summary?: string;
+  /**
+   * The summary as inline nodes, set when the block comes from the editor.
+   * The serializer writes these in preference to `summary`, so marks in a
+   * summary are written back and its text is escaped exactly once.
+   */
+  summaryChildren?: import("mdast").PhrasingContent[];
   children: BlockContentBase[];
   position?: UnistPosition;
 }
@@ -130,5 +137,10 @@ declare module "mdast" {
     highlight: Highlight;
     underline: Underline;
     wikiLink: WikiLink;
+  }
+
+  interface ListItemData {
+    /** The source had no blank line before this item of a loose list (listItemGapJoin.ts). */
+    tightBefore?: boolean;
   }
 }

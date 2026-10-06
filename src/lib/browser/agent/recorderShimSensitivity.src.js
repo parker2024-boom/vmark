@@ -16,27 +16,27 @@
 //   - the PERMANENT mark (`everSecret`): never cleared. The identity of a secret is
 //     the element, not its current attributes — a field observed as a secret at any
 //     point in the document's life stays one, across later commits and across focus
-//     leaving for the eye button (audit 20260903, WI-FL6.4). A change the page makes
+//     leaving for the eye button (audit 20260903). A change the page makes
 //     before the user ever touches the field is visible only as an attribute
 //     mutation, so an observer over EVERY sensitivity-defining attribute feeds the
-//     same mark, from the old value or the new one (#394).
+//     same mark, from the old value or the new one.
 // Both marks live in WeakMaps: every engine VMark ships has one, and a fallback that
 // wrote `__vmark*` properties onto page elements let the page read and alter the
-// classification (#392). The marks fail CLOSED, like the classifier: a mark that
+// classification. The marks fail CLOSED, like the classifier: a mark that
 // cannot be read is a secret, and once any mark has failed to write or read, the
 // shim stops trusting its memory entirely (`marksBroken`) and treats every later
-// commit as a secret — a page that breaks the WeakMaps cannot launder one (#393).
+// commit as a secret — a page that breaks the WeakMaps cannot launder one.
 // The OBSERVER's installation is part of that same memory: it is the only thing that
 // can see a rewrite the user never touched, so a setup that throws — or an engine
 // with no MutationObserver — degrades the shim exactly like a broken mark rather than
-// skipping quietly (#393, round 3).
+// skipping quietly.
 // Bound worth knowing: the observer watches the document tree, not shadow roots — a
 // field inside a shadow root is marked on the first focus/input that sees it.
 // Identifier TOKENS that mark a field sensitive. Matched per token after splitting
 // on punctuation, underscores and camelCase — \b never split `user_password` or
 // `otpCode`, and `password` itself was missing.
 var SENSITIVE_TOKENS = ["password", "passwd", "pwd", "passphrase", "otp", "totp", "mfa", "2fa", "token", "cvv", "cvv2", "cvc", "csc", "ssn", "secret", "pin", "passcode"];
-// Words that NAME a secret in the languages VMark ships (#391, round 2), matched as
+// Words that NAME a secret in the languages VMark ships, matched as
 // SUBSTRINGS of the lowercased identifier or accessible name rather than as tokens:
 // CJK has no word boundaries, and the ASCII tokenizer above splits an accented word
 // ("contraseña") at the accent. Whole phrases only — a bare "code"/"código" is a
@@ -46,8 +46,8 @@ var SENSITIVE_PHRASES = [
   // en: the phrases a page actually LABELS a one-time secret with. English is
   // here rather than in the token list because the secret is the PAIR — a bare
   // "code" is a postal, ZIP, promo, country, discount or area code far more
-  // often than a secret, and the tokenizer above cannot see the qualifier
-  // (#391, round 3). Matched as substrings, so "Enter the verification code we
+  // often than a secret, and the tokenizer above cannot see the qualifier.
+  // Matched as substrings, so "Enter the verification code we
   // sent you" on a <label for> matches too.
   "verification code", "security code", "one-time code", "one time code", "onetime code",
   "confirmation code", "authentication code", "auth code", "recovery code", "backup code",
@@ -91,7 +91,7 @@ function sensitiveIdentifier(s) {
 }
 /** Set the moment ANY mark could not be written or read. The shim's memory of
  *  which fields are secrets is then unreliable, and an unreliable memory at a
- *  sensitivity boundary means every later commit is a secret (#393, round 2):
+ *  sensitivity boundary means every later commit is a secret:
  *  a page that breaks the WeakMaps must not thereby launder one. The cost is
  *  one `{input}` variable per field, which the replay asks the user to type. */
 var marksBroken = false;
@@ -171,7 +171,7 @@ function isSensitiveNow(el) {
   } catch (e) {
     // A field the classifier cannot read is not thereby cleared: a page whose
     // attribute reads throw is refusing inspection, and at a sensitivity
-    // boundary a failure is a secret, never a value to record (audit #393).
+    // boundary a failure is a secret, never a value to record.
     return true;
   }
 }
@@ -235,7 +235,7 @@ function applySensitivityRecords(records) {
     try {
       if (sensitiveAttrs(attrsOf(r.target, r.attributeName, r.oldValue)) || isSensitiveNow(r.target)) rememberSecret(r.target);
     } catch (e) {
-      rememberSecret(r.target); // unreadable under mutation: a secret, fail closed (#393)
+      rememberSecret(r.target); // unreadable under mutation: a secret, fail closed
     }
   }
 }
@@ -258,7 +258,7 @@ try {
   sensitivityObserver = new MutationObserver(applySensitivityRecords);
   sensitivityObserver.observe(document, { attributes: true, attributeFilter: SENSITIVE_ATTRS, attributeOldValue: true, subtree: true });
 } catch (e) {
-  // Same policy as a broken mark, for the same reason (#393, round 3): the
+  // Same policy as a broken mark, for the same reason: the
   // observer is the ONLY thing that can see a rewrite before the user ever
   // touches the field, so a shim without one has an incomplete memory of which
   // fields are secrets — and an incomplete memory at a sensitivity boundary

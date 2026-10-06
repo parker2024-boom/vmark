@@ -1,3 +1,11 @@
+/**
+ * workspaceInstanceRestoreData — parses and validates the workspace instances
+ * saved in a hot-exit window state, orders their ids, chooses the active one,
+ * and synthesizes instances for a window saved without them.
+ *
+ * @module services/persistence/hotExit/workspaceInstanceRestoreData
+ */
+
 import type { WorkspaceInstanceRecord } from "@/stores/workspaceInstancesStore";
 import {
   type WorkspaceInstanceCreatedFrom,

@@ -9,7 +9,7 @@
   min-width: 0; /* let the input shrink instead of overflowing the bar */
 }
 
-/* Buttons are canonical `.vm-icon-btn--sm` (WI-UI2.3). The glyph class is
+/* Buttons are canonical `.vm-icon-btn--sm`. The glyph class is
    the residual: these draw TEXT glyphs (‹ › ✕ ⟳ ★), not svgs, so the square
    still needs a glyph size. The bookmark star's on-state comes from the
    canonical [aria-pressed="true"] accent. */
@@ -43,7 +43,7 @@
   border-bottom-color: var(--primary-color);
 }
 
-/* `.vm-spinner` (WI-UI3.4); residual = the omnibox's compact 8px size. */
+/* `.vm-spinner`; residual = the omnibox's compact 8px size. */
 .browser-omnibox-loading {
   flex: none;
   width: var(--space-2);

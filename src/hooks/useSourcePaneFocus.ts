@@ -18,8 +18,8 @@
  * (which act on `source.editorView`) cannot format that pane's document while
  * this one is focused.
  *
- * The registration lasts only while the pane is focused and visible (audit
- * 20260928): focus moving to a pane with no source editor — a preview, a
+ * The registration lasts only while the pane is focused and visible:
+ * focus moving to a pane with no source editor — a preview, a
  * media viewer, a WYSIWYG pane — forgets this view by identity, as the Tiptap
  * registration does, instead of leaving lint, IME and selection readers
  * aimed at a document the user left.
@@ -51,7 +51,7 @@ export function useSourcePaneFocus(
 ): MutableRefObject<boolean> {
   const isFocusedPane = useIsFocusedPane(windowLabel);
   const ref = useRef(true);
-  /* eslint-disable-next-line react-hooks/refs */
+  /* eslint-disable-next-line react-hooks/refs -- render-synced so editor callbacks read the current focused-pane flag before effects flush */
   ref.current = isFocusedPane;
   const { tabId: ownTabId, cursorContext = true } = options;
 

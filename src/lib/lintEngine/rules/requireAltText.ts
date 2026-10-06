@@ -3,16 +3,18 @@
  *
  * Purpose: Flag image nodes with empty or missing alt text (WCAG 1.1.1).
  *
- * BOTH image spellings are visited (audit R3 #855). A reference-style image
+ * BOTH image spellings are visited. A reference-style image
  * (`![][logo]`) is an `imageReference` node, not an `image`, and carries the
  * same `alt` field — so a document that stores its URLs in reference
  * definitions escaped W02 entirely.
  *
- * The offset comes from `startOffset` rather than `offset ?? 0` (#856): a
+ * The offset comes from `startOffset` rather than `offset ?? 0`: a
  * positioned node whose optional `start.offset` is absent used to be reported
  * at offset 0, which navigates the user to the top of the document instead of
  * to the image. That fallback was written in five rules; it lives in
  * `positionOffset.ts` now.
+ *
+ * @module lib/lintEngine/rules/requireAltText
  */
 
 import { visit } from "unist-util-visit";

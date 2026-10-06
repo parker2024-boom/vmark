@@ -6,12 +6,12 @@
 //! from this return value, the `mcp-port` file and the status, never from a
 //! setting. `server.test.rs` pins it (`the_bridge_binds_an_os_assigned_loopback_port`).
 //!
-//! Typed from the start (#164): a bind failure is an `io` `CommandError`, and
+//! Typed from the start: a bind failure is an `io` `CommandError`, and
 //! it travels to `mcp_bridge_start`'s caller as one — no prose is re-wrapped
 //! at the command boundary.
 //!
 //! @coordinates-with server.rs — `start_bridge` consumes the listener
-//! @coordinates-with ../mcp_server.rs — `mcp_bridge_start` reports the bound port
+//! @coordinates-with control.rs — `mcp_bridge_start` reports the bound port
 
 use crate::command_error::{CommandError, ErrorCode};
 use crate::localized_error;

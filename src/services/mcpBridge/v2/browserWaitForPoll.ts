@@ -1,5 +1,5 @@
 /**
- * browserWaitForPoll — the pieces of `vmark.browser.wait_for` (round 3, #71):
+ * browserWaitForPoll — the pieces of `vmark.browser.wait_for`:
  * request validation, the URL poll answered from the webview mirror, and the eval
  * poll raced against the request deadline. Each is a function on its own, with the
  * handler's gates and responses kept out, so each is tested for what it decides.
@@ -11,7 +11,7 @@
  * changed: an attachment is per page).
  *
  * The eval poll honours the deadline by RACING each poll against it, not by
- * refusing to poll near it (round 2, #70): the native eval has its own timeout
+ * refusing to poll near it: the native eval has its own timeout
  * (seconds on a busy page), so a poll may answer after the request budget — a late
  * answer would land after the bridge deadline as a redelivery, not as a result.
  * The abandoned poll's outcome is discarded and its rejection swallowed (nothing is
@@ -28,7 +28,7 @@
 import { urlForAgent } from "@/lib/browser/url";
 import type { WaitCondition } from "@/lib/browser/agent/actScript";
 import { resolveBrowserTab, validateTimeout, type BrowserTarget } from "./browserHelpers";
-import { readOperationArgs } from "./readOperationArgs";
+import type { CheckedOperationArgs } from "./readOperationArgs";
 
 const POLL_INTERVAL_MS = 200;
 /** The answer a poll that outlives the request deadline is replaced with. */
@@ -36,7 +36,7 @@ const DEADLINE_PASSED: unique symbol = Symbol("deadline-passed");
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /** A wait mode: a page condition checked by eval, or a URL check answered from
- *  the webview mirror without touching the page (WI-NB1.4). */
+ *  the webview mirror without touching the page. */
 type WaitMode = { kind: "script"; condition: WaitCondition } | { kind: "url"; needle: string };
 
 interface WaitRequest {
@@ -46,9 +46,11 @@ interface WaitRequest {
 
 export type WaitRequestParse = { ok: true; request: WaitRequest } | { ok: false; error: string };
 
-/** Parse exactly one condition from the args, or null if zero or more than one. */
-function readCondition(args: Record<string, unknown>): WaitMode | null {
-  const wire = readOperationArgs("vmark.browser.wait_for", args);
+/** The checked payload read of a `wait_for` request. */
+type WaitForRead = CheckedOperationArgs<"vmark.browser.wait_for">;
+
+/** Parse exactly one condition from the payload, or null if zero or more than one. */
+function readCondition(wire: WaitForRead["wire"]): WaitMode | null {
   const ref = typeof wire.ref === "string" && wire.ref.trim() ? wire.ref : undefined;
   const role = typeof wire.role === "string" && wire.role.trim() ? wire.role : undefined;
   const name = typeof wire.name === "string" ? wire.name : undefined;
@@ -70,12 +72,14 @@ function readCondition(args: Record<string, unknown>): WaitMode | null {
  * Validate the wait request: a bounded timeout (defaulting to the single wait
  * budget), exactly one condition, and — for `urlContains` — a needle that can
  * match the REDACTED url at all (query and fragment are stripped so a redirect-set
- * token cannot be probed, audit A-06; a `?` or `#` in the needle can never match).
+ * token cannot be probed; a `?` or `#` in the needle can never match).
+ * A malformed `timeoutMs` is refused, never read as absent (which would wait the
+ * default).
  */
-export function readWaitRequest(args: Record<string, unknown>): WaitRequestParse {
-  const timeoutMs = validateTimeout(args.timeoutMs);
+export function readWaitRequest(read: WaitForRead): WaitRequestParse {
+  const timeoutMs = read.malformed.has("timeoutMs") ? null : validateTimeout(read.wire.timeoutMs);
   if (timeoutMs === null) return { ok: false, error: "INVALID_TIMEOUT" };
-  const mode = readCondition(args);
+  const mode = readCondition(read.wire);
   if (!mode) {
     return { ok: false, error: "wait_for needs exactly one of: ref, role (+optional name), text, or urlContains" };
   }

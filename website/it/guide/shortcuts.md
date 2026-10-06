@@ -9,14 +9,14 @@ VMark è progettato per flussi di lavoro da tastiera. La maggior parte delle sco
 
 ## Tasti Funzione su macOS
 
-VMark usa i tasti funzione (F4–F10) per attivazioni rapide della modalità. Su macOS, questi tasti sono mappati alle funzioni di sistema (luminosità, volume, ecc.) per impostazione predefinita.
+VMark usa i tasti funzione (F2–F10) per attivazioni rapide della modalità. Su macOS, questi tasti sono mappati alle funzioni di sistema (luminosità, volume, ecc.) per impostazione predefinita.
 
 **Per usare i tasti F direttamente senza tenere premuto Fn:**
 
 1. Apri **Impostazioni di Sistema** → **Tastiera**
 2. Abilita **"Usa i tasti F1, F2, ecc. come tasti funzione standard"**
 
-In alternativa, tieni premuto il tasto **Fn** quando premi F4–F10 per attivare le scorciatoie VMark.
+In alternativa, tieni premuto il tasto **Fn** quando premi F2–F10 per attivare le scorciatoie VMark.
 
 ::: tip
 Se preferisci mantenere le funzioni di sistema sui tasti F, puoi personalizzare le scorciatoie VMark nelle Impostazioni (`Mod + ,`) per usare combinazioni di tasti diverse.
@@ -28,10 +28,12 @@ Se preferisci mantenere le funzioni di sistema sui tasti F, puoi personalizzare 
 |-------|--------|
 | `F2` | Problema successivo |
 | `Shift + F2` | Problema precedente |
-| `F4` | Ordina righe in modo crescente |
-| `Shift + F4` | Ordina righe in modo decrescente |
+| `F3` | Mostra/nascondi caratteri invisibili |
+| `F4` | Ordina righe in modo crescente _(solo modalità Sorgente; nessun effetto in WYSIWYG)_ |
+| `Shift + F4` | Ordina righe in modo decrescente _(solo modalità Sorgente; nessun effetto in WYSIWYG)_ |
 | `F5` | Anteprima Sorgente |
-| `F6` | Attiva/disattiva modalità Sorgente |
+| `F6` | Vista sorgente (Markdown: WYSIWYG ⇄ Sorgente; altri formati: Sorgente ⇄ Diviso) |
+| `Shift + F6` | Diviso / Anteprima (Markdown: vista divisa; altri formati: Anteprima ⇄ Diviso) |
 | `F7` | Attiva/disattiva barra di stato |
 | `F8` | Modalità Focus |
 | `F9` | Modalità Macchina da Scrivere |
@@ -60,9 +62,8 @@ Se preferisci mantenere le funzioni di sistema sui tasti F, puoi personalizzare 
 | Apri collegamento (modalità Sorgente) | `Cmd + Clic` |
 | Rimuovi collegamento | `Alt + Shift + K` |
 | Wiki Link | `Alt + Mod + K` |
-| Segnalibro | `Alt + Mod + B` |
+| Link segnalibro | `Alt + Mod + B` |
 | Cancella formattazione | `Mod + \` |
-| Ciclo enfasi | `Mod + Alt + E` _(nessuna → corsivo → grassetto → grassetto+corsivo)_ |
 
 ## Formattazione a Blocchi
 
@@ -72,14 +73,12 @@ Se preferisci mantenere le funzioni di sistema sui tasti F, puoi personalizzare 
 | Paragrafo | `Mod + Shift + 0` |
 | Aumenta livello intestazione | `Alt + Mod + ]` |
 | Diminuisci livello intestazione | `Alt + Mod + [` |
-| Ciclo intestazione | `Mod + Alt + H` _(P → H1 → H2 → … → H6)_ |
 | Citazione | `Alt + Mod + Q` |
 | Blocco di codice | `Alt + Mod + C` |
 | Elenco puntato | `Alt + Mod + U` |
 | Elenco numerato | `Alt + Mod + O` |
 | Elenco di attività | `Alt + Mod + X` |
 | Attiva/disattiva casella attività | `Mod + Shift + Enter` _(contestuale; non personalizzabile)_ |
-| Cambia tipo di elenco | _(personalizzabile)_ |
 | Rientra | `Mod + ]` |
 | Rientra a sinistra | `Mod + [` |
 | Riga orizzontale | `Alt + Mod + -` |
@@ -115,6 +114,7 @@ Se preferisci mantenere le funzioni di sistema sui tasti F, puoi personalizzare 
 | Inserisci video | — |
 | Inserisci audio | — |
 | Inserisci tabella | `Mod + Shift + T` |
+| Indice | _(personalizzabile)_ |
 | Matematica inline | `Alt + Mod + M` |
 | Blocco matematico | `Alt + Mod + Shift + M` |
 | Inserisci nota | `Alt + Mod + N` |
@@ -123,9 +123,9 @@ Se preferisci mantenere le funzioni di sistema sui tasti F, puoi personalizzare 
 | Inserisci importante | `Alt + Mod + Shift + I` |
 | Inserisci cautela | `Mod + Shift + U` |
 | Inserisci comprimibile | `Alt + Mod + D` |
-| Inserisci diagramma | `Alt + Shift + Mod + D` |
+| Inserisci diagramma | `Alt + Mod + Shift + D` |
 | Inserisci diagramma Graphviz | _(personalizzabile)_ |
-| Inserisci mappa mentale | `Alt + Shift + Mod + K` |
+| Inserisci mappa mentale | `Alt + Mod + Shift + K` |
 | Attiva/disattiva commento | `Mod + /` |
 
 ## Selezione e Multi-Cursore
@@ -133,11 +133,12 @@ Se preferisci mantenere le funzioni di sistema sui tasti F, puoi personalizzare 
 | Azione | Scorciatoia |
 |--------|-------------|
 | Seleziona riga | `Mod + L` |
+| Seleziona tutte le occorrenze nel blocco | `Alt + Mod + Shift + L` |
 | Espandi selezione | `Ctrl + Shift + Su` |
 | Seleziona occorrenza successiva | `Mod + D` |
 | Salta occorrenza | `Mod + Shift + D` |
 | Seleziona tutte le occorrenze | `Mod + Shift + L` |
-| Annulla ultimo cursore | `Alt + Mod + Z` |
+| Annulla cursore soft | `Alt + Mod + Z` |
 | Aggiungi cursore sopra | `Mod + Alt + Su` |
 | Aggiungi cursore sotto | `Mod + Alt + Giù` |
 | Comprimi multi-cursore | `Escape` |
@@ -156,7 +157,9 @@ Se preferisci mantenere le funzioni di sistema sui tasti F, puoi personalizzare 
 
 | Azione | Scorciatoia |
 |--------|-------------|
-| Attiva/disattiva modalità Sorgente | `F6` |
+| Vista sorgente (Markdown ⇄ Sorgente; altri formati Sorgente ⇄ Diviso) | `F6` |
+| Diviso / Anteprima (Markdown diviso; altri formati Anteprima ⇄ Diviso) | `Shift + F6` |
+| Dividi editor — due documenti | `Alt + Mod + \` |
 | Attiva/disattiva barra di stato | `F7` |
 | Modalità Focus | `F8` |
 | Modalità Macchina da Scrivere | `F9` |
@@ -165,25 +168,44 @@ Se preferisci mantenere le funzioni di sistema sui tasti F, puoi personalizzare 
 | Ingrandisci | `Mod + =` |
 | Riduci | `Mod + -` |
 | Testo a capo | `Alt + Z` |
+| Ultima scheda usata | `Ctrl + Tab` |
+| Dividi editor — due documenti | `Alt + Mod + \` |
+| Chiudi riquadro | `Alt + Mod + Shift + \` |
+| Attiva l'altro riquadro | `Alt + Mod + Shift + O` |
+| Attiva/disattiva barra laterale | `Ctrl + Shift + 0` |
 | Attiva/disattiva struttura | `Ctrl + Shift + 1` |
 | Attiva/disattiva esplora file | `Ctrl + Shift + 2` |
 | Attiva/disattiva cronologia | `Ctrl + Shift + 3` |
+| Mostra/Nascondi knowledge base | `Ctrl + Shift + 4` |
+| Mostra/Nascondi stato finestre | `Ctrl + Shift + 5` |
 | Attiva/disattiva numeri di riga (blocchi di codice) | `Alt + Mod + L` |
 | Attiva/disattiva terminale | Ctrl + `` ` `` |
+| Metti a fuoco terminale o editor | Ctrl + Shift + `` ` `` (Alt + Shift + `` ` `` su Windows/Linux) |
 | Attiva/disattiva anteprima diagramma | `Alt + Mod + P` |
 | Adatta tabelle alla larghezza | _(personalizzabile)_ |
-| Barra degli strumenti universale | `Mod + Shift + P` |
+| Apri la barra degli strumenti universale | `Mod + Shift + B` |
 | Anteprima Sorgente | `F5` |
 | Controlla Markdown | `Alt + Mod + V` |
 | Problema successivo | `F2` |
 | Problema precedente | `Shift + F2` |
+
+::: tip Mostra/Nascondi knowledge base
+`Ctrl + Shift + 4` è nascosta per impostazione predefinita, insieme alla voce di menu
+**Vista → Mostra/Nascondi knowledge base** e al comando della palette. Nessuna build
+di rilascio, su nessuna piattaforma, include il runtime del content server richiesto
+dalla funzione, quindi i punti di accesso compaiono solo quando **Impostazioni →
+Avanzate → Strumenti sviluppatore** è attivo — vedi
+[Knowledge Base e Slidev](/it/guide/knowledge-base#requisiti). La scorciatoia resta
+comunque elencata e personalizzabile in **Impostazioni → Scorciatoie**.
+:::
 
 ## Operazioni sui File
 
 | Azione | Scorciatoia |
 |--------|-------------|
 | Nuovo file | `Mod + N` |
-| Apertura rapida | `Mod + O` |
+| Apertura rapida | `Mod + O` _(browser di file con ricerca approssimativa)_ |
+| Apri la palette dei comandi | `Mod + Shift + P` |
 | Apri file... | Solo menu _(selettore file nativo)_ |
 | Apri workspace | `Mod + Shift + O` |
 | Salva | `Mod + S` |
@@ -228,12 +250,33 @@ Se preferisci mantenere le funzioni di sistema sui tasti F, puoi personalizzare 
 |--------|-------------|
 | Nuova finestra | `Mod + Shift + N` |
 | Nuova scheda | `Mod + T` |
+| Nuova scheda del browser | `Alt + Mod + Shift + B` |
+| Scheda successiva | `Mod + Shift + ]` |
+| Scheda precedente | `Mod + Shift + [` |
 | Chiudi scheda | `Mod + W` |
+| Riapri scheda chiusa | _(personalizzabile)_ |
 | Mostra/nascondi file nascosti | `Mod + Shift + .` |
-| Mostra/nascondi tutti i file | _(personalizzabile)_ |
+| Mostra/nascondi tutti i file | `Mod + Shift + A` |
 
 ::: tip Nota per Windows/Linux
 Mostra/nascondi file nascosti usa `Ctrl + H` su Windows e Linux.
+
+Attiva/disattiva barra laterale usa `Alt + Shift + 0` su Windows e Linux, perché lì `Mod`
+è Ctrl — quindi la combinazione macOS `Ctrl + Shift + 0` entrerebbe in conflitto con
+`Mod + Shift + 0` di Paragrafo.
+:::
+
+::: tip Nuova scheda del browser
+`Alt + Mod + Shift + B` apre una scheda del browser integrato e compare anche nel menu
+**File**. Il browser integrato è attivo per impostazione predefinita su macOS; se lo
+disattivi in **Impostazioni → Avanzate → Browser integrato**, la voce di menu viene
+nascosta (non resa grigia) finché non lo riattivi. Il browser è disponibile solo su
+macOS, quindi la voce non compare mai su Windows o Linux.
+
+È una vera voce di menu e non solo un'associazione da tastiera, e questo conta: quando
+una pagina web ha il focus della tastiera, il motore del browser consuma i tasti premuti
+prima che VMark li veda, quindi una scorciatoia interna all'app non può attivarsi. Un
+acceleratore di menu viene gestito da macOS stesso, quindi funziona anche mentre navighi.
 :::
 
 ## Aiuto (solo macOS)
@@ -279,12 +322,6 @@ Quando il cursore è all'interno di una tabella:
 | Aggiungi riga sotto | `Mod + Enter` |
 | Aggiungi riga sopra | `Mod + Shift + Enter` |
 | Elimina riga | `Mod + Backspace` |
-| Aggiungi colonna a sinistra | `Alt + Mod + Left` |
-| Aggiungi colonna a destra | `Alt + Mod + Right` |
-| Elimina colonna | `Alt + Mod + Backspace` |
-| Allinea colonna a sinistra | `Mod + Alt + Shift + L` |
-| Allinea colonna a destra | `Mod + Shift + R` |
-| Allinea colonna al centro | _(personalizzabile)_ |
 | Formatta tabella | `Alt + Mod + T` |
 | Esci dalla tabella | Tasti freccia al bordo della tabella |
 
@@ -314,12 +351,12 @@ Quando il terminale integrato è attivo:
 | Azione | Scorciatoia |
 |--------|-------------|
 | Attiva/disattiva terminale | `` Ctrl + ` `` |
-| Sposta il focus sul terminale o sull'editor | `` Ctrl + Shift + ` `` |
-| Copia | `Mod + C` (con selezione) |
-| Incolla | `Mod + V` |
-| Seleziona tutto (solo l'output del terminale) | `Mod + A` |
-| Cancella | `Mod + K` |
-| Cerca | `Mod + F` |
+| Sposta il focus sul terminale o sull'editor | `` Ctrl + Shift + ` `` (`` Alt + Shift + ` `` su Windows/Linux) |
+| Copia | `Mod + C` (con selezione); su Linux anche `Ctrl + Shift + C` o `Ctrl + Insert` |
+| Incolla | `Mod + V`; su Linux anche `Ctrl + Shift + V` o `Shift + Insert` |
+| Seleziona tutto (solo l'output del terminale) | `Mod + A` (`Ctrl + Shift + A` su Linux) |
+| Cancella | `Mod + K` (`Ctrl + Shift + K` su Linux) |
+| Cerca | `Mod + F` (`Ctrl + Shift + F` su Linux) |
 | Passa alla sessione 1–5 | `Mod + 1` fino a `Mod + 5` |
 | Ingrandisci il font del terminale | `Mod + =` |
 | Riduci il font del terminale | `Mod + -` |
@@ -341,6 +378,8 @@ Su macOS il terminale traduce anche le consuete combinazioni di modifica del tes
 | Elimina la riga di input (invia `Ctrl + U`) | `Cmd + Backspace` |
 
 Le combinazioni con `Ctrl` come `Ctrl + A`, `Ctrl + R` e `Ctrl + W` vanno direttamente alla shell su macOS.
+
+Su Linux il terminale segue la consueta convenzione dei terminali Linux: le semplici combinazioni `Ctrl` + lettera vanno alla shell, quindi i tasti di readline come `Ctrl + A`, `Ctrl + E`, `Ctrl + K`, `Ctrl + F`, `Ctrl + U` e `Ctrl + W` funzionano come in qualsiasi altro terminale Linux, e le azioni proprie del terminale passano a `Ctrl + Shift`: `Ctrl + Shift + A` seleziona tutto, `Ctrl + Shift + K` cancella, `Ctrl + Shift + F` cerca, e `Ctrl + Shift + C` / `Ctrl + Shift + V` copiano e incollano. Anche `Ctrl + Insert` e `Shift + Insert` copiano e incollano. Il terminale mantiene due semplici combinazioni `Ctrl`: `Ctrl + C` copia una selezione (e invia SIGINT quando non c'è nulla di selezionato), e `Ctrl + V` incolla. `Ctrl + 1` fino a `Ctrl + 5` continuano a cambiare sessione.
 
 Quando la barra di ricerca del terminale è aperta:
 

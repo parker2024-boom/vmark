@@ -2,7 +2,7 @@
 /**
  * Unit tests for workspace identity logic
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   createWorkspaceIdentity,
   generateUUID,
@@ -68,11 +68,13 @@ describe("workspaceIdentity", () => {
     });
 
     it("sets creation timestamp", () => {
-      const before = Date.now();
-      const identity = createWorkspaceIdentity();
-      const after = Date.now();
-      expect(identity.createdAt).toBeGreaterThanOrEqual(before);
-      expect(identity.createdAt).toBeLessThanOrEqual(after);
+      const createdAt = Date.UTC(2026, 0, 2, 3, 4, 5);
+      vi.setSystemTime(createdAt);
+      try {
+        expect(createWorkspaceIdentity().createdAt).toBe(createdAt);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

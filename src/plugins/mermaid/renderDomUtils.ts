@@ -5,6 +5,7 @@
  * these helpers read or clean the document without touching mermaid state.
  *
  * @coordinates-with plugin.ts — sole consumer
+ * @module plugins/mermaid/renderDomUtils
  */
 
 /**

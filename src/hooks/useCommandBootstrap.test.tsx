@@ -67,6 +67,7 @@ type MountResult = { off: () => void; failed: string[] };
 
 import { useCommandBootstrap } from "./useCommandBootstrap";
 import { useRecentWorkspacesStore } from "@/stores/recentsStore";
+import { readDebugHandle } from "@/utils/devDebugHandle";
 
 beforeEach(() => {
   mountMenuCommandsMock.mockReset();
@@ -142,7 +143,7 @@ describe("useCommandBootstrap", () => {
     // Sanity-check the bundle: at minimum it must carry the misc + view
     // bindings (the largest two groups).
     expect(bindings).toEqual(expect.arrayContaining([
-      expect.objectContaining({ commandId: "app.preferences" }),
+      expect.objectContaining({ commandId: "app.quickOpen" }),
       expect.objectContaining({ commandId: "view.toggleSourceMode" }),
     ]));
   });
@@ -291,8 +292,7 @@ describe("DEV seam: forgetRecentWorkspace", () => {
     useRecentWorkspacesStore.getState().addWorkspace(path);
     expect(useRecentWorkspacesStore.getState().workspaces.some((w) => w.path === path)).toBe(true);
     renderHook(() => useCommandBootstrap());
-    const seam = (window as unknown as { __VMARK_DEBUG__?: Record<string, unknown> }).__VMARK_DEBUG__;
-    const forget = seam?.forgetRecentWorkspace as ((p: string) => void) | undefined;
+    const forget = readDebugHandle("forgetRecentWorkspace") as ((p: string) => void) | undefined;
     expect(typeof forget).toBe("function");
     forget?.(path);
     expect(useRecentWorkspacesStore.getState().workspaces.some((w) => w.path === path)).toBe(false);

@@ -1,16 +1,19 @@
-// WI-2.5 — Cargo.toml schema detector + dependency-tree renderer.
-//
-// Schema POC #2 (after WI-2.4 GHA workflows). Validates the
-// "schema-aware preview" differentiator: rendering the *right* view
-// for a known artifact instead of a generic JSON tree.
-//
-// No network calls in v1. The renderer reads the manifest, displays
-// the dep tree (runtime / dev / build), and stops there — no version
-// resolution, no crates.io lookup, no transitive resolution.
+/**
+ * Cargo.toml schema detector + dependency-tree renderer for the TOML preview.
+ *
+ * A schema-aware preview (the second, after GHA workflows): rendering the *right*
+ * view for a known artifact instead of a generic JSON tree.
+ *
+ * No network calls in v1. The renderer reads the manifest, displays
+ * the dep tree (runtime / dev / build), and stops there — no version
+ * resolution, no crates.io lookup, no transitive resolution.
+ *
+ * @module lib/formats/adapters/cargoToml
+ */
 
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { parse as parseToml } from "smol-toml";
+import { useTomlParser, type TomlParse } from "./tomlParser";
 import type {
   PreviewRendererProps,
   SchemaDetector,
@@ -81,6 +84,7 @@ function parseDepTable(
 
 export function collectCargoDependencies(
   content: string,
+  parseToml: TomlParse,
 ): CargoDependencyResult {
   let parsed: unknown;
   try {
@@ -107,7 +111,12 @@ export function CargoTomlSchemaRenderer({
   diagnostics,
 }: PreviewRendererProps) {
   const { t } = useTranslation("editor");
-  const result = useMemo(() => collectCargoDependencies(content), [content]);
+  const parseToml = useTomlParser();
+  const result = useMemo(
+    () => (parseToml ? collectCargoDependencies(content, parseToml) : null),
+    [content, parseToml],
+  );
+  if (!result) return null; // the parser is still loading
   const totalDeps =
     result.runtime.length + result.dev.length + result.build.length;
 

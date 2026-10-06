@@ -22,10 +22,10 @@
   "enabledPlugins": {
     "rust-analyzer-lsp@claude-plugins-official": true,
     "tdd-guardian@xiaolai": true,
-    "claude-english-buddy@xiaolai": true,
     "docs-guardian@xiaolai": true,
     "typescript-lsp@claude-plugins-official": true,
     "vmark-lsp@vmark-local": true,
-    "frontend-design@claude-plugins-official": true
+    "frontend-design@claude-plugins-official": true,
+    "english-buddy@xiaolai": true
   }
 }

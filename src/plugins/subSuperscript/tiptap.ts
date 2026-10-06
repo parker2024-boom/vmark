@@ -1,3 +1,10 @@
+/**
+ * Subscript and superscript marks — the Tiptap extensions that parse and
+ * render `<sub>` and `<sup>` text.
+ *
+ * @module plugins/subSuperscript/tiptap
+ */
+
 import { Mark, mergeAttributes } from "@tiptap/core";
 import "./sub-super.css";
 

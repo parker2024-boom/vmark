@@ -10,7 +10,7 @@
 //!
 //! The digit-class decomposition (`range_patterns`) is radix-generic: decimal for
 //! an IPv4 octet, hex for the 16-bit group of an IPv6 literal
-//! (`ai_content_rules_cidr6.rs`, round 3 #9).
+//! (`ai_content_rules_cidr6.rs`).
 
 use super::{AUTHORITY, HOST_END, OCTET};
 

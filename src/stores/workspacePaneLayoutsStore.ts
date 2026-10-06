@@ -1,10 +1,10 @@
 /**
- * Per-instance pane-layout snapshots (WI-10.2 / plan D3).
+ * Per-instance pane-layout snapshots (plan D3).
  *
  * Purpose: hold the split layouts of HIDDEN workspace instances while the
  * active instance's layout lives in `paneStore.byWindow`. The rail-switch
  * coordinator stashes the outgoing instance's split here and restores the
- * incoming one through `paneStore.replaceWindowSplit` (WI-10.1) — the only
+ * incoming one through `paneStore.replaceWindowSplit` — the only
  * writer of the final activeTabId alias.
  *
  * A stash holding a tab that closes while hidden is pruned immediately (bus

@@ -24,7 +24,7 @@ interface SidebarResizeHandleProps {
 }
 
 /**
- * WI-2.2 (a11y): focusable separator with arrow-key resize.
+ * A11y: focusable separator with arrow-key resize.
  * role=separator + aria-orientation=vertical announces purpose;
  * tabIndex=0 puts it in tab order; aria-valuenow/min/max + the
  * live `width` prop let screen readers report current width.

@@ -1,3 +1,7 @@
+// WI-RA5.1 — a resolved operand is a value, never scanned for references.
+// WI-RA5.2 — `success()` is implied unless a status function is named; a
+// skipped dependency blocks `success()` without making `failure()` true.
+//
 //! Unit tests for the workflow `if:` condition evaluator (see
 //! `condition.rs`). Split into a sibling file (included via `#[path]`)
 //! to keep the production file under the size gate.
@@ -26,8 +30,30 @@ fn env(pairs: &[(&str, &str)]) -> HashMap<String, String> {
         .collect()
 }
 
+/// Nothing has failed and nothing this step needs was skipped.
+const HEALTHY: RunStatus = RunStatus {
+    failed: false,
+    blocked: false,
+};
+
+/// A step before this one failed.
+const FAILED: RunStatus = RunStatus {
+    failed: true,
+    blocked: false,
+};
+
+/// A step this one `needs` was skipped; nothing failed.
+const BLOCKED: RunStatus = RunStatus {
+    failed: false,
+    blocked: true,
+};
+
 fn eval(cond: &str, any_failed: bool) -> Result<bool, String> {
-    evaluate_condition(cond, &HashMap::new(), &HashMap::new(), any_failed)
+    eval_under(cond, if any_failed { FAILED } else { HEALTHY })
+}
+
+fn eval_under(cond: &str, status: RunStatus) -> Result<bool, String> {
+    evaluate_condition(cond, &HashMap::new(), &HashMap::new(), status)
 }
 
 // === literals ===
@@ -144,7 +170,7 @@ fn ref_in_condition_equality() {
         "${{ steps.first.outputs.status }} == 'ok'",
         &o,
         &HashMap::new(),
-        false,
+        HEALTHY,
     )
     .unwrap();
     assert!(r);
@@ -153,15 +179,20 @@ fn ref_in_condition_equality() {
 #[test]
 fn bare_ref_in_condition() {
     let o = outputs(&[("first", &[("score", "42")])]);
-    let r =
-        evaluate_condition("steps.first.outputs.score > 10", &o, &HashMap::new(), false).unwrap();
+    let r = evaluate_condition(
+        "steps.first.outputs.score > 10",
+        &o,
+        &HashMap::new(),
+        HEALTHY,
+    )
+    .unwrap();
     assert!(r);
 }
 
 #[test]
 fn env_ref_in_condition() {
     let e = env(&[("STAGE", "prod")]);
-    let r = evaluate_condition("env.STAGE == 'prod'", &HashMap::new(), &e, false).unwrap();
+    let r = evaluate_condition("env.STAGE == 'prod'", &HashMap::new(), &e, HEALTHY).unwrap();
     assert!(r);
 }
 
@@ -172,7 +203,7 @@ fn ref_resolution_failure_is_error() {
         "${{ steps.ghost.outputs.x }} == 'ok'",
         &HashMap::new(),
         &HashMap::new(),
-        false,
+        HEALTHY,
     );
     assert!(r.is_err(), "expected Err, got {:?}", r);
 }
@@ -186,7 +217,7 @@ fn strips_outer_wrapper() {
         "${{ steps.first.outputs.status == 'ok' }}",
         &o,
         &HashMap::new(),
-        false,
+        HEALTHY,
     )
     .unwrap();
     assert!(r);
@@ -194,9 +225,13 @@ fn strips_outer_wrapper() {
 
 #[test]
 fn outer_wrapper_with_success() {
-    assert!(
-        evaluate_condition("${{ success() }}", &HashMap::new(), &HashMap::new(), false).unwrap()
-    );
+    assert!(evaluate_condition(
+        "${{ success() }}",
+        &HashMap::new(),
+        &HashMap::new(),
+        HEALTHY
+    )
+    .unwrap());
 }
 
 // === fail-loud on garbage ===
@@ -333,7 +368,7 @@ fn short_circuit_with_resolved_refs_keeps_values() {
         "steps.first.outputs.status || steps.missing.outputs.x",
         &o,
         &HashMap::new(),
-        false,
+        HEALTHY,
     )
     .unwrap());
 }
@@ -366,4 +401,180 @@ fn normal_nesting_still_evaluates() {
     assert!(eval("((true && false) || (true && true))", false).unwrap());
     // true && (false||false) => false; ||false => false; !false => true
     assert!(eval("!(true && (false || false) || false)", false).unwrap());
+}
+
+// === a resolved operand is a value, never scanned for references ===
+
+/// `steps.a.output == <text as a quoted literal>`, in whichever quote the
+/// text does not contain (the lexer's string literals have no escapes).
+fn equals_literal(operand: &str, text: &str) -> String {
+    let quote = if text.contains('\'') { '"' } else { '\'' };
+    assert!(
+        !text.contains(quote),
+        "fixture needs both quote kinds: {text:?}"
+    );
+    format!("{operand} == {quote}{text}{quote}")
+}
+
+#[test]
+fn a_step_output_operand_is_compared_byte_identical() {
+    let e = env(&[("HOME", "LEAKED-ENV-VALUE"), ("name", "leaked-name")]);
+    for text in [
+        "${HOME}",
+        "${NOPE}",
+        "${{ steps.a.output }}",
+        "${{ env.HOME }}",
+        "const s = `Hello ${name}, total ${amount * 2}`;",
+        "$$",
+        "ghost.output",
+        "",
+        "路径 ${HOME} 中文",
+        "first\r\n${HOME}\r\n",
+    ] {
+        let o = outputs(&[("a", &[("text", text)])]);
+        for operand in [
+            "steps.a.output",
+            "steps.a.outputs.text",
+            "${{ steps.a.output }}",
+            "${{ steps.a.outputs.text }}",
+        ] {
+            let cond = equals_literal(operand, text);
+            assert_eq!(
+                evaluate_condition(&cond, &o, &e, HEALTHY),
+                Ok(true),
+                "condition {cond:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn an_env_operand_is_compared_byte_identical() {
+    let e = env(&[("LEGACY", "${HOME}"), ("HOME", "LEAKED-ENV-VALUE")]);
+    for operand in ["env.LEGACY", "${{ env.LEGACY }}"] {
+        let cond = equals_literal(operand, "${HOME}");
+        assert_eq!(
+            evaluate_condition(&cond, &HashMap::new(), &e, HEALTHY),
+            Ok(true),
+            "condition {cond:?}"
+        );
+    }
+}
+
+#[test]
+fn an_unknown_reference_in_the_condition_itself_still_errors() {
+    let o = outputs(&[("a", &[("text", "${HOME}")])]);
+    let e = env(&[("HOME", "LEAKED-ENV-VALUE")]);
+    for cond in [
+        "env.NOPE == 'x'",
+        "${{ env.NOPE }} == 'x'",
+        "steps.a.output == steps.ghost.output",
+        "steps.a.outputs.missing == 'x'",
+    ] {
+        let r = evaluate_condition(cond, &o, &e, HEALTHY);
+        assert!(r.is_err(), "condition {cond:?} gave {r:?}");
+    }
+}
+
+#[test]
+fn an_unreadable_reference_operand_fails_instead_of_comparing_as_text() {
+    // `${{ a}b }}` and `${{}}` name nothing. They must not survive as the
+    // literal strings they are spelled with.
+    for cond in [
+        "${{ a}b }} == 'x'",
+        "${{ a}b }} != 'x'",
+        "'x' != ${{}}",
+        "${{ steps.a }} == 'x'",
+    ] {
+        let r = eval(cond, false);
+        assert!(r.is_err(), "condition {cond:?} gave {r:?}");
+    }
+}
+
+// === the run status a condition is judged under ===
+
+/// A step failed AND a step this one needs did not complete.
+const FAILED_AND_BLOCKED: RunStatus = RunStatus {
+    failed: true,
+    blocked: true,
+};
+
+#[test]
+fn status_functions_read_the_run_status() {
+    for (status, success, failure) in [
+        (HEALTHY, true, false),
+        (FAILED, false, true),
+        (BLOCKED, false, false),
+        (FAILED_AND_BLOCKED, false, true),
+    ] {
+        for (cond, expected) in [
+            ("success()", success),
+            ("failure()", failure),
+            ("always()", true),
+            ("${{ always() }}", true),
+            ("!failure()", !failure),
+            ("success() || failure()", success || failure),
+            ("!success() && !failure()", !success && !failure),
+        ] {
+            assert_eq!(
+                eval_under(cond, status),
+                Ok(expected),
+                "{cond:?} under {status:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_condition_naming_no_status_function_requires_success() {
+    for cond in ["true", "1 == 1", "!false", "'a' == 'a'", "${{ 1 == 1 }}"] {
+        assert_eq!(eval_under(cond, HEALTHY), Ok(true), "{cond:?}");
+        for status in [FAILED, BLOCKED, FAILED_AND_BLOCKED] {
+            assert_eq!(
+                eval_under(cond, status),
+                Ok(false),
+                "{cond:?} under {status:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_status_function_spelled_inside_a_string_is_text() {
+    // Quoted, it is a literal: `success()` is still implied.
+    let cond = "'always()' == 'always()'";
+    assert_eq!(eval_under(cond, HEALTHY), Ok(true));
+    assert_eq!(eval_under(cond, FAILED), Ok(false));
+}
+
+#[test]
+fn a_named_status_function_lets_the_rest_of_the_condition_decide() {
+    assert_eq!(eval_under("always() && 1 == 1", FAILED), Ok(true));
+    assert_eq!(eval_under("always() && 1 == 2", FAILED), Ok(false));
+    assert_eq!(eval_under("failure() && 'a' == 'a'", FAILED), Ok(true));
+    assert_eq!(eval_under("failure() && 'a' == 'a'", HEALTHY), Ok(false));
+    // Named anywhere — the far side of an `||` counts.
+    assert_eq!(eval_under("false || always()", FAILED), Ok(true));
+    assert_eq!(eval_under("(1 == 2) || (failure())", BLOCKED), Ok(false));
+}
+
+#[test]
+fn the_implied_dead_branch_is_parsed_but_never_evaluated() {
+    // A reference that cannot resolve, or a comparison that cannot be made,
+    // does not turn a skip into an error…
+    assert_eq!(
+        eval_under("steps.ghost.outputs.x == 'y'", FAILED),
+        Ok(false)
+    );
+    assert_eq!(eval_under("'a' > 'b'", BLOCKED), Ok(false));
+    // …though both are errors when the condition is live…
+    assert!(eval_under("steps.ghost.outputs.x == 'y'", HEALTHY).is_err());
+    assert!(eval_under("'a' > 'b'", HEALTHY).is_err());
+    // …and a condition that does not parse is an error either way.
+    for cond in ["1 ==", "(true", "a = b", "true false", ""] {
+        for status in [HEALTHY, FAILED, BLOCKED] {
+            let r = eval_under(cond, status);
+            assert!(r.is_err(), "{cond:?} under {status:?} gave {r:?}");
+        }
+    }
 }

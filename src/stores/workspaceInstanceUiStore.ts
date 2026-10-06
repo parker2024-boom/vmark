@@ -1,5 +1,5 @@
 /**
- * Per-workspace-instance UI state (WI-9.1 / plan D2).
+ * Per-workspace-instance UI state (plan D2).
  *
  * Purpose: presentation state that must SWITCH with the workspace rail —
  * sidebar width/view mode, file-explorer folder-open + scroll state, and
@@ -19,7 +19,7 @@
  * editor prefs) intentionally does NOT live here.
  *
  * @coordinates-with services/workspaces/switchWorkspaceInstance.ts — restore on switch
- * @coordinates-with services/persistence/hotExit — capture/restore (WI-9.4)
+ * @coordinates-with services/persistence/hotExit — capture/restore
  * @module stores/workspaceInstanceUiStore
  */
 import { create } from "zustand";

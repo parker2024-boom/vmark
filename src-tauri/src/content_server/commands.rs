@@ -1,11 +1,11 @@
-//! Tauri command surface for the content server (Phase 1 WI-1.4; grill C3).
+//! Tauri command surface for the content server (Phase 1; grill C3).
 //!
 //! Spawns the bundled Node content-server per workspace, discovers its port via
 //! the port-file, mints browser-auth nonces over loopback, and tears down the
 //! child on stop. The Node runtime + bundle are resolved from the provisioned
 //! app-data dir, with a `VMARK_CONTENT_SERVER_CLI` env override for dev.
 //!
-//! Trust (WI-FL3.6): the workspace's trust identity travels with the start as
+//! Trust: the workspace's trust identity travels with the start as
 //! `--trusted`. It relaxes the served pages' CSP so remote `https:` images
 //! render (`server/content/src/server/headers.ts`); it never decides whether
 //! the workspace is served. The CSP is baked into the child at spawn, so a
@@ -13,10 +13,10 @@
 //! transition the manager expresses cleanly (`take_if_generation`, then the
 //! normal spawn), and the right one: refusing would block a security
 //! downgrade. Two starts racing with opposite trust values are reconciled by
-//! the manager (a mismatched resident is replaced at registration, #120) and,
+//! the manager (a mismatched resident is replaced at registration) and,
 //! when this attempt lost the port file to the other, by one more attempt.
 //!
-//! The start itself lives in `start.rs` as four ordered steps (#115); this
+//! The start itself lives in `start.rs` as four ordered steps; this
 //! file is the command surface and the pieces both share.
 
 use crate::app_paths::app_data_dir;
@@ -50,7 +50,7 @@ impl ServerHandle {
     }
 }
 
-/// Stable per-workspace key (sha256 prefix), matching workspace.rs conventions.
+/// Stable per-workspace key (sha256 prefix), matching workspace/mod.rs conventions.
 fn workspace_key(root: &str) -> String {
     let digest = Sha256::digest(root.as_bytes());
     digest.iter().take(8).map(|b| format!("{b:02x}")).collect()
@@ -64,7 +64,7 @@ pub(super) fn port_file_path(app: &AppHandle, root: &str) -> Result<PathBuf, Com
     Ok(dir.join(format!("{}.port.json", workspace_key(root))))
 }
 
-/// Refuse a workspace root a server must not be rooted at (#280). Zero trust
+/// Refuse a workspace root a server must not be rooted at. Zero trust
 /// at the IPC edge: an EMPTY root would have the child serve its own working
 /// directory, and a RELATIVE one resolves against a process CWD the user
 /// never chose — in a GUI app that is `/`.
@@ -90,7 +90,7 @@ fn check_root(workspace_root: &str) -> Result<(), CommandError> {
 }
 
 /// How many times a start is attempted before giving up on a concurrent start
-/// that keeps winning the port file with the OTHER trust value (#120).
+/// that keeps winning the port file with the OTHER trust value.
 const START_ATTEMPTS: u32 = 2;
 
 /// Start (or return the existing) content server for a workspace, spawned
@@ -116,7 +116,7 @@ pub async fn content_server_start(
 
 /// Stop a workspace's content server and clean up its port-file. Idempotent;
 /// the entry's supervisor sees `NotCurrent` and ends quietly (no crash
-/// signal). A teardown step that failed is an ERROR, not a stop (#114): the
+/// signal). A teardown step that failed is an ERROR, not a stop: the
 /// frontend treats it as "the child may be alive" and keeps the server in
 /// view, where a success would have hidden an orphan.
 #[tauri::command]
@@ -129,8 +129,8 @@ pub async fn content_server_stop(
 
 /// The stop over the manager alone, so it is testable without a Tauri app.
 /// The record leaves the registry either way — a second stop is quiet — and
-/// the outcome says what the teardown left behind (#123); a child that is
-/// not proven gone stays owned by the manager for a retry at quit (#122).
+/// the outcome says what the teardown left behind; a child that is
+/// not proven gone stays owned by the manager for a retry at quit.
 pub(super) fn stop(mgr: &ContentServerManager, root: &str) -> Result<(), CommandError> {
     let Some(detached) = mgr.take(root) else {
         return Ok(());

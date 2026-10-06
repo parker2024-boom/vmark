@@ -6,7 +6,7 @@
  * Alt+Shift+Arrow reorders the focused tab; Enter/Space activates it.
  *
  * Key decisions:
- *   - Roving focus via DOM (audit 20260612 H27): plain ArrowLeft/Right
+ *   - Roving focus via DOM: plain ArrowLeft/Right
  *     moves focus to the adjacent [role="tab"] inside the enclosing
  *     [role="tablist"], wrapping at the ends; Home/End jump to the
  *     first/last tab. Without this, inactive tabs were unreachable from

@@ -3,7 +3,10 @@
  *
  * Integrates the multi-cursor plugin and keymap with Tiptap.
  * Provides VSCode/Sublime-style multi-cursor editing.
+ *
+ * @module plugins/multiCursor/tiptap
  */
+
 import { Extension } from "@tiptap/core";
 import { multiCursorPlugin } from "./multiCursorPlugin";
 import { multiCursorKeymap } from "./keymap";

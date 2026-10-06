@@ -1,5 +1,5 @@
 /**
- * Browser tool — act on the embedded browser tab (WI-2.5 / R5).
+ * Browser tool — act on the embedded browser tab.
  *
  * The MUTATING half of the embedded-browser surface: `act` clicks and types by
  * ARIA role + accessible name, `open`/`navigate` drive the tab, `style` and
@@ -9,13 +9,13 @@
  * (ask the user), and `upload` is never permitted.
  *
  * Pure observation lives in `browser_read`, which declares
- * `readOnlyHint: true`. The two were one tool until the 2026-07-28 audit
- * remediation: a tool carries ONE annotation set, so bundling the ARIA snapshot
+ * `readOnlyHint: true`. The two were one tool until an audit remediation
+ * split them: a tool carries ONE annotation set, so bundling the ARIA snapshot
  * with `execute_js` forced the composite to declare the dangerous value and
  * charged a human approval to the safest, most frequent call in the surface.
  * Splitting along "does this modify anything?" lets each half tell the truth.
  *
- * Origin: Embedded browser sites and workflows plan (2026-07-12, retired) WI-2.5.
+ * Origin: Embedded browser sites and workflows plan (retired).
  *
  * The schema and this registration live here; the per-action handlers are the
  * table in `browserActions.ts`, and the `action` enum DERIVES from that table's
@@ -128,7 +128,7 @@ export function registerBrowserTool(server: VMarkMcpServer): void {
         selector: z.string().optional().describe('CSS selector (style only).'),
         // Bounded like a script, and for the same reason: each of these is
         // retained verbatim and rendered in a human approval dialog. They had
-        // no bound at all (audit R3 #208).
+        // no bound at all.
         set: boundedStringRecordSchema('Inline style properties to set, {cssProp: value} (style only).'),
         addClasses: boundedStringArraySchema('Classes to add (style only).'),
         removeClasses: boundedStringArraySchema('Classes to remove (style only).'),
@@ -177,7 +177,7 @@ export function registerBrowserTool(server: VMarkMcpServer): void {
           .describe('Named persistent context [A-Za-z0-9._-] to reuse a saved login (open only; per-use approved; macOS 14+).'),
         text: boundedTextSchema('Text to type into the target (act, operation=type).'),
         // The description has always promised HTTP(S); the schema accepted any
-        // string, so a client could not see the constraint (audit R3 #209).
+        // string, so a client could not see the constraint.
         url: urlSchema('HTTP(S) destination (open/navigate only).'),
         // The bounds that the old JSON-Schema → Zod converter silently dropped:
         // the client-visible schema advertised neither `minimum` nor `maximum`.

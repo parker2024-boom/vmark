@@ -1,20 +1,58 @@
+// @ts-check
 /**
  * VMark Reader - Interactive controls for exported HTML
  *
- * Features:
- * - Font size adjustment
- * - Line height adjustment
- * - Content width adjustment
- * - Light/Dark theme toggle
- * - CJK letter spacing toggle
- * - Expand all details toggle
- * - Settings persistence via localStorage
+ * Features: font size / line height / content width, themes, CJK spacing,
+ * table of contents, code block buttons, image lightbox, footnote navigation.
+ * Settings persist in localStorage.
+ *
+ * This file ships verbatim inside every exported document, so it is a classic
+ * script with no imports. It is type-checked through its JSDoc and linted;
+ * `__tests__/readerStaticChecks.test.ts` fails if either stops being true.
+ * The DOM it reads is the exporter's: footnotes are
+ * `sup[data-type="footnote_reference"]` and `dl[data-type="footnote_definition"]`,
+ * joined by `data-label`.
  */
 
 (function() {
   'use strict';
 
+  /**
+   * @typedef {{ background: string, foreground: string, secondary: string, border: string, link: string, isDark: boolean }} Theme
+   * @typedef {'fontSize' | 'lineHeight' | 'contentWidth' | 'cjkLetterSpacing'} RangeSetting
+   * @typedef {'cjkLatinSpacing' | 'expandDetails' | 'showToc'} ToggleSetting
+   * @typedef {'latinFont' | 'cjkFont' | 'theme'} NameSetting
+   */
+
+  /** First HTML element matching `selector` under `root`. @param {string} selector @param {ParentNode} [root] @returns {HTMLElement | null} */
+  function qs(selector, root) {
+    const el = (root || document).querySelector(selector);
+    return el instanceof HTMLElement ? el : null;
+  }
+
+  /** Every HTML element matching `selector` under `root`. @param {string} selector @param {ParentNode} [root] @returns {HTMLElement[]} */
+  function qsa(selector, root) {
+    /** @type {HTMLElement[]} */
+    const found = [];
+    (root || document).querySelectorAll(selector).forEach(el => {
+      if (el instanceof HTMLElement) found.push(el);
+    });
+    return found;
+  }
+
+  /** Own-property lookup, so a name like "constructor" is not found on the prototype. @template T @param {Record<string, T>} table @param {string} key @returns {T | undefined} */
+  function own(table, key) {
+    return Object.prototype.hasOwnProperty.call(table, key) ? table[key] : undefined;
+  }
+
+  /** 'smooth', unless the reader asked the system for reduced motion. @returns {ScrollBehavior} */
+  function scrollBehavior() {
+    const reduced = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    return reduced ? 'auto' : 'smooth';
+  }
+
   // Font stacks (matching VMark editor fonts)
+  /** @type {{ latin: Record<string, string>, cjk: Record<string, string> }} */
   const FONT_STACKS = {
     latin: {
       system: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
@@ -55,6 +93,7 @@
   };
 
   // Theme definitions (matching VMark editor themes)
+  /** @type {Record<string, Theme>} */
   const THEMES = {
     white: {
       background: '#FFFFFF',
@@ -113,6 +152,7 @@
   };
 
   // Settings bounds
+  /** @type {Record<RangeSetting, { min: number, max: number, step: number }>} */
   const BOUNDS = {
     fontSize: { min: 12, max: 28, step: 1 },
     lineHeight: { min: 1.2, max: 2.4, step: 0.1 },
@@ -123,29 +163,60 @@
   // Storage key
   const STORAGE_KEY = 'vmark-reader-settings';
 
+  /** @type {RangeSetting[]} */
+  const RANGE_SETTINGS = ['fontSize', 'lineHeight', 'contentWidth', 'cjkLetterSpacing'];
+  /** @type {ToggleSetting[]} */
+  const TOGGLE_SETTINGS = ['cjkLatinSpacing', 'expandDetails', 'showToc'];
+  /** @type {NameSetting[]} */
+  const NAME_SETTINGS = ['latinFont', 'cjkFont', 'theme'];
+
   // State
   let settings = { ...DEFAULTS };
+  /** @type {HTMLElement | null} */
   let panel = null;
   let isOpen = false;
 
+  /** @param {unknown} name @returns {name is RangeSetting} */
+  function isRangeSetting(name) {
+    return RANGE_SETTINGS.some(key => key === name);
+  }
+
+  /** Clamp to the setting's bounds and round away float noise. @param {RangeSetting} key @param {number} value */
+  function clampSetting(key, value) {
+    const bounds = BOUNDS[key];
+    const precision = bounds.step < 0.1 ? 100 : 10;
+    return Math.round(Math.max(bounds.min, Math.min(bounds.max, value)) * precision) / precision;
+  }
+
   /**
-   * Load settings from localStorage
+   * Load settings from localStorage. Stored values are untrusted — any page on
+   * this origin can write them, and some are rendered into the panel — so each
+   * is taken only if it has its default's type; numbers are clamped.
    */
   function loadSettings() {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        settings = { ...DEFAULTS, ...parsed };
-      }
+      /** @type {unknown} */
+      const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      if (typeof parsed !== 'object' || parsed === null) return;
+      const saved = /** @type {Record<string, unknown>} */ (parsed);
+      RANGE_SETTINGS.forEach(key => {
+        const value = saved[key];
+        if (typeof value === 'number' && Number.isFinite(value)) settings[key] = clampSetting(key, value);
+      });
+      TOGGLE_SETTINGS.forEach(key => {
+        const value = saved[key];
+        if (typeof value === 'boolean') settings[key] = value;
+      });
+      NAME_SETTINGS.forEach(key => {
+        const value = saved[key];
+        if (typeof value === 'string') settings[key] = value;
+      });
     } catch (e) {
       console.warn('[VMark Reader] Failed to load settings:', e);
     }
   }
 
-  /**
-   * Save settings to localStorage
-   */
+  /** Save settings to localStorage */
   function saveSettings() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
@@ -154,25 +225,22 @@
     }
   }
 
-  /**
-   * Apply current settings to the document
-   */
+  /** Apply current settings to the document */
   function applySettings() {
     const root = document.documentElement;
-    const surface = document.querySelector('.export-surface');
-    const editor = document.querySelector('.export-surface-editor');
+    const surface = qs('.export-surface');
 
     // Font size
     root.style.setProperty('--editor-font-size', `${settings.fontSize}px`);
     root.style.setProperty('--editor-font-size-mono', `${settings.fontSize * 0.85}px`);
 
     // Line height
-    root.style.setProperty('--editor-line-height', settings.lineHeight);
+    root.style.setProperty('--editor-line-height', String(settings.lineHeight));
     root.style.setProperty('--editor-line-height-px', `${settings.fontSize * settings.lineHeight}px`);
 
     // Fonts
-    const latinStack = FONT_STACKS.latin[settings.latinFont] || FONT_STACKS.latin.system;
-    const cjkStack = FONT_STACKS.cjk[settings.cjkFont] || FONT_STACKS.cjk.system;
+    const latinStack = own(FONT_STACKS.latin, settings.latinFont) || FONT_STACKS.latin.system;
+    const cjkStack = own(FONT_STACKS.cjk, settings.cjkFont) || FONT_STACKS.cjk.system;
     root.style.setProperty('--font-sans', `${latinStack}, ${cjkStack}`);
 
     // Content width
@@ -202,11 +270,9 @@
     updatePanelUI();
   }
 
-  /**
-   * Apply theme colors to the document
-   */
+  /** Apply theme colors to the document. @param {string} themeId */
   function applyTheme(themeId) {
-    const theme = THEMES[themeId] || THEMES.paper;
+    const theme = own(THEMES, themeId) || THEMES.paper;
     const root = document.documentElement;
 
     // Apply theme colors as CSS variables
@@ -239,136 +305,116 @@
   }
 
   // Store original text for CJK spacing toggle
+  /** @type {WeakMap<Node, string>} */
   const originalTexts = new WeakMap();
   const THIN_SPACE = '\u2009';
+  const SKIPPED_TEXT_TAGS = ['script', 'style', 'code', 'pre', 'kbd', 'samp'];
+  const BLOCK_SELECTOR = 'p, li, td, th, dd, dt, h1, h2, h3, h4, h5, h6, blockquote, summary, figcaption, pre, div';
 
-  /**
-   * Apply or remove CJK-Latin spacing
-   */
+  /** True for text the reader may respace: not code, not script or style. @param {Node} node */
+  function isProseText(node) {
+    const parent = node.parentElement;
+    return !!parent && !SKIPPED_TEXT_TAGS.includes(parent.tagName.toLowerCase());
+  }
+
+  /** Every text node under `root`, in document order. @param {Node} root @returns {Node[]} */
+  function textNodesOf(root) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    /** @type {Node[]} */
+    const nodes = [];
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) nodes.push(node);
+    return nodes;
+  }
+
+  /** Apply or remove CJK-Latin spacing */
   function applyCjkSpacing() {
-    const editor = document.querySelector('.export-surface-editor');
+    const editor = qs('.export-surface-editor');
     if (!editor) return;
 
     const isApplied = editor.dataset.cjkApplied === 'true';
 
     if (settings.cjkLatinSpacing && !isApplied) {
-      // Apply spacing
       addCjkSpacing(editor);
       editor.dataset.cjkApplied = 'true';
     } else if (!settings.cjkLatinSpacing && isApplied) {
-      // Remove spacing
       removeCjkSpacing(editor);
       editor.dataset.cjkApplied = 'false';
     }
   }
 
+  /** Replace a text node's content, remembering what it was. @param {Node} node @param {string} text */
+  function respace(node, text) {
+    if (!originalTexts.has(node)) originalTexts.set(node, node.textContent || '');
+    node.textContent = text;
+  }
+
+  /**
+   * Put a thin space at every CJK/Latin boundary. A boundary can fall BETWEEN
+   * two text nodes — CJK letter spacing wraps each CJK run in its own span —
+   * so the previous text node of the same block is part of the comparison.
+   * The space always goes on the Latin side, keeping the CJK spans pure.
+   * @param {HTMLElement} editor
+   */
   function addCjkSpacing(editor) {
     const CJK_RANGE = /[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\uff00-\uffef\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/;
     const LATIN_RANGE = /[a-zA-Z0-9]/;
+    /** @param {string} a @param {string} b */
+    const needsSpace = (a, b) =>
+      (CJK_RANGE.test(a) && LATIN_RANGE.test(b)) || (LATIN_RANGE.test(a) && CJK_RANGE.test(b));
+    /** @param {Node} node */
+    const blockOf = node => (node.parentElement ? node.parentElement.closest(BLOCK_SELECTOR) : null);
 
-    const walker = document.createTreeWalker(
-      editor,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode: function(node) {
-          const parent = node.parentElement;
-          if (!parent) return NodeFilter.FILTER_REJECT;
-          const tag = parent.tagName.toLowerCase();
-          if (['script', 'style', 'code', 'pre', 'kbd', 'samp'].includes(tag)) {
-            return NodeFilter.FILTER_REJECT;
-          }
-          return NodeFilter.FILTER_ACCEPT;
-        }
-      }
-    );
-
-    const textNodes = [];
-    let node;
-    while (node = walker.nextNode()) {
-      textNodes.push(node);
-    }
-
-    textNodes.forEach(textNode => {
-      const text = textNode.textContent;
-      if (!text || text.length < 2) return;
-
-      // Store original
-      if (!originalTexts.has(textNode)) {
-        originalTexts.set(textNode, text);
+    /** @type {Node | null} The previous non-empty text node, when it is prose. */
+    let previous = null;
+    textNodesOf(editor).forEach(textNode => {
+      const text = textNode.textContent || '';
+      if (!text) return;
+      if (!isProseText(textNode)) {
+        previous = null;
+        return;
       }
 
       let result = '';
       for (let i = 0; i < text.length; i++) {
         result += text[i];
-        if (i < text.length - 1) {
-          const curr = text[i];
-          const next = text[i + 1];
-          const currIsCjk = CJK_RANGE.test(curr);
-          const nextIsCjk = CJK_RANGE.test(next);
-          const currIsLatin = LATIN_RANGE.test(curr);
-          const nextIsLatin = LATIN_RANGE.test(next);
-
-          if ((currIsCjk && nextIsLatin) || (currIsLatin && nextIsCjk)) {
-            if (curr !== ' ' && curr !== THIN_SPACE && next !== ' ' && next !== THIN_SPACE) {
-              result += THIN_SPACE;
-            }
-          }
-        }
+        if (i < text.length - 1 && needsSpace(text[i], text[i + 1])) result += THIN_SPACE;
       }
 
-      if (result !== text) {
-        textNode.textContent = result;
+      const before = previous ? previous.textContent || '' : '';
+      if (previous && before && blockOf(previous) === blockOf(textNode) && needsSpace(before[before.length - 1], text[0])) {
+        if (LATIN_RANGE.test(text[0])) result = THIN_SPACE + result;
+        else respace(previous, before + THIN_SPACE);
       }
+
+      if (result !== text) respace(textNode, result);
+      previous = textNode;
     });
   }
 
+  /** @param {HTMLElement} editor */
   function removeCjkSpacing(editor) {
-    const walker = document.createTreeWalker(
-      editor,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode: function(node) {
-          const parent = node.parentElement;
-          if (!parent) return NodeFilter.FILTER_REJECT;
-          const tag = parent.tagName.toLowerCase();
-          if (['script', 'style', 'code', 'pre', 'kbd', 'samp'].includes(tag)) {
-            return NodeFilter.FILTER_REJECT;
-          }
-          return NodeFilter.FILTER_ACCEPT;
-        }
-      }
-    );
-
-    const textNodes = [];
-    let node;
-    while (node = walker.nextNode()) {
-      textNodes.push(node);
-    }
-
-    textNodes.forEach(textNode => {
+    textNodesOf(editor).filter(isProseText).forEach(textNode => {
       // Restore original or remove thin spaces
       const original = originalTexts.get(textNode);
-      if (original) {
+      if (original !== undefined) {
         textNode.textContent = original;
       } else {
         // Fallback: remove all thin spaces
-        textNode.textContent = textNode.textContent.replace(/\u2009/g, '');
+        textNode.textContent = (textNode.textContent || '').replace(/\u2009/g, '');
       }
     });
   }
 
-  /**
-   * Apply CJK letter spacing by wrapping CJK text in spans
-   */
+  /** Apply CJK letter spacing by wrapping CJK text in spans */
   function applyCjkLetterSpacing() {
-    const editor = document.querySelector('.export-surface-editor');
+    const editor = qs('.export-surface-editor');
     if (!editor) return;
 
     const spacing = settings.cjkLetterSpacing;
     const spacingValue = spacing === 0 ? '0' : `${spacing}em`;
 
     // Update existing cjk-spacing spans
-    editor.querySelectorAll('.cjk-letter-spacing').forEach(span => {
+    qsa('.cjk-letter-spacing', editor).forEach(span => {
       span.style.letterSpacing = spacingValue;
     });
 
@@ -380,31 +426,9 @@
     // CJK Unicode ranges
     const CJK_REGEX = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\u3100-\u312f]+/g;
 
-    const walker = document.createTreeWalker(
-      editor,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode: function(node) {
-          const parent = node.parentElement;
-          if (!parent) return NodeFilter.FILTER_REJECT;
-          const tag = parent.tagName.toLowerCase();
-          // Skip code, pre, and already-processed spans
-          if (['script', 'style', 'code', 'pre', 'kbd', 'samp'].includes(tag)) {
-            return NodeFilter.FILTER_REJECT;
-          }
-          if (parent.classList.contains('cjk-letter-spacing')) {
-            return NodeFilter.FILTER_REJECT;
-          }
-          return NodeFilter.FILTER_ACCEPT;
-        }
-      }
-    );
-
-    const textNodes = [];
-    let node;
-    while (node = walker.nextNode()) {
-      textNodes.push(node);
-    }
+    // Skip code, pre, and already-processed spans
+    const textNodes = textNodesOf(editor).filter(node =>
+      isProseText(node) && !(node.parentElement && node.parentElement.classList.contains('cjk-letter-spacing')));
 
     textNodes.forEach(textNode => {
       const text = textNode.textContent;
@@ -443,15 +467,13 @@
       }
 
       // Replace text node with fragment
-      textNode.parentNode.replaceChild(fragment, textNode);
+      if (textNode.parentNode) textNode.parentNode.replaceChild(fragment, textNode);
     });
 
     editor.dataset.cjkLetterSpacingApplied = 'true';
   }
 
-  /**
-   * Apply expand/collapse all details
-   */
+  /** Apply expand/collapse all details */
   function applyExpandDetails() {
     const details = document.querySelectorAll('details');
     details.forEach(el => {
@@ -463,25 +485,23 @@
     });
   }
 
-  /**
-   * Apply code block buttons (copy, line numbers toggle)
-   */
+  /** Apply code block buttons (copy, line numbers toggle) */
   function applyCodeBlockButtons() {
-    const editor = document.querySelector('.export-surface-editor');
+    const editor = qs('.export-surface-editor');
     if (!editor) return;
 
     // Only add buttons once
     if (editor.dataset.codeButtonsApplied === 'true') return;
 
     // Exclude preview-only blocks (mermaid, math) which show rendered output
-    const codeBlocks = editor.querySelectorAll('.code-block-wrapper:not(.code-block-preview-only)');
+    const codeBlocks = qsa('.code-block-wrapper:not(.code-block-preview-only)', editor);
     codeBlocks.forEach(wrapper => {
       // Create button container
       const btnContainer = document.createElement('div');
       btnContainer.className = 'vmark-code-btn-group';
 
       // Line numbers toggle button (only if block has line numbers)
-      const lineNumbers = wrapper.querySelector('.code-line-numbers');
+      const lineNumbers = qs('.code-line-numbers', wrapper);
       if (lineNumbers) {
         // Hide line numbers by default
         lineNumbers.style.display = 'none';
@@ -552,15 +572,17 @@
   }
 
   // TOC state
+  /** @type {HTMLElement | null} */
   let tocSidebar = null;
+  /** @type {HTMLElement | null} */
   let tocBackdrop = null;
+  /** @type {HTMLElement | null} */
   let tocToggleTab = null;
+  /** @type {{ id: string, level: number, text: string, element: HTMLElement }[]} */
   let tocHeadings = [];
   let scrollSpyActive = false;
 
-  /**
-   * Toggle TOC visibility
-   */
+  /** Toggle TOC visibility */
   function toggleToc() {
     settings.showToc = !settings.showToc;
     saveSettings();
@@ -568,16 +590,14 @@
     updatePanelUI();
   }
 
-  /**
-   * Create TOC toggle tab (always visible on left edge)
-   */
+  /** Create TOC toggle tab (always visible on left edge) */
   function createTocToggleTab() {
     if (tocToggleTab) return;
 
-    tocToggleTab = document.createElement('button');
-    tocToggleTab.className = 'vmark-toc-toggle-tab';
-    tocToggleTab.setAttribute('aria-label', 'Toggle Table of Contents');
-    tocToggleTab.title = 'Table of Contents (T)';
+    const tab = document.createElement('button');
+    tab.className = 'vmark-toc-toggle-tab';
+    tab.setAttribute('aria-label', 'Toggle Table of Contents');
+    tab.title = 'Table of Contents (T)';
 
     // Create chevron SVG using DOM methods (avoid innerHTML for security hygiene)
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -588,35 +608,28 @@
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', 'M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z');
     svg.appendChild(path);
-    tocToggleTab.appendChild(svg);
+    tab.appendChild(svg);
 
-    tocToggleTab.addEventListener('click', toggleToc);
-    document.body.appendChild(tocToggleTab);
+    tab.addEventListener('click', toggleToc);
+    document.body.appendChild(tab);
+    tocToggleTab = tab;
   }
 
-  /**
-   * Update TOC toggle tab appearance
-   */
+  /** Update TOC toggle tab appearance */
   function updateTocToggleTab() {
     if (!tocToggleTab) return;
     tocToggleTab.classList.toggle('expanded', settings.showToc);
   }
 
-  /**
-   * Generate and apply Table of Contents sidebar
-   */
+  /** Generate and apply Table of Contents sidebar */
   function applyToc() {
-    const editor = document.querySelector('.export-surface-editor');
-    const surface = document.querySelector('.export-surface');
+    const editor = qs('.export-surface-editor');
+    const surface = qs('.export-surface');
     if (!editor || !surface) return;
 
-    // Create toggle tab if headings exist (check once)
-    if (!tocToggleTab) {
-      const headings = editor.querySelectorAll('h1, h2, h3');
-      if (headings.length > 0) {
-        createTocToggleTab();
-      }
-    }
+    // Extract headings (h1-h3); the toggle tab exists only when there are some
+    const headings = qsa('h1, h2, h3', editor);
+    if (!tocToggleTab && headings.length > 0) createTocToggleTab();
 
     if (!settings.showToc) {
       // Hide TOC sidebar
@@ -644,8 +657,6 @@
       return;
     }
 
-    // Extract headings (h1-h3)
-    const headings = editor.querySelectorAll('h1, h2, h3');
     if (headings.length === 0) return;
 
     // Build TOC items and ensure IDs
@@ -660,20 +671,24 @@
       tocHeadings.push({
         id: heading.id,
         level: parseInt(heading.tagName[1], 10),
-        text: heading.textContent.trim(),
+        text: (heading.textContent || '').trim(),
         element: heading
       });
     });
 
     // Create sidebar
-    tocSidebar = document.createElement('aside');
-    tocSidebar.className = 'vmark-toc-sidebar visible';
+    const sidebar = document.createElement('aside');
+    sidebar.className = 'vmark-toc-sidebar visible';
 
     // Header with close button (for mobile only)
     const header = document.createElement('div');
     header.className = 'vmark-toc-header';
-    header.innerHTML = `<button class="vmark-toc-close" title="Close">&times;</button>`;
-    tocSidebar.appendChild(header);
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'vmark-toc-close';
+    closeBtn.title = 'Close';
+    closeBtn.textContent = '\u00d7';
+    header.appendChild(closeBtn);
+    sidebar.appendChild(header);
 
     // Navigation
     const nav = document.createElement('nav');
@@ -683,14 +698,14 @@
       const link = document.createElement('a');
       link.href = `#${item.id}`;
       link.className = `vmark-toc-item vmark-toc-level-${item.level}`;
-      link.dataset.index = index;
+      link.dataset.index = String(index);
       link.textContent = item.text;
 
       link.addEventListener('click', (e) => {
         e.preventDefault();
         const target = document.getElementById(item.id);
         if (target) {
-          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
           history.pushState(null, '', `#${item.id}`);
           // On mobile, close sidebar after click
           if (window.innerWidth < 768) {
@@ -705,7 +720,7 @@
       nav.appendChild(link);
     });
 
-    tocSidebar.appendChild(nav);
+    sidebar.appendChild(nav);
 
     // Close button handler
     const closeToc = () => {
@@ -715,22 +730,24 @@
       updatePanelUI();
     };
 
-    tocSidebar.querySelector('.vmark-toc-close').addEventListener('click', closeToc);
+    closeBtn.addEventListener('click', closeToc);
 
     // Create backdrop for mobile
-    tocBackdrop = document.createElement('div');
-    tocBackdrop.className = 'vmark-toc-backdrop';
-    tocBackdrop.addEventListener('click', closeToc);
-    document.body.appendChild(tocBackdrop);
+    const backdrop = document.createElement('div');
+    backdrop.className = 'vmark-toc-backdrop';
+    backdrop.addEventListener('click', closeToc);
+    document.body.appendChild(backdrop);
 
     // Insert sidebar
-    document.body.appendChild(tocSidebar);
+    document.body.appendChild(sidebar);
     document.body.classList.add('vmark-toc-open');
 
     // Show backdrop on mobile
     if (window.innerWidth < 768) {
-      tocBackdrop.classList.add('visible');
+      backdrop.classList.add('visible');
     }
+    tocSidebar = sidebar;
+    tocBackdrop = backdrop;
 
     // Enable scroll spy
     enableScrollSpy();
@@ -739,9 +756,7 @@
     updateTocToggleTab();
   }
 
-  /**
-   * Enable scroll spy to highlight current section
-   */
+  /** Enable scroll spy to highlight current section */
   function enableScrollSpy() {
     if (scrollSpyActive || tocHeadings.length === 0) return;
     scrollSpyActive = true;
@@ -749,18 +764,14 @@
     handleScrollSpy(); // Initial highlight
   }
 
-  /**
-   * Disable scroll spy
-   */
+  /** Disable scroll spy */
   function disableScrollSpy() {
     if (!scrollSpyActive) return;
     scrollSpyActive = false;
     window.removeEventListener('scroll', handleScrollSpy);
   }
 
-  /**
-   * Handle scroll spy - highlight current section in TOC
-   */
+  /** Handle scroll spy - highlight current section in TOC */
   function handleScrollSpy() {
     if (!tocSidebar || tocHeadings.length === 0) return;
 
@@ -778,31 +789,30 @@
     }
 
     // Update active state
-    const links = tocSidebar.querySelectorAll('.vmark-toc-item');
+    const links = qsa('.vmark-toc-item', tocSidebar);
     links.forEach((link, index) => {
       link.classList.toggle('active', index === currentIndex);
     });
 
     // Scroll TOC to keep active item visible
-    const activeLink = tocSidebar.querySelector('.vmark-toc-item.active');
-    if (activeLink) {
-      const nav = tocSidebar.querySelector('.vmark-toc-nav');
+    const activeLink = links[currentIndex];
+    const nav = qs('.vmark-toc-nav', tocSidebar);
+    if (activeLink && nav) {
       const linkRect = activeLink.getBoundingClientRect();
       const navRect = nav.getBoundingClientRect();
 
       if (linkRect.top < navRect.top || linkRect.bottom > navRect.bottom) {
-        activeLink.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        activeLink.scrollIntoView({ block: 'nearest', behavior: scrollBehavior() });
       }
     }
   }
 
-  /**
-   * Create the settings panel
-   */
+  /** Create the settings panel */
   function createPanel() {
     // Create toggle button
     const toggle = document.createElement('button');
     toggle.className = 'vmark-reader-toggle';
+    toggle.setAttribute('aria-controls', 'vmark-reader-panel');
     toggle.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <circle cx="12" cy="12" r="3"/>
       <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
@@ -810,10 +820,14 @@
     toggle.title = 'Reader Settings';
     toggle.addEventListener('click', togglePanel);
 
-    // Create panel
-    panel = document.createElement('div');
-    panel.className = 'vmark-reader-panel';
-    panel.innerHTML = `
+    // Create panel. Every interpolated setting is a number or a boolean
+    // (see loadSettings), so none of them can carry markup.
+    const el = document.createElement('div');
+    el.id = 'vmark-reader-panel';
+    el.className = 'vmark-reader-panel';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-label', 'Reader settings');
+    el.innerHTML = `
       <div class="vmark-reader-header">
         <span>Reader Settings</span>
         <button class="vmark-reader-close" title="Close">&times;</button>
@@ -898,86 +912,78 @@
     `;
 
     // Event listeners
-    panel.querySelector('.vmark-reader-close').addEventListener('click', togglePanel);
-
-    panel.querySelectorAll('.vmark-reader-btn').forEach(btn => {
-      btn.addEventListener('click', handleRangeClick);
-    });
-
-    panel.querySelectorAll('.vmark-reader-theme-circle').forEach(btn => {
-      btn.addEventListener('click', handleThemeClick);
-    });
-
-    panel.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-      checkbox.addEventListener('change', handleCheckboxChange);
-    });
-
-    panel.querySelectorAll('.vmark-reader-select').forEach(select => {
-      select.addEventListener('change', handleSelectChange);
-    });
-
-    panel.querySelector('.vmark-reader-reset-btn').addEventListener('click', handleReset);
+    qsa('.vmark-reader-close', el).forEach(btn => btn.addEventListener('click', togglePanel));
+    qsa('.vmark-reader-btn', el).forEach(btn => btn.addEventListener('click', handleRangeClick));
+    qsa('.vmark-reader-theme-circle', el).forEach(btn => btn.addEventListener('click', handleThemeClick));
+    qsa('input[type="checkbox"]', el).forEach(box => box.addEventListener('change', handleCheckboxChange));
+    qsa('.vmark-reader-select', el).forEach(select => select.addEventListener('change', handleSelectChange));
+    qsa('.vmark-reader-reset-btn', el).forEach(btn => btn.addEventListener('click', handleReset));
 
     // Append to document
     document.body.appendChild(toggle);
-    document.body.appendChild(panel);
+    document.body.appendChild(el);
+    panel = el;
+    syncToggleState();
   }
 
-  /**
-   * Toggle panel visibility
-   */
+  /** Toggle panel visibility */
   function togglePanel() {
     isOpen = !isOpen;
-    panel.classList.toggle('open', isOpen);
+    if (panel) panel.classList.toggle('open', isOpen);
     document.body.classList.toggle('vmark-panel-open', isOpen);
+    syncToggleState();
   }
 
-  /**
-   * Handle range button clicks (+/-)
-   */
+  /** Tell assistive technology whether the settings panel is open. */
+  function syncToggleState() {
+    const toggle = qs('.vmark-reader-toggle');
+    if (!toggle) return;
+    toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    toggle.setAttribute('aria-label', isOpen ? 'Close reader settings' : 'Open reader settings');
+  }
+
+  /** Handle range button clicks (+/-). @param {Event} e */
   function handleRangeClick(e) {
     const btn = e.currentTarget;
-    const action = btn.dataset.action;
-    const dir = parseInt(btn.dataset.dir, 10);
-    adjustSetting(action, dir);
+    if (!(btn instanceof HTMLElement)) return;
+    adjustSetting(btn.dataset.action, parseInt(btn.dataset.dir || '', 10));
   }
 
-  /**
-   * Handle theme button clicks
-   */
+  /** Handle theme button clicks. @param {Event} e */
   function handleThemeClick(e) {
-    const theme = e.target.dataset.theme;
-    settings.theme = theme;
+    const btn = e.currentTarget;
+    if (!(btn instanceof HTMLElement) || !btn.dataset.theme) return;
+    settings.theme = btn.dataset.theme;
     saveSettings();
     applySettings();
   }
 
-  /**
-   * Handle checkbox changes
-   */
+  /** Handle checkbox changes. A checkbox may only write a boolean setting. @param {Event} e */
   function handleCheckboxChange(e) {
-    const setting = e.target.dataset.setting;
-    settings[setting] = e.target.checked;
+    const box = e.currentTarget;
+    if (!(box instanceof HTMLInputElement)) return;
+    const setting = TOGGLE_SETTINGS.find(key => key === box.dataset.setting);
+    if (!setting) return;
+    settings[setting] = box.checked;
     saveSettings();
     applySettings();
   }
 
-  /**
-   * Handle select changes
-   */
+  /** Handle select changes. A select may only write a font setting. @param {Event} e */
   function handleSelectChange(e) {
-    const setting = e.target.dataset.setting;
-    settings[setting] = e.target.value;
+    const select = e.currentTarget;
+    if (!(select instanceof HTMLSelectElement)) return;
+    const setting = select.dataset.setting;
+    if (setting !== 'latinFont' && setting !== 'cjkFont') return;
+    settings[setting] = select.value;
     saveSettings();
     applySettings();
   }
 
-  /**
-   * Handle reset button
-   */
+  /** Handle reset button */
   function handleReset() {
     // First remove CJK spacing if applied
-    const editor = document.querySelector('.export-surface-editor');
+    const editor = qs('.export-surface-editor');
     if (editor && editor.dataset.cjkApplied === 'true') {
       removeCjkSpacing(editor);
       editor.dataset.cjkApplied = 'false';
@@ -988,44 +994,49 @@
     applySettings();
   }
 
-  /**
-   * Update panel UI to reflect current settings
-   */
+  /** Update panel UI to reflect current settings */
   function updatePanelUI() {
-    if (!panel) return;
+    const el = panel;
+    if (!el) return;
 
-    // Update value displays
-    panel.querySelector('[data-value="fontSize"]').textContent = `${settings.fontSize}px`;
-    panel.querySelector('[data-value="lineHeight"]').textContent = settings.lineHeight;
-    panel.querySelector('[data-value="contentWidth"]').textContent = `${settings.contentWidth}em`;
-    panel.querySelector('[data-value="cjkLetterSpacing"]').textContent = `${settings.cjkLetterSpacing}em`;
+    /** @param {RangeSetting} name @param {string} unit */
+    const showValue = (name, unit) => {
+      const value = qs(`[data-value="${name}"]`, el);
+      if (value) value.textContent = `${settings[name]}${unit}`;
+    };
+    showValue('fontSize', 'px');
+    showValue('lineHeight', '');
+    showValue('contentWidth', 'em');
+    showValue('cjkLetterSpacing', 'em');
 
     // Update theme circles
-    panel.querySelectorAll('.vmark-reader-theme-circle').forEach(btn => {
+    qsa('.vmark-reader-theme-circle', el).forEach(btn => {
       btn.classList.toggle('active', btn.dataset.theme === settings.theme);
     });
 
     // Update checkboxes
-    panel.querySelector('[data-setting="showToc"]').checked = settings.showToc;
-    panel.querySelector('[data-setting="cjkLatinSpacing"]').checked = settings.cjkLatinSpacing;
-    panel.querySelector('[data-setting="expandDetails"]').checked = settings.expandDetails;
+    TOGGLE_SETTINGS.forEach(name => {
+      const box = qs(`[data-setting="${name}"]`, el);
+      if (box instanceof HTMLInputElement) box.checked = settings[name];
+    });
 
     // Update selects
-    panel.querySelector('[data-setting="latinFont"]').value = settings.latinFont;
-    panel.querySelector('[data-setting="cjkFont"]').value = settings.cjkFont;
+    ['latinFont', 'cjkFont'].forEach(name => {
+      const select = qs(`[data-setting="${name}"]`, el);
+      if (select instanceof HTMLSelectElement) select.value = name === 'latinFont' ? settings.latinFont : settings.cjkFont;
+    });
   }
 
   // ============================================
   // Keyboard Shortcuts
   // ============================================
 
-  /**
-   * Setup keyboard shortcuts
-   */
+  /** Setup keyboard shortcuts */
   function setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
       // Ignore if typing in input
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      const target = e.target;
+      if (target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
 
       switch (e.key) {
         case 'Escape':
@@ -1061,19 +1072,11 @@
     });
   }
 
-  /**
-   * Adjust a setting by direction
-   */
+  /** Step a range setting up (1) or down (-1). @param {string | undefined} action @param {number} dir */
   function adjustSetting(action, dir) {
-    const bounds = BOUNDS[action];
-    if (!bounds) return;
+    if (!isRangeSetting(action) || (dir !== 1 && dir !== -1)) return;
 
-    let value = settings[action] + (dir * bounds.step);
-    value = Math.max(bounds.min, Math.min(bounds.max, value));
-    const precision = bounds.step < 0.1 ? 100 : 10;
-    value = Math.round(value * precision) / precision;
-
-    settings[action] = value;
+    settings[action] = clampSetting(action, settings[action] + dir * BOUNDS[action].step);
     saveSettings();
     applySettings();
   }
@@ -1082,24 +1085,24 @@
   // Back to Top Button
   // ============================================
 
+  /** @type {HTMLElement | null} */
   let backToTopBtn = null;
 
-  /**
-   * Create back to top button
-   */
+  /** Create back to top button */
   function createBackToTop() {
-    backToTopBtn = document.createElement('button');
-    backToTopBtn.className = 'vmark-back-to-top';
-    backToTopBtn.setAttribute('aria-label', 'Back to top');
-    backToTopBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    const btn = document.createElement('button');
+    backToTopBtn = btn;
+    btn.className = 'vmark-back-to-top';
+    btn.setAttribute('aria-label', 'Back to top');
+    btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="18 15 12 9 6 15"></polyline>
     </svg>`;
 
-    backToTopBtn.addEventListener('click', () => {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    btn.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: scrollBehavior() });
     });
 
-    document.body.appendChild(backToTopBtn);
+    document.body.appendChild(btn);
 
     // Show/hide based on scroll position
     window.addEventListener('scroll', updateBackToTop, { passive: true });
@@ -1116,67 +1119,70 @@
   // Reading Progress Indicator
   // ============================================
 
+  /** @type {HTMLElement | null} */
   let progressBar = null;
+  /** @type {HTMLElement | null} */
+  let progressFill = null;
 
-  /**
-   * Create reading progress bar
-   */
+  /** Create reading progress bar */
   function createProgressBar() {
-    progressBar = document.createElement('div');
-    progressBar.className = 'vmark-progress-bar';
-    progressBar.setAttribute('role', 'progressbar');
-    progressBar.setAttribute('aria-label', 'Reading progress');
+    const bar = document.createElement('div');
+    bar.className = 'vmark-progress-bar';
+    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('aria-label', 'Reading progress');
 
-    const progressFill = document.createElement('div');
-    progressFill.className = 'vmark-progress-fill';
-    progressBar.appendChild(progressFill);
+    const fill = document.createElement('div');
+    fill.className = 'vmark-progress-fill';
+    bar.appendChild(fill);
 
-    document.body.appendChild(progressBar);
+    document.body.appendChild(bar);
+    progressBar = bar;
+    progressFill = fill;
 
     window.addEventListener('scroll', updateProgress, { passive: true });
     updateProgress();
   }
 
   function updateProgress() {
-    if (!progressBar) return;
-    const fill = progressBar.querySelector('.vmark-progress-fill');
+    if (!progressBar || !progressFill) return;
     const scrollTop = window.scrollY;
     const docHeight = document.documentElement.scrollHeight - window.innerHeight;
     const progress = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
-    fill.style.width = `${progress}%`;
-    progressBar.setAttribute('aria-valuenow', Math.round(progress));
+    progressFill.style.width = `${progress}%`;
+    progressBar.setAttribute('aria-valuenow', String(Math.round(progress)));
   }
 
   // ============================================
   // Image Lightbox
   // ============================================
 
+  /** @type {HTMLElement | null} */
   let lightbox = null;
 
-  /**
-   * Setup image lightbox
-   */
+  /** Setup image lightbox */
   function setupImageLightbox() {
     // Create lightbox container
-    lightbox = document.createElement('div');
-    lightbox.className = 'vmark-lightbox';
-    lightbox.setAttribute('role', 'dialog');
-    lightbox.setAttribute('aria-label', 'Image preview');
-    lightbox.innerHTML = `
+    const box = document.createElement('div');
+    box.className = 'vmark-lightbox';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', 'Image preview');
+    box.innerHTML = `
       <button class="vmark-lightbox-close" aria-label="Close">&times;</button>
       <img class="vmark-lightbox-img" src="" alt="">
     `;
 
-    lightbox.addEventListener('click', (e) => {
-      if (e.target === lightbox || e.target.classList.contains('vmark-lightbox-close')) {
+    box.addEventListener('click', (e) => {
+      const target = e.target;
+      if (target === box || (target instanceof Element && target.classList.contains('vmark-lightbox-close'))) {
         closeLightbox();
       }
     });
 
-    document.body.appendChild(lightbox);
+    document.body.appendChild(box);
+    lightbox = box;
 
     // Add click handlers to images
-    const editor = document.querySelector('.export-surface-editor');
+    const editor = qs('.export-surface-editor');
     if (editor) {
       editor.querySelectorAll('img').forEach(img => {
         // Skip broken images and tiny images (use naturalWidth for accurate check)
@@ -1199,14 +1205,18 @@
     }
   }
 
+  /** @param {string} src @param {string} alt */
   function openLightbox(src, alt) {
     if (!lightbox) return;
-    const img = lightbox.querySelector('.vmark-lightbox-img');
-    img.src = src;
-    img.alt = alt || '';
+    const img = lightbox.querySelector('img');
+    if (img) {
+      img.src = src;
+      img.alt = alt || '';
+    }
     lightbox.classList.add('visible');
     document.body.style.overflow = 'hidden';
-    lightbox.querySelector('.vmark-lightbox-close').focus();
+    const close = lightbox.querySelector('button');
+    if (close) close.focus();
   }
 
   function closeLightbox() {
@@ -1219,104 +1229,74 @@
   // Footnote Navigation
   // ============================================
 
+  /** Scroll to `target`, flash it, and move keyboard focus to `focusTarget`. @param {HTMLElement} target @param {HTMLElement | null} focusTarget */
+  function jumpTo(target, focusTarget) {
+    target.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
+    target.classList.add('vmark-highlight');
+    setTimeout(() => target.classList.remove('vmark-highlight'), 2000);
+    if (focusTarget) focusTarget.focus({ preventScroll: true });
+  }
+
   /**
-   * Setup footnote navigation
+   * Footnote navigation, joined by the exporter's `data-label`.
+   *
+   * A label is whatever the author wrote (`[^note]`, `[^2]` before `[^1]`), so
+   * it is never treated as a position and never spliced into a selector. One
+   * reference may appear several times; the backlink returns to the one the
+   * reader came from, or to the first. A click is taken over only when there
+   * is somewhere to go — otherwise the browser keeps its default.
    */
   function setupFootnoteNavigation() {
-    const editor = document.querySelector('.export-surface-editor');
+    const editor = qs('.export-surface-editor');
     if (!editor) return;
 
-    // Find footnote references and definitions
-    const refs = editor.querySelectorAll('.footnote-ref, [data-type="footnote_reference"]');
-    const defs = editor.querySelectorAll('.footnote-def, [data-type="footnote_definition"]');
+    /** @type {Map<string, HTMLElement>} */
+    const definitions = new Map();
+    /** @type {Map<string, HTMLElement>} label → the reference a backlink returns to */
+    const returnTo = new Map();
 
-    // Create ID mappings if not present
-    refs.forEach((ref, i) => {
-      if (!ref.id) ref.id = `fnref-${i + 1}`;
-      const noteId = ref.dataset.noteId || (i + 1);
+    qsa('[data-type="footnote_definition"]', editor).forEach(def => {
+      const label = def.dataset.label;
+      if (label === undefined || definitions.has(label)) return;
+      definitions.set(label, def);
 
-      ref.style.cursor = 'pointer';
-      ref.setAttribute('role', 'link');
-      ref.setAttribute('aria-label', `Go to footnote ${noteId}`);
-
-      ref.addEventListener('click', (e) => {
-        e.preventDefault();
-        const def = editor.querySelector(`#fndef-${noteId}, .footnote-def[data-note-id="${noteId}"], [data-type="footnote_definition"][data-note-id="${noteId}"]`);
-        if (def) {
-          def.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          def.classList.add('vmark-highlight');
-          setTimeout(() => def.classList.remove('vmark-highlight'), 2000);
-        }
-      });
+      const backref = document.createElement('a');
+      backref.className = 'footnote-backref';
+      backref.textContent = '\u21a9';
+      backref.href = `#fnref-${label}`;
+      backref.setAttribute('aria-label', `Back to reference ${label}`);
+      (qs('dd', def) || def).appendChild(backref);
     });
 
-    // Setup backlinks in definitions
-    defs.forEach((def, i) => {
-      if (!def.id) def.id = `fndef-${i + 1}`;
-      const noteId = def.dataset.noteId || (i + 1);
+    qsa('[data-type="footnote_reference"]', editor).forEach(ref => {
+      const label = ref.dataset.label;
+      if (label === undefined || !definitions.has(label)) return;
+      if (!returnTo.has(label)) returnTo.set(label, ref);
+      (qs('a', ref) || ref).setAttribute('aria-label', `Go to footnote ${label}`);
+    });
 
-      // Find or create backref
-      let backref = def.querySelector('.footnote-backref');
-      if (!backref) {
-        backref = document.createElement('a');
-        backref.className = 'footnote-backref';
-        backref.innerHTML = '↩';
-        backref.href = `#fnref-${noteId}`;
-        const content = def.querySelector('.footnote-def-content, dd');
-        if (content) content.appendChild(backref);
-      }
+    editor.addEventListener('click', (e) => {
+      const origin = e.target instanceof Element ? e.target : null;
+      if (!origin) return;
 
-      backref.setAttribute('aria-label', `Back to reference ${noteId}`);
-      backref.addEventListener('click', (e) => {
+      const ref = origin.closest('[data-type="footnote_reference"]');
+      const def = origin.closest('.footnote-backref') ? origin.closest('[data-type="footnote_definition"]') : null;
+      if (ref instanceof HTMLElement) {
+        const target = definitions.get(ref.dataset.label || '');
+        if (!target) return;
         e.preventDefault();
-        const ref = editor.querySelector(`#fnref-${noteId}, .footnote-ref[data-note-id="${noteId}"]`);
-        if (ref) {
-          ref.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          ref.classList.add('vmark-highlight');
-          setTimeout(() => ref.classList.remove('vmark-highlight'), 2000);
-        }
-      });
+        returnTo.set(ref.dataset.label || '', ref);
+        jumpTo(target, qs('.footnote-backref', target));
+      } else if (def instanceof HTMLElement) {
+        const target = returnTo.get(def.dataset.label || '');
+        if (!target) return;
+        e.preventDefault();
+        jumpTo(target, qs('a', target));
+      }
     });
   }
 
-  // ============================================
-  // Accessibility Improvements
-  // ============================================
-
-  /**
-   * Improve accessibility of reader controls
-   */
-  function improveAccessibility() {
-    // Add aria labels to toggle button
-    const toggle = document.querySelector('.vmark-reader-toggle');
-    if (toggle) {
-      toggle.setAttribute('aria-label', 'Open reader settings');
-      toggle.setAttribute('aria-expanded', 'false');
-      toggle.setAttribute('aria-controls', 'vmark-reader-panel');
-    }
-
-    // Add id and role to panel
-    if (panel) {
-      panel.id = 'vmark-reader-panel';
-      panel.setAttribute('role', 'dialog');
-      panel.setAttribute('aria-label', 'Reader settings');
-    }
-
-    // Update aria-expanded when panel toggles
-    const originalToggle = togglePanel;
-    togglePanel = function() {
-      originalToggle();
-      const toggle = document.querySelector('.vmark-reader-toggle');
-      if (toggle) {
-        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        toggle.setAttribute('aria-label', isOpen ? 'Close reader settings' : 'Open reader settings');
-      }
-    };
-  }
-
-  /**
-   * Initialize reader
-   */
+  /** Initialize reader */
   function init() {
     // Wait for DOM
     if (document.readyState === 'loading') {
@@ -1334,7 +1314,6 @@
     createProgressBar();
     setupImageLightbox();
     setupFootnoteNavigation();
-    improveAccessibility();
   }
 
   // Start

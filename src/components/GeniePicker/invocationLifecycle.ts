@@ -27,7 +27,7 @@ export function isResponseMode(mode: PickerMode): boolean {
  * Run an invocation with the picker open; log a rejection; close the picker
  * once it settles if it never reached a response mode.
  *
- * `run` is a THUNK, not a promise (audit R3 #623). Passing the promise meant
+ * `run` is a THUNK, not a promise. Passing the promise meant
  * the caller evaluated it first, so an invocation that threw SYNCHRONOUSLY —
  * a bad scope, a provider lookup that blows up before its first await —
  * propagated out of the call and reached neither `onError` nor the close
@@ -43,7 +43,7 @@ export function isResponseMode(mode: PickerMode): boolean {
  * the backend — so a user who cancels during that window and reopens the
  * picker has a NEW session on screen when the old invocation finally settles.
  * The mode is then `search`, not a response mode, and the close below shut a
- * picker the old invocation had nothing to do with (audit R2, #610/#624). The
+ * picker the old invocation had nothing to do with. The
  * default keeps the helper usable where there is no session to name.
  */
 export function settleInvocation(
@@ -54,7 +54,7 @@ export function settleInvocation(
   // Invoked SYNCHRONOUSLY: an async function's body runs to its first `await`,
   // and there is none here, so the invocation still starts in the user's click
   // task. A synchronous throw becomes this promise's rejection instead of
-  // escaping the call (#623).
+  // escaping the call.
   const started = (async () => run())();
   return started
     .then(() => undefined, onError)

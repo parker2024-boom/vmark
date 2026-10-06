@@ -130,7 +130,7 @@ phase_1() {
   # "0 unlinked" is the WEAK assertion and must never be the only one: while
   # this plan's own commit messages DESCRIBE the WI-16 bug, the string "WI-16"
   # appears in the commit log and the gate reports it linked — satisfied by
-  # prose about the defect rather than by the fix (observed 2026-08-09, F6).
+  # prose about the defect rather than by the fix (observed live, F6).
   # The 21-vs-22 count below is the load-bearing check.
   cmd_ok "predecessor plan reports 0 unlinked (WI-AF1.2)" \
          bash scripts/check-wi-linkage.sh .claude/tdd-guardian/plan-20260803-161713.md

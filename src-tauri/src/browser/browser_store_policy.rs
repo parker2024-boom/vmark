@@ -1,4 +1,4 @@
-//! Pure data-store selection policy for browser postures (WI-NB10.1 / D6v2).
+//! Pure data-store selection policy for browser postures (D6v2).
 //!
 //! `store_policy(mode, profile, macos_major)` is the ONE place the "which
 //! `WKWebsiteDataStore` does this tab get?" decision lives. It is deliberately
@@ -24,7 +24,7 @@
 //! simply **not met** there, and the arm says so rather than pretending. A named
 //! AI profile still gets a *distinct* non-persistent store below 14 (isolated, not
 //! persistent) — never the shared singleton, which would collapse cross-profile
-//! isolation (sec review WI-P6.1 H2).
+//! isolation.
 //!
 //! ## Human identity is a SEPARATE namespace from AI profiles (collision safety)
 //!

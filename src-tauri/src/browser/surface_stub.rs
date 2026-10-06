@@ -5,7 +5,7 @@
 //! here exists to REFUSE honestly rather than to no-op silently. A caller must be
 //! able to tell "not implemented on this platform" from "done".
 //!
-//! Windows (WebView2) and Linux (webkit2gtk) backends land in WI-5.1 / WI-5.2.
+//! Windows (WebView2) and Linux (webkit2gtk) backends are planned.
 //! `browser/surface.test.rs` pins these signatures against the macOS ones — a
 //! drift there compiles fine on macOS and breaks these targets.
 

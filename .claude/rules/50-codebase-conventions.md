@@ -11,6 +11,7 @@ paths:
 
 - `use[Name]Store` in `[name]Store.ts`. With middleware: `create<FooState>()(persist(...))`.
 - Always guard keyed updates — return `state` unchanged when the key is missing (a local `updateDoc` helper).
+- Stores are created only under `src/stores/`; elsewhere take a `StoreApi` type, never `create` one (`scripts/source-layout.test.mjs`).
 
 ## 2. Hook cleanup
 
@@ -23,7 +24,12 @@ Never attach anonymous listeners you cannot remove.
 `src/plugins/<name>/`: `index.ts` (ProseMirror factory), `tiptap.ts` (Tiptap
 wrapper; may be the only entry), `<name>.css` imported by whichever creates the
 plugin. Plugin CSS lives only in the plugin directory, never in `editor.css`.
-`codemirror/` is a module cluster, not a single plugin.
+
+Module clusters, not single plugins (shared helpers, views and registries that
+plugins use; `scripts/source-layout.test.mjs` fails on a directory with no entry
+that is not listed here): `actions/`, `codemirror/`, `editorPlugins/`,
+`formatToolbar/`, `frontmatterPanel/`, `imagePreview/`, `mathPreview/`,
+`sourceMathPopup/`, `svg/`, `syntaxReveal/`, `toolbarActions/`, `workflowPreview/`.
 
 ## 4. MCP bridge (`src/services/mcpBridge/`)
 

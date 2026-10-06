@@ -1,5 +1,20 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Editor as TiptapEditor } from "@tiptap/core";
+/**
+ * WYSIWYG toolbar adapter — routing AND outcome.
+ *
+ * Every action runs through the REAL handler modules against a real Tiptap
+ * editor built from the production extension set (`runOnWysiwyg`), and the
+ * assertion is the markdown the editor holds afterwards — not that a stub was
+ * called. The null-context cases keep an editor double where the point is
+ * "nothing to act on", and undo/redo/alerts keep one where the point is which
+ * editor command the action maps to.
+ *
+ * Mocked: `sonner` (a third-party toast boundary, asserted on for Format
+ * Table) and the debug loggers (production no-ops; see the parity suite for
+ * the teardown race they cause).
+ */
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
+import { Editor, type Editor as TiptapEditor } from "@tiptap/core";
+import { SelectionRange } from "@tiptap/pm/state";
 
 vi.mock("sonner", () => ({
   toast: {
@@ -12,97 +27,20 @@ vi.mock("sonner", () => ({
     dismiss: vi.fn(),
   },
 }));
-vi.mock("@/plugins/editorPlugins/expandedToggleMark", () => ({
-  expandedToggleMark: vi.fn(() => true),
-}));
-vi.mock("@/plugins/formatToolbar/nodeActions.tiptap", () => ({
-  // Handlers return real command booleans (B2); mock the success case.
-  handleBlockquoteNest: vi.fn(() => true),
-  handleBlockquoteUnnest: vi.fn(() => true),
-  handleRemoveBlockquote: vi.fn(() => true),
-  handleListIndent: vi.fn(() => true),
-  handleListOutdent: vi.fn(() => true),
-  handleRemoveList: vi.fn(() => true),
-  handleToBulletList: vi.fn(() => true),
-  handleToOrderedList: vi.fn(() => true),
-}));
-vi.mock("@/plugins/tableUI/tableActions.tiptap", () => ({
-  addColLeft: vi.fn(() => true),
-  addColRight: vi.fn(() => true),
-  addRowAbove: vi.fn(() => true),
-  addRowBelow: vi.fn(() => true),
-  alignColumn: vi.fn(() => true),
-  deleteCurrentColumn: vi.fn(() => true),
-  deleteCurrentRow: vi.fn(() => true),
-  deleteCurrentTable: vi.fn(() => true),
-  formatTable: vi.fn(() => true),
-}));
-vi.mock("@/plugins/footnotePopup/tiptapInsertFootnote", () => ({
-  insertFootnoteAndOpenPopup: vi.fn(() => true),
-}));
-vi.mock("@/plugins/taskToggle/tiptapTaskListUtils", () => ({
-  toggleTaskList: vi.fn(() => true),
-}));
-vi.mock("@/plugins/toolbarActions/tiptapSelectionActions", () => ({
-  selectWordInView: vi.fn(() => true),
-  selectLineInView: vi.fn(() => true),
-  selectBlockInView: vi.fn(() => true),
-  expandSelectionInView: vi.fn(() => true),
-}));
-vi.mock("./multiSelectionPolicy", () => ({
-  canRunActionInMultiSelection: vi.fn(() => true),
-}));
-vi.mock("./wysiwygMultiSelection", () => ({
-  applyMultiSelectionBlockquoteAction: vi.fn(() => false),
-  applyMultiSelectionHeading: vi.fn(() => false),
-  applyMultiSelectionListAction: vi.fn(() => false),
-}));
-vi.mock("./wysiwygAdapterLinks", () => ({
-  insertWikiLink: vi.fn(() => true),
-  insertBookmarkLink: vi.fn(() => true),
-}));
-vi.mock("./wysiwygAdapterFormatting", () => ({
-  clearFormattingInView: vi.fn(() => true),
-  toggleBlockquote: vi.fn(() => true),
-  handleWysiwygTransformCase: vi.fn(() => true),
-  toggleQuoteStyleAtCursor: vi.fn(() => true),
-}));
-vi.mock("./wysiwygHeadingLevel", () => ({ increaseHeadingLevel: vi.fn(() => true), decreaseHeadingLevel: vi.fn(() => true) }));
-vi.mock("./wysiwygAdapterInsert", () => ({
-  handleInsertImage: vi.fn(() => true),
-  handleInsertVideo: vi.fn(() => true),
-  handleInsertAudio: vi.fn(() => true),
-  insertInlineMath: vi.fn(() => true),
-}));
-vi.mock("./wysiwygAdapterBlockInsert", () => ({  // own module since the parity fixes
-  insertMathBlock: vi.fn(() => true), insertDiagramBlock: vi.fn(() => true),
-  insertGraphvizBlock: vi.fn(() => true), insertMarkmapBlock: vi.fn(() => true),
-}));
-vi.mock("./wysiwygAdapterCodeBlock", () => ({
-  handleInsertCodeBlock: vi.fn(() => true),
-}));
-vi.mock("./wysiwygAdapterLinkEditor", () => ({
-  openLinkEditor: vi.fn(() => true),
-}));
-vi.mock("./wysiwygAdapterCjk", () => ({
-  handleFormatCJK: vi.fn(() => true),
-  handleFormatCJKFile: vi.fn(() => true),
-  handleRemoveTrailingSpaces: vi.fn(() => true),
-  handleCollapseBlankLines: vi.fn(() => true),
-  handleLineEndings: vi.fn(() => true),
-}));
-vi.mock("./wysiwygAdapterBlockOps", () => ({
-  handleWysiwygMoveBlockUp: vi.fn(() => true),
-  handleWysiwygMoveBlockDown: vi.fn(() => true),
-  handleWysiwygDuplicateBlock: vi.fn(() => true),
-  handleWysiwygDeleteBlock: vi.fn(() => true),
-  handleWysiwygJoinBlocks: vi.fn(() => true),
-  handleWysiwygRemoveBlankLines: vi.fn(() => true),
-}));
+vi.mock("@/utils/debug", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return Object.fromEntries(Object.keys(actual).map((k) => [k, () => {}]));
+});
 
+import { toast } from "sonner";
 import { performWysiwygToolbarAction, setWysiwygHeadingLevel } from "./wysiwygAdapter";
 import type { WysiwygToolbarContext, MultiSelectionContext } from "./types";
-import { canRunActionInMultiSelection } from "./multiSelectionPolicy";
+import { runOnWysiwyg, disposeSurfaces, type Target } from "./__tests__/parity/surfaces";
+import { createTiptapExtensions } from "@/services/assembly/createTiptapExtensions";
+import { parseMarkdown, serializeMarkdown } from "@/utils/markdownPipeline";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
+
+afterAll(disposeSurfaces);
 
 const baseContext: WysiwygToolbarContext = {
   surface: "wysiwyg",
@@ -111,7 +49,7 @@ const baseContext: WysiwygToolbarContext = {
   context: null,
 };
 
-/** A chainable editor-command stub. */
+/** A chainable editor-command stub, for the cases that only check command mapping. */
 const link = () => vi.fn().mockReturnThis();
 
 function createMockEditor(overrides?: Record<string, unknown>) {
@@ -124,7 +62,6 @@ function createMockEditor(overrides?: Record<string, unknown>) {
     },
     chain: link(), focus: link(), setParagraph: link(), setHeading: link(), setCodeBlock: link(),
     setHorizontalRule: link(), insertTable: link(), insertContentAt: link(), setTextSelection: link(),
-    // Divider/table read the selection to place the block AFTER the current one.
     state: { selection: { $from: { depth: 0 }, $to: { pos: 0 } } },
     run: vi.fn(() => true),
     ...overrides,
@@ -148,12 +85,10 @@ const disabledMultiSelection: MultiSelectionContext = {
   blockParentType: null,
 };
 
-describe("performWysiwygToolbarAction", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+const TABLE = "| a | b |\n| --- | --- |\n| c | d |";
 
-  it("calls alert insertion commands with the correct type", () => {
+describe("performWysiwygToolbarAction — no editor or view", () => {
+  it("maps each alert action to its alert type", () => {
     const actions: Record<string, string> = {
       insertAlertNote: "NOTE",
       insertAlertTip: "TIP",
@@ -161,767 +96,351 @@ describe("performWysiwygToolbarAction", () => {
       insertAlertWarning: "WARNING",
       insertAlertCaution: "CAUTION",
     };
-
     for (const [action, alertType] of Object.entries(actions)) {
       const insertAlertBlock = vi.fn(() => true);
       const editor = { commands: { insertAlertBlock } } as unknown as TiptapEditor;
-      const applied = performWysiwygToolbarAction(action, {
-        ...baseContext,
-        editor,
-      });
-      expect(applied).toBe(true);
+      expect(performWysiwygToolbarAction(action, { ...baseContext, editor })).toBe(true);
       expect(insertAlertBlock).toHaveBeenCalledWith(alertType);
     }
   });
 
-  it("returns false for unknown action", () => {
+  it("returns false for an unknown action", () => {
+    expect(performWysiwygToolbarAction("unknownAction", { ...baseContext, editor: createMockEditor() })).toBe(false);
+  });
+
+  it("routes undo and redo to the editor's history commands", () => {
     const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("unknownAction", {
-      ...baseContext,
-      editor,
-    });
-    expect(result).toBe(false);
-  });
-
-  it("handles undo with editor", () => {
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("undo", {
-      ...baseContext,
-      editor,
-    });
-    expect(result).toBe(true);
-    expect(editor.commands.undo).toHaveBeenCalled();
-  });
-
-  it("returns false for undo without editor", () => {
-    const result = performWysiwygToolbarAction("undo", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("handles redo with editor", () => {
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("redo", {
-      ...baseContext,
-      editor,
-    });
-    expect(result).toBe(true);
-    expect(editor.commands.redo).toHaveBeenCalled();
-  });
-
-  it("returns false for redo without editor", () => {
-    const result = performWysiwygToolbarAction("redo", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns false for inline formatting without view", () => {
-    const formats = ["bold", "italic", "underline", "strikethrough", "highlight", "superscript", "subscript", "code"];
-    for (const format of formats) {
-      const result = performWysiwygToolbarAction(format, baseContext);
-      expect(result).toBe(false);
-    }
-  });
-
-  it("returns false for clearFormatting without view", () => {
-    const result = performWysiwygToolbarAction("clearFormatting", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns false for increaseHeading without editor", () => {
-    const result = performWysiwygToolbarAction("increaseHeading", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns false for decreaseHeading without editor", () => {
-    const result = performWysiwygToolbarAction("decreaseHeading", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("delegates insertCodeBlock to handleInsertCodeBlock", async () => {
-    const { handleInsertCodeBlock } = await import("./wysiwygAdapterCodeBlock");
-    const context = { ...baseContext, editor: createMockEditor() };
-    const result = performWysiwygToolbarAction("insertCodeBlock", context);
-    expect(result).toBe(true);
-    expect(handleInsertCodeBlock).toHaveBeenCalledWith(context);
-  });
-
-  it("delegates insertGraphvizDiagram to insertGraphvizBlock", async () => {
-    const { insertGraphvizBlock } = await import("./wysiwygAdapterBlockInsert");
-    const context = { ...baseContext, editor: createMockEditor() };
-    const result = performWysiwygToolbarAction("insertGraphvizDiagram", context);
-    expect(result).toBe(true);
-    expect(insertGraphvizBlock).toHaveBeenCalledWith(context);
+    expect(performWysiwygToolbarAction("undo", { ...baseContext, editor })).toBe(true);
+    expect(performWysiwygToolbarAction("redo", { ...baseContext, editor })).toBe(true);
+    expect(editor.commands.undo).toHaveBeenCalledTimes(1);
+    expect(editor.commands.redo).toHaveBeenCalledTimes(1);
   });
 
   it("rejects non-integer and out-of-range heading levels", () => {
     const editor = createMockEditor();
-    const context = { ...baseContext, editor };
     for (const bad of [-1, 7, 2.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(setWysiwygHeadingLevel(context, bad)).toBe(false);
+      expect(setWysiwygHeadingLevel({ ...baseContext, editor }, bad)).toBe(false);
     }
     expect(editor.chain).not.toHaveBeenCalled();
   });
 
-  it("returns false for insertDivider without editor", () => {
-    const result = performWysiwygToolbarAction("insertDivider", baseContext);
-    expect(result).toBe(false);
+  it("setWysiwygHeadingLevel returns false with no editor", () => {
+    expect(setWysiwygHeadingLevel(baseContext, 1)).toBe(false);
   });
 
-  it("inserts divider with editor", () => {
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("insertDivider", {
-      ...baseContext,
-      editor,
-    });
-    expect(result).toBe(true);
-    expect(editor.chain).toHaveBeenCalled();
-  });
-
-  it("returns false for insertTable without editor", () => {
-    const result = performWysiwygToolbarAction("insertTable", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("handles insertTable with editor", () => {
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("insertTable", {
-      ...baseContext,
-      editor,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("handles insertTableBlock same as insertTable", () => {
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("insertTableBlock", {
-      ...baseContext,
-      editor,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("returns false for insertFootnote without editor", () => {
-    const result = performWysiwygToolbarAction("insertFootnote", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns false for insertDetails without editor", () => {
-    const result = performWysiwygToolbarAction("insertDetails", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("inserts details block with editor", () => {
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("insertDetails", {
-      ...baseContext,
-      editor,
-    });
-    expect(result).toBe(true);
-    expect(editor.commands.insertDetailsBlock).toHaveBeenCalled();
-  });
-
-  it("returns false for insertBlockquote without editor", () => {
-    const result = performWysiwygToolbarAction("insertBlockquote", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns false for toggleQuoteStyle without editor", () => {
-    const result = performWysiwygToolbarAction("toggleQuoteStyle", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns false for insertBulletList without view", () => {
-    const result = performWysiwygToolbarAction("insertBulletList", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns false for insertOrderedList without view", () => {
-    const result = performWysiwygToolbarAction("insertOrderedList", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns false for insertTaskList without editor", () => {
-    const result = performWysiwygToolbarAction("insertTaskList", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns false for selection actions without view", () => {
-    const actions = ["selectWord", "selectLine", "selectBlock", "expandSelection"];
-    for (const action of actions) {
-      const result = performWysiwygToolbarAction(action, baseContext);
-      expect(result).toBe(false);
-    }
-  });
-
-  it("returns false for table operations without view", () => {
-    const actions = [
-      "addRowAbove", "addRow", "addColLeft", "addCol",
-      "deleteRow", "deleteCol", "deleteTable",
-      "alignLeft", "alignCenter", "alignRight",
-      "alignAllLeft", "alignAllCenter", "alignAllRight",
-    ];
-    for (const action of actions) {
-      const result = performWysiwygToolbarAction(action, baseContext);
-      expect(result).toBe(false);
-    }
-  });
-
-  it("returns false for blockquote operations without view", () => {
-    const actions = ["nestBlockquote", "unnestBlockquote", "removeBlockquote"];
-    for (const action of actions) {
-      const result = performWysiwygToolbarAction(action, baseContext);
-      expect(result).toBe(false);
-    }
-  });
-
-  it("returns false when multi-selection disallows the action", () => {
-    vi.mocked(canRunActionInMultiSelection).mockReturnValue(false);
-    const editor = createMockEditor();
-    const multi: MultiSelectionContext = {
-      ...disabledMultiSelection,
-      enabled: true,
-      reason: "multi",
-    };
-    // "insertCodeBlock" is disallowed in multi-selection
-    const result = performWysiwygToolbarAction("insertCodeBlock", {
-      ...baseContext,
-      editor,
-      multiSelection: multi,
-    });
-    expect(result).toBe(false);
-    vi.mocked(canRunActionInMultiSelection).mockReturnValue(true);
+  it.each([
+    "undo", "redo",
+    "bold", "italic", "underline", "strikethrough", "highlight", "superscript", "subscript", "code",
+    "clearFormatting", "increaseHeading", "decreaseHeading",
+    "bulletList", "orderedList", "indent", "outdent", "removeList",
+    "insertDivider", "insertTable", "insertFootnote", "insertDetails", "insertBlockquote",
+    "toggleQuoteStyle", "insertBulletList", "insertOrderedList", "insertTaskList",
+    "selectWord", "selectLine", "selectBlock", "expandSelection",
+    "addRowAbove", "addRow", "addColLeft", "addCol", "deleteRow", "deleteCol", "deleteTable",
+    "alignLeft", "alignCenter", "alignRight", "alignAllLeft", "alignAllCenter", "alignAllRight",
+    "nestBlockquote", "unnestBlockquote", "removeBlockquote",
+    "insertAlertNote", "insertAlertTip", "insertAlertImportant", "insertAlertWarning", "insertAlertCaution",
+  ])("%s with nothing to act on returns false", (action) => {
+    expect(performWysiwygToolbarAction(action, baseContext)).toBe(false);
   });
 });
 
-describe("setWysiwygHeadingLevel", () => {
+/** Run on the real editor and return the markdown, failing loudly on a thrown error. */
+function run(markdown: string, target: Target, action: string) {
+  const result = runOnWysiwyg(markdown, target, action);
+  expect(result.error).toBeUndefined();
+  return result;
+}
+
+describe("performWysiwygToolbarAction — real editor outcomes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("returns false when editor is null", () => {
-    const result = setWysiwygHeadingLevel(baseContext, 1);
-    expect(result).toBe(false);
+  it.each([
+    ["bold", "hello **world**\n"],
+    ["italic", "hello *world*\n"],
+    ["underline", "hello ++world++\n"],
+    ["strikethrough", "hello ~~world~~\n"],
+    ["highlight", "hello ==world==\n"],
+    ["superscript", "hello ^world^\n"],
+    ["subscript", "hello ~world~\n"],
+    ["code", "hello `world`\n"],
+    ["link:wiki", "hello [[world]]\n"],
+    ["transformUppercase", "hello WORLD\n"],
+  ])("%s transforms the selected word", (action, expected) => {
+    const result = run("hello world", { select: "world" }, action);
+    expect(result.accepted).toBe(true);
+    expect(result.markdown).toBe(expected);
   });
 
-  it("sets paragraph when level is 0", () => {
-    const editor = createMockEditor();
-    const result = setWysiwygHeadingLevel(
-      { ...baseContext, editor },
-      0
-    );
-    expect(result).toBe(true);
-    expect(editor.chain).toHaveBeenCalled();
+  it("clearFormatting removes inline marks from the selection", () => {
+    expect(run("hello **world**", { select: "world" }, "clearFormatting").markdown).toBe("hello world\n");
   });
 
-  it("sets heading level 1-6", () => {
-    for (let level = 1; level <= 6; level++) {
-      const editor = createMockEditor();
-      const result = setWysiwygHeadingLevel(
-        { ...baseContext, editor },
-        level
-      );
-      expect(result).toBe(true);
-      expect(editor.chain).toHaveBeenCalled();
-    }
+  it.each([
+    ["transformLowercase", "HELLO WORLD", { select: "WORLD" }, "HELLO world\n"],
+    ["transformTitleCase", "hello world", { select: "hello world" }, "Hello World\n"],
+    ["transformToggleCase", "Hello", { select: "Hello" }, "HELLO\n"],
+  ] as const)("%s rewrites the selection's case", (action, md, target, expected) => {
+    expect(run(md, target, action).markdown).toBe(expected);
   });
 
-  it("returns false when multi-selection disallows heading", () => {
-    const editor = createMockEditor();
-    const multi: MultiSelectionContext = {
-      ...disabledMultiSelection,
-      enabled: true,
-      reason: "multi",
-      inCodeBlock: true, // code block disallows conditional actions
-    };
-    vi.mocked(canRunActionInMultiSelection).mockReturnValue(false);
-    const result = setWysiwygHeadingLevel(
-      { ...baseContext, editor, multiSelection: multi },
-      2
-    );
-    expect(result).toBe(false);
-    vi.mocked(canRunActionInMultiSelection).mockReturnValue(true);
+  it.each([
+    ["increaseHeading", "### Title\n\n"],
+    ["decreaseHeading", "# Title\n\n"],
+  ])("%s steps the heading level", (action, expected) => {
+    expect(run("## Title", { caret: "Title" }, action).markdown).toBe(expected);
   });
+
+  it.each([
+    ["bulletList", "item", "item", "- item\n\n"],
+    ["orderedList", "item", "item", "1. item\n\n"],
+    ["taskList", "item", "item", "- [ ] item\n\n"],
+    ["indent", "- one\n- two", "two", "- one\n  - two\n\n"],
+    ["outdent", "- one\n  - two", "two", "- one\n- two\n\n"],
+    ["removeList", "- one", "one", "one\n\n"],
+    ["insertBulletList", "para", "para", "- para\n\n"],
+    ["insertOrderedList", "para", "para", "1. para\n\n"],
+    ["insertTaskList", "para", "para", "- [ ] para\n\n"],
+  ])("%s reshapes the list structure", (action, md, caret, expected) => {
+    expect(run(md, { caret }, action).markdown).toBe(expected);
+  });
+
+  it.each([
+    ["addRowAbove", "| a | b |\n| - | - |\n|   |   |\n| c | d |\n\n"],
+    ["addRow", "| a | b |\n| - | - |\n| c | d |\n|   |   |\n\n"],
+    ["addColLeft", "|   | a | b |\n| - | - | - |\n|   | c | d |\n\n"],
+    ["addCol", "| a |   | b |\n| - | - | - |\n| c |   | d |\n\n"],
+    ["deleteCol", "| b |\n| - |\n| d |\n\n"],
+    ["alignCenter", "|  a  | b |\n| :-: | - |\n|  c  | d |\n\n"],
+    ["alignAllRight", "|  a |  b |\n| -: | -: |\n|  c |  d |\n\n"],
+  ])("%s edits the table at the caret", (action, expected) => {
+    expect(run(TABLE, { caret: "c" }, action).markdown).toBe(expected);
+  });
+
+  it("deleteRow removes the caret row", () => {
+    expect(run(`${TABLE}\n| e | f |`, { caret: "c" }, "deleteRow").markdown).toBe("| a | b |\n| - | - |\n| e | f |\n\n");
+  });
+
+  it("deleteTable removes the whole table", () => {
+    expect(run(`${TABLE}\n\nafter`, { caret: "c" }, "deleteTable").markdown).toBe("after\n");
+  });
+
+  it("formatTable inside a table reports success", () => {
+    expect(run(TABLE, { caret: "c" }, "formatTable").accepted).toBe(true);
+    expect(toast.success).toHaveBeenCalledTimes(1);
+    expect(toast.info).not.toHaveBeenCalled();
+  });
+
+  it("formatTable with nothing to format still dispatches, and says nothing changed", () => {
+    const result = run("para", { caret: "para" }, "formatTable");
+    // Dispatched (true) so the toolbar shows no generic failure; the info
+    // toast tells the user there was nothing to change.
+    expect(result.accepted).toBe(true);
+    expect(result.markdown).toBe("para\n");
+    expect(toast.info).toHaveBeenCalledTimes(1);
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["nestBlockquote", "> quoted", "> > quoted\n\n"],
+    ["unnestBlockquote", "> > quoted", "> quoted\n\n"],
+    ["removeBlockquote", "> quoted", "quoted\n\n"],
+    ["insertBlockquote", "para", "> para\n\n"],
+  ])("%s changes the quote depth", (action, md, expected) => {
+    const caret = md.replace(/^[> ]+/, "");
+    expect(run(md, { caret }, action).markdown).toBe(expected);
+  });
+
+  it.each([
+    ["insertMath", "para\n\n$$\n$$\n\n"],
+    ["insertDivider", "para\n\n---\n\n"],
+    ["insertTable", "para\n\n|   |   |\n| - | - |\n|   |   |\n\n"],
+    ["insertTableBlock", "para\n\n|   |   |\n| - | - |\n|   |   |\n\n"],
+  ])("%s inserts its block AFTER the current one", (action, expected) => {
+    expect(run("para", { caret: "para" }, action).markdown).toBe(expected);
+  });
+
+  it.each([
+    ["insertDiagram", "```mermaid"],
+    ["insertMarkmap", "```markmap"],
+    ["insertGraphvizDiagram", "```dot"],
+    ["insertDetails", "<details open>"],
+    ["insertAlertNote", "> [!NOTE]"],
+  ])("%s inserts its block after the paragraph", (action, fence) => {
+    const { markdown } = run("para", { caret: "para" }, action);
+    expect(markdown.startsWith("para\n\n")).toBe(true);
+    expect(markdown).toContain(fence);
+  });
+
+  it("insertCodeBlock turns the paragraph into a code block", () => {
+    expect(run("para", { caret: "para" }, "insertCodeBlock").markdown).toBe("```plaintext\npara\n```\n\n");
+  });
+
+  it("insertFootnote adds a reference and its definition", () => {
+    expect(run("para", { caret: "para" }, "insertFootnote").markdown).toBe("[^1]para\n\n[^1]: \n\n");
+  });
+
+  it("insertInlineMath inserts an inline math node at the caret", () => {
+    const { markdown, accepted } = run("para", { caret: "para" }, "insertInlineMath");
+    expect(accepted).toBe(true);
+    expect(markdown).not.toBe("para\n");
+    expect(markdown).toContain("para");
+  });
+
+  it("toggleQuoteStyle converts straight quotes to curly ones", () => {
+    expect(run('say "hi" now', { caret: "hi" }, "toggleQuoteStyle").markdown).toBe("say “hi” now\n");
+  });
+
+  it.each(["formatCJK", "formatCJKFile"])("%s spaces CJK and Latin text", (action) => {
+    expect(run("中文English", { caret: "English" }, action).markdown).toBe("中文 English\n");
+  });
+
+  it.each(["removeTrailingSpaces", "collapseBlankLines"])("%s is accepted on a document", (action) => {
+    expect(run("a\n\nb", { caret: "a" }, action).accepted).toBe(true);
+  });
+
+  it.each(["lineEndingsLF", "lineEndingsCRLF"])(
+    "%s records nothing — and reports false — when no document tab is active",
+    (action) => {
+      const result = run("a", { caret: "a" }, action);
+      expect(result.accepted).toBe(false);
+      expect(result.markdown).toBe("a\n");
+    },
+  );
+
+  it.each([
+    ["selectWord", "hello world", "world"],
+    ["selectBlock", "hello world\n\nnext", "hello world"],
+  ])("%s selects around the caret", (action, md, selected) => {
+    const result = run(md, { caret: "world" }, action);
+    expect(result.markdown).toBe(`${md}\n`);
+    expect(result.selectedText).toBe(selected);
+  });
+
+  it.each([
+    ["moveLineUp", "two", "two\n\none\n"],
+    ["moveLineDown", "one", "two\n\none\n"],
+    ["deleteLine", "one", "two\n"],
+  ])("%s moves or removes the caret block", (action, caret, expected) => {
+    expect(run("one\n\ntwo", { caret }, action).markdown).toBe(expected);
+  });
+
+  it("duplicateLine repeats the caret line", () => {
+    expect(run("one\n\ntwo", { caret: "one" }, "duplicateLine").markdown).toBe("one\\\none\n\ntwo\n");
+  });
+
+  it("link:bookmark accepts in a document with headings to link to", () => {
+    const result = run("# Head\n\nhello world", { caret: "world" }, "link:bookmark");
+    expect(result.accepted).toBe(true);
+    expect(result.markdown).toBe("# Head\n\nhello world\n");
+  });
+
+  it("joinLines joins the caret block onto the previous one", () => {
+    const result = run("one\n\ntwo", { caret: "two" }, "joinLines");
+    expect(result.accepted).toBe(true);
+    expect(result.markdown).toBe("onetwo\n");
+  });
+
+  it("joinLines at the start of the document has nothing to join", () => {
+    expect(run("one\n\ntwo", { caret: "one" }, "joinLines").accepted).toBe(false);
+  });
+
+  it("removeBlankLines with no selection does nothing", () => {
+    expect(run("one\n\ntwo", { caret: "one" }, "removeBlankLines").accepted).toBe(false);
+  });
+
+  it.each(["insertImage", "insertVideo", "insertAudio", "link"])(
+    "%s accepts and leaves the document for its async picker",
+    (action) => {
+      const result = run("hello world", { select: "world" }, action);
+      expect(result.accepted).toBe(true);
+      expect(result.markdown).toBe("hello world\n");
+    },
+  );
 });
 
-describe("performWysiwygToolbarAction (with view)", () => {
-  const mockView = {} as import("@tiptap/pm/view").EditorView;
+/** A fresh production editor whose selection is a real multi-cursor selection. */
+describe("multi-selection", () => {
+  let editor: Editor;
+  let element: HTMLElement;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(canRunActionInMultiSelection).mockReturnValue(true);
+  beforeAll(() => {
+    element = document.createElement("div");
+    document.body.appendChild(element);
+    editor = new Editor({ element, extensions: createTiptapExtensions(), content: "" });
   });
 
-  it("handles inline formatting with view", () => {
-    const formats = ["bold", "italic", "underline", "strikethrough", "highlight", "superscript", "subscript", "code"];
-    for (const format of formats) {
-      const result = performWysiwygToolbarAction(format, {
-        ...baseContext,
-        view: mockView,
+  afterAll(async () => {
+    editor.destroy();
+    element.remove();
+    // Lets deferred extension work run while the worker is still alive.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  function load(markdown: string, carets: string[]): WysiwygToolbarContext {
+    editor.commands.setContent(parseMarkdown(editor.schema, markdown).toJSON());
+    const positions = carets.map((needle) => {
+      let found = -1;
+      editor.state.doc.descendants((node, pos) => {
+        if (found < 0 && node.isText && node.text?.includes(needle)) found = pos + node.text.indexOf(needle);
       });
-      expect(result).toBe(true);
-    }
-  });
-
-  it("handles clearFormatting with view", () => {
-    const result = performWysiwygToolbarAction("clearFormatting", {
-      ...baseContext,
-      view: mockView,
+      expect(found).toBeGreaterThan(0);
+      return found;
     });
-    expect(result).toBe(true);
+    const { doc } = editor.state;
+    const ranges = positions.map((p) => new SelectionRange(doc.resolve(p), doc.resolve(p)));
+    editor.view.dispatch(editor.state.tr.setSelection(new MultiSelection(ranges, 0)));
+    return { surface: "wysiwyg", view: editor.view, editor, context: null };
+  }
+
+  const markdown = () => serializeMarkdown(editor.schema, editor.state.doc);
+  const multi: MultiSelectionContext = {
+    ...disabledMultiSelection,
+    enabled: true,
+    reason: "multi",
+    inTextblock: true,
+    sameBlockParent: true,
+  };
+
+  // Each cursor's paragraph becomes its own list; adjacent lists alternate
+  // their marker when serialized, so the marker is matched as a class.
+  it.each([
+    ["bulletList", [/^[-*+] one$/m, /^[-*+] two$/m]],
+    ["orderedList", [/^1[.)] one$/m, /^1[.)] two$/m]],
+  ])("%s applies at EVERY cursor", (action, lines) => {
+    const ctx = load("one\n\ntwo", ["one", "two"]);
+    expect(performWysiwygToolbarAction(action, { ...ctx, multiSelection: multi })).toBe(true);
+    for (const line of lines) expect(markdown()).toMatch(line);
   });
 
-  it("handles link action", () => {
-    const result = performWysiwygToolbarAction("link", {
-      ...baseContext,
-      view: mockView,
-    });
-    expect(result).toBe(true);
+  it("nestBlockquote nests the quote at every cursor", () => {
+    const ctx = load("> one\n\nmid\n\n> two", ["one", "two"]);
+    expect(performWysiwygToolbarAction("nestBlockquote", { ...ctx, multiSelection: multi })).toBe(true);
+    expect(markdown()).toContain("> > one");
+    expect(markdown()).toContain("> > two");
   });
 
-  it("handles link:wiki action", () => {
-    const result = performWysiwygToolbarAction("link:wiki", {
-      ...baseContext,
-      view: mockView,
-    });
-    expect(result).toBe(true);
+  it("setWysiwygHeadingLevel turns every cursor's block into a heading", () => {
+    const ctx = load("one\n\ntwo", ["one", "two"]);
+    expect(setWysiwygHeadingLevel({ ...ctx, multiSelection: multi }, 2)).toBe(true);
+    expect(markdown()).toContain("## one");
+    expect(markdown()).toContain("## two");
   });
 
-  it("handles link:bookmark action", () => {
-    const result = performWysiwygToolbarAction("link:bookmark", {
-      ...baseContext,
-      view: mockView,
-    });
-    expect(result).toBe(true);
+  it("a disallowed action is refused and the document is unchanged", () => {
+    const ctx = load("one\n\ntwo", ["one", "two"]);
+    const before = markdown();
+    expect(performWysiwygToolbarAction("insertCodeBlock", { ...ctx, multiSelection: multi })).toBe(false);
+    expect(markdown()).toBe(before);
   });
 
-  it("handles increaseHeading with editor", () => {
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("increaseHeading", {
-      ...baseContext,
-      editor,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("handles decreaseHeading with editor", () => {
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("decreaseHeading", {
-      ...baseContext,
-      editor,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("handles bulletList with view", () => {
-    const result = performWysiwygToolbarAction("bulletList", {
-      ...baseContext,
-      view: mockView,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("handles orderedList with view", () => {
-    const result = performWysiwygToolbarAction("orderedList", {
-      ...baseContext,
-      view: mockView,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("handles taskList with editor", () => {
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("taskList", {
-      ...baseContext,
-      view: mockView,
-      editor,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("returns false for taskList without editor", () => {
-    const result = performWysiwygToolbarAction("taskList", {
-      ...baseContext,
-      view: mockView,
-    });
-    expect(result).toBe(false);
-  });
-
-  it("handles indent with view", () => {
-    const result = performWysiwygToolbarAction("indent", {
-      ...baseContext,
-      view: mockView,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("handles outdent with view", () => {
-    const result = performWysiwygToolbarAction("outdent", {
-      ...baseContext,
-      view: mockView,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("handles removeList with view", () => {
-    const result = performWysiwygToolbarAction("removeList", {
-      ...baseContext,
-      view: mockView,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("handles table row/col operations with view", () => {
-    const actions = ["addRowAbove", "addRow", "addColLeft", "addCol",
-      "deleteRow", "deleteCol", "deleteTable"];
-    for (const action of actions) {
-      const result = performWysiwygToolbarAction(action, {
-        ...baseContext,
-        view: mockView,
-      });
-      expect(result).toBe(true);
-    }
-  });
-
-  it("handles table alignment operations with view", () => {
-    const actions = ["alignLeft", "alignCenter", "alignRight",
-      "alignAllLeft", "alignAllCenter", "alignAllRight"];
-    for (const action of actions) {
-      const result = performWysiwygToolbarAction(action, {
-        ...baseContext,
-        view: mockView,
-      });
-      expect(result).toBe(true);
-    }
-  });
-
-  it("handles formatTable with view and shows toast", () => {
-    const result = performWysiwygToolbarAction("formatTable", {
-      ...baseContext,
-      view: mockView,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("formatTable no-op still returns true and shows info toast (E2)", async () => {
-    const { formatTable } = await import("@/plugins/tableUI/tableActions.tiptap");
-    vi.mocked(formatTable).mockReturnValueOnce(false);
-    const result = performWysiwygToolbarAction("formatTable", {
-      ...baseContext,
-      view: mockView,
-    });
-    // The action is dispatched (returns true) so the toolbar doesn't show a
-    // generic failure; the toast tells the user nothing was changed.
-    expect(result).toBe(true);
-  });
-
-  it("handles blockquote operations with view", () => {
-    const actions = ["nestBlockquote", "unnestBlockquote", "removeBlockquote"];
-    for (const action of actions) {
-      const result = performWysiwygToolbarAction(action, {
-        ...baseContext,
-        view: mockView,
-      });
-      expect(result).toBe(true);
-    }
-  });
-
-  it("handles insertBlockquote with editor", () => {
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("insertBlockquote", {
-      ...baseContext,
-      editor,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("handles insert media actions", () => {
-    const actions = ["insertImage", "insertVideo", "insertAudio"];
-    for (const action of actions) {
-      const result = performWysiwygToolbarAction(action, {
-        ...baseContext,
-        view: mockView,
-      });
-      expect(result).toBe(true);
-    }
-  });
-
-  it("handles insert math/diagram/markmap actions", () => {
-    const actions = ["insertMath", "insertDiagram", "insertMarkmap", "insertInlineMath"];
-    for (const action of actions) {
-      const result = performWysiwygToolbarAction(action, {
-        ...baseContext,
-        view: mockView,
-      });
-      expect(result).toBe(true);
-    }
-  });
-
-  it("handles insertBulletList with view", () => {
-    const result = performWysiwygToolbarAction("insertBulletList", {
-      ...baseContext,
-      view: mockView,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("handles insertOrderedList with view", () => {
-    const result = performWysiwygToolbarAction("insertOrderedList", {
-      ...baseContext,
-      view: mockView,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("handles insertTaskList with editor", () => {
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("insertTaskList", {
-      ...baseContext,
-      editor,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("handles insertFootnote with editor", () => {
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("insertFootnote", {
-      ...baseContext,
-      editor,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("handles toggleQuoteStyle with editor", () => {
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("toggleQuoteStyle", {
-      ...baseContext,
-      editor,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("handles CJK formatting actions", () => {
-    const actions = ["formatCJK", "formatCJKFile", "removeTrailingSpaces",
-      "collapseBlankLines", "lineEndingsLF", "lineEndingsCRLF"];
-    for (const action of actions) {
-      const result = performWysiwygToolbarAction(action, {
-        ...baseContext,
-        view: mockView,
-      });
-      expect(result).toBe(true);
-    }
-  });
-
-  it("handles selection actions with view", () => {
-    const actions = ["selectWord", "selectLine", "selectBlock", "expandSelection"];
-    for (const action of actions) {
-      const result = performWysiwygToolbarAction(action, {
-        ...baseContext,
-        view: mockView,
-      });
-      expect(result).toBe(true);
-    }
-  });
-
-  it("handles block operations", () => {
-    const actions = ["moveLineUp", "moveLineDown", "duplicateLine",
-      "deleteLine", "joinLines", "removeBlankLines"];
-    for (const action of actions) {
-      const result = performWysiwygToolbarAction(action, {
-        ...baseContext,
-        view: mockView,
-      });
-      expect(result).toBe(true);
-    }
-  });
-
-  it("handles text transformation actions", () => {
-    const actions = ["transformUppercase", "transformLowercase",
-      "transformTitleCase", "transformToggleCase"];
-    for (const action of actions) {
-      const result = performWysiwygToolbarAction(action, {
-        ...baseContext,
-        view: mockView,
-      });
-      expect(result).toBe(true);
-    }
-  });
-
-  it("returns false when multi-selection disallows action", () => {
-    vi.mocked(canRunActionInMultiSelection).mockReturnValue(false);
-    const result = performWysiwygToolbarAction("bold", {
-      ...baseContext,
-      view: mockView,
-    });
-    expect(result).toBe(false);
-  });
-
-  it("returns false for bulletList without view (null view path)", () => {
-    const result = performWysiwygToolbarAction("bulletList", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns false for orderedList without view (null view path)", () => {
-    const result = performWysiwygToolbarAction("orderedList", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns false for indent without view (null view path)", () => {
-    const result = performWysiwygToolbarAction("indent", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns false for outdent without view (null view path)", () => {
-    const result = performWysiwygToolbarAction("outdent", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns false for removeList without view (null view path)", () => {
-    const result = performWysiwygToolbarAction("removeList", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns true when applyMultiSelectionListAction handles bulletList", async () => {
-    const { applyMultiSelectionListAction } = await import("./wysiwygMultiSelection");
-    vi.mocked(applyMultiSelectionListAction).mockReturnValueOnce(true);
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("bulletList", {
-      ...baseContext,
-      view: mockView,
-      editor,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("returns true when applyMultiSelectionListAction handles orderedList", async () => {
-    const { applyMultiSelectionListAction } = await import("./wysiwygMultiSelection");
-    vi.mocked(applyMultiSelectionListAction).mockReturnValueOnce(true);
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("orderedList", {
-      ...baseContext,
-      view: mockView,
-      editor,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("returns true when applyMultiSelectionListAction handles taskList", async () => {
-    const { applyMultiSelectionListAction } = await import("./wysiwygMultiSelection");
-    vi.mocked(applyMultiSelectionListAction).mockReturnValueOnce(true);
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("taskList", {
-      ...baseContext,
-      view: mockView,
-      editor,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("returns true when applyMultiSelectionListAction handles indent", async () => {
-    const { applyMultiSelectionListAction } = await import("./wysiwygMultiSelection");
-    vi.mocked(applyMultiSelectionListAction).mockReturnValueOnce(true);
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("indent", {
-      ...baseContext,
-      view: mockView,
-      editor,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("returns true when applyMultiSelectionListAction handles outdent", async () => {
-    const { applyMultiSelectionListAction } = await import("./wysiwygMultiSelection");
-    vi.mocked(applyMultiSelectionListAction).mockReturnValueOnce(true);
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("outdent", {
-      ...baseContext,
-      view: mockView,
-      editor,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("returns true when applyMultiSelectionListAction handles removeList", async () => {
-    const { applyMultiSelectionListAction } = await import("./wysiwygMultiSelection");
-    vi.mocked(applyMultiSelectionListAction).mockReturnValueOnce(true);
-    const editor = createMockEditor();
-    const result = performWysiwygToolbarAction("removeList", {
-      ...baseContext,
-      view: mockView,
-      editor,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("returns true when applyMultiSelectionBlockquoteAction handles nestBlockquote", async () => {
-    const { applyMultiSelectionBlockquoteAction } = await import("./wysiwygMultiSelection");
-    vi.mocked(applyMultiSelectionBlockquoteAction).mockReturnValueOnce(true);
-    const result = performWysiwygToolbarAction("nestBlockquote", {
-      ...baseContext,
-      view: mockView,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("returns true when applyMultiSelectionBlockquoteAction handles unnestBlockquote", async () => {
-    const { applyMultiSelectionBlockquoteAction } = await import("./wysiwygMultiSelection");
-    vi.mocked(applyMultiSelectionBlockquoteAction).mockReturnValueOnce(true);
-    const result = performWysiwygToolbarAction("unnestBlockquote", {
-      ...baseContext,
-      view: mockView,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("returns true when applyMultiSelectionBlockquoteAction handles removeBlockquote", async () => {
-    const { applyMultiSelectionBlockquoteAction } = await import("./wysiwygMultiSelection");
-    vi.mocked(applyMultiSelectionBlockquoteAction).mockReturnValueOnce(true);
-    const result = performWysiwygToolbarAction("removeBlockquote", {
-      ...baseContext,
-      view: mockView,
-    });
-    expect(result).toBe(true);
-  });
-
-  it("returns false for insertAlertNote without editor", () => {
-    const result = performWysiwygToolbarAction("insertAlertNote", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns false for insertAlertTip without editor", () => {
-    const result = performWysiwygToolbarAction("insertAlertTip", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns false for insertAlertImportant without editor", () => {
-    const result = performWysiwygToolbarAction("insertAlertImportant", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns false for insertAlertWarning without editor", () => {
-    const result = performWysiwygToolbarAction("insertAlertWarning", baseContext);
-    expect(result).toBe(false);
-  });
-
-  it("returns false for insertAlertCaution without editor", () => {
-    const result = performWysiwygToolbarAction("insertAlertCaution", baseContext);
-    expect(result).toBe(false);
-  });
-});
-
-describe("setWysiwygHeadingLevel — multi-selection handled", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(canRunActionInMultiSelection).mockReturnValue(true);
-  });
-
-  it("returns true when applyMultiSelectionHeading handles the action", async () => {
-    const { applyMultiSelectionHeading } = await import("./wysiwygMultiSelection");
-    vi.mocked(applyMultiSelectionHeading).mockReturnValueOnce(true);
-    const editor = createMockEditor();
-    const mockView = {} as import("@tiptap/pm/view").EditorView;
-    const result = setWysiwygHeadingLevel(
-      { ...baseContext, editor, view: mockView },
-      2
-    );
-    expect(result).toBe(true);
+  it("a conditional action is refused when a cursor sits in a code block", () => {
+    const ctx = load("one\n\ntwo", ["one", "two"]);
+    const before = markdown();
+    expect(setWysiwygHeadingLevel({ ...ctx, multiSelection: { ...multi, inCodeBlock: true } }, 2)).toBe(false);
+    expect(performWysiwygToolbarAction("bold", { ...ctx, multiSelection: { ...multi, inCodeBlock: true } })).toBe(false);
+    expect(markdown()).toBe(before);
   });
 });

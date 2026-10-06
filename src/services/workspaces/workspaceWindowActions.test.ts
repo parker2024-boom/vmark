@@ -2,8 +2,8 @@
 // WI-TS2.3 — moving an instance out kills its terminal sessions AFTER the
 // ack (never on timeout/cancel) and realigns to the promoted successor.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useDocumentStore } from "@/stores/documentStore";
-import { resetTerminalSessionStore, useUIStore } from "@/stores/uiStore";
+import { useDocumentStore, useRevisionStore } from "@/stores/documentStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import {
   selectWindowWorkspaceState,
   useWorkspaceInstancesStore,
@@ -70,20 +70,26 @@ describe("workspace window actions", () => {
       .toMatchObject({ activeWorkspaceInstanceId: expect.stringMatching(/^wsi-placeholder-/) });
   });
 
-  it("uses a caller-provided cleanup callback after acknowledged move", async () => {
-    const cleanupTab = vi.fn();
+  // WI-RA1C.4 — the move does not free the moved tabs' state itself; detaching
+  // them announces their removal, and the tab-state cleanup frees ALL of it.
+  it("frees every piece of a moved tab's state, and none of a kept tab's", async () => {
     setRailMode(true);
     addInstance("main", "wsi-repo", "/repo");
-    const tabId = addTab("main", "/repo/a.md", "A");
+    const movedTabId = addTab("main", "/repo/a.md", "A", { dirty: true });
+    const keptTabId = addTab("main", "/other/b.md", "B");
+    const keptRevision = useRevisionStore.getState().getRevision(keptTabId);
+    useRevisionStore.getState().getRevision(movedTabId);
     mockInvoke.mockResolvedValueOnce("doc-2");
 
-    const move = moveWorkspaceInstanceToNewWindow("main", "wsi-repo", { cleanupTab });
+    const move = moveWorkspaceInstanceToNewWindow("main", "wsi-repo");
     await vi.waitFor(() => expect(mockInvoke).toHaveBeenCalled());
     ackTransfer(mockInvoke.mock.calls[0][1].data as WorkspaceTransferPayload);
     await expect(move).resolves.toMatchObject({ ok: true });
 
-    expect(cleanupTab).toHaveBeenCalledWith(tabId);
-    expect(useDocumentStore.getState().getDocument(tabId)).toBeDefined();
+    expect(useDocumentStore.getState().getDocument(movedTabId)).toBeUndefined();
+    expect(useRevisionStore.getState().revisions[movedTabId]).toBeUndefined();
+    expect(useDocumentStore.getState().getDocument(keptTabId)).toBeDefined();
+    expect(useRevisionStore.getState().revisions[keptTabId]?.revision).toBe(keptRevision);
   });
 
   it("keeps the source intact when a move times out before ack", async () => {
@@ -149,7 +155,7 @@ describe("workspace window actions", () => {
     ackTransfer(mockInvoke.mock.calls[0][1].data as WorkspaceTransferPayload);
     await expect(move).resolves.toMatchObject({ ok: true });
 
-    expect(mockInvoke).toHaveBeenLastCalledWith("close_window", { label: "doc-1" });
+    expect(mockInvoke).toHaveBeenLastCalledWith("close_window");
   });
 
   it("does not attribute file tabs to a rootless placeholder instance", async () => {
@@ -207,7 +213,7 @@ describe("workspace window actions", () => {
 });
 
 describe("terminal scope lifecycle on move (WI-TS2.3, D-T6)", () => {
-  const termIds = () => useUIStore.getState().terminal.sessions.map((s) => s.id);
+  const termIds = () => useTerminalStore.getState().sessions.map((s) => s.id);
 
   beforeEach(() => {
     resetTerminalSessionStore();
@@ -218,13 +224,13 @@ describe("terminal scope lifecycle on move (WI-TS2.3, D-T6)", () => {
     addInstance("main", "wsi-repo", "/repo");
     addInstance("main", "wsi-stay", "/stay");
     useWorkspaceInstancesStore.getState().activateWorkspaceInstance("main", "wsi-repo");
-    const moved = useUIStore
+    const moved = useTerminalStore
       .getState()
       .terminalCreateSession({ ownerInstanceId: "wsi-repo" })!;
-    const stay = useUIStore
+    const stay = useTerminalStore
       .getState()
       .terminalCreateSession({ ownerInstanceId: "wsi-stay" })!;
-    useUIStore.getState().terminalSetActiveSession(moved.id);
+    useTerminalStore.getState().terminalSetActiveSession(moved.id);
     mockInvoke.mockResolvedValueOnce("doc-2");
 
     const move = moveWorkspaceInstanceToNewWindow("main", "wsi-repo");
@@ -239,9 +245,9 @@ describe("terminal scope lifecycle on move (WI-TS2.3, D-T6)", () => {
     expect(termIds()).toEqual([stay.id]);
     // The moved instance was ACTIVE — realign shows the successor's session
     // instead of a blank panel over hidden PTYs.
-    expect(useUIStore.getState().terminal.activeSessionId).toBe(stay.id);
+    expect(useTerminalStore.getState().activeSessionId).toBe(stay.id);
     expect(
-      "wsi-repo" in useUIStore.getState().terminal.lastActiveByScope,
+      "wsi-repo" in useTerminalStore.getState().lastActiveByScope,
     ).toBe(false);
   });
 
@@ -249,7 +255,7 @@ describe("terminal scope lifecycle on move (WI-TS2.3, D-T6)", () => {
     vi.useFakeTimers();
     setRailMode(true);
     addInstance("main", "wsi-repo", "/repo");
-    const s = useUIStore
+    const s = useTerminalStore
       .getState()
       .terminalCreateSession({ ownerInstanceId: "wsi-repo" })!;
     mockInvoke.mockResolvedValueOnce("doc-2");

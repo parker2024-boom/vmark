@@ -30,7 +30,7 @@ import type { FormatConfig } from "@/lib/formats/types";
  * `ctx.isDocument`, checked separately).
  *
  * - edit / selection / lines: universal text-editor concerns; always allowed.
- * - a document tab whose format config is unknown → allowed (WI-1A.7: a new /
+ * - a document tab whose format config is unknown → allowed (a new /
  *   non-markdown format ships without a coordinated edit here).
  * - unrecognised future categories → allowed.
  */
@@ -44,7 +44,7 @@ export function isCategoryAllowedByFormat(
   const formatConfig: FormatConfig | undefined = formatId
     ? getFormatById(formatId)
     : undefined;
-  /* v8 ignore next -- @preserve document tab, unknown format → permissive (WI-1A.7) */
+  /* v8 ignore next -- @preserve document tab, unknown format → permissive */
   if (!formatConfig) return true;
   const policy = formatConfig.adapters.menuPolicy;
   switch (category) {

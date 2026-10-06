@@ -2,6 +2,8 @@
  * Date Utilities
  *
  * Shared date formatting functions for consistent display across the app.
+ *
+ * @module utils/dateUtils
  */
 
 /**

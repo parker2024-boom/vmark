@@ -1,7 +1,7 @@
 /**
  * Save-on-Close Shared Surface (leaf)
  *
- * Purpose: the types, button labels and filename/filter helpers shared by
+ * Purpose: the types, translated button labels and filename/filter helpers shared by
  * closeSave.ts (the prompts) and closeSaveBatch.ts (the batch persistence).
  * A leaf so neither of those imports the other — the two-file split otherwise
  * forms a cycle.
@@ -11,6 +11,8 @@
  * @module services/windowClose/closeSaveShared
  */
 
+import i18n from "@/i18n";
+
 /** Context describing a dirty document that may need saving before close. */
 export interface CloseSaveContext {
   windowLabel: string;
@@ -19,7 +21,7 @@ export interface CloseSaveContext {
   filePath: string | null;
   content: string;
   /** DIVERGENT rather than dirty: the user kept local content after an
-   *  external edit (WI-2) — the prompt says the file changed on disk. */
+   *  external edit — the prompt says the file changed on disk. */
   divergent?: boolean;
 }
 
@@ -39,21 +41,41 @@ export type MultiSaveResult =
 export interface MultiSaveOptions {
   /** Called before saving each document, 1-indexed */
   onProgress?: (current: number, total: number, title: string) => void;
+  /**
+   * Called immediately before each write, after any dialog has closed. Returns
+   * the context to write — the document as it is NOW — or `null` when it no
+   * longer needs saving (its tab closed, or another path saved it while a
+   * dialog was open). A context is a capture, and a dialog stays open for as
+   * long as the user takes. Absent: the captured context is written as-is, for
+   * callers that revalidate after the batch instead.
+   */
+  revalidate?: (context: CloseSaveContext) => CloseSaveContext | null;
 }
 
-export const CLOSE_SAVE_BUTTONS = {
-  save: "Save",
-  dontSave: "Don't Save",
-  cancel: "Cancel",
-} as const;
+/**
+ * Button labels for the single-document save prompt, translated per call.
+ * The dialog reports a click by returning the clicked label, so the caller
+ * must compare against the SAME object it showed (`closeSave.i18n.test.ts`
+ * checks every locale keeps the three labels distinct).
+ */
+export function closeSaveButtons(): { save: string; dontSave: string; cancel: string } {
+  return {
+    save: i18n.t("dialog:unsavedChanges.buttonSave"),
+    dontSave: i18n.t("dialog:unsavedChanges.buttonDontSave"),
+    cancel: i18n.t("dialog:unsavedChanges.buttonCancel"),
+  };
+}
 
-export const MULTI_SAVE_BUTTONS = {
-  saveAll: "Save All",
-  dontSave: "Don't Save",
-  cancel: "Cancel",
-} as const;
+/** Button labels for the multi-document save prompt; see `closeSaveButtons`. */
+export function multiSaveButtons(): { saveAll: string; dontSave: string; cancel: string } {
+  return {
+    saveAll: i18n.t("dialog:unsavedChanges.buttonSaveAll"),
+    dontSave: i18n.t("dialog:unsavedChanges.buttonDontSave"),
+    cancel: i18n.t("dialog:unsavedChanges.buttonCancel"),
+  };
+}
 
-// WI-1B.8 — derive Save dialog filters per-tab from the format registry.
+// Derive Save dialog filters per-tab from the format registry.
 // Untitled tabs default to markdown (the canonical "Save As" flow). Filter
 // NAMES resolve through i18n at dialog time: the adapter carries a key, not a
 // literal, so the name is not frozen in English at module-load time. The
@@ -90,22 +112,23 @@ function untitledExtensionForFilePath(filePath: string | null): string {
 }
 
 
+/** Replace characters invalid on Windows/macOS/Linux (/ \ : * ? " < > |) and collapse whitespace. */
+function sanitizeFilename(name: string): string {
+  return name.replace(/[/\\:*?"<>|]/g, "-").replace(/\s+/g, " ").trim();
+}
+
 /**
- * Sanitize a title for use as a filename.
- * Removes/replaces characters that are invalid in filenames.
+ * Sanitize a title for use as a filename. A title with nothing usable in it
+ * falls back to the translated untitled name new tabs get (common:untitled),
+ * sanitized the same way.
  */
 export function toSafeFilename(title: string): string {
-  // Replace characters invalid on Windows/macOS/Linux
-  // Invalid: / \ : * ? " < > |
-  return title
-    .replace(/[/\\:*?"<>|]/g, "-")
-    .replace(/\s+/g, " ")
-    .trim() || "Untitled";
+  return sanitizeFilename(title) || sanitizeFilename(i18n.t("common:untitled"));
 }
 
 /**
  * Ensure filename ends with the default extension for `filePath`'s format.
- * Untitled tabs default to markdown (.md). WI-1B.8 + WI-1B.9 — was
+ * Untitled tabs default to markdown (.md). This used to be
  * hardcoded ".md".
  */
 export function ensureFormatExtension(

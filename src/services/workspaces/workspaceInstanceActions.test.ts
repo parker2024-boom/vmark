@@ -102,7 +102,7 @@ describe("openOrActivateWorkspaceInstance", () => {
 });
 
 // WI-17.2 — per-instance config I/O must address the instance's STORED root
-// spelling, never a user-supplied variant (workspace.rs hashes the exact
+// spelling, never a user-supplied variant (workspace/mod.rs hashes the exact
 // string, so c:\repo and C:\Repo would address different config files).
 describe("resolveStableRootPath", () => {
   function addInstance(rootPath: string, platform: "macos" | "windows" | "linux"): void {

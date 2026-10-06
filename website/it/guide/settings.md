@@ -250,7 +250,7 @@ L'impostazione non compare su macOS né su Linux.
 | Versioni massime | Numero di snapshot di cronologia da mantenere per documento | 50 versioni | 10, 25, 50, 100 |
 | Mantieni versioni per | Età massima degli snapshot di cronologia prima di essere eliminati | 7 giorni | 1 giorno, 7 giorni, 14 giorni, 30 giorni |
 | Finestra di unione | I salvataggi automatici consecutivi all'interno di questa finestra si consolidano in un unico snapshot, riducendo il rumore dello storage | 30 secondi | Off, 10s, 30s, 1 min, 2 min |
-| Dimensione massima file per la cronologia | Salta la creazione di snapshot di cronologia per i file più grandi di questa soglia | 512 KB | 256 KB, 512 KB, 1 MB, 5 MB, Illimitato |
+| Dimensione massima file per la cronologia | Salta gli snapshot di cronologia del salvataggio automatico per i file più grandi di questa soglia. I salvataggi manuali, i salvataggi MCP e la copia di sicurezza fatta prima di ripristinare una versione vengono sempre conservati | 512 KB | 256 KB, 512 KB, 1 MB, 5 MB, Illimitato |
 
 ### Immagini
 
@@ -340,7 +340,7 @@ scelta, e puoi cambiare qualsiasi scheda con l'interruttore a schermo oppure con
 
 ### Editor esterno
 
-Per il pulsante **Apri nell'editor esterno** nelle schede di codice in sola lettura, scegli l'editor che deve essere avviato. Un bundle app (es. `/Applications/Visual Studio Code.app`) o un eseguibile.
+Per il pulsante **Apri in un editor esterno** nelle schede di codice in sola lettura, scegli l'editor che deve essere avviato: il nome di un editor noto (`code`, `zed`, `subl`, `vim`, …) oppure il percorso completo di un bundle app (es. `/Applications/Visual Studio Code.app`) o di un eseguibile. Shell, interpreti ed emulatori di terminale vengono rifiutati, così come un percorso che non esiste.
 
 L'impostazione GUI sostituisce qualsiasi variabile d'ambiente — l'esplicito supera l'implicito. Lasciala vuota per usare la catena di fallback `$VMARK_EXTERNAL_EDITOR → $VISUAL → $EDITOR → predefinito di piattaforma`. Vedi [Apri nell'editor esterno](/it/guide/formats#apri-nell-editor-esterno) per l'ordine di risoluzione completo e il controllo di sicurezza.
 
@@ -440,7 +440,7 @@ Configura il pannello terminale integrato. Apri il terminale con `` Ctrl + ` ``.
 
 | Impostazione | Descrizione | Predefinito | Opzioni |
 |-------------|-------------|-------------|---------|
-| Shell | Quale shell usare. Richiede il riavvio del terminale per avere effetto | Predefinito di Sistema | Shell rilevate automaticamente nel sistema (es. zsh, bash, fish) |
+| Shell | Quale shell usare. Richiede il riavvio del terminale per avere effetto. Una shell salvata che non è più disponibile viene mostrata come *(non disponibile)* e viene usata quella predefinita | Predefinito di Sistema | Shell rilevate automaticamente nel sistema (es. zsh, bash, fish) |
 | Posizione Pannello | Dove posizionare il pannello del terminale | Auto | Auto (basato sul rapporto d'aspetto della finestra), In alto, In basso, A sinistra, A destra |
 | Dimensione Pannello | Proporzione dello spazio disponibile occupata dal terminale. Il trascinamento del pannello aggiorna anche questo valore | 40% | dal 10% all'80% |
 | Dimensione Font | Dimensione del testo nel terminale | 13px | da 10px a 24px |
@@ -449,7 +449,7 @@ Configura il pannello terminale integrato. Apri il terminale con `` Ctrl + ` ``.
 | Cursore Lampeggiante | Se il cursore del terminale lampeggia | Attivo | Attivo / Off |
 | Copia alla Selezione | Copia automaticamente il testo selezionato nel terminale negli appunti | Off | Attivo / Off |
 | Visualizza automaticamente le trascrizioni | Mostra Markdown, tabelle e diagrammi Mermaid di Claude/Codex accanto alla CLI del terminale. Aggiunge un hook SessionStart locale alla configurazione di Claude Code e Codex; riavvia le sessioni CLI attive dopo l'attivazione | Off | Attivo / Off |
-| Renderer WebGL | Usa il rendering con accelerazione GPU per il terminale. Disabilita se si verificano problemi di input IME. Richiede il riavvio del terminale | Attivo | Attivo / Off |
+| Renderer WebGL | Usa il rendering con accelerazione GPU per il terminale. Disabilita se si verificano problemi di input IME. Richiede il riavvio del terminale. Solo macOS e Windows — Linux usa sempre il renderer DOM | Attivo | Attivo / Off |
 | Appunti remoti (OSC 52) | Consente ai programmi in esecuzione nel terminale — via ssh, dentro tmux — di copiare negli appunti di sistema. Il canale è di sola scrittura: la lettura degli appunti è sempre rifiutata, poiché qualsiasi output stampato nel terminale potrebbe richiederla | Attivo | Attivo / Off |
 | Cronologia di scorrimento | Numero di righe di output che ogni sessione conserva nella cronologia di scorrimento. Valori più alti usano più memoria | 5.000 | 1.000 / 5.000 / 10.000 / 50.000 |
 | Modalità screen reader | Rende l'output del terminale accessibile alle tecnologie assistive (VoiceOver). Disattivata per impostazione predefinita per motivi di prestazioni | Off | Attivo / Off |
@@ -468,7 +468,7 @@ Vedi [Terminale Integrato](/it/guide/terminal) per ulteriori informazioni su ses
 
 ## Informazioni
 
-Visualizza la versione dell'app, i collegamenti al sito web e al repository GitHub e la gestione degli aggiornamenti.
+Visualizza la versione dell'app, i collegamenti al sito web e al repository GitHub e la gestione degli aggiornamenti. Il collegamento **Note di terze parti** apre i testi di licenza del software open source incluso in VMark nell'app predefinita del sistema per i file di testo.
 
 ### Aggiornamenti
 
@@ -540,7 +540,22 @@ I quattro predefiniti sono sempre inclusi: rimuoverne uno vale solo fino al riav
 |-------------|-------------|-------------|
 | Mantieni entrambi gli editor attivi | Monta sia l'editor WYSIWYG che quello Sorgente contemporaneamente per un cambio di modalità più veloce. Aumenta l'utilizzo della memoria | Off |
 
-### Motore dei workflow
+### Coerenza
+
+| Impostazione | Descrizione | Predefinito | Opzioni |
+|-------------|-------------|-------------|---------|
+| Confidenza del controllo semantico | Quanto deve essere sicuro un controllo prima che la sua risposta venga registrata come verdetto. Al di sotto di questa soglia, la risposta viene conservata ma contrassegnata come sconosciuta | 0.9 | 0.7, 0.8, 0.9, 0.95 |
+
+Vedi [Coerenza](/it/guide/coherence) per sapere che cos'è un controllo e come vengono registrati i verdetti.
+
+### File di workflow
+
+| Impostazione | Descrizione | Predefinito | Opzioni |
+|-------------|-------------|-------------|---------|
+| Recupera i metadati delle action | Consente a VMark di recuperare `action.yml` dalle GitHub Actions referenziate per popolare il modulo `with:` dell'editor strutturato. Disattivalo per mantenere l'editor dei workflow completamente offline | Attivo | Attivo / Off |
+| Usa actionlint quando disponibile | Se il binario `actionlint` è nel tuo PATH, lo esegue sui file di workflow per una diagnostica più completa. Nessun effetto se il binario non è installato | Attivo | Attivo / Off |
+
+### Workflow
 
 Il visualizzatore di GitHub Actions non ha un interruttore: aprendo un file sotto
 `.github/workflows/` compaiono il grafo e l'editor a form, e gli aiuti del riquadro

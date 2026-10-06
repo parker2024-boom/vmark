@@ -1,5 +1,5 @@
 /**
- * Tab cycling — pure next/previous tab selection (audit 20260612 H27).
+ * Tab cycling — pure next/previous tab selection.
  *
  * Purpose: Given the ordered tab list and the active tab id, return the id
  *   to activate when cycling forward/backward with wrap-around. Pure so the

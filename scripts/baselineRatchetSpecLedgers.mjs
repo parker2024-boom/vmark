@@ -1,6 +1,6 @@
 /**
  * Custom comparators for the markdown spec tier's governed baselines
- * (WI-0.3, plan ADR-5).
+ * (plan ADR-5).
  *
  * Three kinds of file, three identity notions:
  *   - JSON ledgers (`specDeltas.json`, `specRoundtripDeltas.json`): one
@@ -42,7 +42,7 @@ function requireString(value, label, field) {
 /**
  * Identity of one ledger record: JSON tuple of EVERY enforcement-relevant
  * field, values included. Field-name-only identities allowed a same-commit
- * value rewrite to pass the merge-base ratchet unchanged (audit round 1),
+ * value rewrite to pass the merge-base ratchet unchanged,
  * and a " | " join could collapse records containing the delimiter.
  * `reason` is deliberately excluded — rewording prose is not a new record.
  */
@@ -77,7 +77,7 @@ export function specRoundtripRecords(doc, label) {
   for (const d of requireArray(doc?.fidelity, label)) {
     out.add(recordIdentity("fidelity", d, FIDELITY_FIELDS, label));
   }
-  // WI-2.2's independent-ruler section arrived after the first ledgers; a
+  // The independent-ruler section arrived after the first ledgers; a
   // base-ref file may predate it, so absence reads as empty, not malformed.
   for (const d of requireArray(doc?.independentRuler ?? [], label)) {
     out.add(recordIdentity("independentRuler", d, FIDELITY_FIELDS, label));

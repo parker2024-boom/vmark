@@ -2,13 +2,17 @@
 
 O VMark inclui um conjunto abrangente de regras de formatação para texto em Chinês, Japonês e Coreano. Essas ferramentas ajudam a manter uma tipografia consistente ao misturar caracteres CJK e latinos.
 
+::: info O coreano é deliberadamente deixado de lado
+O coreano usa espaçamento nativo entre palavras, e as partículas se ligam diretamente à palavra anterior — `VMark에는`, nunca `VMark 에는`. Inserir um espaço ali é um erro gramatical, não uma preferência tipográfica, por isso **o Hangul fica excluído de todas as regras de espaçamento** e da conversão para pontuação de largura total. O texto coreano passa sem alterações; apenas os caracteres Han dentro dele são formatados.
+:::
+
 ## Início Rápido
 
 Use **Formatar → CJK → Formatar arquivo inteiro** ou pressione `Alt + Mod + Shift + F` para formatar todo o documento.
 
 **Formatar → CJK → Formatar seleção** (`Mod + Shift + F`) formata **os blocos que sua seleção abrange** — o parágrafo, a lista ou a tabela inteira que o cursor ou a seleção toca, e não exatamente os caracteres selecionados. O espaçamento CJK é uma propriedade da fronteira *entre* dois caracteres adjacentes, e uma seleção no meio de uma palavra não contém essa fronteira; por isso o comando indica uma região a corrigir em vez do texto a reescrever. Sem seleção, ele formata o bloco onde está o cursor.
 
-Os dois comandos protegem exatamente as mesmas coisas (veja «Conteúdo protegido»), então selecionar tudo antes de `Mod + Shift + F` é seguro.
+Os dois comandos protegem exatamente as mesmas coisas (veja [Conteúdo protegido](#conteudo-protegido)), então selecionar tudo antes de `Mod + Shift + F` é seguro.
 
 ---
 
@@ -16,13 +20,51 @@ Os dois comandos protegem exatamente as mesmas coisas (veja «Conteúdo protegid
 
 ### 1. Espaçamento CJK-Latino
 
-Adiciona automaticamente espaços entre caracteres/números CJK e latinos.
+Adiciona automaticamente espaços entre caracteres/números CJK e latinos, incluindo
+números com sinal (negativo, positivo, mais-ou-menos) e números com prefixo de
+moeda.
 
 | Antes | Depois |
 |-------|--------|
 | 学习Python编程 | 学习 Python 编程 |
 | 共100个 | 共 100 个 |
 | 使用macOS系统 | 使用 macOS 系统 |
+| 我有-1个 | 我有 -1 个 |
+| 我有+1个 | 我有 +1 个 |
+| 误差±5%范围 | 误差 ±5% 范围 |
+| 中文-$100元 | 中文 -$100 元 |
+| 范围-100到-200 | 范围 -100 到 -200 |
+
+Os sinais reconhecidos são `-` `+` ASCII, `－` `＋` de largura total, o sinal de
+menos Unicode `−` e o mais-ou-menos `±`. Um sinal só é ligado ao número quando
+seguido de um dígito (ou de um símbolo de moeda seguido de um dígito), de modo que
+identificadores CJK-latinos com hífen (por exemplo, `中文-Web`) e expressões CJK-CJK
+com hífen (por exemplo, `中文-我`) permanecem intactos, e intervalos como `5-10` são
+preservados.
+
+**O que conta como CJK e o que conta como latino.** Um caractere CJK é um caractere
+Han, Hiragana, Katakana ou Bopomofo segundo o script Unicode. Isso inclui os blocos
+Han mais raros (Extensão A, as extensões do plano suplementar e os ideogramas de
+compatibilidade), a marca de iteração `々`, o zero ideográfico `〇`, o katakana de
+meia largura e a marca de som prolongado `ー`. Um caractere latino é qualquer letra
+do alfabeto latino, incluindo letras acentuadas, de modo que os dois lados de uma
+palavra recebem espaço:
+
+| Antes | Depois |
+|-------|--------|
+| 中文café中文 | 中文 café 中文 |
+| 中文𠀀abc | 中文𠀀 abc |
+| ｶﾀｶﾅabc | ｶﾀｶﾅ abc |
+| 日本・東京 | 日本・東京 |
+
+Letras latinas de largura total (`Ａ`) já trazem seu próprio espaçamento e nunca
+recebem espaço. O ponto médio do katakana `・` é pontuação, não letra, então nenhum
+espaço é adicionado ao lado dele.
+
+**Links.** O parêntese de fechamento de um link recebe espaço em relação ao texto
+CJK que vem depois dele apenas quando o texto visível do link termina em letra
+latina ou dígito — esse é o espaço que o leitor vê. `参见[link](https://x.com)中文`
+vira `参见[link](https://x.com) 中文`; `参见[中文](https://x.com)中文` fica inalterado.
 
 ### 2. Pontuação de Largura Total
 
@@ -45,7 +87,7 @@ Converte letras e números de largura total para meia largura.
 
 ### 4. Conversão de Parênteses
 
-Converte parênteses de meia largura para largura total quando cercam conteúdo CJK.
+Converte parênteses de meia largura para largura total quando cercam conteúdo CJK. Os dois parênteses precisam estar no mesmo parágrafo: separados por uma linha em branco, ficam como foram digitados.
 
 | Antes | Depois |
 |-------|--------|
@@ -78,6 +120,8 @@ O VMark usa um **algoritmo de emparelhamento de aspas baseado em pilha** que tra
 | "don't worry" | “don't worry” |
 | 5'10" tall | 5'10" tall |
 
+Nenhum espaço é inserido entre um caractere CJK e um glifo de aspas. `“ ”`, `‘ ’`, `「 」` e `『 』` são de largura total em contexto CJK — tanto a GB/T 15834 quanto a JLREQ lhes dão seu próprio espaçamento lateral — e por isso `他说“你好”然后走了` fica exatamente como foi escrito. Texto latino ainda recebe espaço: `word“text”` vira `word “text”`.
+
 Com a opção de colchetes de canto habilitada:
 
 | Antes | Depois |
@@ -87,7 +131,7 @@ Com a opção de colchetes de canto habilitada:
 
 ### 7. Normalização de Reticências
 
-Padroniza a formatação de reticências.
+Padroniza a formatação de reticências, na forma que o script ao redor usa. Não existe uma única resposta correta: o chinês (GB/T 15834) e o japonês (JIS X 4051) usam as reticências de seis pontos `……` e **não** levam espaço depois delas, o coreano usa `…`, e apenas o texto latino usa `...` seguido de espaço.
 
 | Antes | Depois |
 |-------|--------|
@@ -96,6 +140,8 @@ Padroniza a formatação de reticências.
 | そして...続く | そして……続く |
 | 그리고...계속 | 그리고…계속 |
 | wait...ok | wait... ok |
+
+O script é decidido pelos caracteres imediatamente ao lado dos pontos, não pelo documento, então `...` dentro de uma citação em inglês em um arquivo chinês mantém a forma latina.
 
 ### 8. Pontuação Repetida
 
@@ -111,7 +157,7 @@ Limita sinais de pontuação consecutivos (limite configurável).
 - Múltiplos espaços comprimidos: `多个   空格` → `多个 空格`
 - Espaços em branco no final removidos
 - Espaçamento de barra: `A / B` → `A/B`
-- Espaçamento de moeda: `$ 100` → `$100`
+- Ligação de moeda e unidade: `$ 100` → `$100`, `100 %` → `100%`. Apenas espaços e tabulações são removidos: um número no fim de uma linha ou parágrafo nunca é unido a uma unidade ou moeda na linha seguinte, e um espaço não separável que você digitou entre um número e sua unidade é mantido
 
 ---
 
@@ -202,7 +248,7 @@ Quando **Aspas de Canto CJK** está habilitado, as aspas curvas ao redor de cont
 
 ### Pular seção de referências
 
-O formatador CJK detecta cabeçalhos "References" / "参考文献" / "参考资料" / "Bibliography" e pula a reformatação dessas seções — texto formatado como citação muitas vezes depende de pontuação específica que as regras CJK normalizariam.
+Quando **Ignorar seções de referência** está habilitado em Configurações → Idioma → Tratamento de seções (desligado por padrão), o formatador CJK detecta cabeçalhos "References" / "Further Reading" / "参考文献" / "参考资料" / "Bibliography" e pula a reformatação dessas seções — texto formatado como citação muitas vezes depende de pontuação específica que as regras CJK normalizariam. Ative a opção para documentos acadêmicos; deixe-a desligada para formatar o arquivo inteiro.
 
 ### Verificação de integridade
 
@@ -227,6 +273,8 @@ Configure em **Configurações → Editor → Tipografia → Espaçamento entre 
 | Leve | 0.03em | Espaçamento leve |
 | Normal | 0.05em | Recomendado para a maioria dos casos |
 | Amplo | 0.08em | Espaçamento mais pronunciado |
+| Mais amplo | 0.10em | Ainda mais amplo, para tamanhos de exibição grandes |
+| Extra | 0.12em | A opção mais ampla |
 
 ### Como Funciona
 
@@ -268,7 +316,7 @@ O VMark usa um algoritmo sofisticado baseado em pilha para emparelhamento de asp
 3. **Detecção de Apóstrofo**: Reconhece contrações (don't, it's) e as preserva
 4. **Detecção de Prima**: Reconhece medidas (5'10") e as preserva
 5. **Detecção de Contexto CJK**: Verifica se o conteúdo entre aspas envolve caracteres CJK
-6. **Limpeza de Órfãos**: Trata aspas sem par de forma elegante
+6. **Limpeza de Órfãos**: Trata aspas sem par de forma elegante; uma aspa ainda aberta no fim de um parágrafo fica sem par, então aspas nunca se emparelham através de uma linha em branco
 
 ### Exemplos
 
@@ -324,7 +372,8 @@ Quando **Aspas de Canto CJK** está habilitado, aspas curvas ao redor de conteú
 
 ### Caracteres Suportados
 
-A conversão de colchetes de canto é acionada quando o conteúdo entre aspas contém **caracteres chineses** (Ideogramas CJK Unificados U+4E00–U+9FFF):
+A conversão de colchetes de canto é acionada quando o conteúdo entre aspas — ou o
+texto imediatamente ao lado dele — é Han, Hiragana, Katakana ou Bopomofo:
 
 | Tipo de Conteúdo | Exemplo | Converte? |
 |------------------|---------|-----------|
@@ -335,7 +384,8 @@ A conversão de colchetes de canto é acionada quando o conteúdo entre aspas co
 | Coreano | `"한글"` | ✗ permanece como `"한글"` |
 | Inglês | `"hello"` | ✗ permanece como `"hello"` |
 
-**Dica:** Para texto japonês com apenas Kana, use manualmente colchetes de canto `「」` ou inclua pelo menos um caractere Kanji.
+O coreano fica excluído pelo mesmo motivo que nas regras de espaçamento: o coreano usa `“ ”`,
+não colchetes de canto.
 
 ---
 
@@ -375,7 +425,7 @@ Após a formatação, o texto ficará assim:
 
 学习过程中遇到的最大挑战是 —— 状态管理。Redux 的概念……说实话有点难理解。后来换成了 Zustand，简单多了！
 
-老师说 "don't give up" 然后继续讲 "写代码要注重可读性"，我觉得很有道理。
+老师说“don't give up”然后继续讲“写代码要注重可读性”，我觉得很有道理。
 
 访问 https://example.com/docs 获取 v2.0.0 版本文档，价格 $99.99，时间 12:30 开始。
 
@@ -393,7 +443,13 @@ Após a formatação, o texto ficará assim:
 - Espaçamento CJK-Latino adicionado (学习 TypeScript)
 - Pontuação de largura total convertida (，。！)
 - Números de largura total normalizados (３→3, １０００→1000, ２００→200)
-- Hífens duplos convertidos em travessões (-- → ——)
-- Reticências normalizadas (. . . → ...)
-- Aspas inteligentes aplicadas, apóstrofo preservado (don't)
+- Hífens duplos convertidos em travessões (是--状态 → 是 —— 状态)
+- Reticências normalizadas para a forma chinesa, sem espaço depois (. . . → ……)
+- Aspas inteligentes aplicadas sem espaço ao lado do texto CJK, apóstrofo preservado (don't)
 - Construtos técnicos protegidos (https://example.com/docs, v2.0.0, $99.99, 12:30)
+
+**E o que _não_ muda:** o `--` em `**Frontend**--React` continua sendo um hífen
+duplo. A conversão de travessão exige um caractere CJK ou um alfanumérico
+imediatamente ao lado dos hífens, e `*` não é nenhum dos dois. Disparar em
+marcadores de ênfase converteria o `--` dentro de cada item de lista puramente em
+inglês de um documento chinês, o que é pior do que deixar esses três como estão.

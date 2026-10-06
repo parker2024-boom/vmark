@@ -164,8 +164,13 @@ describe("statefulFsFake — no silent success (case 10)", () => {
   it("get_file_size_bytes reports real byte length (multibyte-aware) and rejects for holes", async () => {
     statefulFs.seed("/repo/cjk.md", "中文"); // 6 bytes UTF-8, 2 UTF-16 units
     await expect(statefulFs.invoke("get_file_size_bytes", { path: "/repo/cjk.md" })).resolves.toBe(6);
+    // WI-RA26.1 — the real command rejects with a typed CommandError, so the
+    // fake does too: a flow under test sees the shape production sends.
     await expect(
       statefulFs.invoke("get_file_size_bytes", { path: "/repo/ghost.md" }),
-    ).rejects.toThrow(/ENOENT/);
+    ).rejects.toEqual({
+      code: "not-found",
+      message: "invalid path '/repo/ghost.md': No such file or directory (os error 2)",
+    });
   });
 });

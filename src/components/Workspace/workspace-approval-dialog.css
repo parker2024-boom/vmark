@@ -1,10 +1,10 @@
-/* Backdrop chrome comes from the shared overlay shell (WI-UI3.1). */
+/* Backdrop chrome comes from the shared overlay shell. */
 .workspace-approval-overlay {
   padding: var(--space-4);
 }
 
 .workspace-approval-dialog {
-  --vm-overlay-width: 540px; /* was 30em @ 18px — the chrome body is 13px now (WI-UI2.1) */
+  --vm-overlay-width: 540px; /* was 30em @ 18px — the chrome body is 13px now */
   padding: var(--space-5);
 }
 

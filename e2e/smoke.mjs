@@ -3,7 +3,7 @@
  * VMark E2E Smoke Harness — RW-13 (L12) · hardening v2-005
  *
  * Purpose: A minimal, runnable happy-path smoke test that drives a LIVE VMark
- * debug build through its Tauri MCP automation bridge. Audit L12 / WI v2-005
+ * debug build through its Tauri MCP automation bridge. An audit
  * flagged that the repo had no executable E2E harness — this closes that gap
  * with the smallest correct thing: connect → confirm a window → type into a
  * SCRATCH tab → assert the content round-trips → capture a screenshot →

@@ -1,5 +1,4 @@
-//! The pure decisions behind the navigation delegate's policy callbacks (audit
-//! 20260903 round 3, #22).
+//! The pure decisions behind the navigation delegate's policy callbacks.
 //!
 //! `nav_registry_policy_macos.rs` used to decide a top-level navigation candidate
 //! inline: policy snapshot, lifecycle interpretation, the ticket a load rides,

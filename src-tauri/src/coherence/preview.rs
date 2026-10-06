@@ -1,4 +1,4 @@
-//! Dry-run candidate projection (Phase 3, WI-3.1; ADR-P1, design D2/v4.4/v4.5).
+//! Dry-run candidate projection (Phase 3; ADR-P1, design D2/v4.4/v4.5).
 //! Overlays a candidate revision on a **clone** of the DAG and projects the
 //! affected (incident) edges — the property SP1 proved
 //! (`spike_sp1_dry_run_projection.rs`), now wired to the real index and the
@@ -46,7 +46,7 @@ impl CoherenceIndex {
     /// index state + the transient overlay.
     pub fn project_candidates(&self, candidate: &Candidate, now: &str) -> Result<Preview, String> {
         let affected = self.edges_incident_to(&candidate.object)?;
-        // Bounded sub-dag (WI-3.4 perf): only the candidate's object and each
+        // Bounded sub-dag: only the candidate's object and each
         // affected edge's upstream+downstream — the objects `project_edge`
         // actually resolves — never the whole corpus.
         let mut objects = vec![candidate.object];

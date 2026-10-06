@@ -5,7 +5,7 @@
  * `attachInputTrace` captures the keydown/input/composition sequence and the
  * helper textarea's value at each step — the part that reveals the input
  * ARBITRATION decision — so real IME traces can be recorded by a human typing
- * (plan WI-0.1/WI-0.3) instead of synthesised from reading code (synthesised
+ * instead of synthesised from reading code (synthesised
  * fixtures reproduce the exact defect the audit found).
  *
  * Scope note: it does NOT observe `term.onData` or `pty.write` — those are the
@@ -24,9 +24,10 @@
  * @module components/Terminal/terminalInputTrace
  */
 import { isDev } from "@/utils/debug/internals";
+import { publishDevGlobal } from "@/utils/devDebugHandle";
 
 /** One recorded step in a keystroke's journey. Field set mirrors the fixture
- *  schema WI-0.3 requires (audit "unknowable" list). */
+ *  schema (audit "unknowable" list). */
 export interface InputTraceRecord {
   /** Monotonic-ish ms since the trace started (performance.now delta). */
   t: number;
@@ -184,6 +185,6 @@ export function maybeInstallDevInputTrace(textarea: HTMLTextAreaElement): () => 
       URL.revokeObjectURL(url);
     },
   };
-  (globalThis as unknown as { __vmarkInputTrace?: typeof api }).__vmarkInputTrace = api;
+  publishDevGlobal("__vmarkInputTrace", api);
   return detach;
 }

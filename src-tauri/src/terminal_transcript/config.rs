@@ -1,7 +1,21 @@
 //! Additive, idempotent hook configuration. Invalid user config is never replaced.
+//!
+//! A CLI config is the user's own file, and they may keep it as a symlink into
+//! a dotfiles checkout. Renaming a new file over that link would turn it into
+//! a regular file: the checkout keeps the old content and the link is gone. So
+//! a link is resolved first and the replacement lands on the file it names. A
+//! link that leads nowhere (dangling, or a loop) is an error, not an invitation
+//! to create a config somewhere the user never put one.
+//!
+//! @coordinates-with atomic_replace.rs — the synced temp-file-and-rename write, and link resolution
+//! @module terminal_transcript/config
+use crate::atomic_replace::{
+    atomic_replace, resolve_link_target, AtomicReplaceError, LinkResolveError,
+};
 use crate::command_error::CommandError;
 use serde_json::{json, Value};
-use std::path::Path;
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
 /// Returns whether the config changed — callers write the file only then, so an
 /// already-configured CLI file is never rewritten (or reformatted).
 pub(super) fn add_hook(config: &mut Value, command: &str) -> Result<bool, CommandError> {
@@ -28,30 +42,58 @@ pub(super) fn add_hook(config: &mut Value, command: &str) -> Result<bool, Comman
     groups.push(json!({"hooks":[{"type":"command", "command": command, "timeout": 5}]}));
     Ok(true)
 }
-pub(super) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), CommandError> {
-    let temporary = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
+/// The file a config path really names: the path itself, or the file a
+/// symlink there leads to. Both the read and the write go to the result.
+pub(super) fn resolve_target(path: &Path) -> Result<PathBuf, CommandError> {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => {}
+        // A regular file, or nothing there yet: the path is the target.
+        Ok(_) => return Ok(path.to_path_buf()),
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(path.to_path_buf()),
+        Err(e) => return Err(CommandError::io(format!("{}: {e}", path.display()))),
     }
-    let mut file = options
-        .open(&temporary)
-        .map_err(|e| CommandError::io(e.to_string()))?;
-    {
-        use std::io::Write;
-        file.write_all(bytes)
-            .map_err(|e| CommandError::io(e.to_string()))?;
+    let target = resolve_link_target(path).map_err(|error| match error {
+        LinkResolveError::TooManyLinks => {
+            CommandError::invalid_input(format!("{} is a symlink loop", path.display()))
+        }
+        LinkResolveError::ReadLink(e) => CommandError::io(format!("{}: {e}", path.display())),
+        LinkResolveError::ReferentParentMissing(parent) => CommandError::not_found(format!(
+            "{} links into a missing directory: {}",
+            path.display(),
+            parent.display()
+        )),
+    })?;
+    // Link resolution names the file a dangling link points at, so that a
+    // document save can create it. A config is different: no file there means
+    // the user's real config is not where they said it is.
+    if !target.exists() {
+        return Err(CommandError::not_found(format!(
+            "{} links to a missing file: {}",
+            path.display(),
+            target.display()
+        )));
     }
-    if let Ok(meta) = std::fs::metadata(path) {
-        std::fs::set_permissions(&temporary, meta.permissions())
-            .map_err(|e| CommandError::io(e.to_string()))?;
-    }
-    drop(file);
-    std::fs::rename(&temporary, path).map_err(|e| {
-        let _ = std::fs::remove_file(&temporary);
-        CommandError::io(e.to_string())
+    Ok(target)
+}
+/// Replace `target` with `bytes`: a temp file beside it, synced, then renamed
+/// over it, keeping the mode an existing file had. `target` is used as given —
+/// pass a config path through [`resolve_target`] first.
+pub(super) fn write_atomic(target: &Path, bytes: &[u8]) -> Result<(), CommandError> {
+    let parent = target.parent().ok_or_else(|| {
+        CommandError::invalid_input(format!("{} has no parent directory", target.display()))
+    })?;
+    std::fs::create_dir_all(parent).map_err(|e| CommandError::io(e.to_string()))?;
+    atomic_replace(target, parent, bytes).map_err(|error| {
+        let cause = match error {
+            AtomicReplaceError::CreateTemp { source, .. } => source.to_string(),
+            AtomicReplaceError::WriteTemp(e)
+            | AtomicReplaceError::FlushTemp(e)
+            | AtomicReplaceError::SyncTemp(e) => e.to_string(),
+            AtomicReplaceError::Persist(e) => e.error.to_string(),
+        };
+        CommandError::io(format!("{}: {cause}", target.display()))
     })
 }
+#[cfg(test)]
+#[path = "config.test.rs"]
+mod tests;

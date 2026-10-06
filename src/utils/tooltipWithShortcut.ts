@@ -7,7 +7,10 @@
  *
  * @example tooltipWithShortcut("Open Sidebar", "⌃⇧0") // "Open Sidebar (⌃⇧0)"
  * @example tooltipWithShortcut("Open Sidebar", "")     // "Open Sidebar"
+ *
+ * @module utils/tooltipWithShortcut
  */
+
 export function tooltipWithShortcut(label: string, formattedKey: string): string {
   const key = formattedKey.trim();
   return key ? `${label} (${key})` : label;

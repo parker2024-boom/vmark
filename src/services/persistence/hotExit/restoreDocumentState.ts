@@ -9,7 +9,7 @@
  * Key decisions:
  *   - ONE hot-exit ingest replaces the old init/load/updateLastDiskContent
  *     sequence whose write ORDER was load-bearing. The origin's
- *     prefer-persisted rule (WI-1.3) applies the snapshot's line ending where
+ *     prefer-persisted rule applies the snapshot's line ending where
  *     it is decided; `deriveFrom` points detection at the RAW disk bytes when
  *     present, because the saved body is canonical LF and would otherwise
  *     answer "lf" for every file.
@@ -130,7 +130,7 @@ export async function restoreDocumentState(
 
   // ONE hot-exit ingest replaces the old init/load/updateLastDiskContent
   // sequence whose write ORDER was load-bearing. The origin's prefer-persisted
-  // rule (WI-1.3) applies the snapshot's line ending where it is decided;
+  // rule applies the snapshot's line ending where it is decided;
   // `deriveFrom` points detection at the RAW disk bytes when present, because
   // the saved body is canonical LF and would answer "lf" for every file.
   documentStore.ingestExternalContent(tabId, docState.saved_content, 'hot-exit-restore', {

@@ -12,7 +12,7 @@ export interface CliArgs {
   token?: string;
   port?: number;
   portFile?: string;
-  /** Workspace trust (WI-FL3.6): relaxes the CSP so remote `https:` images render. */
+  /** Workspace trust: relaxes the CSP so remote `https:` images render. */
   trusted?: boolean;
 }
 

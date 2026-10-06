@@ -6,10 +6,12 @@
  * - Block math: $$ ... $$ or ```latex code blocks
  *
  * Uses KaTeX for rendering and remark-math for parsing.
+ *
+ * @module plugins/latex/plugin
  */
 
 import { escapeHtml } from "@/utils/sanitize";
-import { loadKatex, type KatexOptions } from "./katexLoader";
+import { loadKatex, type KatexOptions } from "@/plugins/shared/katexLoader";
 
 /**
  * Render LaTeX content to HTML using KaTeX.

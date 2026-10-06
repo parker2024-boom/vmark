@@ -10,7 +10,7 @@
  * @module utils/mediaPathDetection
  */
 
-// Dotted media-extension lists — single source of truth (WI-0.6, D3).
+// Dotted media-extension lists — single source of truth.
 // Re-exported (VIDEO/AUDIO) to preserve this module's public surface.
 import {
   IMAGE_EXTENSIONS_DOTTED as IMAGE_EXTENSIONS,

@@ -1,7 +1,7 @@
 /**
  * Heading Picker Store — heading-anchor picker popup state.
  *
- * Standalone Zustand store (T09 revert, WI-9 plan-20260803-161713): the
+ * Standalone Zustand store: the
  * former merged-store slice re-inlined. The shim API is the contract —
  * consumers are unchanged.
  *

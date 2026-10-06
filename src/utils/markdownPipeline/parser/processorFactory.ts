@@ -30,7 +30,7 @@ import { analyzeContent, type ContentAnalysis } from "./remarkPlugins";
 function buildProcessor(analysis: ContentAnalysis, preserveLineBreaks: boolean) {
   // The plugin set — and every delta between modes — lives in `dialect.ts`.
   // Building here from a second hand-written chain is what let the editor and
-  // lint stacks diverge silently (WI-3.1).
+  // lint stacks diverge silently.
   return buildProcessorForMode("document", { ...analysis, preserveLineBreaks });
 }
 

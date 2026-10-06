@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 
-vi.mock("@/plugins/sourcePopup/sourcePopupUtils", () => ({
+vi.mock("@/plugins/shared/sourcePopupUtils", () => ({
   getAnchorRectFromRange: vi.fn(() => ({ top: 0, bottom: 20, left: 0, right: 100 })),
 }));
 
@@ -374,7 +374,7 @@ describe("insertLink", () => {
 
   it("returns false when getAnchorRectFromRange returns null for existing link", async () => {
     // Make getAnchorRectFromRange return null → showLinkPopupForExistingLink returns false
-    const { getAnchorRectFromRange } = await import("@/plugins/sourcePopup/sourcePopupUtils");
+    const { getAnchorRectFromRange } = await import("@/plugins/shared/sourcePopupUtils");
     vi.mocked(getAnchorRectFromRange).mockReturnValueOnce(null);
 
     const openPopup = vi.mocked(hostPopups.openLinkPopup);
@@ -477,7 +477,7 @@ describe("insertSourceBookmarkLink — callback", () => {
 
 describe("openLinkCreatePopup — null anchor rect guard", () => {
   it("does not open popup when getAnchorRectFromRange returns null", async () => {
-    const { getAnchorRectFromRange } = await import("@/plugins/sourcePopup/sourcePopupUtils");
+    const { getAnchorRectFromRange } = await import("@/plugins/shared/sourcePopupUtils");
     vi.mocked(getAnchorRectFromRange).mockReturnValueOnce(null);
 
     const openPopup = vi.mocked(hostPopups.openLinkCreatePopup);

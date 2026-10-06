@@ -431,3 +431,55 @@ Notes on how it behaves:
   It is off by default and is per-split.
 - Splitting needs two documents open. Browser tabs are not documents, so the
   split does not apply to them.
+
+## The tab context menu
+
+Right-click a tab to open its menu. Arrow keys, Home and End move through it; Enter or Space runs an item; Escape closes it.
+
+| Item | What it does | Available when |
+|---|---|---|
+| Move to New Window | Moves the tab into a new window, with an **Undo** in the confirmation. A secondary window left empty closes. | The document is loaded, and it is not the only tab of the main window |
+| Pin / Unpin | Pins or unpins the tab — see [Pinned tabs](#pinned-tabs). | Always |
+| Open to the Side | Shows the tab in the other split pane — see [Two documents side by side](#two-documents-side-by-side). | Both this tab and the active one are documents, and this one is not the active tab (not shown for browser tabs) |
+| Rename | Renames the file in place in the tab — see [Renaming a file](#renaming-a-file). | The document has been saved |
+| Copy Path | Copies the file's absolute path. | The document has been saved |
+| Copy Relative Path | Copies the path relative to the workspace folder. | A workspace is open and the file is inside it |
+| Reveal in Finder | Shows the file in Finder (**Show in Explorer** on Windows, **Show in File Manager** on Linux). | The document has been saved |
+| Restore to Disk | Writes the tab's content back to its path. | The file was deleted from disk while open |
+| Revert to Saved | After a confirmation, discards your changes and reloads the file from disk. | The tab has unsaved changes and its file still exists |
+| Close | Closes the tab (asks to save first if it has unsaved changes). | The tab is not pinned |
+| Close Others | Closes every other unpinned tab. | Another unpinned tab exists |
+| Close Tabs to the Right | Closes the unpinned tabs to its right. | One exists |
+| Close All Unpinned Tabs | Closes every unpinned tab, this one included. | An unpinned tab exists |
+| Close All | Closes every tab, pinned ones included. If a pinned tab would close, it asks first and names how many; cancelling closes nothing. | Always |
+
+Bulk closes act on the tabs of the current workspace and close them one at a time. Each tab with unsaved changes asks first, and cancelling any of those prompts stops the rest.
+
+## Pinned tabs
+
+Pin a tab from its context menu to keep it at hand:
+
+- It moves to the pinned group at the left of the strip, shows a pin icon, and loses its close button. Tabs cannot be dragged across the boundary between pinned and unpinned tabs (*"Pinned tabs stay at the left. Drop blocked."*), and a pinned tab cannot be dragged out of its window.
+- It cannot be closed by any means — `Mod + W`, middle-click, **Close**, or a bulk close — until you unpin it; trying shows *"Unpin tab before closing"*. Two deliberate closes are the exception: **Close All** closes pinned tabs too once you confirm, and closing a workspace from the rail closes its pinned tabs with the rest.
+- Closing a window that holds pinned tabs asks for confirmation — *"This window has N pinned tabs. Close anyway?"* — unless a save dialog was already shown.
+- A pin survives moving the tab to another window or workspace and an update restart, but not quitting VMark: tabs reopened at the next launch are unpinned.
+
+There is no keyboard shortcut for pinning.
+
+## Renaming a file
+
+Choose **Rename** in a tab's context menu. The name becomes editable in the tab, with the part before the extension selected. Enter or clicking away commits; Escape cancels. The file is renamed on disk and every open tab that points to it follows. VMark never overwrites: if the name is taken, a dialog says *A file named “X” already exists.* A name that is empty, unchanged, `.` or `..`, or contains `/` or `\` is refused or ignored. What you type is the whole name — delete the extension and the file loses it.
+
+On **macOS**, with **Settings → Appearance → Show filename in titlebar** on, you can also double-click the file name in the title bar to rename it. The same rules and messages apply; after a collision or error the name stays editable so you can try another. If **Show file extensions** is off, the original extension is kept when you type a name without one. Double-clicking the title of an unsaved document opens **Save** instead.
+
+## Closing tabs and windows
+
+Nothing with unsaved changes is closed without asking.
+
+- **Closing one tab** with unsaved changes (`Mod + W`, the tab's ×, or **Close**) asks *"Do you want to save changes to …?"* with **Save**, **Don't Save** and **Cancel**. **Save** on a never-saved document opens a save dialog in your default save folder, with the tab's title as the suggested name. Cancelling that dialog, or a failed save, keeps the tab open.
+- **Closing a window** with one unsaved document asks the same question. With two or more, one dialog lists them all — never-saved documents are marked *(new)* — with **Save All**, **Don't Save** and **Cancel**.
+- **Save All** saves every document that has a file. For never-saved documents it asks for a location: one save dialog if there is one, or **one folder picker** for several (*"Choose folder for N new documents"*). Each is then saved in that folder under its title, and a name that is already taken gets a number (`Untitled 2.md`), so nothing is overwritten.
+- **Quitting** (`Mod + Q`) runs the same check in every window, one window at a time; cancelling in any window cancels the quit. With **Settings → Files & Images → Confirm quit** on (the default), the first press only shows *"Press ⌘Q again to quit"* — press it again within two seconds. A quit from the operating system (shutting down, say) skips the double press.
+- **Save All and Quit** saves the unsaved documents in every window without the dialog — it still asks where to put never-saved ones (one save dialog, or one folder picker for several, in the window that holds them) — then quits. If a document cannot be saved, or you cancel that dialog, the quit stops: that window stays open, and a failed save says why.
+
+On macOS, VMark keeps running after its last window closes; on Windows and Linux, closing the last window quits — unless, on Windows, **Settings → Files & Images → Minimize to tray on close** is on: then the last window is hidden in the system tray instead, with nothing closed and no save prompt (see [Settings](/guide/settings)).

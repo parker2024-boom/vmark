@@ -1,3 +1,10 @@
+/**
+ * localStorageShim — installs a Map-backed `localStorage` when the test
+ * environment has none, so code that reads storage runs under node.
+ *
+ * @module test/localStorageShim
+ */
+
 const storage = new Map<string, string>();
 
 let hasLocalStorage: boolean;

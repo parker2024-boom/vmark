@@ -3,6 +3,8 @@
  *
  * DOM management for editing a wiki link's target path (the display alias is
  * edited inline in the editor). Extends WysiwygPopupView for lifecycle.
+ *
+ * @module plugins/wikiLinkPopup/WikiLinkPopupView
  */
 
 import { open } from "@tauri-apps/plugin-dialog";

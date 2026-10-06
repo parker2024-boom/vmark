@@ -11,7 +11,7 @@ vi.mock("@/utils/debug", () => ({
 
 import { describe, it, expect, vi } from "vitest";
 import { Schema, type Node } from "@tiptap/pm/model";
-import { EditorState, TextSelection } from "@tiptap/pm/state";
+import { EditorState, TextSelection, NodeSelection } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 
 vi.mock("@/plugins/shared/tableFitToWidth", () => ({
@@ -1080,11 +1080,9 @@ describe("getCellPosition out-of-bounds via alignColumn", () => {
 describe("getTableInfo - shallow selection fallback indices", () => {
   it("defaults rowIndex=0 when selection depth is at table level", () => {
     // Create a table, then select the table node itself via NodeSelection
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { NodeSelection: NS } = require("@tiptap/pm/state");
     const state = createTableState(2, 2);
     const tablePos = 0; // table is first child
-    const stateWithSel = state.apply(state.tr.setSelection(NS.create(state.doc, tablePos)));
+    const stateWithSel = state.apply(state.tr.setSelection(NodeSelection.create(state.doc, tablePos)));
     const view = mockView(stateWithSel);
     const info = getTableInfo(view);
 
@@ -1120,8 +1118,6 @@ describe("getTableScrollWrapper - non-HTMLElement nodeDOM", () => {
 describe("getTableInfo - shallow selection defaults", () => {
   it("defaults rowIndex to 0 when $pos.depth equals tableDepth (line 77 false)", () => {
     // Use NodeSelection on the table node: $pos.depth === tableDepth
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { NodeSelection } = require("@tiptap/pm/state");
     const state = createTableState(2, 3);
     const tablePos = 0;
     const stateWithSel = state.apply(state.tr.setSelection(NodeSelection.create(state.doc, tablePos)));
@@ -1139,8 +1135,6 @@ describe("getTableInfo - shallow selection defaults", () => {
   it("defaults colIndex to 0 when $pos.depth equals tableDepth + 1 (line 78 false)", () => {
     // We need selection depth = tableDepth + 1 (inside table row but not cell).
     // This is tricky to construct; NodeSelection on a row might work.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { NodeSelection } = require("@tiptap/pm/state");
     const state = createTableState(2, 2);
     // Position of first row: tablePos + 1
     const rowPos = 1;

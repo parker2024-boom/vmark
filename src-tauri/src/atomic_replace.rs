@@ -1,14 +1,14 @@
 //! Byte-oriented atomic file replacement core.
 //!
-//! Purpose: the single temp-file + fsync + rename implementation shared by
+//! Purpose: the single temp-file + fsync + durable-rename implementation shared by
 //! `app_paths::atomic_write_file` (sync, internal callers: workspace config,
-//! MCP port file) and `file_write::atomic_write_file_sync` (frontend save
+//! MCP port file) and `files::write::atomic_write_file_sync` (frontend save
 //! path). The two previously carried near-duplicate copies that drifted
 //! (Windows persist fallback, permission preservation) and needed the same
-//! permissions fix twice (Codex audit 20260718).
+//! permissions fix twice.
 //!
 //! `resolve_link_target` lives here too, but is deliberately NOT called by
-//! this core: following a symlink is a DOCUMENT-save policy (`file_write`),
+//! this core: following a symlink is a DOCUMENT-save policy (`files::write`),
 //! and applying it to app-private writes would let a planted link redirect
 //! them.
 //!
@@ -17,7 +17,7 @@
 
 // `#[cfg(unix)]`: the only remaining user is `preserve_target_permissions`.
 // The Windows branch used `fs::remove_file` until that destructive fallback
-// was removed (audit 20260906, B1), so an ungated import is now dead there —
+// was removed, so an ungated import is now dead there —
 // and `-D warnings` makes dead an error on a platform local cargo never
 // builds.
 #[cfg(unix)]
@@ -59,7 +59,7 @@ pub(crate) enum AtomicReplaceError {
 /// abort the content write, so problems are logged, not returned.
 ///
 /// Applied through the temp file's own DESCRIPTOR (`fchmod`), never through
-/// `temp.path()` (audit #529). `workflow::commit_dir` exists to make the whole
+/// `temp.path()`. `workflow::commit_dir` exists to make the whole
 /// save resolve through one validated directory descriptor, and a path-based
 /// `chmod` in the middle of that sequence hands a write back to name
 /// resolution — a directory swapped since the containment walk would take the
@@ -93,7 +93,7 @@ pub(crate) fn preserve_target_permissions(_target: &Path, _temp: &NamedTempFile)
 /// the rename. Finder tags live in `com.apple.metadata:_kMDItemUserTags`, so
 /// without this an ordinary save drops a tagged note out of the user's
 /// tag-based organization — the rename installs a fresh inode that never had
-/// them (audit 20260906, B3).
+/// them.
 ///
 /// Best-effort, exactly like permission preservation: user metadata must never
 /// cost the user their content write, so every failure is logged and the save
@@ -102,7 +102,7 @@ pub(crate) fn preserve_target_permissions(_target: &Path, _temp: &NamedTempFile)
 /// replacement of that same file, not privilege being granted from elsewhere.
 ///
 /// Written through the temp file's DESCRIPTOR for the reason
-/// `preserve_target_permissions` is (audit #529): the anchored save must not
+/// `preserve_target_permissions` is: the anchored save must not
 /// hand a write back to path resolution.
 #[cfg(target_os = "macos")]
 pub(crate) fn preserve_target_xattrs(target: &Path, temp: &NamedTempFile) {
@@ -140,7 +140,7 @@ pub(crate) fn preserve_target_xattrs(target: &Path, temp: &NamedTempFile) {
 #[cfg(not(target_os = "macos"))]
 pub(crate) fn preserve_target_xattrs(_target: &Path, _temp: &NamedTempFile) {
     // Finder tags are a macOS concept. Linux/Windows document metadata is not
-    // carried today; see audit 20260906 B3 for the ACL follow-up.
+    // carried today; ACLs there remain an open follow-up.
 }
 
 /// Atomically replace `target` with `contents`.
@@ -154,7 +154,9 @@ pub(crate) fn preserve_target_xattrs(_target: &Path, _temp: &NamedTempFile) {
 /// contents are synced to disk before the rename so a crash can't expose a
 /// zero-length file, and the existing target's permission bits and extended
 /// attributes are carried over — the rename would otherwise replace them with
-/// the temp file's restrictive 0600 on Unix and no metadata at all.
+/// the temp file's restrictive 0600 on Unix and no metadata at all. After the
+/// rename the parent directory is synced (Unix), because the rename is an edit
+/// of that directory and is not durable until it is.
 ///
 /// `target` is used verbatim. A caller saving a USER DOCUMENT should pass it
 /// through [`resolve_link_target`] first, or a save through an alias replaces
@@ -198,7 +200,7 @@ where
 
     temp.flush().map_err(AtomicReplaceError::FlushTemp)?;
 
-    // Metadata BEFORE the sync (#528), the same order `workflow::commit_dir`
+    // Metadata BEFORE the sync, the same order `workflow::commit_dir`
     // uses. `sync_all` is what makes the inode durable, so a mode or an xattr
     // applied after it survived only until the next crash — the rename is made
     // durable independently, and the file would then be at the target with the
@@ -219,7 +221,7 @@ where
     //
     // There used to be a Windows-only remove-then-retry here, on the premise
     // that Windows `rename` fails when the target exists. That premise was
-    // false — and the fallback was destructive (audit 20260906, B1): it fired
+    // false — and the fallback was destructive: it fired
     // on ANY persist failure, including one caused by the SOURCE temp file
     // being held open without `FILE_SHARE_DELETE`. The `remove_file(target)`
     // then succeeded while both renames failed, so the user's document was
@@ -227,7 +229,8 @@ where
     // window with no file at the target at all.
     //
     // On failure the returned temp file is dropped → removed, so no temp leak
-    // and — the property that matters — the existing target is untouched.
+    // and — the property that matters — the existing target is untouched. On
+    // success the same call syncs the parent directory.
     crate::atomic_persist::persist_with_retry(temp, target)
 }
 

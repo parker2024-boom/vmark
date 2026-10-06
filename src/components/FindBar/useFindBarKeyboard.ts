@@ -6,8 +6,7 @@
  *     Enter in the replace input replaces the current match.
  *   - Escape closes the bar from either input, and is CONSUMED: the same
  *     keystroke used to carry on to the popup views that listen on `document`,
- *     so one Escape dismissed the find bar and an open link popup together
- *     (audit round 3, #602).
+ *     so one Escape dismissed the find bar and an open link popup together.
  *   - Tab moves focus find → replace; Shift+Tab moves it back.
  *   - The IME guard runs first: Enter during CJK composition (and the
  *     post-composition grace period on macOS WebKit) never triggers a find.
@@ -15,13 +14,13 @@
  *     (`hasCurrentMatch`, shared with the buttons' disabled state): after a
  *     query or mode change the store keeps the previous count until the
  *     editor recounts, and the keyboard used to dispatch against it — a
- *     Shift+Enter right after retyping jumped to the OLD last match (#302).
+ *     Shift+Enter right after retyping jumped to the OLD last match.
  *
  * The two handlers are ONE dispatcher, parameterized by what Enter does and
  * where Tab goes. They were near-identical copies, and every rule above had to
  * be written twice — which is how the IME guard, the Escape treatment and the
  * recount check each became a thing that could hold in one input and not the
- * other (audit round 3, #601).
+ * other.
  *
  * @coordinates-with src/components/FindBar/FindBar.tsx — the only consumer
  * @coordinates-with src/stores/uiStore/searchSlice.ts — the actions dispatched
@@ -36,7 +35,7 @@ import type { useImeComposition } from "@/hooks/useImeComposition";
  * The bar has a match to act on. Both search backends report an index >= 0
  * whenever they report matches, so (matchCount > 0, currentIndex < 0) is
  * exactly "recount pending" — the previous criteria's count — and is treated
- * as no match by the buttons and the keyboard alike (#302).
+ * as no match by the buttons and the keyboard alike.
  */
 export function hasCurrentMatch(search: { matchCount: number; currentIndex: number }): boolean {
   return search.matchCount > 0 && search.currentIndex >= 0;
@@ -74,7 +73,7 @@ export function useFindBarKeyboard({
       } else if (e.key === "Escape") {
         // Consumed, not merely acted on: the popup views listen for Escape on
         // `document`, so an un-stopped one closed them alongside the bar. The
-        // field has focus; the keystroke is the bar's (#602).
+        // field has focus; the keystroke is the bar's.
         e.preventDefault();
         e.stopPropagation();
         onClose();

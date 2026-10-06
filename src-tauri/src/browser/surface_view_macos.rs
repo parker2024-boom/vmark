@@ -59,6 +59,8 @@ fn user_info_string(
     key: &str,
 ) -> Option<String> {
     let value = info.objectForKey(&NSString::from_str(key))?;
+    // SAFETY: `isKindOfClass:` is an `NSObject` method every object answers; it
+    // takes a class and returns `BOOL`, the types written here.
     let is_string: bool = unsafe { objc2::msg_send![&*value, isKindOfClass: NSString::class()] };
     if !is_string {
         return None;
@@ -70,6 +72,8 @@ fn user_info_string(
 
 fn user_info_int(info: &NSDictionary<NSErrorUserInfoKey, AnyObject>, key: &str) -> Option<i64> {
     let value = info.objectForKey(&NSString::from_str(key))?;
+    // SAFETY: `isKindOfClass:` is an `NSObject` method every object answers; it
+    // takes a class and returns `BOOL`, the types written here.
     let is_number: bool = unsafe { objc2::msg_send![&*value, isKindOfClass: NSNumber::class()] };
     if !is_number {
         return None;
@@ -122,6 +126,8 @@ pub(super) fn js_result_to_outcome(
     }
     // SAFETY: WebKit hands the completion handler a valid (autoreleased) object.
     let obj: &AnyObject = unsafe { &*value };
+    // SAFETY: `isKindOfClass:` is an `NSObject` method every object answers; it
+    // takes a class and returns `BOOL`, the types written here.
     let is_string: bool = unsafe { objc2::msg_send![obj, isKindOfClass: NSString::class()] };
     if !is_string {
         log::debug!(
@@ -130,6 +136,9 @@ pub(super) fn js_result_to_outcome(
         );
         return Err(EvalFailure::non_string());
     }
+    // SAFETY: `value` is non-null and was just class-checked as an `NSString`;
+    // WebKit keeps it alive for the completion handler, and `ns` is not kept
+    // past this call.
     let ns: &NSString = unsafe { &*value.cast::<NSString>() };
     if ns.length() > MAX_EVAL_RESULT_UTF16 {
         return Err(EvalFailure::TooLarge);
@@ -152,7 +161,7 @@ pub(super) fn js_result_to_outcome(
 /// show it in. Attaching anyway drops a live web page into a window that never asked for
 /// one, on top of a document the user is editing, taking the clicks meant for it. A create
 /// that cannot find its window fails, the command layer rolls the registry entry back, and
-/// the surface shows the error (WI-S0.9). (Audit, High.)
+/// the surface shows the error. (Audit, High.)
 pub(super) fn content_view(
     app: &AppHandle,
     window_label: &str,

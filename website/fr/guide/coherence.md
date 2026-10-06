@@ -93,7 +93,7 @@ quoi la couche vous interroge. Toutes deux sont réservées à l'humain —
 aucun outil MCP ne peut les définir.
 
 **Marquer comme terminé (cycle de vie du document).** Quand un document
-aval est achevé — un chapitre publié, un rapport livré —, choisissez
+aval est achevé — un chapitre publié, un rapport livré — choisissez
 **Marquer comme terminé** sur n'importe laquelle de ses lignes. Cela met
 en sourdine toutes les dépendances vers ce document, y compris celles qui
 ne sont pas listées actuellement, et c'est pourquoi une confirmation vous
@@ -165,8 +165,11 @@ Les **affirmations canoniques** sont des faits que vous avez rendus
 explicites (« Elena est gauchère »). Sélectionnez du texte dans un
 document et lancez *Extraire une affirmation de la sélection*&nbsp;:
 l'affirmation naît en **brouillon**, avec sa provenance (quel document,
-quelle révision). Promouvez-la en **établie** quand elle devient
-canon — seules les affirmations établies alimentent les vérifications
+quelle révision). Pour voir et gérer vos affirmations, lancez
+**Affirmations canoniques** depuis la palette de commandes — le panneau
+n'a ni élément de menu ni raccourci, et *Extraire une affirmation de la
+sélection* l'ouvre pour vous avec le nouveau brouillon. Promouvez une
+affirmation en **établie** quand elle devient canon — seules les affirmations établies alimentent les vérifications
 sémantiques. Corriger ou clore une affirmation ajoute de
 l'historique&nbsp;; rien n'est jamais supprimé. Masquer une affirmation
 dans un contexte est une visibilité réversible, pas une clôture.

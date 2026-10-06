@@ -1,3 +1,10 @@
+/**
+ * restoreHelpers — hot-exit restore steps for one window: pull its saved state
+ * with retries, validate its shape, and restore its UI layout and tabs.
+ *
+ * @module services/persistence/hotExit/restoreHelpers
+ */
+
 import { invoke } from '@tauri-apps/api/core';
 import { hotExitLog, hotExitWarn } from '@/utils/debug';
 import { useTabStore } from '@/stores/tabStore';
@@ -72,10 +79,8 @@ export function isValidWindowState(raw: unknown): raw is WindowState {
 export async function pullWindowStateWithRetry(windowLabel: string, retries = MAX_STATE_RETRIES): Promise<WindowState | null> {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const windowState = await invoke<WindowState | null>(
-        'hot_exit_get_window_state',
-        { windowLabel }
-      );
+      // The state of the window that asks; `windowLabel` names it in logs.
+      const windowState = await invoke<WindowState | null>('hot_exit_get_window_state');
 
       if (windowState) {
         // Reject a structurally malformed payload loudly (T1/ADR-2). Unlike a

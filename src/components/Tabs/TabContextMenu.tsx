@@ -47,7 +47,7 @@ import { tabFilePath, type Tab } from "@/stores/tabStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { isImeKeyEvent } from "@/utils/imeGuard";
 import { useDismissOnOutsideOrEscape } from "@/hooks/useDismissOnOutsideOrEscape";
-import { getRevealInFileManagerLabel } from "@/utils/pathUtils";
+import { revealInFileManagerKey } from "@/utils/pathUtils";
 import { tabContextError } from "@/utils/debug";
 import { useTabContextMenuActions, type TabMenuItem } from "./useTabContextMenuActions";
 import { useMenuPosition, type ContextMenuPosition } from "./useMenuPosition";
@@ -82,7 +82,7 @@ function findNextFocusable(
 /** Renders a right-click context menu for a tab with keyboard navigation and viewport-aware positioning. */
 export function TabContextMenu({ tab, position, windowLabel, onClose }: TabContextMenuProps) {
   // Opens UPWARD out of the bottom bar and into the browser rect, where the native
-  // view would paint straight over it. Freeze while shown (WI-SOC.1).
+  // view would paint straight over it. Freeze while shown.
   useBrowserOccluder(true, "tab-context-menu");
   const { t } = useTranslation("common");
   const menuRef = useRef<HTMLDivElement>(null);
@@ -90,14 +90,14 @@ export function TabContextMenu({ tab, position, windowLabel, onClose }: TabConte
   const [focusedIndex, setFocusedIndex] = useState(-1);
 
   /* v8 ignore next -- @preserve reason: ?? [] fallback for missing windowLabel key; windowLabel always valid in tests */
-  // WI-12.4: bulk actions (Close Others/Right/All) target the VISIBLE set —
+  // Bulk actions (Close Others/Right/All) target the VISIBLE set —
   // hidden instances' tabs are never closed by a visible-context sweep.
   const tabs = useVisibleWindowTabs(windowLabel);
   const doc = useDocumentStore((state) => state.documents[tab.id]);
   const workspaceRoot = useWorkspaceStore((state) => state.rootPath);
   const closeShortcut = useShortcutsStore((state) => state.getShortcut("closeFile"));
 
-  const revealLabel = useMemo(() => getRevealInFileManagerLabel(), []);
+  const revealLabel = t(revealInFileManagerKey());
   const closeShortcutLabel = useMemo(() => formatKeyForDisplay(closeShortcut), [closeShortcut]);
   const filePath = tabFilePath(tab) ?? doc?.filePath ?? null;
 
@@ -164,7 +164,7 @@ export function TabContextMenu({ tab, position, windowLabel, onClose }: TabConte
   // below; not derivable during render without losing mount-time focus init (#1063).
   useEffect(() => {
     /* v8 ignore next -- @preserve reason: ?? -1 fallback only when focusableIndices is empty; menu always has enabled items in tests */
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-seeds focus when the focusable set changes, paired with the DOM-focus effect; mount-time init cannot run during render
     setFocusedIndex(focusableIndices[0] ?? -1);
   }, [focusableIndices]);
 

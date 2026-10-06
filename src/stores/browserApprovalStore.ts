@@ -1,4 +1,8 @@
-/** Browser approval store — standing grants and page-scoped ephemeral approvals (R5/R7a). */
+/**
+ * Browser approval store — standing grants and page-scoped ephemeral approvals (R5/R7a).
+ *
+ * @module stores/browserApprovalStore
+ */
 
 import { create } from "zustand";
 import { performHumanTabAttach, consumeOnceAttachment } from "@/services/browser/humanTabAttach";
@@ -85,13 +89,13 @@ interface BrowserApprovalActions {
     /** The exact script (for `style`/`eval`) the user is approving — shown in the
      *  prompt and bound into the one-shot. Omit for target-based ops. */
     script?: string,
-    /** The workflow run that raised this prompt (WI-NB5.3), so ending the run
+    /** The workflow run that raised this prompt, so ending the run
      *  can withdraw it. Omit for a one-off act's prompt. */
     runId?: string,
     /** Display-only summary of a bound payload (`Text: "…"`, `Key: Enter`). */
     payloadSummary?: string,
   ) => BrowserRequestApprovalResult;
-  /** Withdraw every pending prompt raised by `runId` (WI-NB5.3) — end-of-run
+  /** Withdraw every pending prompt raised by `runId` — end-of-run
    *  cleanup that closes the late-Allow race. No-op for runless prompts. */
   withdrawByRun: (runId: string) => void;
   /** Resolve a pending request: `remember` promotes it to a standing grant scoped
@@ -193,7 +197,7 @@ export const useBrowserApprovalStore = create<BrowserApprovalState & BrowserAppr
       return "queued";
     },
 
-    // WI-NB5.3: end-of-run cleanup. A workflow run ending (completed, cancelled,
+    // End-of-run cleanup. A workflow run ending (completed, cancelled,
     // lease-lost) withdraws its own pending prompts, so a "Allow" clicked after
     // the run is gone cannot mint a one-shot for a run that will never use it.
     withdrawByRun: (runId) =>
@@ -222,8 +226,8 @@ export const useBrowserApprovalStore = create<BrowserApprovalState & BrowserAppr
         // `resolving`; this is the guard behind it, for every outcome.
         if (get().resolving.includes(id)) return;
         if (outcome === "deny") return set((s) => ({ pending: s.pending.filter((p) => p.id !== id) }));
-        // The entry captured at the click is the TOKEN the outcome is judged against
-        // (#153): a late success records the mirror only if that very entry is still
+        // The entry captured at the click is the TOKEN the outcome is judged against:
+        // a late success records the mirror only if that very entry is still
         // pending and the tab is still on the prompt's generation; a failure marks the
         // entry and re-enables the buttons. See browserApprovalStore.attach.ts.
         const { patch, token } = beginAttach(get(), request);

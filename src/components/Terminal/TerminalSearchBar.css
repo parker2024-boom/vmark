@@ -14,7 +14,7 @@
   /* Intentionally fixed for compact terminal search UI. */
 }
 
-/* `.vm-input--bare` (WI-UI3.3): the bar owns the boundary. */
+/* `.vm-input--bare`: the bar owns the boundary. */
 .terminal-search-input {
   width: 160px;
   font-size: var(--font-size-sm);
@@ -27,7 +27,7 @@
   opacity: var(--opacity-muted);
 }
 
-/* No matches for a non-empty query (WI-3.1). Colour alone is not the signal —
+/* No matches for a non-empty query. Colour alone is not the signal —
    the adjacent result text says "No results" — but it makes the dead-end
    obvious while typing. */
 .terminal-search-input--no-match {
@@ -50,7 +50,7 @@
   white-space: nowrap;
 }
 
-/* Buttons are canonical `.vm-icon-btn--sm` (WI-UI2.3); aria-pressed accent,
+/* Buttons are canonical `.vm-icon-btn--sm`; aria-pressed accent,
    hover, disabled and the focus bar all come from icon-button-shared.css. */
 
 /* Dark theme shadow */
@@ -59,7 +59,7 @@
 }
 
 /* focus: caret-only — borderless finder/popup input; the caret is the
-   indicator (rule 33 §2, WI-UI1.8). */
+   indicator (rule 33 §2). */
 .terminal-search-input:focus {
   outline: none;
 }

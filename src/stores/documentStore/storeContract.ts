@@ -77,7 +77,7 @@ export interface DocumentStore {
   ) => void;
   /**
    * EXTERNAL-domain write: canonicalises and applies the `origin`'s precedence
-   * rule (WI-1.3). A BASELINE origin creates the document when the tab has
+   * rule. A BASELINE origin creates the document when the tab has
    * none; an EDIT origin on a missing tab is a no-op.
    */
   ingestExternalContent: (
@@ -112,7 +112,7 @@ export interface DocumentStore {
   isReadOnly: (tabId: string) => boolean;
 
   /**
-   * Record a successful write. REQUIRED dual snapshot (WI-1.4): an optional
+   * Record a successful write. REQUIRED dual snapshot: an optional
    * single string let un-migrated callers type-check clean while the store
    * assumed disk held the LF editor text.
    */
@@ -121,7 +121,7 @@ export interface DocumentStore {
   markAutoSaved: (tabId: string, snapshots: SaveSnapshots) => void;
   /**
    * Adopt a benign external rewrite: refresh the disk snapshot AND re-derive
-   * the file's convention from it, touching nothing else (WI-1.6). Refreshing
+   * the file's convention from it, touching nothing else. Refreshing
    * only the snapshot left the convention stale, so the next `preserve` save
    * wrote the OLD one back and the sync engine kept flipping the file.
    */
@@ -140,5 +140,4 @@ export interface DocumentStore {
   // Selectors
   /** Readonly for the reason on `documents` above. */
   getDocument: (tabId: string) => Readonly<DocumentState> | undefined;
-  getAllDirtyDocuments: () => string[]; // Returns tabIds
 }

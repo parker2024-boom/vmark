@@ -1,9 +1,13 @@
-// WI-1A.9 — Plain text adapter (full Phase 1A pipeline smoke test).
-//
-// Plain `.txt` is the simplest non-markdown format and the dispatcher
-// fallback for unknown extensions. No language pack, no validator, no
-// preview — just the SplitPaneEditor source pane with native CodeMirror
-// editing, find, undo, save.
+/**
+ * Plain text adapter — the simplest format and the end-to-end pipeline smoke test.
+ *
+ * Plain `.txt` is the simplest non-markdown format and the dispatcher
+ * fallback for unknown extensions. No language pack, no validator, no
+ * preview — just the SplitPaneEditor source pane with native CodeMirror
+ * editing, find, undo, save.
+ *
+ * @module lib/formats/adapters/txt
+ */
 
 import { registerFormat } from "../registry";
 import type { FormatConfig } from "../types";

@@ -7,27 +7,55 @@
  *   deciding what a change *means* (staleness, recompile) and what to *do* about
  *   it belongs to consumers — never here.
  *
+ * @coordinates-with src-tauri/src/watcher/batch.rs — the Rust twin of the raw batch types
  * @module services/workspaceEvents/types
  */
 
 /**
- * The raw `fs:changed` payload emitted by the Rust `notify` watcher. `kind` is
- * the watcher's string ("create" | "modify" | "remove" | "rename"); `paths` are
- * absolute, and for a `rename` arrive as flattened [old, new] pairs.
+ * One change inside a watcher batch. `kind` is the watcher's string
+ * ("create" | "modify" | "remove" | "rename"); `paths` are absolute, and a
+ * rename the OS reported as a pair carries [old, new].
  */
-export interface RawFsChangeEvent {
-  /** Watcher id — the emitting window's label. */
+interface RawFsChange {
+  /** Watcher kind string. */
+  kind: string;
+  /** Changed absolute paths (rename → [old, new] when the OS paired them). */
+  paths: string[];
+}
+
+/**
+ * The raw `fs:changed` payload: every change one Rust watcher saw in one
+ * window of time, in the order the OS reported them. Addressed to the window
+ * that owns the watcher.
+ */
+export interface RawFsChangeBatch {
+  /** Watcher id — the owning window's label. */
   watchId: string;
   /** The directory the watcher covers. */
   rootPath: string;
-  /** Changed absolute paths (rename → flattened [old, new] pairs). */
-  paths: string[];
-  /** Watcher kind string. */
-  kind: string;
+  /** The changes, oldest first. */
+  changes: RawFsChange[];
+  /**
+   * True when the watcher lost track of the tree (the OS dropped events, or
+   * the watcher reported an error): `changes` may be incomplete.
+   */
+  rescan: boolean;
 }
 
-/** Semantic classification of a workspace file change. */
-export type WorkspaceEventKind = "created" | "modified" | "deleted" | "renamed";
+/** One change of a batch together with the watcher it came from. */
+export interface RawFsChangeEvent extends RawFsChange {
+  /** Watcher id — the owning window's label. */
+  watchId: string;
+  /** The directory the watcher covers. */
+  rootPath: string;
+}
+
+/**
+ * Semantic classification of a workspace event. The first four name what
+ * happened to one path; `rescan` says the watcher lost track of the tree, so
+ * anything under the root may have changed without an event of its own.
+ */
+export type WorkspaceEventKind = "created" | "modified" | "deleted" | "renamed" | "rescan";
 
 /**
  * One normalized, in-scope workspace change — the layer's output unit.
@@ -35,7 +63,10 @@ export type WorkspaceEventKind = "created" | "modified" | "deleted" | "renamed";
 export interface SemanticWorkspaceEvent {
   /** What happened to the path. */
   kind: WorkspaceEventKind;
-  /** Normalized absolute path of the affected file. */
+  /**
+   * Normalized absolute path of the affected file. For `rescan`, the watched
+   * root itself.
+   */
   path: string;
   /**
    * For `renamed`, the normalized old path. Absent for other kinds and for an

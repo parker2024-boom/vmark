@@ -3,6 +3,8 @@
  *
  * Re-exports from the codeDetection module for backward compatibility.
  * The implementation is now split into smaller files under ./codeDetection/
+ *
+ * @module utils/codeDetection
  */
 
 /* v8 ignore start -- @preserve reason: barrel re-export file with no executable logic */

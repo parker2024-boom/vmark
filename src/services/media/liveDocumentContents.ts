@@ -16,12 +16,13 @@
  * service (the manual command) need it, and services must not import hooks.
  *
  * @coordinates-with orphanAssetCleanup.ts — consumed as OrphanScanOptions.knownContents
+ * @coordinates-with services/tabs/openDocuments.ts — which documents count as open
  * @coordinates-with services/tabs/tabOperations.ts — close-time cleanup
  * @coordinates-with services/commands/miscCommands.ts — manual cleanup command
  * @module services/media/liveDocumentContents
  */
 
-import { useDocumentStore } from "@/stores/documentStore";
+import { openDocuments } from "@/services/tabs/openDocuments";
 import { flushAllWysiwygNow } from "@/utils/wysiwygFlush";
 import { canonicalPathKey } from "@/utils/paths/pathComparison";
 
@@ -39,20 +40,22 @@ import { canonicalPathKey } from "@/utils/paths/pathComparison";
 export function liveContentsExcluding(
   excludedTabIds: ReadonlySet<string> = new Set()
 ): Map<string, string> {
-  // WI-10: the WYSIWYG editor syncs into the store on a debounce. Right after
+  // The WYSIWYG editor syncs into the store on a debounce. Right after
   // a paste — exactly when a brand-new image has a single reference — that
   // reference exists in NEITHER the store nor the file. Flush every mounted
   // editor first, or cleanup deletes the image out of the settling window.
   flushAllWysiwygNow();
   const live = new Map<string, string>();
-  const { documents } = useDocumentStore.getState();
-  for (const [tabId, doc] of Object.entries(documents)) {
+  // Open documents only. A buffer here replaces the file as the scan's evidence
+  // for its path, and a document left with no tab holds text nobody can see or
+  // save: trusting it deletes an image the file on disk still references.
+  for (const { tabId, doc } of openDocuments()) {
     if (excludedTabIds.has(tabId)) continue;
     if (!doc.filePath) {
       live.set(`untitled:${tabId}`, doc.content);
       continue;
     }
-    // WI-8c: two spellings of one path must land on ONE key, or a lookup
+    // Two spellings of one path must land on ONE key, or a lookup
     // misses the buffer and the scan falls back to a stale file.
     const key = canonicalPathKey(doc.filePath);
     if (live.has(key) && !doc.isDirty) continue;

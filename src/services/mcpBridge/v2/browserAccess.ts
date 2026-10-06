@@ -8,7 +8,7 @@
  * read as `BROWSER_DISABLED` there), then the user's setting.
  *
  * `resolveBrowserTarget` is the envelope every handler opens with: that gate, then
- * the tab the request names (round 3, #62). The gate → tabId validation → tab
+ * the tab the request names. The gate → tabId validation → tab
  * resolution → refusal sequence used to be copied into seven handlers, error
  * strings and all; here it is once, and a handler that needs a different tab
  * contract (`close` requires a tabId; `navigate` speaks `TAB_NOT_FOUND`) is the
@@ -25,7 +25,7 @@
  * operation with `permission-denied` — a lockout until the tab navigated.
  *
  * A success is a certain spend and is mirrored directly. A REJECTION is not
- * classified here at all (round 4, #37): `browser_eval` can fail before the gate
+ * classified here at all: `browser_eval` can fail before the gate
  * too — a poisoned lock, a script over the size bound, a half-specified target —
  * and a token denylist read every one of those as "spent" while the driver kept
  * the attachment. So after a rejection the mirror is reconciled to the driver's
@@ -42,7 +42,13 @@ import { respond } from "@/services/mcpBridge/utils";
 import { useBrowserApprovalStore } from "@/stores/browserApprovalStore";
 import { isMacPlatform } from "@/utils/platform";
 import { reconcileAttachmentMirror } from "./browserAttachmentMirror";
-import { browserEnabled, readTabIdArg, resolveBrowserTab, type BrowserTarget } from "./browserHelpers";
+import {
+  browserEnabled,
+  readTabIdArg,
+  resolveBrowserTab,
+  type BrowserTarget,
+  type TabIdRead,
+} from "./browserHelpers";
 
 /** The native surface exists only on macOS (`surface_stub.rs` everywhere else). */
 function browserSupportedHere(): boolean {
@@ -79,14 +85,15 @@ export async function browserGate(id: string): Promise<boolean> {
  * the active tab, which could act on an unintended page; refused as
  * `TAB_NOT_FOUND` when it names no live browser tab), else this window's active
  * browser tab ("no active browser tab" when there is none). Returns null once a
- * refusal has been sent.
+ * refusal has been sent. `read` is the request's `readOperationArgsChecked`
+ * result, so the tab id is read from the operation's own contract.
  */
 export async function resolveBrowserTarget(
   id: string,
-  args: Record<string, unknown>,
+  read: TabIdRead,
 ): Promise<BrowserTarget | null> {
   if (!(await browserGate(id))) return null;
-  const tabIdArg = readTabIdArg(args);
+  const tabIdArg = readTabIdArg(read);
   if (tabIdArg === null) {
     await respond({ id, success: false, error: "tabId must be a non-empty string when supplied" });
     return null;

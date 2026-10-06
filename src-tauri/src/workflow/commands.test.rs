@@ -556,10 +556,10 @@ mod through_the_command {
         let app_data = ws.path().join("app-data");
         std::fs::create_dir(&app_data).expect("app data inside the root");
         let app = mock_app(engine_on());
-        app.manage(crate::workspace_grants::WorkspaceGrants::default());
-        crate::workspace_grants::restore_from(
+        app.manage(crate::workspace::grants::WorkspaceGrants::default());
+        crate::workspace::grants::restore_from(
             app.handle(),
-            app_data.join(crate::workspace_grants::GRANTS_FILE),
+            app_data.join(crate::workspace::grants::GRANTS_FILE),
             std::time::Duration::from_secs(5),
         );
 
@@ -656,10 +656,11 @@ mod through_the_command {
 
 /// #522 — a graph the runner cannot sort is refused SYNCHRONOUSLY.
 ///
-/// `topological_sort` fails on the runner's first line, before it emits
-/// `workflow:complete`, while `run_workflow` had already returned `Ok` with an
-/// execution id the frontend was subscribed to. The run neither started nor
-/// finished and the panel waited forever, with a log line as the only trace.
+/// When this was found, a failed `topological_sort` made the runner return
+/// before it emitted `workflow:complete`, after `run_workflow` had already
+/// returned `Ok`, so the panel waited forever. The runner now emits a failed
+/// completion on that path too; admission still refuses the graph first, so a
+/// malformed workflow is an `invalid-input` error and never a spawned run.
 #[test]
 fn a_dependency_cycle_is_refused_at_admission_not_by_the_spawned_runner() {
     let state = engine_on();

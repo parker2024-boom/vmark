@@ -1,9 +1,9 @@
 //! The read side of workflow snapshots: list and restore (WI-LX2.3).
 //!
 //! Split from `snapshots.rs` at the file-size gate when the write side grew
-//! its bounded, cancellable copy (#267). Until WI-LX2.3 this half was
+//! its bounded, cancellable copy. Until WI-LX2.3 this half was
 //! `#[allow(dead_code)]` with no command and no UI, while a run whose
-//! snapshot failed was already REFUSED (`prepare.rs`, #266) — a recovery
+//! snapshot failed was already REFUSED (`prepare.rs`) — a recovery
 //! point nothing could recover from. `snapshot_commands.rs` now exposes both
 //! functions, and the run panel offers the restore after a run.
 //!
@@ -12,11 +12,11 @@
 //!     workspace_root`), never a caller's. A snapshot without one predates
 //!     restore and is refused rather than guessed at.
 //!   - Every write and delete goes through `snapshot_write.rs`, anchored to
-//!     the root held OPEN for the whole restore (#74, #75), so a parent — or
+//!     the root held OPEN for the whole restore, so a parent — or
 //!     the root itself — swapped for an escaping link is refused, not written
 //!     or deleted through. A recorded path outside the root, or one carrying
 //!     `..`, is skipped — metadata is not trusted, and it is read bounded and
-//!     checked to name its own snapshot (#76, #77).
+//!     checked to name its own snapshot.
 //!   - Per-file failures are COUNTED, not fatal: an undo that stops at the
 //!     first bad file leaves the rest unrestored for no reason. The report
 //!     says how many were restored, deleted and skipped.
@@ -37,7 +37,7 @@ use std::path::{Component, Path, PathBuf};
 
 const MAX_SNAPSHOTS: usize = 50;
 const SNAPSHOTS_DIR: &str = "workflow-snapshots";
-/// Largest `metadata.json` a list or a restore reads (#76). A record names at
+/// Largest `metadata.json` a list or a restore reads. A record names at
 /// most one path per save-file target of a run capped at 50 steps, so a real
 /// one is a few kilobytes; it sits in app data and is read as hostile.
 const MAX_METADATA_BYTES: u64 = 1024 * 1024;
@@ -72,7 +72,7 @@ pub(super) enum MetadataError {
     /// It is there and could not be read.
     Unreadable(std::io::Error),
     /// It was read and is not a record of THIS snapshot: over the cap, not a
-    /// regular file, not a `SnapshotInfo`, or naming another snapshot (#77).
+    /// regular file, not a `SnapshotInfo`, or naming another snapshot.
     Invalid(String),
 }
 
@@ -86,10 +86,10 @@ impl std::fmt::Display for MetadataError {
     }
 }
 
-/// The ONE loader list, restore and retention share (#76) — they used to
+/// The ONE loader list, restore and retention share — they used to
 /// read and parse separately, unbounded, and had already drifted on what a
 /// read failure means. Bounded, since the record sits in app data and is read
-/// as hostile; checked to name the directory it sits in (#77), or the panel
+/// as hostile; checked to name the directory it sits in, or the panel
 /// could confirm one snapshot and restore another. The read is blocking, so
 /// it runs on the blocking pool like every `read_regular_bounded` caller.
 pub(super) async fn load_metadata(
@@ -150,7 +150,7 @@ pub async fn restore_snapshot(
             "errors.workflow.snapshotNoWorkspace"
         ));
     };
-    // Resolved ONCE and held open for the whole restore (#74): every write and
+    // Resolved ONCE and held open for the whole restore: every write and
     // delete below proves containment against this directory, not its name.
     let root = PathBuf::from(&recorded_root)
         .canonicalize()
@@ -191,7 +191,7 @@ fn restore_blocking(snapshot_dir: &Path, info: &SnapshotInfo, root: &HeldRoot) -
         match restore_one(snapshot_dir, recorded, root) {
             Ok(()) => report.restored += 1,
             Err(reason) => {
-                log::warn!("[workflow] not restoring '{recorded}': {reason}");
+                log::warn!("[workflow] not restoring {recorded:?}: {reason}");
                 report.skipped += 1;
             }
         }
@@ -201,7 +201,7 @@ fn restore_blocking(snapshot_dir: &Path, info: &SnapshotInfo, root: &HeldRoot) -
             Ok(true) => report.deleted += 1,
             Ok(false) => {}
             Err(reason) => {
-                log::warn!("[workflow] not deleting '{recorded}': {reason}");
+                log::warn!("[workflow] not deleting {recorded:?}: {reason}");
                 report.skipped += 1;
             }
         }

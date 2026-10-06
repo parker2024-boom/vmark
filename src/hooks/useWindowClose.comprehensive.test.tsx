@@ -11,7 +11,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useTabStore } from "@/stores/tabStore";
 import { useDocumentStore } from "@/stores/documentStore";
 
-type EventHandler = (event: { payload: string }) => void | Promise<void>;
+type EventHandler = (event: { payload: unknown }) => void | Promise<void>;
 const listeners = new Map<string, EventHandler>();
 
 vi.mock("@tauri-apps/api/webviewWindow", () => ({
@@ -74,8 +74,15 @@ vi.mock("@/contexts/WindowContext", () => ({
 }));
 
 import { useWindowClose } from "./useWindowClose";
+import { startTabStateCleanup } from "@/services/windowClose/tabCleanup";
 
 const WINDOW = "main";
+/** What Rust sends this window for an ordinary quit (Cmd+Q). */
+const QUIT_REQUEST = { label: WINDOW, saveAll: false };
+
+// The window runs this for its lifetime: the close teardown drops the window's
+// tab list, and each removed tab's document goes with it.
+startTabStateCleanup();
 
 function TestHarness() {
   useWindowClose();
@@ -119,7 +126,7 @@ describe("useWindowClose — window:close-requested", () => {
     });
 
     expect(mockPersistWorkspaceSession).toHaveBeenCalledWith(WINDOW);
-    expect(invoke).toHaveBeenCalledWith("close_window", { label: WINDOW });
+    expect(invoke).toHaveBeenCalledWith("close_window");
   });
 
   it("closes window with clean tabs (no dirty documents)", async () => {
@@ -136,7 +143,7 @@ describe("useWindowClose — window:close-requested", () => {
       await listeners.get("window:close-requested")!({ payload: WINDOW });
     });
 
-    expect(invoke).toHaveBeenCalledWith("close_window", { label: WINDOW });
+    expect(invoke).toHaveBeenCalledWith("close_window");
   });
 
   it("prompts save for a single dirty document", async () => {
@@ -159,7 +166,7 @@ describe("useWindowClose — window:close-requested", () => {
     });
 
     expect(mockPromptSaveForDirtyDocument).toHaveBeenCalled();
-    expect(invoke).toHaveBeenCalledWith("close_window", { label: WINDOW });
+    expect(invoke).toHaveBeenCalledWith("close_window");
   });
 
   it("does not close when single dirty save is cancelled", async () => {
@@ -178,7 +185,7 @@ describe("useWindowClose — window:close-requested", () => {
       await listeners.get("window:close-requested")!({ payload: WINDOW });
     });
 
-    expect(invoke).not.toHaveBeenCalledWith("close_window", expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith("close_window");
   });
 
   it("prompts multi-save for multiple dirty documents", async () => {
@@ -204,7 +211,7 @@ describe("useWindowClose — window:close-requested", () => {
     });
 
     expect(mockPromptSaveForMultipleDocuments).toHaveBeenCalled();
-    expect(invoke).toHaveBeenCalledWith("close_window", { label: WINDOW });
+    expect(invoke).toHaveBeenCalledWith("close_window");
   });
 
   it("does not close when multi-save is cancelled", async () => {
@@ -226,7 +233,7 @@ describe("useWindowClose — window:close-requested", () => {
       await listeners.get("window:close-requested")!({ payload: WINDOW });
     });
 
-    expect(invoke).not.toHaveBeenCalledWith("close_window", expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith("close_window");
   });
 
   it("ignores close-requested for a different window", async () => {
@@ -239,7 +246,7 @@ describe("useWindowClose — window:close-requested", () => {
       await listeners.get("window:close-requested")!({ payload: "other-window" });
     });
 
-    expect(invoke).not.toHaveBeenCalledWith("close_window", expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith("close_window");
   });
 
   it("cleans up documents on close", async () => {
@@ -273,7 +280,7 @@ describe("useWindowClose — window:close-requested", () => {
     });
 
     expect(mockAsk).not.toHaveBeenCalled();
-    expect(invoke).toHaveBeenCalledWith("close_window", { label: WINDOW });
+    expect(invoke).toHaveBeenCalledWith("close_window");
   });
 
   it("prompts pinned-tabs confirmation and closes when user confirms", async () => {
@@ -293,7 +300,7 @@ describe("useWindowClose — window:close-requested", () => {
     });
 
     expect(mockAsk).toHaveBeenCalledTimes(1);
-    expect(invoke).toHaveBeenCalledWith("close_window", { label: WINDOW });
+    expect(invoke).toHaveBeenCalledWith("close_window");
   });
 
   it("does NOT close when pinned-tabs confirmation is cancelled", async () => {
@@ -313,7 +320,7 @@ describe("useWindowClose — window:close-requested", () => {
     });
 
     expect(mockAsk).toHaveBeenCalledTimes(1);
-    expect(invoke).not.toHaveBeenCalledWith("close_window", expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith("close_window");
     expect(mockPersistWorkspaceSession).not.toHaveBeenCalled();
   });
 
@@ -339,7 +346,7 @@ describe("useWindowClose — window:close-requested", () => {
 
     expect(mockAsk).not.toHaveBeenCalled();
     expect(mockPromptSaveForDirtyDocument).toHaveBeenCalled();
-    expect(invoke).toHaveBeenCalledWith("close_window", { label: WINDOW });
+    expect(invoke).toHaveBeenCalledWith("close_window");
   });
 });
 
@@ -358,10 +365,10 @@ describe("useWindowClose — app:quit-requested", () => {
     await waitFor(() => expect(listeners.has("app:quit-requested")).toBe(true));
 
     await act(async () => {
-      await listeners.get("app:quit-requested")!({ payload: WINDOW });
+      await listeners.get("app:quit-requested")!({ payload: QUIT_REQUEST });
     });
 
-    expect(invoke).toHaveBeenCalledWith("close_window", { label: WINDOW });
+    expect(invoke).toHaveBeenCalledWith("close_window");
   });
 
   it("calls cancel_quit when close is cancelled", async () => {
@@ -377,7 +384,7 @@ describe("useWindowClose — app:quit-requested", () => {
     await waitFor(() => expect(listeners.has("app:quit-requested")).toBe(true));
 
     await act(async () => {
-      await listeners.get("app:quit-requested")!({ payload: WINDOW });
+      await listeners.get("app:quit-requested")!({ payload: QUIT_REQUEST });
     });
 
     expect(invoke).toHaveBeenCalledWith("cancel_quit");
@@ -403,8 +410,8 @@ describe("useWindowClose — app:quit-requested", () => {
     await waitFor(() => expect(listeners.has("app:quit-requested")).toBe(true));
 
     // Two quit events while the prompt hangs — both must JOIN one close.
-    const quit1 = listeners.get("app:quit-requested")!({ payload: WINDOW });
-    const quit2 = listeners.get("app:quit-requested")!({ payload: WINDOW });
+    const quit1 = listeners.get("app:quit-requested")!({ payload: QUIT_REQUEST });
+    const quit2 = listeners.get("app:quit-requested")!({ payload: QUIT_REQUEST });
     await waitFor(() => expect(mockPromptSaveForDirtyDocument).toHaveBeenCalledTimes(1));
 
     // The user cancels the close.
@@ -440,7 +447,7 @@ describe("useWindowClose — app:quit-requested", () => {
     const closeReq = listeners.get("window:close-requested")!({ payload: WINDOW });
     await waitFor(() => expect(mockPromptSaveForDirtyDocument).toHaveBeenCalledTimes(1));
     // …then Cmd+Q lands while the prompt is open.
-    const quit = listeners.get("app:quit-requested")!({ payload: WINDOW });
+    const quit = listeners.get("app:quit-requested")!({ payload: QUIT_REQUEST });
 
     resolvePrompt({ action: "cancelled" });
     await act(async () => {
@@ -471,7 +478,7 @@ describe("useWindowClose — app:quit-requested", () => {
     await waitFor(() => expect(listeners.has("app:quit-requested")).toBe(true));
 
     await act(async () => {
-      await listeners.get("app:quit-requested")!({ payload: WINDOW });
+      await listeners.get("app:quit-requested")!({ payload: QUIT_REQUEST });
     });
 
     // cancel_quit was called and rejected — the catch block ran (lines 210-211)
@@ -486,10 +493,10 @@ describe("useWindowClose — app:quit-requested", () => {
     await waitFor(() => expect(listeners.has("app:quit-requested")).toBe(true));
 
     await act(async () => {
-      await listeners.get("app:quit-requested")!({ payload: "other-window" });
+      await listeners.get("app:quit-requested")!({ payload: { label: "other-window", saveAll: false } });
     });
 
-    expect(invoke).not.toHaveBeenCalledWith("close_window", expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith("close_window");
   });
 });
 
@@ -550,7 +557,7 @@ describe("useWindowClose — menu:close", () => {
     expect(mockCloseTabWithDirtyCheck).not.toHaveBeenCalled();
     // ...instead the window-close request runs.
     expect(mockPersistWorkspaceSession).toHaveBeenCalledWith(WINDOW);
-    expect(invoke).toHaveBeenCalledWith("close_window", { label: WINDOW });
+    expect(invoke).toHaveBeenCalledWith("close_window");
   });
 
   it("catches closeTabWithDirtyCheck error gracefully", async () => {
@@ -650,7 +657,7 @@ describe("useWindowClose — handleCloseRequest catch block (lines 144-146)", ()
       expect.any(Error)
     );
     // close_window should NOT have been called since the error was caught
-    expect(invoke).not.toHaveBeenCalledWith("close_window", expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith("close_window");
     consoleSpy.mockRestore();
   });
 });
@@ -669,7 +676,7 @@ describe("useWindowClose — orphan image cleanup", () => {
     });
     await waitFor(() => expect(listeners.has(event)).toBe(true));
     await act(async () => {
-      await listeners.get(event)!({ payload: WINDOW });
+      await listeners.get(event)!({ payload: event === "app:quit-requested" ? QUIT_REQUEST : WINDOW });
     });
   }
 
@@ -682,7 +689,7 @@ describe("useWindowClose — orphan image cleanup", () => {
     await renderAndFire("window:close-requested");
 
     expect(mockCleanupOrphansForClosingTabs).toHaveBeenCalledWith([a, b]);
-    expect(invoke).toHaveBeenCalledWith("close_window", { label: WINDOW });
+    expect(invoke).toHaveBeenCalledWith("close_window");
   });
 
   it("cleans up after the save prompt resolves, so it scans the saved content", async () => {
@@ -741,6 +748,6 @@ describe("useWindowClose — orphan image cleanup", () => {
     await renderAndFire("window:close-requested");
 
     expect(mockCleanupOrphansForClosingTabs).not.toHaveBeenCalled();
-    expect(invoke).not.toHaveBeenCalledWith("close_window", expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith("close_window");
   });
 });

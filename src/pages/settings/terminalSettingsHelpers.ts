@@ -5,13 +5,13 @@
  *
  * Key decisions:
  *   - Panel-size options are DERIVED from TERMINAL_MAX_RATIO rather than
- *     hand-listed (WI-1.2). The list used to run to 80% while the layout
+ *     hand-listed. The list used to run to 80% while the layout
  *     capped at 50% in three independent places, so the top three entries
  *     rendered identically to 50% and a drag silently rewrote the stored
  *     value. Deriving them means raising the cap can never strand the
  *     dropdown again. The honest answer to "I want 80%" is the maximize
  *     toggle, not a persisted ratio that squeezes the editor out.
- *   - Font-size options are a FUNCTION of the current value (WI-1.3), because
+ *   - Font-size options are a FUNCTION of the current value, because
  *     Mod +/- zooms freely (step 2 from a default of 13 → 15, 17, …) while the
  *     presets are a curated subset. A native <select> whose `value` matches no
  *     option renders its first entry, so an unmatched zoom used to display
@@ -56,7 +56,7 @@ export const scrollbackOptions = [
  * ONE structure rather than two parallel arrays — reordering or extending
  * parallel arrays silently mislabels every entry after the edit. The numbers
  * live here so the published range in `website/guide/terminal.md` can be
- * checked against what the dropdown actually offers (WI-2.2).
+ * checked against what the dropdown actually offers.
  */
 export const lineHeightChoices = [
   { value: 1.0, labelKey: "tight" },
@@ -67,7 +67,7 @@ export const lineHeightChoices = [
   { value: 2.0, labelKey: "extra" },
 ] as const;
 
-/** Just the line-height numbers — used by the doc↔range guard (WI-2.2). */
+/** Just the line-height numbers — used by the doc↔range guard. */
 export const lineHeightValues = lineHeightChoices.map((c) => c.value);
 
 /** Font-size options — raw px labels (no translation). */
@@ -112,7 +112,7 @@ export function withCurrentNumericOption(
 
 /**
  * Font-size options with `current` injected when free zoom (`Mod +/-`) has
- * landed outside the presets (WI-1.3).
+ * landed outside the presets.
  */
 export function fontSizeOptionsFor(
   current: number,

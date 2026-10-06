@@ -9,7 +9,7 @@
  *   - `KnowledgeBaseRunning` — the toolbar (site/graph, slides, open in
  *     browser, stop) over the graph view or the served iframe.
  *
- * The stopped state lives in `KnowledgeBaseRuntimeState` (WI-FL1.1). The graph
+ * The stopped state lives in `KnowledgeBaseRuntimeState`. The graph
  * view stays behind `RetryableLazy` here for the reason the panel's header
  * gives: React.lazy caches a chunk-load rejection forever.
  *
@@ -17,7 +17,7 @@
  * @coordinates-with src/stores/contentServerStore.ts — status, provision, url, view mode
  * @module components/KnowledgeBasePanel/KnowledgeBasePanelViews
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import { RetryableLazy } from "@/components/RetryableLazy";
 import {
@@ -26,11 +26,14 @@ import {
   type KbViewMode,
 } from "@/stores/contentServerStore";
 
-const loadKbGraphView = () =>
+/** Loads the graph chunk; each call is a fresh attempt. */
+export type KbGraphLoader = () => Promise<{ default: ComponentType }>;
+
+const loadKbGraphView: KbGraphLoader = () =>
   import("./KbGraphView").then((m) => ({ default: m.KbGraphView }));
 
 /**
- * 0–100 from an untrusted byte-count pair (audit #319): a non-positive or
+ * 0–100 from an untrusted byte-count pair: a non-positive or
  * non-finite total is 0%, and a stream that over-reports never shows >100%.
  */
 function downloadPercent({ received, total }: ProvisionProgress): number {
@@ -60,8 +63,8 @@ export function KnowledgeBaseProgress({ provision }: { provision: ProvisionProgr
  * The failure line and its Retry.
  *
  * `error` is nullable because the store's is, and a null one rendered an alert
- * holding nothing but a button — an announced "alert" with no message in it
- * (audit round 3, #628). A localized fallback is the honest floor: something
+ * holding nothing but a button — an announced "alert" with no message in it.
+ * A localized fallback is the honest floor: something
  * failed, the panel just was not told what.
  */
 export function KnowledgeBaseError({ error, onRetry }: { error: string | null; onRetry: () => void }) {
@@ -84,6 +87,12 @@ export interface KnowledgeBaseRunningProps {
   onOpenInBrowser: () => void;
   onPreviewSlides: () => void;
   onExportSlides: () => void;
+  /**
+   * The graph chunk's loader. Defaults to the real dynamic import; a parameter
+   * because a module registry never re-fails a module that resolved once, and
+   * the failed-then-retried load is behaviour that has to be testable.
+   */
+  loadGraph?: KbGraphLoader;
 }
 
 /** One toolbar control: a label key, what it does, and whether it reads pressed. */
@@ -104,7 +113,7 @@ type ToolbarEntry = ToolbarButton | "spacer";
  * view-mode ones differed only by which `aria-pressed` they carried — so the
  * markup that makes a control a control lived in six places, and a change to
  * any of it (the button primitive, the pressed state, a focus rule) had six
- * chances to be applied five times (audit round 3, #630).
+ * chances to be applied five times.
  */
 function KnowledgeBaseToolbar({ entries }: { entries: ToolbarEntry[] }) {
   const { t } = useTranslation();
@@ -137,6 +146,7 @@ export function KnowledgeBaseRunning({
   onOpenInBrowser,
   onPreviewSlides,
   onExportSlides,
+  loadGraph = loadKbGraphView,
 }: KnowledgeBaseRunningProps) {
   const { t } = useTranslation();
   const setViewMode = (mode: KbViewMode) =>
@@ -156,7 +166,7 @@ export function KnowledgeBaseRunning({
       {viewMode === "graph" ? (
         <RetryableLazy
           feature="Knowledge base graph"
-          load={loadKbGraphView}
+          load={loadGraph}
           componentProps={{}}
           // Same placeholder the graph itself uses while fetching, so chunk
           // load and data load read as one continuous state.
@@ -176,7 +186,7 @@ export function KnowledgeBaseRunning({
  * `iframeUrl` is the ONE-TIME `/__auth?t=<nonce>` link (grill M2): the first
  * navigation trades it for the session cookie and BURNS the nonce. Switching to
  * the graph unmounts this frame, so coming back used to mount a fresh one on
- * the same spent link (audit R2, #631). It is therefore cleared once this frame
+ * the same spent link. It is therefore cleared once this frame
  * has actually loaded — the only evidence the handshake happened — and a later
  * mount loads `url`, which the cookie now authenticates. Cleared on UNMOUNT
  * rather than on load, so the frame that just authenticated is not re-rendered

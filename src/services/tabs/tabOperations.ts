@@ -6,25 +6,26 @@
  *
  * Key decisions:
  *   - Lives in hooks/ (not utils/) because it has Tauri dialog + store side effects
- *   - Dirty AND divergent documents need resolution before closing (WI-2). A
+ *   - Dirty AND divergent documents need resolution before closing. A
  *     divergent doc — the user kept local content after an external edit — has
  *     isDirty false, but closing it silently would discard exactly the content
  *     the user already chose once to keep.
- *   - Document state is REVALIDATED after every await (WI-5). Prompts, saves
+ *   - Document state is REVALIDATED after every await. Prompts, saves
  *     and cleanup all yield; an edit (human or MCP — VMark exposes writes over
  *     MCP) landing mid-await must trigger another prompt, not be dropped. The
  *     loop is bounded: a document that cannot be brought to rest is a cancel,
  *     never a silent discard. One exemption: a buffer byte-identical to a
  *     completed save is AT REST even with isDirty standing — save-time
  *     normalization (hard-break style) is an artifact, not an edit.
- *   - Concurrent closes of one tab share ONE promise and ONE outcome (WI-7).
+ *   - Concurrent closes of one tab share ONE promise and ONE outcome.
  *     The old boolean guard answered `true` to the second caller while the
  *     first might still be cancelled.
  *   - A document tab whose document state is missing is CLOSED, not reported
- *     closed (WI-6) — the old `return true` left the tab on screen forever and
+ *     closed — the old `return true` left the tab on screen forever and
  *     defeated useFileOpen's close-during-open guard.
- *   - closeTab's return value gates cleanupTabState (WI-5): a pinned refusal
- *     must not wipe the document of a tab still visible.
+ *   - Per-tab state is freed by the tab store's removal announcement, not
+ *     here: a pinned refusal announces nothing, so the document of a tab still
+ *     visible is never wiped.
  *   - Pinned tabs are short-circuited with the unpin-before-closing toast, and
  *     pin state is re-checked after the prompts — pinning DURING the dialog is
  *     a "keep this" signal too.
@@ -33,7 +34,7 @@
  * @coordinates-with services/windowClose/closeSave.ts — promptSaveForDirtyDocument dialog
  * @coordinates-with services/media/closeCleanup.ts — close-time orphan cleanup
  * @coordinates-with tabStore.ts — closeTab reports whether removal happened
- * @coordinates-with services/windowClose/tabCleanup.ts — cleanupTabState centralises per-tab store cleanup
+ * @coordinates-with services/windowClose/tabCleanup.ts — frees per-tab state when the store announces the removal
  * @module services/tabs/tabOperations
  */
 
@@ -41,14 +42,13 @@ import { promptSaveForDirtyDocument } from "@/services/windowClose/closeSave";
 import { useTabStore } from "@/stores/tabStore";
 import { useDocumentStore } from "@/stores/documentStore";
 import { cleanupOrphansForClosingTabs } from "@/services/media/closeCleanup";
-import { cleanupTabState } from "@/services/windowClose/tabCleanup";
 import { imeToast as toast } from "@/services/ime/imeToast";
 import i18n from "@/i18n";
 import { isBrowserTab } from "@/stores/tabStoreTypes";
 import { flushAllWysiwygNow } from "@/utils/wysiwygFlush";
 import type { DocumentState } from "@/stores/documentStore";
 
-/** A document needs resolving before close when it is dirty OR divergent (WI-2). */
+/** A document needs resolving before close when it is dirty OR divergent. */
 function needsResolution(doc: Pick<DocumentState, "isDirty" | "isDivergent">): boolean {
   return doc.isDirty || doc.isDivergent;
 }
@@ -79,7 +79,7 @@ function atRest(
 /**
  * Bring one document to rest: prompt while it needs resolution, re-checking
  * after every save because an edit that lands DURING the save leaves it dirty
- * again (WI-5). "discarded" is the user's explicit choice to drop whatever the
+ * again. "discarded" is the user's explicit choice to drop whatever the
  * buffer holds at close time — later edits included.
  */
 async function resolveDirtyState(
@@ -88,7 +88,7 @@ async function resolveDirtyState(
   fallbackTitle: string
 ): Promise<Resolution> {
   for (let attempt = 0; attempt < MAX_RESOLUTION_ATTEMPTS; attempt++) {
-    // WI-10: an edit still in the editor's debounce window must count.
+    // An edit still in the editor's debounce window must count.
     flushAllWysiwygNow();
     const doc = useDocumentStore.getState().getDocument(tabId);
     if (!doc || !needsResolution(doc)) return { kind: "clean" };
@@ -104,7 +104,7 @@ async function resolveDirtyState(
     });
     if (result.action === "cancelled") return { kind: "cancelled" };
     if (result.action === "discarded") return { kind: "discarded" };
-    // "saved" — revalidate rather than trust it (WI-5), but distinguish the
+    // "saved" — revalidate rather than trust it, but distinguish the
     // two ways isDirty can still stand: save-time normalization (hard-break
     // style) makes markSaved compare the SAVED bytes against the untouched
     // buffer, which is not an edit — the buffer being byte-identical to what
@@ -122,7 +122,7 @@ async function resolveDirtyState(
   return { kind: "cancelled" };
 }
 
-/** In-flight closes by tabId — concurrent callers share the outcome (WI-7). */
+/** In-flight closes by tabId — concurrent callers share the outcome. */
 const inFlightCloses = new Map<string, Promise<boolean>>();
 
 /**
@@ -168,24 +168,22 @@ async function performTabClose(windowLabel: string, tabId: string): Promise<bool
     return useTabStore.getState().closeTab(windowLabel, tabId);
   }
 
-  // A document tab with no document state: close the TAB anyway (WI-6). This
+  // A document tab with no document state: close the TAB anyway. This
   // state is reachable while a file read is in flight, and reporting success
   // while the tab stays on screen made Cmd+W look dead — and defeated the
   // close-during-open guard, which checks whether the tab still exists.
   if (!useDocumentStore.getState().getDocument(tabId)) {
-    const removed = useTabStore.getState().closeTab(windowLabel, tabId);
-    if (removed) cleanupTabState(tabId);
-    return removed;
+    return useTabStore.getState().closeTab(windowLabel, tabId);
   }
 
-  // Resolve → cleanup → revalidate, bounded (WI-5): cleanup does file IO, and
+  // Resolve → cleanup → revalidate, bounded: cleanup does file IO, and
   // an edit landing during it must not be dropped under a stale "clean".
   let resolution: Resolution = { kind: "clean" };
   for (let attempt = 0; attempt < MAX_RESOLUTION_ATTEMPTS; attempt++) {
     resolution = await resolveDirtyState(windowLabel, tabId, tab.title);
     if (resolution.kind === "cancelled") return false;
 
-    // Pinning DURING the prompt is a "keep this around" signal (WI-5).
+    // Pinning DURING the prompt is a "keep this around" signal.
     const tabNow = useTabStore.getState().tabs[windowLabel]?.find((t) => t.id === tabId);
     if (!tabNow) return true;
     if (tabNow.isPinned) {
@@ -208,9 +206,7 @@ async function performTabClose(windowLabel: string, tabId: string): Promise<bool
     return false;
   }
 
-  const removed = useTabStore.getState().closeTab(windowLabel, tabId);
-  if (removed) cleanupTabState(tabId);
-  return removed;
+  return useTabStore.getState().closeTab(windowLabel, tabId);
 }
 
 /**

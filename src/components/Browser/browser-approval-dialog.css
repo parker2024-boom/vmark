@@ -1,4 +1,4 @@
-/* BrowserApprovalDialog (WI-S0.8) — the AI-action consent prompt.
+/* BrowserApprovalDialog — the AI-action consent prompt.
 
    The backdrop is deliberately OPAQUE. The native WKWebView is frozen (hidden) while
    this is up, which leaves a blank rect behind it — a translucent backdrop would show
@@ -21,7 +21,7 @@
   /* ui-ok(overlay): frozen WKWebView — see header; the OPAQUE backdrop and
      self-contained shell are the point, so it does not adopt .vm-overlay */
   width: 100%;
-  max-width: 540px; /* was 30em against the old 18px body basis (WI-UI2.1) */
+  max-width: 540px; /* was 30em against the old 18px body basis */
   /* A page can hand the AI a novel as an accessible name. The name is clipped,
      but the descriptor must never push Deny/Allow off the viewport either way. */
   max-height: calc(100vh - 2 * var(--spacing-3));

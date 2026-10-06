@@ -12,27 +12,27 @@ KI-Genies sind Prompt-Vorlagen, die Ihren Text mithilfe von KI transformieren. W
 
 ## Die Genie-Auswahl
 
-Drücken Sie `Mod + Y` (oder Menü **Werkzeuge > KI-Genies**), um ein Spotlight-ähnliches Overlay mit einer einzigen einheitlichen Eingabe zu öffnen.
+Drücken Sie `Mod + Y` (oder Menü **Bearbeiten → Genies → Genies suchen…**), um ein Spotlight-ähnliches Overlay mit einer einzigen einheitlichen Eingabe zu öffnen. Dasselbe Untermenü listet jedes Genie mit Namen auf, sodass sich ein Genie auch direkt aus dem Menü ausführen lässt.
 
 **Suche und freie Eingabe** — Beginnen Sie zu tippen, um Genies nach Name, Beschreibung oder Kategorie zu filtern. Wenn keine Genies übereinstimmen, wird die Eingabe zu einem freien Promptfeld.
 
-**Schnellschaltflächen** — Wenn der Bereich "Auswahl" ist und die Eingabe leer ist, werden Ein-Klick-Schaltflächen für häufige Aktionen angezeigt (Polieren, Kürzen, Grammatik, Umformulieren).
+**Schnellschaltflächen** — Wenn der Bereich „Auswahl“ ist und die Eingabe leer ist, werden Ein-Klick-Schaltflächen für häufige Aktionen angezeigt (Polieren, Kürzen, Grammatik, Umformulieren).
 
 **Zweistufige freie Eingabe** — Wenn keine Genies übereinstimmen, drücken Sie einmal `Enter`, um einen Bestätigungshinweis zu sehen, dann erneut `Enter`, um als KI-Prompt zu senden. Dies verhindert versehentliche Übermittlungen.
 
 **Bereichsauswahl** — Drücken Sie `Tab`, um zwischen Bereichen zu wechseln: Auswahl → Block → Dokument → Alles.
 
-**Prompt-Verlauf** — Im freien Modus (keine übereinstimmenden Genies) drücken Sie `Pfeil oben` / `Pfeil unten`, um frühere Prompts zu durchblättern. Drücken Sie `Strg + R`, um ein durchsuchbares Verlaufs-Dropdown zu öffnen. Ghost-Text zeigt den zuletzt übereinstimmenden Prompt als grauen Hinweis an — drücken Sie `Tab`, um ihn zu übernehmen.
+**Prompt-Verlauf** — Im freien Modus (keine übereinstimmenden Genies) drücken Sie `Pfeil oben` / `Pfeil unten`, um frühere Prompts zu durchblättern. Drücken Sie `Strg + R`, um ein durchsuchbares Verlaufs-Dropdown zu öffnen; dessen Schaltfläche **Verlauf löschen** leert den gespeicherten Verlauf (bis zu 100 Prompts) auf einmal, ohne nachzufragen. Ghost-Text zeigt den zuletzt übereinstimmenden Prompt als grauen Hinweis an — drücken Sie `Tab`, um ihn zu übernehmen, oder `Escape`, um ihn auszublenden (er kehrt zurück, sobald Sie Ihre Eingabe ändern).
 
 ### Verarbeitungsrückmeldung
 
 Nach der Auswahl eines Genie oder dem Absenden eines freien Prompts zeigt die Auswahl Inline-Rückmeldungen:
 
 - **Verarbeitung** — Ein Denk-Indikator mit Zeitzähler. Drücken Sie `Escape` zum Abbrechen.
-- **Vorschau** — Die KI-Antwort wird in Echtzeit gestreamt. Verwenden Sie `Annehmen`, um anzuwenden, oder `Ablehnen`, um zu verwerfen.
+- **Vorschau** — Die KI-Antwort erscheint, sobald sie eintrifft: CLI-Anbieter streamen sie während der Generierung, während REST-Anbieter die gesamte Antwort auf einmal liefern, wenn die Anfrage abgeschlossen ist. Verwenden Sie `Annehmen`, um anzuwenden, oder `Ablehnen`, um zu verwerfen.
 - **Fehler** — Falls etwas schiefgeht, wird die Fehlermeldung mit einer Schaltfläche `Erneut versuchen` angezeigt.
 
-Die Statusleiste zeigt ebenfalls den KI-Fortschritt an — ein drehendes Symbol mit Zeitzähler während der Ausführung, ein kurzes "Fertig"-Symbol bei Erfolg oder ein Fehlerindikator mit den Schaltflächen "Erneut versuchen"/"Schließen". Die Statusleiste wird automatisch eingeblendet, wenn die KI aktiv ist, selbst wenn Sie sie zuvor mit `F7` ausgeblendet haben.
+Die Statusleiste zeigt ebenfalls den KI-Fortschritt an — ein drehendes Symbol mit Zeitzähler während der Ausführung, ein kurzes „Fertig“-Symbol bei Erfolg oder ein Fehlerindikator mit den Schaltflächen **Erneut versuchen** und **Schließen**. **Erneut versuchen** führt die fehlgeschlagene Anfrage erneut aus — dasselbe Genie oder denselben Prompt, auf die aktuelle Auswahl — auch nachdem die Auswahl geschlossen wurde; die Schaltfläche fehlt, wenn es nichts zu wiederholen gibt, etwa ohne Anbieter. Die Statusleiste wird automatisch eingeblendet, wenn die KI aktiv ist, selbst wenn Sie sie zuvor mit `F7` ausgeblendet haben.
 
 ## Integrierte Genies
 
@@ -89,7 +89,7 @@ Wenn der Bereich **Auswahl** ist, aber nichts ausgewählt ist, arbeitet der Geni
 
 Nachdem ein Genie ausgeführt wurde, erscheint der Vorschlag inline:
 
-- **Ersetzen** — Originaltext mit roter, gewellter Durchstreichung, gefolgt vom neuen Text als verblasstem, kursivem „Geistertext" in der Akzentfarbe
+- **Ersetzen** — Originaltext mit roter, gewellter Durchstreichung, gefolgt vom neuen Text als verblasstem, kursivem „Geistertext“ in der Akzentfarbe
 - **Einfügen** — Neuer Text als Geistertext nach dem Quellblock
 - **Löschen** — Originaltext mit roter, gewellter Durchstreichung
 
@@ -108,9 +108,9 @@ Jeder Vorschlag hat Annehmen- (Häkchen) und Ablehnen- (X) Schaltflächen.
 
 ## Statusleisten-Anzeige
 
-Während die KI generiert, zeigt die Statusleiste ein drehendes Funken-Symbol mit einem Zeitzähler ("Denkt... 3s"). Eine Abbrechen-Schaltfläche (×) ermöglicht das Stoppen der Anfrage.
+Während die KI generiert, zeigt die Statusleiste ein drehendes Funken-Symbol mit einem Zeitzähler („Denkt... 3s“). Eine Abbrechen-Schaltfläche (×) ermöglicht das Stoppen der Anfrage.
 
-Nach Abschluss wird kurz ein "Fertig"-Häkchen für 3 Sekunden angezeigt. Bei einem Fehler zeigt die Statusleiste die Fehlermeldung mit den Schaltflächen "Erneut versuchen" und "Schließen".
+Nach Abschluss wird kurz ein „Fertig“-Häkchen für 3 Sekunden angezeigt. Bei einem Fehler zeigt die Statusleiste die Fehlermeldung mit den Schaltflächen „Erneut versuchen“ und „Schließen“.
 
 Die Statusleiste wird automatisch eingeblendet, wenn die KI aktiv ist (läuft, Fehler oder Erfolg), auch wenn sie mit `F7` ausgeblendet wurde.
 
@@ -130,11 +130,11 @@ Genies werden im Anwendungsdatenverzeichnis gespeichert:
 | Windows | `%APPDATA%\app.vmark\genies\` |
 | Linux | `~/.local/share/app.vmark/genies/` |
 
-Öffnen Sie diesen Ordner über das Menü **Werkzeuge > Genies-Ordner öffnen**.
+Öffnen Sie diesen Ordner über das Menü **Bearbeiten → Genies → Genies-Ordner öffnen**; nach dem Hinzufügen oder Bearbeiten von Dateien aktualisiert **Bearbeiten → Genies → Genies neu laden** die Liste.
 
 ### Verzeichnisstruktur
 
-Unterverzeichnisse werden zu **Kategorien** in der Auswahl. Sie können Genies beliebig organisieren:
+Unterverzeichnisse werden zu **Kategorien** in der Auswahl, und der Scan ist rekursiv — verschachteln Sie Ordner so tief Sie möchten; die Kategorie eines Genies ist sein Ordnerpfad relativ zu `genies/` (`academic/thesis/abstract.md` landet also in `academic/thesis`), sofern das Frontmatter nicht `category` setzt. Symbolische Links werden übersprungen. Sie können Genies beliebig organisieren:
 
 ```text
 genies/
@@ -171,7 +171,7 @@ Return only the improved text — no explanations.
 {{content}}
 ```
 
-Der Dateiname `polish.md` wird in der Auswahl als Anzeigename "Polish" verwendet.
+Der Dateiname `polish.md` wird in der Auswahl als Anzeigename „Polish“ verwendet.
 
 ### Frontmatter-Felder
 
@@ -184,7 +184,7 @@ Der Dateiname `polish.md` wird in der Auswahl als Anzeigename "Polish" verwendet
 | `context` | Nein | `1`, `2` | `0` (keiner) |
 | `model` | Nein | Modell-Bezeichner, der den Anbieterstandard überschreibt | Anbieterstandard |
 
-**Genie-Name** — Der Anzeigename wird immer aus dem **Dateinamen** (ohne `.md`) abgeleitet. Zum Beispiel erscheint `fix-grammar.md` als "Fix Grammar" in der Auswahl. Benennen Sie die Datei um, um den Anzeigenamen zu ändern.
+**Genie-Name** — Der Anzeigename wird immer aus dem **Dateinamen** (ohne `.md`) abgeleitet. Zum Beispiel erscheint `fix-grammar.md` als „Fix Grammar“ in der Auswahl. Benennen Sie die Datei um, um den Anzeigenamen zu ändern.
 
 ### Der `{{content}}`-Platzhalter
 
@@ -193,7 +193,7 @@ Der `{{content}}`-Platzhalter ist das Kernstück jedes Genie. Wenn ein Genie aus
 1. **Text extrahieren** basierend auf dem Bereich (ausgewählter Text, aktueller Block oder gesamtes Dokument)
 2. **Ersetzen** jedes `{{content}}` in Ihrer Vorlage durch den extrahierten Text
 3. **Senden** des ausgefüllten Prompts an den aktiven KI-Anbieter
-4. **Streamen** der Antwort zurück als Inline-Vorschlag
+4. **Zurückgeben** der Antwort als Inline-Vorschlag — bei einem CLI-Anbieter während der Generierung gestreamt, bei einem REST-Anbieter in einem Stück
 
 Mit dieser Vorlage zum Beispiel:
 
@@ -203,7 +203,7 @@ Translate the following text into French.
 {{content}}
 ```
 
-Wenn der Benutzer "Hello, how are you?" auswählt, erhält die KI:
+Wenn der Benutzer „Hello, how are you?“ auswählt, erhält die KI:
 
 ```text
 Translate the following text into French.
@@ -211,7 +211,7 @@ Translate the following text into French.
 Hello, how are you?
 ```
 
-Die KI antwortet mit "Bonjour, comment allez-vous ?" und es erscheint als Inline-Vorschlag, der den ausgewählten Text ersetzt.
+Die KI antwortet mit „Bonjour, comment allez-vous ?“ und es erscheint als Inline-Vorschlag, der den ausgewählten Text ersetzt.
 
 ### Der `{{context}}`-Platzhalter
 
@@ -544,13 +544,13 @@ Abschirmung ist eine starke Gegenmaßnahme, keine absolute Garantie.
 
 ## Fehlerbehebung
 
-**"Kein KI-Anbieter verfügbar"** — Öffnen Sie Einstellungen > Integrationen und konfigurieren Sie einen Anbieter. Siehe [KI-Anbieter](/de/guide/ai-providers).
+**„Kein KI-Anbieter verfügbar“** — Öffnen Sie Einstellungen > Integrationen und konfigurieren Sie einen Anbieter. Siehe [KI-Anbieter](/de/guide/ai-providers).
 
 **Genie erscheint nicht in der Auswahl** — Überprüfen Sie, ob die Datei eine `.md`-Erweiterung (oder `.yml`/`.yaml` für ein [Workflow-Genie](/de/guide/workflow-genies)) und gültiges Frontmatter mit `---`-Begrenzern hat. Unterordner werden bis zu acht Ebenen tief durchsucht (insgesamt höchstens 10.000 Einträge), symbolische Links werden übersprungen. Führen Sie nach dem Hinzufügen von Dateien **Bearbeiten → Genies → Genies neu laden** aus.
 
 **KI gibt Unsinn oder Fehler zurück** — Überprüfen Sie, ob Ihr API-Schlüssel korrekt ist und der Modellname für Ihren Anbieter gültig ist. Überprüfen Sie das Terminal/die Konsole auf Fehlerdetails.
 
-**Vorschlag entspricht nicht den Erwartungen** — Verfeinern Sie Ihren Prompt. Fügen Sie Einschränkungen hinzu ("nur den Text zurückgeben", "nicht erklären"), legen Sie eine Rolle fest oder schränken Sie den Bereich ein.
+**Vorschlag entspricht nicht den Erwartungen** — Verfeinern Sie Ihren Prompt. Fügen Sie Einschränkungen hinzu („nur den Text zurückgeben“, „nicht erklären“), legen Sie eine Rolle fest oder schränken Sie den Bereich ein.
 
 ## Siehe auch
 

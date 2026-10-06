@@ -10,6 +10,9 @@
  *   - Clipboard write failure is handled gracefully
  *   - destroy() removes event listener and sets destroyed flag
  *   - destroyed flag prevents copy after destroy
+ *   - WI-RA18.4: the selection is markdown and is copied as written — a
+ *     two-space hard break and blank lines inside a fence survive; only the
+ *     blank lines before it and the whitespace after it are trimmed
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -20,10 +23,6 @@ const mockCopyOnSelect = { value: true };
 
 vi.mock("@/plugins/shared/hostSettings", () => ({
   hostSettings: { copyOnSelect: () => mockCopyOnSelect.value },
-}));
-
-vi.mock("@/plugins/markdownCopy/tiptap", () => ({
-  cleanTextForClipboard: (text: string) => text.trim(),
 }));
 
 vi.mock("@/utils/debug", () => ({
@@ -96,6 +95,24 @@ describe("createSourceCopyOnSelectPlugin", () => {
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith("hello");
   });
 
+  it.each([
+    ["a two-space hard break", "line one  \nline two", "line one  \nline two"],
+    ["a backslash hard break", "line one\\\nline two", "line one\\\nline two"],
+    ["blank lines inside a fence", "```\nx\n\n\n\ny\n```", "```\nx\n\n\n\ny\n```"],
+    ["trailing spaces inside a fence", "```\nkeep   \n```", "```\nkeep   \n```"],
+    ["CJK text with a hard break", "中文  \n日本語", "中文  \n日本語"],
+    ["blank lines around the selection", "\n\n  text  \n\n", "  text"],
+  ])("copies the selected markdown as written: %s", async (_label, content, expected) => {
+    const view = createView(content, 0, content.length);
+
+    view.dom.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expected);
+  });
+
   it("does nothing on mouseup when copyOnSelect is disabled", async () => {
     mockCopyOnSelect.value = false;
     const view = createView("hello world", 0, 5);
@@ -124,7 +141,7 @@ describe("createSourceCopyOnSelectPlugin", () => {
   });
 
   it("does not copy when cleaned text is empty", async () => {
-    // Select whitespace only — cleanTextForClipboard trims to empty string
+    // Select whitespace only — trimming leaves an empty string
     const view = createView("   ", 0, 3);
 
     const mouseUpEvent = new MouseEvent("mouseup", { bubbles: true });

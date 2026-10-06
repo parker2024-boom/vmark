@@ -1,54 +1,37 @@
-//! PTY session state — flow control, session registry, and quit-time cleanup.
+//! PTY session state — the session registry and the one way a session ends.
 //!
 //! Moved out of `pty.rs` (the command surface); see that module's header for
-//! the design decisions. Contains the `PauseControl` condvar, the per-session
-//! `Session` record and its blocking `create_session` /
-//! `kill_and_reap_unstarted` lifecycle helpers, the managed `PtyState` map
-//! (with its `Drop` fallback), and the explicit quit-path `kill_all`.
-//! Window-destroy cleanup lives in `window_sessions.rs`.
+//! the design decisions. Contains the per-session `Session` record with its
+//! blocking `create_session` constructor, the `terminate` every teardown path
+//! shares, the managed `PtyState` map (with its `Drop` fallback), and the
+//! quit-path `kill_all`. The shell itself lives in `child.rs`, the
+//! interruptible reader source in `output.rs`, the pause condvar in
+//! `pause.rs`, what may be spawned at all in `spawn_policy.rs`, and
+//! window-destroy cleanup in `window_sessions.rs`.
 
-use portable_pty::{native_pty_system, Child, ChildKiller, CommandBuilder, MasterPty, PtySize};
+use super::child::{terminate_children, ChildSlot, HANGUP_GRACE};
+use super::output::{self, Interrupter, OutputSource};
+use super::pause::PauseControl;
+use super::spawn_policy::VettedCommand;
+use portable_pty::{native_pty_system, MasterPty, PtySize};
 use serde::Serialize;
 use std::collections::BTreeMap;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Arc, Condvar, Mutex as StdMutex};
+use std::sync::{Arc, Mutex as StdMutex, MutexGuard};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, Runtime};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 
-// ---------------------------------------------------------------------------
-// Flow control
-// ---------------------------------------------------------------------------
+/// How long `terminate` waits for an interrupted reader thread to finish. It
+/// normally ends within milliseconds; the bound covers a reader stuck sending
+/// to a webview that is going away.
+const READER_JOIN_TIMEOUT: Duration = Duration::from_millis(2000);
+const READER_JOIN_POLL: Duration = Duration::from_millis(5);
 
-pub(super) struct PauseControl {
-    paused: StdMutex<bool>,
-    cond: Condvar,
-}
-
-impl PauseControl {
-    pub(super) fn new() -> Self {
-        Self {
-            paused: StdMutex::new(false),
-            cond: Condvar::new(),
-        }
-    }
-
-    pub(super) fn pause(&self) {
-        *self.paused.lock().unwrap_or_else(|p| p.into_inner()) = true;
-    }
-
-    pub(super) fn resume(&self) {
-        *self.paused.lock().unwrap_or_else(|p| p.into_inner()) = false;
-        self.cond.notify_one();
-    }
-
-    /// Block the calling thread until unpaused. No-op when not paused.
-    pub(super) fn wait_if_paused(&self) {
-        let mut guard = self.paused.lock().unwrap_or_else(|p| p.into_inner());
-        while *guard {
-            guard = self.cond.wait(guard).unwrap_or_else(|p| p.into_inner());
-        }
-    }
+fn lock<T>(mutex: &StdMutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|p| p.into_inner())
 }
 
 // ---------------------------------------------------------------------------
@@ -60,27 +43,122 @@ pub(super) struct Session {
     /// migrate between windows (moving a workspace instance kills its
     /// sessions), so this is fixed for the session's life.
     pub(super) owner: String,
-    pub(super) reader: Mutex<Option<Box<dyn Read + Send>>>,
-    pub(super) child: Mutex<Option<Box<dyn Child + Send + Sync>>>,
-    pub(super) child_killer: StdMutex<Box<dyn ChildKiller + Send + Sync>>,
+    /// The shell. It stays here whether or not a reader runs, so every
+    /// teardown path can signal and reap it the same way.
+    pub(super) child: ChildSlot,
+    /// The reader's source until `start_reader` hands it to the thread.
+    output: StdMutex<Option<OutputSource>>,
+    interrupter: Interrupter,
+    reader: StdMutex<Option<JoinHandle<()>>>,
     pub(super) writer: StdMutex<Box<dyn Write + Send>>,
     pub(super) master: StdMutex<Box<dyn MasterPty + Send>>,
-    pub(super) pause_ctl: Arc<PauseControl>,
-    pub(super) shutdown: Arc<AtomicBool>,
+    pub(super) pause_ctl: PauseControl,
+    pub(super) shutdown: AtomicBool,
 }
 
-/// Create the PTY pair, validate + spawn the shell, and assemble a `Session`.
+/// Why a reader thread could not be started.
+pub(super) enum StartError {
+    AlreadyStarted,
+    Spawn(std::io::Error),
+}
+
+impl Session {
+    /// Start the reader thread, handing it the session and its output source.
+    /// The reader slot stays locked across the spawn, so a concurrent
+    /// `terminate` sees either no reader or one it can join — never a thread
+    /// that exists but is not recorded yet.
+    pub(super) fn start_reader(
+        self: &Arc<Self>,
+        name: String,
+        run: impl FnOnce(Arc<Session>, OutputSource) + Send + 'static,
+    ) -> Result<(), StartError> {
+        let mut reader = lock(&self.reader);
+        let source = lock(&self.output)
+            .take()
+            .ok_or(StartError::AlreadyStarted)?;
+        let session = Arc::clone(self);
+        let handle = std::thread::Builder::new()
+            .name(name)
+            .spawn(move || run(session, source))
+            .map_err(StartError::Spawn)?;
+        *reader = Some(handle);
+        Ok(())
+    }
+
+    /// Tell the reader to stop: raise the flag, then wake it from a pause and
+    /// from a blocked read.
+    fn request_stop(&self) {
+        self.shutdown.store(true, Ordering::Release);
+        self.pause_ctl.resume();
+        self.interrupter.interrupt();
+    }
+
+    /// Wait, within a bound, for the reader thread to finish.
+    fn join_reader(&self) {
+        let Some(handle) = lock(&self.reader).take() else {
+            return;
+        };
+        if handle.thread().id() == std::thread::current().id() {
+            return;
+        }
+        let deadline = Instant::now() + READER_JOIN_TIMEOUT;
+        while !handle.is_finished() {
+            if Instant::now() >= deadline {
+                log::error!(
+                    "[pty] reader of shell {:?} (window {:?}) did not stop in time",
+                    self.child.pid(),
+                    self.owner
+                );
+                return;
+            }
+            std::thread::sleep(READER_JOIN_POLL);
+        }
+        if handle.join().is_err() {
+            log::error!(
+                "[pty] reader of shell {:?} (window {:?}) panicked",
+                self.child.pid(),
+                self.owner
+            );
+        }
+    }
+}
+
+/// Stop the reader and end the shell of every session: hang up, bounded grace,
+/// kill, reap. Blocking, but bounded however many sessions there are.
+fn stop_shells(sessions: &[Arc<Session>]) {
+    for session in sessions {
+        session.request_stop();
+    }
+    let children: Vec<&ChildSlot> = sessions.iter().map(|session| &session.child).collect();
+    terminate_children(&children, HANGUP_GRACE);
+}
+
+/// End sessions for good, started or not: stop their shells, then wait for
+/// their reader threads. Once the last reference to a session is dropped after
+/// this, its master descriptors close — even while an orphan still holds the
+/// slave side open.
+///
+/// Blocking — call from `spawn_blocking` or a plain thread, never directly on
+/// a tokio worker.
+pub(super) fn terminate(sessions: &[Arc<Session>]) {
+    stop_shells(sessions);
+    for session in sessions {
+        session.join_reader();
+    }
+}
+
+/// Create the PTY pair, spawn the shell, and assemble a `Session`. The command
+/// has already been through the spawn policy — a `VettedCommand` cannot be
+/// built any other way.
 ///
 /// Blocking (`openpty` / `spawn_command` are synchronous syscalls) — call
 /// from `spawn_blocking` or a plain thread, never directly on a tokio worker.
 pub(super) fn create_session(
     owner: String,
-    file: String,
-    args: Vec<String>,
+    command: VettedCommand,
     cols: u16,
     rows: u16,
-    cwd: Option<String>,
-    env: BTreeMap<String, String>,
+    cwd: Option<&str>,
 ) -> Result<Session, String> {
     let pty_system = native_pty_system();
     let pair = pty_system
@@ -94,60 +172,32 @@ pub(super) fn create_session(
         .map_err(|e| e.to_string())?;
 
     let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
-    let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
+    // So a full input queue answers `WouldBlock` instead of holding a write
+    // for as long as the foreground program does not read (`input.rs`).
+    #[cfg(unix)]
+    super::input::make_nonblocking(pair.master.as_ref()).map_err(|e| e.to_string())?;
+    // Before the spawn: a failure here must not leave a shell nobody owns.
+    let (output, interrupter) = output::channel(pair.master.as_ref()).map_err(|e| e.to_string())?;
 
-    // Defense-in-depth: validate that the shell is an absolute path to an
-    // existing executable.  The frontend is trusted, but if the webview were
-    // compromised this prevents spawning arbitrary binaries.
-    let shell_path = std::path::Path::new(&file);
-    if !shell_path.is_absolute() {
-        return Err("Shell must be an absolute path".into());
-    }
-    if !shell_path.exists() {
-        return Err(format!("Shell not found: {}", file));
-    }
-
-    let mut cmd = CommandBuilder::new(&file);
-    cmd.args(args);
-    if let Some(ref d) = cwd {
-        cmd.cwd(d);
-    }
-    for (k, v) in &env {
-        cmd.env(k, v);
-    }
-
-    let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
-    let child_killer = child.clone_killer();
+    let child = pair
+        .slave
+        .spawn_command(command.into_builder(cwd))
+        .map_err(|e| e.to_string())?;
     // Close the slave fd — the child has its own copy.
     // This ensures the reader gets EOF when the child exits.
     drop(pair.slave);
 
     Ok(Session {
         owner,
-        reader: Mutex::new(Some(reader)),
-        child: Mutex::new(Some(child)),
-        child_killer: StdMutex::new(child_killer),
+        child: ChildSlot::new(child),
+        output: StdMutex::new(Some(output)),
+        interrupter,
+        reader: StdMutex::new(None),
         writer: StdMutex::new(writer),
         master: StdMutex::new(pair.master),
-        pause_ctl: Arc::new(PauseControl::new()),
-        shutdown: Arc::new(AtomicBool::new(false)),
+        pause_ctl: PauseControl::new(),
+        shutdown: AtomicBool::new(false),
     })
-}
-
-/// Kill and reap a child the session still owns — i.e. `pty_start` never ran,
-/// so no reader thread will ever `wait()` on it. No-op once child ownership
-/// moved to the reader thread (which reaps on both its normal and panic
-/// paths).
-///
-/// Blocking (`wait()` + `blocking_lock`) — call from `spawn_blocking` or a
-/// plain thread, never directly on a tokio worker.
-pub(super) fn kill_and_reap_unstarted(session: &Session) {
-    session.shutdown.store(true, Ordering::Release);
-    session.pause_ctl.resume();
-    if let Some(mut child) = session.child.blocking_lock().take() {
-        let _ = child.kill();
-        let _ = child.wait();
-    }
 }
 
 pub struct PtyState {
@@ -172,48 +222,32 @@ impl Drop for PtyState {
         // without dropping managed state — so quit-time orphan prevention is
         // the explicit `kill_all` call on the quit path.
         // get_mut() is safe here because Drop receives &mut self.
-        let sessions = std::mem::take(self.sessions.get_mut());
-        for (pid, session) in sessions {
-            session.shutdown.store(true, Ordering::Release);
-            session.pause_ctl.resume();
-            // We only hold the `ChildKiller` here; the `Child` itself was moved
-            // into the reader thread in `pty_start` (and `ChildKiller` does not
-            // expose `wait()`). Reaping is therefore intentionally NOT done here:
-            // the kill makes the reader's `read()` return, its loop breaks, and
-            // the reader thread's `child.wait()` reaps the child — no zombie, no
-            // redundant wait at this site (WI-4.4 / G9).
-            if let Ok(mut killer) = session.child_killer.lock() {
-                if let Err(e) = killer.kill() {
-                    log::warn!("[pty] Failed to kill PTY {pid} during cleanup: {e}");
-                }
-            }
-        }
+        let sessions: Vec<Arc<Session>> = std::mem::take(self.sessions.get_mut())
+            .into_values()
+            .collect();
+        stop_shells(&sessions);
     }
 }
 
-/// Kill all live PTY child processes so they don't outlive the app.
+/// End all live PTY shells so they don't outlive the app.
 ///
 /// Must be called explicitly on the quit path (`quit::finalize_quit` and the
 /// `ExitRequested` → `AllowExit` branch): `app.exit` terminates the process
 /// via `std::process::exit`, which never drops Tauri-managed state, so
-/// `PtyState`'s `Drop` cannot be relied on at quit. Reaping is left to each
-/// session's reader thread (`child.wait()` after the kill), matching `Drop`.
+/// `PtyState`'s `Drop` cannot be relied on at quit.
+///
+/// Returns as soon as every shell is gone. A shell that ignores the hangup
+/// holds quit for the grace period, shared by all sessions, and is then
+/// killed. Reader threads are not joined: the process is about to exit.
 /// Call only from a non-async context (the main-thread quit path) —
 /// `blocking_read` panics inside a tokio runtime.
 pub fn kill_all<R: Runtime>(app: &AppHandle<R>) {
     let Some(state) = app.try_state::<PtyState>() else {
         return;
     };
-    let sessions = state.sessions.blocking_read();
-    for (pid, session) in sessions.iter() {
-        session.shutdown.store(true, Ordering::Release);
-        session.pause_ctl.resume();
-        if let Ok(mut killer) = session.child_killer.lock() {
-            if let Err(e) = killer.kill() {
-                log::warn!("[pty] Failed to kill PTY {pid} during quit cleanup: {e}");
-            }
-        }
-    }
+    // Cloned out so the map is not held locked across the grace period.
+    let sessions: Vec<Arc<Session>> = state.sessions.blocking_read().values().cloned().collect();
+    stop_shells(&sessions);
 }
 
 // ---------------------------------------------------------------------------
@@ -239,6 +273,7 @@ pub(super) async fn get_session(state: &PtyState, pid: u32) -> Result<Arc<Sessio
         .ok_or_else(|| format!("Unknown PTY session {pid}"))
 }
 
-#[cfg(test)]
+// Unix-only: the tests spawn `/bin/sh` and probe pids with `kill(pid, 0)`.
+#[cfg(all(test, unix))]
 #[path = "session.test.rs"]
 mod tests;

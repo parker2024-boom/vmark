@@ -10,7 +10,7 @@
  * @module services/files/fileChangeBatch
  */
 
-import { readTextFile } from "@tauri-apps/plugin-fs";
+import { readDocumentText } from "@/services/files/readDocumentText";
 import { useDocumentStore } from "@/stores/documentStore";
 import { fileOpsError } from "@/utils/debug";
 
@@ -43,7 +43,7 @@ export async function keepAllLocal(pending: BatchChange[]): Promise<void> {
   for (const { tabId, filePath } of pending) {
     useDocumentStore.getState().markDivergent(tabId);
     try {
-      const currentDisk = await readTextFile(filePath);
+      const currentDisk = await readDocumentText(filePath);
       useDocumentStore.getState().updateLastDiskContent(tabId, currentDisk);
     } catch (error) {
       fileOpsError("Failed to refresh lastDiskContent after Keep-all:", filePath, error);

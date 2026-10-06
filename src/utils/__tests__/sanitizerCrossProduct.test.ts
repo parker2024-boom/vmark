@@ -5,24 +5,24 @@
 // asserts the property instead, over the full cross-product: no sanitizer
 // output, from any entry point, may contain executable content.
 //
-// The cross-product is the point. The five entry points carry DIFFERENT
-// allow-lists (media html permits video/audio/iframe; svg permits
-// foreignObject + HTML profiles for Mermaid; katex is its own profile), so
-// a vector proven dead in one says nothing about the others — and the gap
-// between allow-lists is exactly where a hole hides. 62 vectors × 5 entry
-// points = 310 assertions that no hand-written suite would enumerate.
+// The cross-product is the point. The four entry points carry DIFFERENT
+// allow-lists (the extended preview permits svg, figure, details and styles;
+// svg permits foreignObject + HTML profiles for Mermaid; katex is its own
+// profile), so a vector proven dead in one says nothing about the others —
+// and the gap between allow-lists is exactly where a hole hides. 61 vectors
+// × 4 entry points = 244 assertions that no hand-written suite would
+// enumerate.
 //
 // A NEGATIVE CONTROL runs the same detector over unsanitized input and
 // requires it to fire. Without it, a detector that silently stopped
-// matching (a bad regex edit, a renamed export) would report 310 greens
+// matching (a bad regex edit, a renamed export) would report 244 greens
 // while checking nothing — the vacuous-gate failure mode.
 //
 // @coordinates-with sanitizerVectors.ts — the corpus
-// @coordinates-with ../sanitize.ts — the five entry points
+// @coordinates-with ../sanitize.ts — the four entry points
 import { describe, expect, it } from "vitest";
 import {
   sanitizeHtmlPreview,
-  sanitizeMediaHtml,
   sanitizeSvg,
   sanitizeKatex,
 } from "../sanitize";
@@ -44,7 +44,6 @@ const ENTRY_POINTS: readonly [string, (s: string) => string][] = [
         allowStyles: true,
       }),
   ],
-  ["sanitizeMediaHtml", (s) => sanitizeMediaHtml(s)],
   ["sanitizeSvg", (s) => sanitizeSvg(s)],
   ["sanitizeKatex", (s) => sanitizeKatex(s)],
 ];
@@ -126,7 +125,7 @@ function executableHits(output: string): string[] {
 describe("the gate is not vacuous", () => {
   it("has a non-trivial corpus over every entry point", () => {
     expect(XSS_VECTORS.length).toBeGreaterThanOrEqual(60);
-    expect(ENTRY_POINTS.length).toBe(5);
+    expect(ENTRY_POINTS.length).toBe(4);
   });
 
   it("gives every vector a unique id", () => {

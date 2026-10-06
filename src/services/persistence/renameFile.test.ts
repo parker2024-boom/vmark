@@ -4,9 +4,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockRename = vi.fn();
 const mockExists = vi.fn();
 const mockStat = vi.fn();
-const mockReconcile = vi.fn();
-const mockApply = vi.fn();
-const mockGetAllOpenFilePaths = vi.fn(() => ["/docs/note.md"]);
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
   rename: (...args: unknown[]) => mockRename(...args),
@@ -31,26 +28,44 @@ vi.mock("@tauri-apps/api/path", () => ({
   },
 }));
 
-vi.mock("@/stores/tabStore", () => ({
-  useTabStore: { getState: () => ({ getAllOpenFilePaths: mockGetAllOpenFilePaths }) },
-}));
-
-vi.mock("@/utils/pathReconciliation", () => ({
-  reconcilePathChange: (...args: unknown[]) => mockReconcile(...args),
-}));
-
-vi.mock("./applyPathReconciliation", () => ({
-  applyPathReconciliation: (...args: unknown[]) => mockApply(...args),
-}));
-
 import { renameFile } from "./renameFile";
+import { useTabStore } from "@/stores/tabStore";
+import { useDocumentStore } from "@/stores/documentStore";
+
+// Reconciliation runs real: an open tab on /docs/note.md is what a rename of
+// that file must re-point (and what every refused rename must leave alone).
+const WINDOW = "main";
+const OPEN_PATH = "/docs/note.md";
+let openTabId = "";
+
+function resetStores(): void {
+  useTabStore.getState().removeWindow(WINDOW);
+  const docs = useDocumentStore.getState();
+  for (const id of Object.keys(docs.documents)) docs.removeDocument(id);
+}
+
+/** Where the open tab and its document point now. */
+function openTabPaths(): { tab: string | null | undefined; doc: string | null | undefined } {
+  const tab = useTabStore.getState().getTabsByWindow(WINDOW).find((t) => t.id === openTabId);
+  return {
+    tab: tab?.kind === "document" ? tab.filePath : undefined,
+    doc: useDocumentStore.getState().getDocument(openTabId)?.filePath,
+  };
+}
+
+/** The open tab was not touched. */
+function expectOpenTabUntouched(): void {
+  expect(openTabPaths()).toEqual({ tab: OPEN_PATH, doc: OPEN_PATH });
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockExists.mockResolvedValue(false);
   mockStat.mockResolvedValue({ isDirectory: false });
   mockRename.mockResolvedValue(undefined);
-  mockReconcile.mockReturnValue([{ action: "update_path", oldPath: "/docs/note.md", newPath: "/docs/renamed.md" }]);
+  resetStores();
+  openTabId = useTabStore.getState().createTab(WINDOW, OPEN_PATH);
+  useDocumentStore.getState().initDocument(openTabId, "body", OPEN_PATH);
 });
 
 describe("renameFile", () => {
@@ -58,13 +73,14 @@ describe("renameFile", () => {
     const result = await renameFile("/docs/note.md", "renamed.md");
     expect(result).toEqual({ status: "renamed", newPath: "/docs/renamed.md" });
     expect(mockRename).toHaveBeenCalledWith("/docs/note.md", "/docs/renamed.md");
-    expect(mockReconcile).toHaveBeenCalledWith({
-      changeType: "rename",
-      oldPath: "/docs/note.md",
-      newPath: "/docs/renamed.md",
-      openFilePaths: ["/docs/note.md"],
-    });
-    expect(mockApply).toHaveBeenCalledOnce();
+    // The open tab and its document follow the file to its new name.
+    expect(openTabPaths()).toEqual({ tab: "/docs/renamed.md", doc: "/docs/renamed.md" });
+  });
+
+  it("leaves tabs on other files alone", async () => {
+    const result = await renameFile("/docs/other.md", "renamed.md");
+    expect(result).toEqual({ status: "renamed", newPath: "/docs/renamed.md" });
+    expectOpenTabUntouched();
   });
 
   it("appends .md when renaming a file without an extension in the new name", async () => {
@@ -77,7 +93,7 @@ describe("renameFile", () => {
     const result = await renameFile("/docs/note.md", "note.md");
     expect(result).toEqual({ status: "unchanged", path: "/docs/note.md" });
     expect(mockRename).not.toHaveBeenCalled();
-    expect(mockApply).not.toHaveBeenCalled();
+    expectOpenTabUntouched();
   });
 
   it("refuses to overwrite an existing target", async () => {
@@ -92,7 +108,7 @@ describe("renameFile", () => {
     mockRename.mockRejectedValue(boom);
     const result = await renameFile("/docs/note.md", "renamed.md");
     expect(result).toEqual({ status: "error", error: boom });
-    expect(mockApply).not.toHaveBeenCalled();
+    expectOpenTabUntouched();
   });
 });
 
@@ -183,7 +199,7 @@ describe("renameFile — name validation", () => {
     expect(result.status).toBe("error");
     expect(mockRename).not.toHaveBeenCalled();
     expect(mockExists).not.toHaveBeenCalled();
-    expect(mockApply).not.toHaveBeenCalled();
+    expectOpenTabUntouched();
   });
 
   it("still renames normally after validation (control)", async () => {

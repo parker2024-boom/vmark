@@ -17,15 +17,7 @@ import { visit } from "unist-util-visit";
 import type { Plugin } from "unified";
 import type { Root, Blockquote, Paragraph, Text, BlockContent } from "mdast";
 
-const ALERT_KINDS = [
-  "note",
-  "tip",
-  "important",
-  "warning",
-  "caution",
-] as const;
-
-type AlertKind = (typeof ALERT_KINDS)[number];
+type AlertKind = "note" | "tip" | "important" | "warning" | "caution";
 
 export interface AlertNode {
   type: "alert";

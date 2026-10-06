@@ -1,3 +1,11 @@
+/**
+ * fileTreeFilters — decides which directory entries the file explorer tree
+ * shows, from the always-skipped names, hidden-file and all-files settings,
+ * excluded folders and a name filter.
+ *
+ * @module components/Sidebar/FileExplorer/fileTreeFilters
+ */
+
 import type { DirectoryEntry } from "./types";
 
 /**

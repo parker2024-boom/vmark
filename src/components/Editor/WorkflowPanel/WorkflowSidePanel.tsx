@@ -11,8 +11,8 @@
  * Runs ITS tab's document (`tabId`, from the surface that mounts it) — never
  * the active tab of window "main", which is what it used to read (WI-LX2.2) —
  * and shows ITS tab's preview (graph, parse error, open state): a split's two
- * panels used to share one window-global preview (#129). While ITS run is live
- * the panel stays, so Cancel survives a file that stopped parsing (#124).
+ * panels used to share one window-global preview. While ITS run is live
+ * the panel stays, so Cancel survives a file that stopped parsing.
  *
  * @coordinates-with stores/workflowStore.ts — panel open state + parsed graph
  * @coordinates-with components/Editor/WorkflowPanel/WorkflowRunPanel.tsx — the panel body
@@ -38,7 +38,7 @@ export function WorkflowSidePanel({ tabId }: { tabId: string | null }) {
   const graph = useWorkflowStore((s) => docPreview(s.preview, tabId).graph);
   const parseError = useWorkflowStore((s) => docPreview(s.preview, tabId).parseError);
   // A run this tab owns keeps the panel — and its Cancel — until it ends,
-  // even when the preview closed because the file stopped parsing (#124).
+  // even when the preview closed because the file stopped parsing.
   const liveRunHere = useWorkflowStore(
     (s) => tabId !== null && s.preview.executionId !== null && s.preview.runTabId === tabId,
   );

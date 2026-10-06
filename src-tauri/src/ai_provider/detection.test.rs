@@ -136,8 +136,7 @@ fn warm_exec(shell: &std::path::Path) {
     // real defect — still fails instead of hanging the suite.
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     loop {
-        let result = std::process::Command::new(shell)
-            .arg("--vmark-warmup")
+        let result = build_command(&shell.to_string_lossy(), &["--vmark-warmup"])
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
@@ -325,4 +324,25 @@ fn zdotdir_round_trips_via_fake_login_shell() {
          {got:?} says nothing about the round-trip"
     );
     assert_eq!(got.as_deref(), Some("/home/x/.config/zsh"));
+}
+
+/// WI-RA7C.1 — the per-shell `ZDOTDIR` cache keeps working once poisoned. The
+/// entries are independent, so a panic mid-insert cannot have torn one; the
+/// silent skip instead re-ran a login shell (up to a five-second probe) on
+/// every terminal spawn for the rest of the session.
+#[test]
+fn a_poisoned_zdotdir_cache_still_answers_from_the_cache() {
+    let cache: ZdotdirCache = crate::lock_policy::tests::poisoned(HashMap::new());
+    let mut queries = 0;
+    for _ in 0..2 {
+        let answer = cached_zdotdir(&cache, "/bin/zsh", || {
+            queries += 1;
+            Some("/opt/zdotdir".to_string())
+        });
+        assert_eq!(answer.as_deref(), Some("/opt/zdotdir"));
+    }
+    assert_eq!(
+        queries, 1,
+        "the second spawn must be answered from the cache"
+    );
 }

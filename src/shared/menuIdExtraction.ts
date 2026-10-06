@@ -8,7 +8,7 @@
  * Consumers:
  *   - scripts/extract-menu-ids.ts — regenerates src/shared/menu-ids.json
  *   - src/shared/menuIdExtraction.test.ts — fails when the checked-in JSON
- *     drifts from the Rust sources (audit 20260612 H1: the old generator read
+ *     drifts from the Rust sources (the old generator read
  *     a deleted file and the contract silently rotted for 4 months)
  *   - actionRegistry.test.ts — pins MENU_TO_ACTION bidirectionally to
  *     menu-ids.json's menuIds
@@ -94,10 +94,10 @@ export const EXCLUDED_MENU_IDS: ReadonlySet<string> = new Set([
   "new-window",
   // Routed through the CommandBus (menu:last-used-tab -> tab.lastUsed).
   "last-used-tab",
-  // Routed through the CommandBus (menu:reopen-closed-tab -> tab.reopenClosed, WI-FL3.3).
+  // Routed through the CommandBus (menu:reopen-closed-tab -> tab.reopenClosed).
   "reopen-closed-tab",
-  // Routed through the CommandBus (menu:bring-all-to-front -> window.bringAllToFront,
-  // WI-FL3.10). It was listed under "handled natively" above, which was the
+  // Routed through the CommandBus (menu:bring-all-to-front -> window.bringAllToFront).
+  // It was listed under "handled natively" above, which was the
   // premise the feature ledger found false: Rust classifies it as Generic and
   // emits menu:bring-all-to-front, and nothing was bound to it.
   "bring-all-to-front",
@@ -112,7 +112,7 @@ export const EXCLUDED_MENU_IDS: ReadonlySet<string> = new Set([
   "reload-genies",
   "open-genies-folder",
   "no-genies",
-  // Pane commands, routed through the CommandBus (WI-DSPL1.2).
+  // Pane commands, routed through the CommandBus.
   "split-documents",
   "close-pane",
   "focus-other-pane",
@@ -120,7 +120,7 @@ export const EXCLUDED_MENU_IDS: ReadonlySet<string> = new Set([
   // Routed through the CommandBus (menu:new-browser-tab -> browser.newTab), not the
   // editor action registry: it opens a tab, it does not act on a document. It exists as
   // a NATIVE menu item because the embedded browser's WKWebView takes keyboard focus,
-  // and a DOM shortcut cannot fire while a page has it (WI-S0.5).
+  // and a DOM shortcut cannot fire while a page has it.
   "new-browser-tab",
   "open",
   "open-folder",

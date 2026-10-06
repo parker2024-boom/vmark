@@ -4,6 +4,8 @@
  * Adds a PNG export button to Graphviz diagram containers.
  * Thin wrapper binding the graphviz export renderer to the shared
  * render → PNG → save flow in shared/diagramExportPng.ts.
+ *
+ * @module plugins/graphviz/graphvizExport
  */
 
 import { renderGraphvizForExport } from "./index";

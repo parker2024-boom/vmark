@@ -5,9 +5,17 @@
 //! `BinaryMissing` result so the frontend can hide the actionlint
 //! diagnostics layer silently rather than treating it as an error.
 //!
-//! Plan ADR-7 + WI-5.4. Cross-platform per AGENTS.md: never use bare
+//! One PATH does both jobs: `run_actionlint` looks for the binary in the PATH
+//! it is given and runs the child with that same PATH, so the subtools
+//! actionlint shells out to (shellcheck, pyflakes) resolve the way the binary
+//! did. The caller passes the login-shell PATH — a macOS GUI launch inherits a
+//! minimal one that holds neither.
+//!
+//! Plan ADR-7. Cross-platform per AGENTS.md: never use bare
 //! `Command::new`; route through the existing
 //! `ai_provider::spawn::build_command` pattern.
+//!
+//! @coordinates-with gha_workflow/commands.rs — passes the login-shell PATH
 
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -52,13 +60,10 @@ pub struct ActionlintDiagnostic {
     pub snippet: Option<String>,
 }
 
-/// Walk PATH looking for an executable named `name`. Returns the first
-/// match. macOS GUI apps inherit a minimal PATH, so for production the
-/// call site should also feed in the result of
-/// `ai_provider::login_shell_path()`.
-pub fn find_on_path(name: &str) -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
-    for dir in std::env::split_paths(&path) {
+/// The first file named `name` in the directories of `path`, a PATH-style
+/// list. On Windows `name.exe` is tried in each directory too.
+pub(crate) fn find_in_path(path: &str, name: &str) -> Option<PathBuf> {
+    for dir in std::env::split_paths(path) {
         let candidate = dir.join(name);
         #[cfg(target_os = "windows")]
         {
@@ -81,39 +86,13 @@ pub fn find_on_path(name: &str) -> Option<PathBuf> {
     None
 }
 
-/// Compose the PATH passed to the actionlint child process.
-///
-/// `extra_path` (typically the frontend-supplied login-shell PATH from the
-/// renderer) is prepended so the caller's preferred binary discovery order
-/// wins. The macOS login-shell PATH is appended so subtools (shellcheck,
-/// pyflakes) remain discoverable in GUI launches that inherit a minimal
-/// launchd PATH.
-///
-/// `extra_path` may already be a colon-separated list. Empty / `None`
-/// inputs are skipped. The OS `PATH` env separator is `:` on Unix and `;`
-/// on Windows; we use the platform separator so the merged value stays
-/// portable.
-pub(crate) fn compose_actionlint_path(extra_path: Option<&str>, login_shell_path: &str) -> String {
-    let sep = if cfg!(windows) { ';' } else { ':' };
-    match extra_path.map(str::trim).filter(|s| !s.is_empty()) {
-        Some(prefix) => {
-            if login_shell_path.is_empty() {
-                prefix.to_string()
-            } else {
-                format!("{}{}{}", prefix, sep, login_shell_path)
-            }
-        }
-        None => login_shell_path.to_string(),
-    }
-}
-
 /// Run actionlint on the given YAML content. Returns a `LintResult`
 /// that the caller serializes back to the frontend.
 ///
-/// `extra_path` is an optional PATH addition (typically the result of
-/// `ai_provider::login_shell_path()` for macOS GUI launches).
-pub fn run_actionlint(yaml: &str, extra_path: Option<&str>) -> LintResult {
-    let exe = match find_actionlint(extra_path) {
+/// `path` is the PATH actionlint is looked for in and run with (see the
+/// module header).
+pub fn run_actionlint(yaml: &str, path: &str) -> LintResult {
+    let exe = match find_in_path(path, "actionlint") {
         Some(p) => p,
         None => return LintResult::BinaryMissing,
     };
@@ -130,9 +109,7 @@ pub fn run_actionlint(yaml: &str, extra_path: Option<&str>) -> LintResult {
     // actionlint can't find its subtools (shellcheck, pyflakes) and
     // silently degrades shell-script and Python-expression checks.
     // Same pattern as ai_provider/cli.rs, pandoc/commands.rs, external_editor.rs.
-    // extra_path is prepended so caller-supplied binary-discovery order wins.
-    let login_path = crate::ai_provider::login_shell_path();
-    cmd.env("PATH", compose_actionlint_path(extra_path, &login_path));
+    cmd.env("PATH", path);
 
     let mut child = match cmd.spawn() {
         Ok(c) => c,
@@ -146,8 +123,7 @@ pub fn run_actionlint(yaml: &str, extra_path: Option<&str>) -> LintResult {
     if let Some(mut stdin) = child.stdin.take() {
         if let Err(e) = stdin.write_all(yaml.as_bytes()) {
             // Pipe closed early — actionlint likely panicked or aborted.
-            // Logging avoids the silent-hang debugging trail (Rust audit
-            // round 5 finding).
+            // Logging avoids the silent-hang debugging trail.
             log::warn!("actionlint stdin write failed: {}", e);
         }
     }
@@ -212,28 +188,6 @@ pub fn run_actionlint(yaml: &str, extra_path: Option<&str>) -> LintResult {
     parse_actionlint_output(&stdout)
 }
 
-fn find_actionlint(extra_path: Option<&str>) -> Option<PathBuf> {
-    if let Some(p) = find_on_path("actionlint") {
-        return Some(p);
-    }
-    // Fallback: split extra_path and probe each entry.
-    let extra = extra_path?;
-    for dir in std::env::split_paths(extra) {
-        let candidate = dir.join("actionlint");
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-        #[cfg(target_os = "windows")]
-        {
-            let exe = dir.join("actionlint.exe");
-            if exe.is_file() {
-                return Some(exe);
-            }
-        }
-    }
-    None
-}
-
 /// Parse actionlint's JSON output. Each line is a JSON object per the
 /// `{{json .}}` template. We parse leniently — malformed lines are
 /// skipped rather than aborting the whole batch.
@@ -265,155 +219,6 @@ pub fn parse_actionlint_output(stdout: &str) -> LintResult {
     LintResult::Ok { diagnostics }
 }
 
-// ─── Tests ──────────────────────────────────────────────────────────
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn find_on_path_returns_none_for_unknown_binary() {
-        // A binary name with whitespace can never exist as a file.
-        assert!(find_on_path("not a real binary xyz").is_none());
-    }
-
-    #[test]
-    fn find_on_path_finds_common_unix_binary_when_present() {
-        // sh exists on every reasonable Unix; on Windows we just verify
-        // the function doesn't panic.
-        #[cfg(not(target_os = "windows"))]
-        {
-            let result = find_on_path("sh");
-            assert!(result.is_some());
-        }
-        #[cfg(target_os = "windows")]
-        {
-            let _ = find_on_path("cmd"); // existence is best-effort
-        }
-    }
-
-    #[test]
-    fn parse_actionlint_array_form() {
-        let input = r#"[{"message":"unused","kind":"syntax-check","line":3,"column":5}]"#;
-        let result = parse_actionlint_output(input);
-        match result {
-            LintResult::Ok { diagnostics } => {
-                assert_eq!(diagnostics.len(), 1);
-                assert_eq!(diagnostics[0].line, 3);
-                assert_eq!(diagnostics[0].kind, "syntax-check");
-            }
-            _ => panic!("expected Ok"),
-        }
-    }
-
-    #[test]
-    fn parse_actionlint_jsonl_form() {
-        let input = r#"{"message":"a","kind":"x","line":1,"column":1}
-{"message":"b","kind":"y","line":2,"column":1}"#;
-        let result = parse_actionlint_output(input);
-        match result {
-            LintResult::Ok { diagnostics } => {
-                assert_eq!(diagnostics.len(), 2);
-                assert_eq!(diagnostics[0].message, "a");
-                assert_eq!(diagnostics[1].message, "b");
-            }
-            _ => panic!("expected Ok"),
-        }
-    }
-
-    #[test]
-    fn parse_actionlint_skips_malformed_lines() {
-        let input = "{\"message\":\"a\",\"kind\":\"x\",\"line\":1,\"column\":1}\nnot-json\n{\"message\":\"b\",\"kind\":\"y\",\"line\":2,\"column\":1}";
-        let result = parse_actionlint_output(input);
-        match result {
-            LintResult::Ok { diagnostics } => {
-                assert_eq!(diagnostics.len(), 2);
-            }
-            _ => panic!("expected Ok"),
-        }
-    }
-
-    #[test]
-    fn parse_actionlint_returns_failed_for_corrupt_array() {
-        let input = "[ this is not valid json ]";
-        let result = parse_actionlint_output(input);
-        assert!(matches!(result, LintResult::Failed { .. }));
-    }
-
-    #[test]
-    fn parse_actionlint_empty_array_means_clean() {
-        let input = "[]";
-        let result = parse_actionlint_output(input);
-        match result {
-            LintResult::Ok { diagnostics } => assert!(diagnostics.is_empty()),
-            _ => panic!("expected Ok with empty diagnostics"),
-        }
-    }
-
-    #[test]
-    fn run_actionlint_returns_binary_missing_when_not_installed() {
-        // Override PATH to an empty location so actionlint can't be found.
-        let saved_path = std::env::var_os("PATH");
-        std::env::set_var("PATH", "/tmp/definitely-empty-dir-xyz-12345");
-        let result = run_actionlint("on: push\njobs:\n  a:\n    runs-on: x\n    steps: []", None);
-        if let Some(p) = saved_path {
-            std::env::set_var("PATH", p);
-        }
-        assert!(matches!(result, LintResult::BinaryMissing));
-    }
-
-    // --- compose_actionlint_path ------------------------------------------
-    //
-    // Composing the spawn-time PATH is the only logic that the spawned
-    // child process depends on for subtool discovery. Unit-test the helper
-    // directly so a regression that drops the env var or the prepend order
-    // is caught without needing a subprocess.
-
-    fn sep() -> char {
-        if cfg!(windows) {
-            ';'
-        } else {
-            ':'
-        }
-    }
-
-    #[test]
-    fn compose_path_prepends_extra_path_in_front_of_login_shell_path() {
-        let s = sep();
-        let composed = compose_actionlint_path(Some("/opt/homebrew/bin"), "/usr/bin:/bin");
-        assert_eq!(
-            composed,
-            format!("/opt/homebrew/bin{}{}", s, "/usr/bin:/bin")
-        );
-    }
-
-    #[test]
-    fn compose_path_falls_back_to_login_shell_when_extra_is_none() {
-        let composed = compose_actionlint_path(None, "/usr/bin:/bin");
-        assert_eq!(composed, "/usr/bin:/bin");
-    }
-
-    #[test]
-    fn compose_path_falls_back_to_login_shell_when_extra_is_blank() {
-        let composed = compose_actionlint_path(Some("   "), "/usr/bin:/bin");
-        assert_eq!(composed, "/usr/bin:/bin");
-    }
-
-    #[test]
-    fn compose_path_returns_extra_path_alone_when_login_shell_is_empty() {
-        let composed = compose_actionlint_path(Some("/opt/homebrew/bin"), "");
-        assert_eq!(composed, "/opt/homebrew/bin");
-    }
-
-    #[test]
-    fn compose_path_uses_platform_separator() {
-        let composed = compose_actionlint_path(Some("A"), "B");
-        let expected_sep = sep();
-        assert!(
-            composed.contains(expected_sep),
-            "expected platform sep {:?} in {:?}",
-            expected_sep,
-            composed
-        );
-    }
-}
+#[path = "actionlint.test.rs"]
+mod tests;

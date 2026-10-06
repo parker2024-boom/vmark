@@ -1,3 +1,11 @@
+/**
+ * BrowserWorkspaceSurface — the pane surface that shows the active browser
+ * page of the browser workspace, plus its chrome where the OS draws the
+ * title bar.
+ *
+ * @module components/Browser/BrowserWorkspaceSurface
+ */
+
 import { useWindowLabel } from "@/contexts/WindowContext";
 import { usePaneContext } from "@/contexts/PaneContext";
 import { useTabStore } from "@/stores/tabStore";

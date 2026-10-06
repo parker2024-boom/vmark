@@ -2,8 +2,10 @@
  * Genies store — loaded AI genie definitions with persisted recent/favorite lists.
  *
  * `vmark-genies` localStorage key holds recent & favorite name lists only;
- * the genie definitions themselves are re-loaded from disk via `list_genies`
- * on each app start to pick up file changes.
+ * the genie definitions themselves are re-loaded from disk via `load_genies`
+ * on each app start to pick up file changes. That is one IPC call for the
+ * listing and every file's content; a genie the answer had no room for comes
+ * back without content and is read on its own with `read_genie`.
  *
  * Multi-window reconciliation: every window shares that key but has its own
  * store instance, so addRecent/toggleFavorite re-read the persisted lists and
@@ -35,13 +37,19 @@ interface GenieEntry {
   path: string;
   source: string;
   category: string | null;
-  /** WI-7.1: discriminator for picker dispatch. */
+  /** Discriminator for picker dispatch. */
   kind?: "markdown" | "workflow";
 }
 
 interface GenieContent {
   metadata: GenieMetadata;
   template: string;
+}
+
+/** A listed genie as `load_genies` returns it: read, failed, or left unread. */
+interface LoadedGenie extends GenieEntry {
+  content?: GenieContent;
+  error?: unknown;
 }
 
 interface GeniesState {
@@ -80,16 +88,16 @@ export const useGeniesStore = create<GeniesState & GeniesActions>()(
         const thisLoadId = ++_loadId;
         set({ loading: true });
         try {
-          const entries: GenieEntry[] = await invoke("list_genies");
+          const entries: LoadedGenie[] = await invoke("load_genies");
 
           if (thisLoadId !== _loadId) return;
 
           const genies: GenieDefinition[] = [];
           for (const entry of entries) {
             try {
-              const content: GenieContent = await invoke("read_genie", {
-                path: entry.path,
-              });
+              if (entry.error !== undefined) throw entry.error;
+              const content: GenieContent =
+                entry.content ?? (await invoke("read_genie", { path: entry.path }));
               // The category falls back file → directory → none, and "none" is
               // the ABSENCE of a category rather than a stated empty one, so
               // an uncategorised genie carries no key at all.

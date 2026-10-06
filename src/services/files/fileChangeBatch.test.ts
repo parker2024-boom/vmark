@@ -5,6 +5,7 @@
  * @module services/files/fileChangeBatch.test
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fileBytes } from "@/test/fileBytes";
 
 const mocks = vi.hoisted(() => ({
   readTextFile: vi.fn(),
@@ -15,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: mocks.readTextFile,
+  readFile: (path: string) => fileBytes(mocks.readTextFile(path)),
 }));
 
 vi.mock("@/stores/documentStore", () => ({

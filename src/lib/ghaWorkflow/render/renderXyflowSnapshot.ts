@@ -8,7 +8,7 @@
  *
  *   Replaces the Mermaid-based inline render documented in ADR-9 of
  *   the GHA workflow viewer plan; rationale in
- *   dev-docs/plans/20260504-workflow-fence-snapshot.md.
+ *   .claude/adr/plans/20260504-workflow-fence-snapshot.md.
  *
  * Architecture (plan ADR-2 + ADR-3 + ADR-4):
  *   - Single shared off-screen xyflow root. One persistent React root

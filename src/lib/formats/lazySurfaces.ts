@@ -1,5 +1,5 @@
 /**
- * Lazy format-surface resolution (WI-13).
+ * Lazy format-surface resolution.
  *
  * Purpose: turn a `FormatConfig` import thunk into a resolved surface exactly
  *   once, with the failure semantics decision-ledger entry **D4** pins.

@@ -14,7 +14,7 @@ import type { EditorView } from "@tiptap/pm/view";
 import { expandedToggleMark as expandedToggleMarkTiptap } from "@/plugins/editorPlugins/expandedToggleMark";
 import { resolveLinkPopupPayload } from "@/plugins/formatToolbar/linkPopupUtils";
 import { findMarkRange, findWordAtCursor } from "@/plugins/syntaxReveal/marks";
-import type { LinkInfo } from "@/plugins/toolbarContext/types";
+import type { LinkInfo } from "@/plugins/shared/toolbarContextTypes";
 import { hostPopups } from "@/plugins/shared/hostPopups";
 import { readClipboardUrl } from "@/services/editor/clipboardUrl";
 import { wysiwygAdapterWarn, wysiwygAdapterError } from "@/utils/debug";

@@ -11,8 +11,8 @@
 //! - `sink`           -- `AiSink` trait + `WindowSink` / `ChannelSink` impls
 //! - `detection`      -- CLI provider detection, login-shell PATH, env API keys
 //! - `rest_api`       -- API key testing, model listing, model validation
-//! - `cli`            -- CLI provider spawning and stdout streaming
-//! - `spawn`          -- Process-spawn platform utilities (no-console-window)
+//! - `cli`            -- CLI provider spawning, prompt on stdin, stdout streaming
+//! - `spawn`          -- Process-spawn platform utilities (no shell in front, no console window)
 //! - `rest_request`   -- REST request builders (URL, headers, body, timeout), unsent
 //! - `rest_providers` -- REST provider prompt execution
 //! - `dispatch`       -- `ProviderRequest` + provider dispatch shared by both entry points
@@ -31,6 +31,11 @@ mod rest_request;
 pub mod sink;
 pub(crate) mod spawn;
 mod types;
+
+/// Stand-in CLI binaries for tests that drive a CLI provider.
+#[cfg(all(test, unix))]
+#[path = "shim.test.rs"]
+pub(crate) mod test_shim;
 
 // Re-export everything from submodules that define Tauri `#[command]`s.
 // Wildcard re-exports are required because `generate_handler!` resolves
@@ -96,7 +101,7 @@ pub async fn run_ai_prompt(
     endpoint: Option<String>,
     cli_path: Option<String>,
 ) -> Result<(), String> {
-    // WI-0B.2: `cli_path` is untrusted webview input and previously overrode the
+    // `cli_path` is untrusted webview input and previously overrode the
     // spawned binary outright (`cli_path="/bin/sh"` → RCE). Validate at the
     // boundary; internal callers stay injectable.
     cli_path_guard::validate_cli_path(&provider, cli_path.as_deref())?;
@@ -104,7 +109,7 @@ pub async fn run_ai_prompt(
     let sink: Arc<dyn AiSink> = Arc::new(WindowSink::new(window, request_id.clone()));
     // Dispatched under a token registered for exactly the dispatch's lifetime,
     // so `cancel_ai_prompt` can fire it — killing a CLI child or dropping the
-    // in-flight REST request (audit #375).
+    // in-flight REST request.
     cancel::dispatch_registered(
         &cancel_registry,
         &request_id,

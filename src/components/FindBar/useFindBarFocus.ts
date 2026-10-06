@@ -12,16 +12,16 @@
  *   - Closing GIVES FOCUS BACK to whatever had it when the bar opened. Without
  *     that the focused field simply unmounted and focus fell to
  *     `document.body`, so the editor the user was typing in a moment earlier
- *     stopped receiving keystrokes until something was clicked (audit round 3,
- *     #595). Captured on the opening edge, before the input takes focus.
+ *     stopped receiving keystrokes until something was clicked.
+ *     Captured on the opening edge, before the input takes focus.
  *   - The Mod+E path is a window event, not a prop. `useSearchCommands` relays
  *     the native menu item as `use-selection-for-find`, because the menu
  *     handler has no route into this subtree.
  *   - The ref is read at call time, never captured: the bar renders `null`
  *     while closed, so on the opening render the input exists but on the
  *     listener's registration render it does not.
- *   - The Mod+E path selects in an EFFECT, not inside the listener (audit R2,
- *     #599). The input's value is the store's query, so seeding it and calling
+ *   - The Mod+E path selects in an EFFECT, not inside the listener.
+ *     The input's value is the store's query, so seeding it and calling
  *     `select()` in the same turn selects the text the box is about to lose:
  *     React commits the new value afterwards and the selection collapses. A
  *     counter bumped beside the seed puts both updates in one render pass, so
@@ -42,9 +42,9 @@ import { seedFindFromSelection } from "@/services/search/seedFindFromSelection";
  *
  * A raw string on both sides is a contract no compiler checks: a typo in either
  * place leaves the menu item doing nothing, silently, and that has already
- * happened once here (WI-FL3.4 — nothing listened at all). The producer cannot
+ * happened once here (nothing listened at all). The producer cannot
  * import this yet, so `useFindBarFocus.eventName.test.ts` reads its source and
- * fails if the two spellings drift (audit round 3, #600).
+ * fails if the two spellings drift.
  */
 export const USE_SELECTION_FOR_FIND_EVENT = "use-selection-for-find";
 
@@ -74,7 +74,7 @@ export function useFindBarFocus(
     }
     // Closing unmounts the focused field, and nothing else claimed focus — it
     // fell to `document.body`, so the editor the user had been typing in a
-    // moment earlier stopped receiving keystrokes (audit round 3, #595).
+    // moment earlier stopped receiving keystrokes.
     // `isConnected`, because the element may have gone with a closed tab.
     const target = previouslyFocused.current;
     previouslyFocused.current = null;

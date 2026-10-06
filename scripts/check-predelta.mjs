@@ -62,7 +62,7 @@ export const CI_GROUPS = ["check:static", "test:coverage", "check:servers", "che
  *
  * `lint` used to be here, on the reasoning that check:fast covers it. That is
  * true only if you happen to have run check:fast since your last edit, and a
- * PRE-PUSH gate cannot assume that: on 2026-08-21 predelta reported all 38
+ * PRE-PUSH gate cannot assume that: once predelta reported all 38
  * gates green and the confirming `check:all` died ~40 seconds later on five
  * eslint errors — one full cycle spent discovering what a cached, seconds-long
  * gate already knew, which is the exact failure this script exists to prevent.

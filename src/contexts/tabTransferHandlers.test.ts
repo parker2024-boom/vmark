@@ -47,7 +47,6 @@ vi.mock("@/stores/workspaceStore", () => ({
   useRecentFilesStore: { getState: () => ({ addFile: mockAddFile }) },
 }));
 
-vi.mock("@/services/windowClose/tabCleanup", () => ({ cleanupTabState: vi.fn() }));
 vi.mock("@/utils/debug", () => ({
   windowCloseWarn: vi.fn(),
   windowContextError: vi.fn(),
@@ -60,6 +59,9 @@ vi.mock("@/utils/openPolicy", () => ({
 }));
 
 const mockInvoke = vi.mocked(invoke);
+
+/** Every Tauri command invoked, in order — `close_window` takes no arguments, so only its name shows a close. */
+const invokedCommands = () => mockInvoke.mock.calls.map(([command]) => command);
 
 /** Read the ack the handler emitted back to Rust. */
 function emittedAck(): TabRemovalAck {
@@ -115,7 +117,7 @@ describe("handleTabRemovalRequest — prepare", () => {
     });
 
     expect(mockDetachTab).not.toHaveBeenCalled();
-    expect(mockInvoke).not.toHaveBeenCalledWith("close_window", expect.anything());
+    expect(invokedCommands()).not.toContain("close_window");
   });
 
   it("refuses when the tab is no longer in this window", async () => {

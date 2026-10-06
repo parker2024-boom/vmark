@@ -32,7 +32,7 @@ export interface DiagramThemeTokens {
   borderColor: string;
   accentPrimary: string;
   mdCharColor: string;
-  /** Alert palette (WI-UI1.5) — the depth palette markmap paints branches with. */
+  /** Alert palette — the depth palette markmap paints branches with. */
   alertNote: string;
   alertTip: string;
   alertImportant: string;

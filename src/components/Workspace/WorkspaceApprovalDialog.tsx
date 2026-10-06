@@ -1,6 +1,6 @@
 /**
- * WorkspaceApprovalDialog — the human half of the open_workspace consent model
- * (plan WI-2.1). The enforcement half (one-shot bound to canonical path + window
+ * WorkspaceApprovalDialog — the human half of the open_workspace consent model.
+ * The enforcement half (one-shot bound to canonical path + window
  * + client, no standing grant) lives in workspaceApprovalStore; this renders the
  * pending request and calls resolveApproval so the AI's retry can proceed.
  *

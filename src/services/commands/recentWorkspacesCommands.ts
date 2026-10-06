@@ -6,7 +6,7 @@
  *
  * What is LOCAL here is the decision: is this entry still a folder, and does
  * this window's unsaved work mean the workspace belongs in a new window? The
- * accepted in-window transition itself is `openWorkspaceByPath` (audit #938).
+ * accepted in-window transition itself is `openWorkspaceByPath`.
  * This file used to re-implement that sequence — config, sidebar, tab restore,
  * split restore, recents — and the copy was missing the original's top-level
  * error boundary, so a throw anywhere inside it escaped the command instead of
@@ -53,7 +53,7 @@ type Ctx = { windowLabel?: string };
  * Is this recents entry still a FOLDER we could open?
  *
  * Two refusals the plain `exists()` could not make:
- *   - `exists()` is true for a regular FILE too (audit #937), and
+ *   - `exists()` is true for a regular FILE too, and
  *     `openWorkspaceWithConfig` falls back to store defaults on ANY read
  *     failure — so a file standing where the folder used to be would have been
  *     installed as the workspace root, with the whole window in workspace mode
@@ -84,7 +84,7 @@ type RecentTarget =
 /**
  * Ask Rust for access to a recents entry, and settle what to open (WI-LX1.1).
  *
- * Granted → the canonical root Rust judged (#250). Readable without a grant →
+ * Granted → the canonical root Rust judged. Readable without a grant →
  * the entry. Gone → `missing`. Unchosen and unreadable → the picker, opened at
  * the entry: the folder the user picks is what opens, and a cancel opens
  * nothing. When the check itself cannot run, only a successful probe of the
@@ -178,7 +178,7 @@ function buildRecentWorkspacesCommandSpecs(): CommandDefinition[] {
       // Shares the workspace-transition guard with workspace.openFolder /
       // workspace.close — a per-command key would let two workspace opens race.
       await withReentryGuard(windowLabel, WORKSPACE_TRANSITION_GUARD, async () => {
-        // #1252 / audit #936 — access comes BEFORE the probe. Grants do not
+        // #1252 — access comes BEFORE the probe. Grants do not
         // survive a restart, so a recents entry outside the static scope
         // (`G:\` on Windows, `/opt` on macOS) made `exists()` REJECT with
         // "forbidden path"; that rejection escaped the command and the menu
@@ -238,7 +238,7 @@ function buildRecentWorkspacesCommandSpecs(): CommandDefinition[] {
 }
 
 /**
- * Register both recent-workspace commands as ONE owner batch (audit #934).
+ * Register both recent-workspace commands as ONE owner batch.
  *
  * A `hasCommand("workspace.clearRecent")` sentinel suppressed
  * `workspace.openRecent` whenever that id was already taken, and gave no

@@ -1,9 +1,9 @@
 /**
- * Breakdown service (WI-1.9b) — ADR-013 services tier.
+ * Breakdown service — ADR-013 services tier.
  *
  * The only writer of `breakdownStore`: pulls the live stale/diverged edge
  * list from the Rust coherence kernel (`coherence_breakdown`), appends
- * resolutions (`coherence_resolve` — WI-1.9a's append-only API), and opens
+ * resolutions (`coherence_resolve` — the append-only API), and opens
  * a downstream artifact for revision through the same window-scoped
  * open-file event the file explorer uses.
  *
@@ -14,7 +14,9 @@
  * @coordinates-with src-tauri/src/coherence/commands.rs — the IPC surface
  * @coordinates-with stores/breakdownStore.ts — the mirror this writes
  * @module services/breakdown/breakdownService
- */import {
+ */
+
+import {
   invoke,
 } from "@tauri-apps/api/core";
 
@@ -59,14 +61,14 @@ export {
 export { isActiveWorkspace, isLatestRefresh, takeRefreshTicket };
 
 
-// Stale-response guard (audit T12): a slow refresh for workspace A must
+// Stale-response guard: a slow refresh for workspace A must
 // never overwrite rows after the user switched to workspace B (or closed
 // the workspace). Each refresh takes a generation ticket; only the
 // newest writes.
 
-/** WI-3.7: the latest completed-merge notice for the dismissible banner. */
+/** The latest completed-merge notice for the dismissible banner. */
 export async function refreshMergeNotice(workspaceRoot: string): Promise<void> {
-  if (!isActiveWorkspace(workspaceRoot)) return; // audit #4/#5: no ticket for a left workspace
+  if (!isActiveWorkspace(workspaceRoot)) return; // no ticket for a left workspace
   const ticket = takeRefreshTicket("merge");
   try {
     const notice = await invoke<MergeNotice | null>("coherence_recent_merge", {
@@ -85,7 +87,7 @@ export async function refreshMergeNotice(workspaceRoot: string): Promise<void> {
 /**
  * Mark a document FROZEN (finished history) or back to LIVE.
  *
- * Measured motivation (2026-07-20): M2 read 0 relevant / 5 noise, and every
+ * Measured motivation: M2 read 0 relevant / 5 noise, and every
  * flag had the same cause — the downstream was already finished. Freezing stops
  * the interruption; the edge and its provenance stay recorded.
  *

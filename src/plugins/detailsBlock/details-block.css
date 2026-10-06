@@ -8,7 +8,7 @@
 .details-block {
   /* Component-local vars (rule 31's local-var pattern). These were consumed
      below as var(--x, fallback) while defined NOWHERE, so the fallbacks were
-     the only values ever rendered (WI-UI0.2 C2e). Defined from tokens here so
+     the only values ever rendered. Defined from tokens here so
      the header follows the theme like everything else. */
   --details-header-bg: var(--bg-secondary);
   --details-header-hover-bg: var(--bg-tertiary);

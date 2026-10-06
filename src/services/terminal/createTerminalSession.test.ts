@@ -7,11 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
-import {
-  MAX_TERMINAL_SESSIONS,
-  resetTerminalSessionStore,
-  useUIStore,
-} from "@/stores/uiStore";
+import { MAX_TERMINAL_SESSIONS, resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import {
   createWorkspaceInstance,
   createWorkspaceRootIdentity,
@@ -46,7 +42,7 @@ function addWorkspace(id: string, rootPath: string): void {
   );
 }
 
-const sessions = () => useUIStore.getState().terminal.sessions;
+const sessions = () => useTerminalStore.getState().sessions;
 
 beforeEach(() => {
   resetTerminalSessionStore();
@@ -104,7 +100,7 @@ describe("predicate/action parity (R2-1)", () => {
     expect(canCreateTerminalSessionHere(W)).toBe(expected);
     const created = createTerminalSessionInScope(W);
     expect(created !== null).toBe(expected);
-    if (created) useUIStore.getState().terminalRemoveSession(created.id);
+    if (created) useTerminalStore.getState().terminalRemoveSession(created.id);
   }
 
   it("agrees below and at the cap in a plain workspace scope", () => {

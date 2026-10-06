@@ -1,172 +1,247 @@
-// @vitest-environment node
-// Coverage for the top-level MCP request router. Specifically:
-//   - read-only docs reject mutations with a structured READ_ONLY envelope
-//     (the v2 contract — not the legacy plain-string error)
-//   - reads still pass through when the doc is read-only
-//   - unknown request types respond with a clear error
-//   - handler exceptions are caught and reported
+// WI-RA1A.8 — the top-level MCP request router, tested by what it REPLIES.
+//
+// The router's own collaborators are real here: the dispatcher, the handlers
+// behind it, the read-only guard and the stores. This suite used to mock
+// `./utils` and `v2/dispatch` — both direct imports of the subject — and then
+// assert that the mocks had been called, which would have stayed green with
+// the router wired to nothing. The only thing replaced is the Tauri boundary:
+// every reply is read from the `mcp_bridge_respond` invoke the bridge receives.
+//
+// What it pins:
+//   - a mutation aimed at a read-only document is refused with the structured
+//     READ_ONLY envelope and changes nothing, judged by the tab the request
+//     TARGETS, not the focused one;
+//   - reads are never blocked by read-only;
+//   - an unknown request type gets a diagnostic naming what this build routes;
+//   - a failure outside any handler still produces a reply.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { invoke } from "@tauri-apps/api/core";
+import { useTabStore } from "@/stores/tabStore";
+import { useDocumentStore, useRevisionStore } from "@/stores/documentStore";
+import { useEditorStore } from "@/stores/editorStore";
+import { useUIStore } from "@/stores/uiStore";
+import { SUPPORTED_TOOL_PREFIXES } from "@/services/mcpBridge/v2/dispatch";
+import type { McpResponse } from "./types";
 import { handleRequest } from "./handleRequest";
 
-const mockIsTargetDocReadOnly = vi.fn((_tabId?: unknown) => false);
-vi.mock("@/services/editor/readOnlyGuard", () => ({
-  isTargetDocReadOnly: (tabId: unknown) => mockIsTargetDocReadOnly(tabId),
-}));
+// A lazily loaded handler chunk that fails to load: the one failure that
+// reaches the router from OUTSIDE a handler's own error wrapper.
+const browserChunk = vi.hoisted(() => ({ failure: null as Error | null }));
+vi.mock("@/services/mcpBridge/v2/browser", async (importOriginal) => {
+  if (browserChunk.failure) throw browserChunk.failure;
+  return importOriginal();
+});
 
-vi.mock("./utils", () => ({
-  respond: vi.fn(),
-}));
-
-const mockDispatchV2 = vi.fn(async (_event: unknown) => false);
-vi.mock("@/services/mcpBridge/v2/dispatch", () => ({
-  dispatchV2: (event: unknown) => mockDispatchV2(event),
-  // Re-export the real prefix list so handleRequest's diagnostic error
-  // string contains real values when the dispatcher returns false.
-  SUPPORTED_TOOL_PREFIXES: [
-    "vmark.session.*",
-    "vmark.workspace.*",
-    "vmark.document.*",
-    "vmark.workflow.*",
-    "vmark.selection.*",
-  ],
-}));
-
-import { respond } from "./utils";
-
-function lastRespond() {
-  const calls = vi.mocked(respond).mock.calls;
-  return calls[calls.length - 1][0];
+/** Every reply the bridge received through `boundary`, in order. */
+function replies(boundary: typeof invoke = invoke): McpResponse[] {
+  return vi
+    .mocked(boundary)
+    .mock.calls.filter(([cmd]) => cmd === "mcp_bridge_respond")
+    .map(([, args]) => (args as { payload: McpResponse }).payload);
 }
 
-function parseStructuredError(s: string | undefined) {
-  if (!s) return null;
+/** The single reply to `id`; zero or several replies is a failure. */
+function replyTo(id: string, boundary: typeof invoke = invoke): McpResponse {
+  const found = replies(boundary).filter((r) => r.id === id);
+  expect(found).toHaveLength(1);
+  return found[0];
+}
+
+function structuredError(reply: McpResponse): { error: string; message: string } | null {
   try {
-    return JSON.parse(s);
+    return JSON.parse(reply.error ?? "");
   } catch {
     return null;
   }
 }
 
+const content = (tabId: string) => useDocumentStore.getState().documents[tabId].content;
+
+/** Open `tabs` in the focused window; the first is the active tab. */
+function openTabs(tabs: Array<{ id: string; content: string; readOnly?: boolean }>): void {
+  useTabStore.setState({
+    tabs: {
+      main: tabs.map((t) => ({
+        kind: "document" as const,
+        id: t.id,
+        filePath: null,
+        title: t.id,
+        isPinned: false,
+        formatId: "markdown",
+      })),
+    },
+    activeTabId: { main: tabs[0].id },
+  });
+  for (const t of tabs) {
+    useDocumentStore.getState().initDocument(t.id, t.content, null);
+    if (t.readOnly) useDocumentStore.getState().setReadOnly(t.id, true);
+  }
+}
+
 beforeEach(() => {
-  vi.clearAllMocks();
-  mockIsTargetDocReadOnly.mockReturnValue(false);
-  mockDispatchV2.mockResolvedValue(false);
+  vi.mocked(invoke).mockClear();
+  browserChunk.failure = null;
+  useTabStore.setState({ tabs: {}, activeTabId: {} });
+  useDocumentStore.setState({ documents: {} });
+  useRevisionStore.setState({ revisions: {} });
+  useUIStore.setState({ sourceMode: false });
+  useEditorStore.getState().setActiveWysiwygEditor(null);
+  useEditorStore.getState().setActiveSourceView(null);
 });
 
-describe("handleRequest — READ_ONLY envelope", () => {
+describe("handleRequest — mutations of a read-only document", () => {
   it.each([
-    "vmark.document.write",
-    "vmark.document.transform",
-    "vmark.workflow.apply_patch",
-    "vmark.selection.set",
-  ])("rejects %s with a structured READ_ONLY envelope on read-only docs", async (type) => {
-    mockIsTargetDocReadOnly.mockReturnValue(true);
+    { type: "vmark.document.write", args: { content: "overwritten" } },
+    { type: "vmark.document.transform", args: { kind: "cjk-spacing" } },
+    { type: "vmark.workflow.apply_patch", args: { patches: [] } },
+    { type: "vmark.selection.set", args: { content: "overwritten" } },
+  ])("refuses $type with the structured READ_ONLY envelope and changes nothing", async ({ type, args }) => {
+    openTabs([{ id: "t-locked", content: "测试ABC", readOnly: true }]);
+    const revision = useRevisionStore.getState().getRevision("t-locked");
 
-    await handleRequest({ id: "req-ro", type, args: {} });
+    await handleRequest({ id: "req-ro", type, args });
 
-    const r = lastRespond();
-    expect(r.success).toBe(false);
-    const err = parseStructuredError(r.error);
-    expect(err).toMatchObject({
-      error: "READ_ONLY",
-      message: expect.any(String),
-    });
-    // Dispatcher must NOT be invoked when the read-only guard blocks.
-    expect(mockDispatchV2).not.toHaveBeenCalled();
+    const reply = replyTo("req-ro");
+    expect(reply.success).toBe(false);
+    expect(structuredError(reply)).toEqual({ error: "READ_ONLY", message: "Document is read-only" });
+    expect(content("t-locked")).toBe("测试ABC");
+    expect(useRevisionStore.getState().getRevision("t-locked")).toBe(revision);
   });
 
-  // WI-4 — the guard must receive the tab the request TARGETS. Passing nothing
-  // (the old behaviour) silently gated every mutation on the active tab.
-  it("passes the request's tabId to the guard", async () => {
+  it("refuses a write that TARGETS a read-only background tab, though the focused tab is writable", async () => {
+    openTabs([
+      { id: "t-focused", content: "focused" },
+      { id: "t-locked", content: "locked", readOnly: true },
+    ]);
+
     await handleRequest({
-      id: "req-tab",
+      id: "req-bg",
       type: "vmark.document.write",
-      args: { tabId: "tab-background", content: "x" },
+      args: { tabId: "t-locked", content: "overwritten", save: false },
     });
 
-    expect(mockIsTargetDocReadOnly).toHaveBeenCalledWith("tab-background");
+    expect(structuredError(replyTo("req-bg"))?.error).toBe("READ_ONLY");
+    expect(content("t-locked")).toBe("locked");
   });
 
-  it("passes undefined to the guard when the request carries no tabId", async () => {
-    // selection.set operates on the focused tab; the guard falls back itself.
-    await handleRequest({ id: "req-sel", type: "vmark.selection.set", args: {} });
+  it("allows a write that TARGETS a writable background tab, though the focused tab is read-only", async () => {
+    openTabs([
+      { id: "t-locked", content: "locked", readOnly: true },
+      { id: "t-writable", content: "before" },
+    ]);
 
-    expect(mockIsTargetDocReadOnly).toHaveBeenCalledWith(undefined);
+    await handleRequest({
+      id: "req-ok",
+      type: "vmark.document.write",
+      args: { tabId: "t-writable", content: "after", save: false },
+    });
+
+    const reply = replyTo("req-ok");
+    expect(reply.success).toBe(true);
+    expect(reply.data).toMatchObject({ saved: false, save_skipped: "opt_out" });
+    expect(content("t-writable")).toBe("after");
+    expect(content("t-locked")).toBe("locked");
   });
 
-  it("does not block reads on read-only docs (read still routes through dispatchV2)", async () => {
-    mockIsTargetDocReadOnly.mockReturnValue(true);
-    mockDispatchV2.mockResolvedValue(true); // the dispatcher would handle it
+  it("judges a request that names no tab by the focused tab", async () => {
+    openTabs([
+      { id: "t-writable", content: "before" },
+      { id: "t-locked", content: "locked", readOnly: true },
+    ]);
+
+    await handleRequest({
+      id: "req-focused",
+      type: "vmark.document.write",
+      args: { content: "after", save: false },
+    });
+
+    expect(replyTo("req-focused").success).toBe(true);
+    expect(content("t-writable")).toBe("after");
+  });
+
+  it("treats a non-string tabId as naming no tab, not as a writable one", async () => {
+    openTabs([{ id: "t-locked", content: "locked", readOnly: true }]);
+
+    await handleRequest({
+      id: "req-bad-tab",
+      type: "vmark.document.write",
+      args: { tabId: 42, content: "overwritten", save: false },
+    });
+
+    expect(structuredError(replyTo("req-bad-tab"))?.error).toBe("READ_ONLY");
+    expect(content("t-locked")).toBe("locked");
+  });
+});
+
+describe("handleRequest — reads of a read-only document", () => {
+  it("document.read is answered with the content", async () => {
+    openTabs([{ id: "t-locked", content: "# locked\n", readOnly: true }]);
 
     await handleRequest({ id: "req-read", type: "vmark.document.read", args: {} });
 
-    expect(mockDispatchV2).toHaveBeenCalledTimes(1);
-    // No respond call from THIS function — the routed handler would respond.
-    expect(respond).not.toHaveBeenCalled();
+    const reply = replyTo("req-read");
+    expect(reply.success).toBe(true);
+    expect(reply.data).toMatchObject({ content: "# locked\n", kind: "markdown", dirty: false });
   });
 
-  it("does not block selection.get on read-only docs", async () => {
-    mockIsTargetDocReadOnly.mockReturnValue(true);
-    mockDispatchV2.mockResolvedValue(true);
+  it("selection.get reaches its handler instead of being refused as READ_ONLY", async () => {
+    openTabs([{ id: "t-locked", content: "# locked\n", readOnly: true }]);
 
-    await handleRequest({ id: "req-sg", type: "vmark.selection.get", args: {} });
+    await handleRequest({ id: "req-sel", type: "vmark.selection.get", args: {} });
 
-    expect(mockDispatchV2).toHaveBeenCalledTimes(1);
-    expect(respond).not.toHaveBeenCalled();
-  });
-});
-
-describe("handleRequest — unknown types", () => {
-  it("responds with an Unknown request error when dispatchV2 returns false", async () => {
-    mockDispatchV2.mockResolvedValue(false);
-
-    await handleRequest({ id: "req-?", type: "vmark.bogus", args: {} });
-
-    const r = lastRespond();
-    expect(r.success).toBe(false);
-    expect(r.error).toContain("Unknown request type");
-    expect(r.error).toContain("vmark.bogus");
-  });
-
-  // Regression for issue #900: when a sidecar/app version mismatch sends
-  // a request type the dispatcher does not recognize, the error must name
-  // the supported tool prefixes and point at version skew so the user can
-  // self-diagnose without log diving.
-  it("error names the supported tool prefixes and the version-skew hint", async () => {
-    mockDispatchV2.mockResolvedValue(false);
-
-    await handleRequest({ id: "req-skew", type: "vmark.session.get_state", args: {} });
-
-    const r = lastRespond();
-    expect(r.success).toBe(false);
-    expect(r.error).toContain("vmark.session.*");
-    expect(r.error).toContain("vmark.workspace.*");
-    expect(r.error).toContain("vmark.document.*");
-    expect(r.error).toContain("vmark.workflow.*");
-    expect(r.error).toContain("vmark.selection.*");
-    expect(r.error).toContain("sidecar");
+    // No editor is mounted in this suite, so the handler's own answer is
+    // NO_EDITOR — which only the handler can give.
+    expect(structuredError(replyTo("req-sel"))?.error).toBe("NO_EDITOR");
   });
 });
 
-describe("handleRequest — error handling", () => {
-  it("catches handler exceptions and responds with the error message", async () => {
-    mockDispatchV2.mockRejectedValueOnce(new Error("boom"));
+describe("handleRequest — unknown request types", () => {
+  it("names the type, every tool prefix this build routes, and the version-skew cause", async () => {
+    // Issue #900: a sidecar/app version mismatch sends a type the dispatcher
+    // does not know; the error must let the user diagnose it without logs.
+    await handleRequest({ id: "req-unknown", type: "vmark.bogus", args: {} });
 
-    await handleRequest({ id: "req-err", type: "vmark.document.read", args: {} });
-
-    const r = lastRespond();
-    expect(r.success).toBe(false);
-    expect(r.error).toBe("boom");
+    const reply = replyTo("req-unknown");
+    expect(reply.success).toBe(false);
+    expect(reply.error).toContain("Unknown request type: vmark.bogus");
+    for (const prefix of SUPPORTED_TOOL_PREFIXES) expect(reply.error).toContain(prefix);
+    expect(reply.error).toContain("sidecar");
   });
 
-  it("stringifies non-Error throws", async () => {
-    mockDispatchV2.mockRejectedValueOnce("plain string failure");
+  it.each(["constructor", "toString", "__proto__", ""])(
+    "treats %j as unknown rather than resolving it on the route table",
+    async (type) => {
+      await handleRequest({ id: "req-proto", type, args: {} });
 
-    await handleRequest({ id: "req-str", type: "vmark.document.read", args: {} });
+      const reply = replyTo("req-proto");
+      expect(reply.success).toBe(false);
+      expect(reply.error).toContain("Unknown request type");
+    },
+  );
+});
 
-    const r = lastRespond();
-    expect(r.success).toBe(false);
-    expect(r.error).toBe("plain string failure");
+describe("handleRequest — failures outside a handler", () => {
+  it("still answers the request when a handler chunk fails to load", async () => {
+    // A fresh module graph, so the chunk has not been loaded by an earlier test.
+    vi.resetModules();
+    browserChunk.failure = new Error("Failed to fetch dynamically imported module");
+    const router = await import("./handleRequest");
+    const boundary = (await import("@tauri-apps/api/core")).invoke;
+    vi.mocked(boundary).mockClear();
+    // What loading the chunk rejects with, as this runtime reports it.
+    const loadFailure: unknown = await import("@/services/mcpBridge/v2/browser").then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(loadFailure).toBeInstanceOf(Error);
+
+    await router.handleRequest({ id: "req-chunk", type: "vmark.browser.read", args: {} });
+
+    // A client left without a reply waits for its own timeout; it gets the
+    // failure's own message instead.
+    const reply = replyTo("req-chunk", boundary);
+    expect(reply.success).toBe(false);
+    expect(reply.error).toBe((loadFailure as Error).message);
   });
 });

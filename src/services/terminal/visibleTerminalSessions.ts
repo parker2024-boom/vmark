@@ -7,15 +7,14 @@
  * components use useVisibleTerminalSessions. Both delegate to the pure
  * selector so the rule cannot fork.
  *
- * @coordinates-with stores/uiStore/terminalScopeSelectors.ts — the pure rule
+ * @coordinates-with stores/terminalStore/scopeSelectors.ts — the pure rule
  * @coordinates-with components/Terminal/useVisibleTerminalSessions.ts — React face
  * @module services/terminal/visibleTerminalSessions
  */
 import { isWorkspaceRailEnabled } from "@/services/featureFlags/workspaceRailFeatureFlag";
-import { useUIStore } from "@/stores/uiStore";
 import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
-import { selectVisibleTerminalSessions } from "@/stores/uiStore/terminalScopeSelectors";
-import type { TerminalSession } from "@/stores/uiStore/types";
+import { selectVisibleTerminalSessions } from "@/stores/terminalStore/scopeSelectors";
+import { useTerminalStore, type TerminalSession } from "@/stores/terminalStore";
 
 /** The window's currently-visible terminal sessions (live store read). */
 export function getVisibleTerminalSessions(windowLabel: string): TerminalSession[] {
@@ -23,22 +22,22 @@ export function getVisibleTerminalSessions(windowLabel: string): TerminalSession
     useWorkspaceInstancesStore.getState().windows[windowLabel]
       ?.activeWorkspaceInstanceId ?? null;
   return selectVisibleTerminalSessions(
-    useUIStore.getState().terminal,
+    useTerminalStore.getState(),
     activeInstanceId,
     isWorkspaceRailEnabled(),
   );
 }
 
 /**
- * Realign the active session to the window's CURRENT visible population
- * (R2-15, audit round 2). A rail-MODE toggle changes what is visible with no
+ * Realign the active session to the window's CURRENT visible population.
+ * A rail-MODE toggle changes what is visible with no
  * scope switch, so no scope action fires — without this, a session hidden by
  * the toggle could stay "active" over an empty tab bar, and the emptiness
  * check in auto-create would see a population it cannot activate. Idempotent:
  * a visible active session is left alone.
  */
 export function realignTerminalActiveToVisible(windowLabel: string): void {
-  useUIStore
+  useTerminalStore
     .getState()
     .terminalRealignActive(getVisibleTerminalSessions(windowLabel).map((s) => s.id));
 }

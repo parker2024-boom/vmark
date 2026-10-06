@@ -12,22 +12,22 @@
  *   `run_workflow` → on rejection, roll back THIS claim only.
  *
  * Key decisions:
- *   - The id is generated and registered BEFORE invoking (WI-0.3, C2): a fast
+ *   - The id is generated and registered BEFORE invoking (C2): a fast
  *     workflow can emit step-update/complete events before `invoke` resolves,
  *     and those are routable only once the store holds the id.
- *   - LISTENERS FIRST (#769), for both entry points: the window's one event
+ *   - LISTENERS FIRST, for both entry points: the window's one event
  *     subscription (`workflowRunEvents.ts`) must be live before anything is
  *     claimed. The genie path used to skip this. With no event owner mounted
  *     the dispatch is refused loudly rather than started unobserved.
  *   - One run per window, checked and claimed with no await between, so two
- *     calls in one tick cannot both pass (audits #728, #770). A refusal is an
+ *     calls in one tick cannot both pass. A refusal is an
  *     outcome, not an error — each caller decides how to surface it.
- *   - The claim carries the run's OWNER when a panel started it (#113/#114):
+ *   - The claim carries the run's OWNER when a panel started it:
  *     one store write registers the id and the tab together, and `invoke` is
  *     issued in the same synchronous block, so no panel ever sees a run that
  *     exists but belongs to nobody.
- *   - A rejected invoke clears the slot only while it still holds THIS id
- *     (audit #374): a run registered after this one must not be wiped by its
+ *   - A rejected invoke clears the slot only while it still holds THIS id:
+ *     a run registered after this one must not be wiped by its
  *     failure. The original rejection is rethrown unchanged (it is a typed
  *     `CommandError` the caller renders).
  *   - Provider resolution and toasts stay in the callers; this module owns

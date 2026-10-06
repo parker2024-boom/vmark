@@ -1,6 +1,6 @@
 //! Per-connection lifecycle for the MCP bridge WebSocket server.
 //!
-//! Split out of `server.rs` (WI-9). The ordering here is the security
+//! Split out of `server.rs`. The ordering here is the security
 //! property: a peer gets a connection slot, an origin-checked and
 //! size-capped WebSocket, and a chance to present its token — and *nothing
 //! else* — until it authenticates. Only then does it cost the process a
@@ -31,7 +31,7 @@ use tokio_tungstenite::{accept_hdr_async_with_config, tungstenite::Message};
 ///
 /// The connection slot is taken **here**, synchronously in the accept loop,
 /// and moved into the spawned task. Acquiring it inside the task instead
-/// (audit round 1, finding 4) bounded nothing: the loop kept accepting
+/// bounded nothing: the loop kept accepting
 /// sockets and spawning tasks — each with a cloned `AppHandle` and a cloned
 /// token — that only discovered they were over the cap once they were
 /// scheduled, so a flood produced an unbounded pre-auth backlog. Refusing
@@ -225,7 +225,7 @@ async fn serve_authenticated<R: tauri::Runtime, S>(
 /// client record and abort its writer task.
 ///
 /// `spawn_logged` absorbs a panic at the TASK boundary, which is exactly why
-/// this exists (audit round 1, finding 6): before it, a panic anywhere in
+/// this exists: before it, a panic anywhere in
 /// message handling skipped the cleanup below, so the `clients` entry
 /// survived holding a live `tx`, and the detached writer task stayed parked
 /// on `rx.recv()` for the rest of the process's life. Cleanup cannot be a
@@ -243,7 +243,7 @@ async fn unregister_after<R: tauri::Runtime, F: Future<Output = ()>>(
         );
     }
 
-    // Cleanup. F6 (WI-3.5, D4.2): disconnect removes ONLY the client record
+    // Cleanup. F6 (D4.2): disconnect removes ONLY the client record
     // — never tabs, never a window's workspace (disconnect_preserves_* test).
     let had_identity = {
         let mut guard = bridge(app).lock().await;

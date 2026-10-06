@@ -22,9 +22,14 @@ const BASE_MTIME_MS = 1_754_000_000_000;
 const MTIME_STEP_MS = 1_000;
 
 interface FileEntry {
-  content: string;
+  /** The file's BYTES — what a real disk holds, and what `readFile` returns. */
+  bytes: Uint8Array;
   mtimeMs: number;
 }
+
+const utf8 = new TextEncoder();
+/** Test-side view of a file: every byte, a leading BOM included. */
+const exactText = new TextDecoder("utf-8", { ignoreBOM: true });
 
 /** Tauri's `stat` result, narrowed to the fields VMark reads. */
 interface FakeFileInfo {
@@ -68,15 +73,33 @@ export class FakeDisk {
 
   /** Put a file on the disk, creating its parent directories. */
   seed(path: string, content: string, opts?: { mtimeMs?: number }): void {
-    this.mkdirp(parentOf(path));
-    this.files.set(path, { content, mtimeMs: opts?.mtimeMs ?? this.tick() });
+    this.seedBytes(path, utf8.encode(content), opts);
   }
 
-  /** Bytes at `path`. Throws when absent — an assertion must never read a hole. */
+  /** Put raw bytes on the disk — a file no UTF-8 string can describe. */
+  seedBytes(path: string, bytes: Uint8Array, opts?: { mtimeMs?: number }): void {
+    this.mkdirp(parentOf(path));
+    this.files.set(path, { bytes: bytes.slice(), mtimeMs: opts?.mtimeMs ?? this.tick() });
+  }
+
+  /**
+   * The file at `path` as UTF-8 text, EVERY byte included (a leading BOM is
+   * kept, as Node's `readFile(p, "utf8")` keeps it). Throws when absent — an
+   * assertion must never read a hole.
+   */
   read(path: string): string {
+    return exactText.decode(this.entry(path, "read").bytes);
+  }
+
+  /** The raw bytes at `path`. Throws when absent. */
+  readBytes(path: string): Uint8Array {
+    return this.entry(path, "readBytes").bytes.slice();
+  }
+
+  private entry(path: string, op: string): FileEntry {
     const entry = this.files.get(path);
-    if (!entry) fail(`read("${path}") — no such file on the fake disk`);
-    return entry.content;
+    if (!entry) fail(`${op}("${path}") — no such file on the fake disk`);
+    return entry;
   }
 
   has(path: string): boolean {
@@ -116,19 +139,31 @@ export class FakeDisk {
   /** Byte length (UTF-8), the unit `get_file_size_bytes` reports. */
   byteSize(path: string): number | null {
     const entry = this.files.get(path);
-    return entry ? new TextEncoder().encode(entry.content).length : null;
+    return entry ? entry.bytes.length : null;
   }
 
   // ── Async surface (what the mocked plugin delegates to) ──
 
+  /**
+   * plugin-fs `readTextFile`, decoded exactly as the plugin decodes it: its
+   * Rust command returns the raw bytes and its guest JS runs them through
+   * `new TextDecoder("utf-8")`, whose default (`ignoreBOM: false`) DROPS a
+   * leading U+FEFF and replaces invalid sequences with U+FFFD. The same
+   * constructor reproduces both (see the header of statefulFsFake.ts).
+   */
   readTextFile(path: string): Promise<string> {
+    return this.readFile(path).then((bytes) => new TextDecoder("utf-8").decode(bytes));
+  }
+
+  /** plugin-fs `readFile`: the raw bytes, BOM and all. */
+  readFile(path: string): Promise<Uint8Array> {
     const entry = this.files.get(path);
     if (!entry) {
       return Promise.reject(
         new Error(`failed to read file "${path}": No such file or directory (os error 2)`),
       );
     }
-    return Promise.resolve(entry.content);
+    return Promise.resolve(entry.bytes.slice());
   }
 
   readDir(
@@ -230,7 +265,7 @@ export class FakeDisk {
       return Promise.reject(new Error(`failed to stat "${path}": No such file or directory`));
     }
     return Promise.resolve({
-      size: new TextEncoder().encode(entry.content).length,
+      size: entry.bytes.length,
       mtime: new Date(entry.mtimeMs),
       isFile: true,
       isDirectory: false,

@@ -1,5 +1,5 @@
 /**
- * BreakdownOverlay (WI-1.9b) — app-level mount for the Breakdown panel.
+ * BreakdownOverlay — app-level mount for the Breakdown panel.
  *
  * Registered in App.tsx's overlay slot (ADR-007 — no shell edits). Renders
  * the panel as a docked surface when `breakdownStore.panelOpen` is set.
@@ -14,7 +14,7 @@ import { useBrowserOccluder } from "@/hooks/useBrowserOccluder";
 export function BreakdownOverlay() {
   const open = useBreakdownStore(selectPanelOpen);
   // The native browser view paints over all React DOM in its rect, so freeze every
-  // mounted browser tab while this overlay is up (WI-SOC.1).
+  // mounted browser tab while this overlay is up.
   useBrowserOccluder(open, "breakdown");
   if (!open) return null;
   return (

@@ -71,7 +71,7 @@ pub(super) fn decide(
     let shared_origin_approved =
         mode == AutomationMode::AiShared && reg.shared_navigation_approved(tab_id, committed);
     // A profile-backed sandbox tab reads only its approved origin; an ordinary
-    // sandbox tab reads unconfined. The registry is the origin authority (WI-P6.1 H1).
+    // sandbox tab reads unconfined. The registry is the origin authority.
     let sandbox_read_allowed = match mode {
         AutomationMode::AiSandbox => reg.profile_read_allowed(tab_id, committed),
         _ => true,
@@ -89,7 +89,7 @@ pub(super) fn decide(
     );
     // A profile-backed tab that has left its approved origin is HARD-denied a read
     // (screenshot authorizes as `read`): not even a one-shot may rescue it — the
-    // page is loaded with the profile's real login (WI-P6.1 H1, re-verify round 2).
+    // page is loaded with the profile's real login.
     if operation == "read" && mode == AutomationMode::AiSandbox && !sandbox_read_allowed {
         return Err(profile_origin_confined());
     }

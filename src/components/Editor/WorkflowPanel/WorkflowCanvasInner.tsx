@@ -5,7 +5,7 @@
  *   split the eager App bundle absorbs xyflow on every cold start, even
  *   for users who never open a workflow.
  *
- * Origin: GitHub Actions workflow viewer plan (2026-05-04, retired)
+ * Origin: GitHub Actions workflow viewer plan (retired)
  *   Phase 9 audit follow-up — judgment-agent finding.
  *
  * Key decisions:
@@ -50,7 +50,7 @@ import { applyLayout, type LayoutDirection } from "@/lib/ghaWorkflow/render/layo
 import { useWorkflowStore } from "@/stores/workflowStore";
 import { JobNode } from "./JobNode";
 
-// Cross-validator audit round 2 fix: with JobNode now typed as
+// With JobNode now typed as
 // `NodeProps<Node<JobNodeData>>` instead of `Node<JobNodeData>`, the
 // node-types registry no longer needs an `as` cast. Drift in
 // JobNodeData or the node-type contract is now a compile error.

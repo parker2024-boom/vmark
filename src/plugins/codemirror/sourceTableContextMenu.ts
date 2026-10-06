@@ -8,10 +8,13 @@
  *   - Menu is rendered as a DOM element inside the popup host (not document.body)
  *   - Actions delegate to sourceContextDetection table action functions
  *   - Follows macOS context menu styling conventions
+ *   - Placement goes through the shared `clampMenuPosition`, bounded by the
+ *     editor and the window; a menu that cannot fit lands on the near margin
  *
  * @coordinates-with sourceContextDetection/tableDetection.ts — table structure detection
  * @coordinates-with sourceContextDetection/tableActions.ts — table manipulation functions
- * @coordinates-with sourcePopup/ — popup host and coordinate system
+ * @coordinates-with shared/sourcePopupUtils.ts — popup host and coordinate system
+ * @coordinates-with utils/menuPosition.ts — the shared clamp
  * @module plugins/codemirror/sourceTableContextMenu
  */
 
@@ -19,7 +22,8 @@ import { EditorView, ViewPlugin } from "@codemirror/view";
 import { imeToast as toast } from "@/services/ime/imeToast";
 import i18n from "@/i18n";
 import { icons } from "@/utils/icons";
-import { getPopupHost, toHostCoords } from "@/plugins/sourcePopup";
+import { getPopupHost, toHostCoords } from "@/plugins/shared/sourcePopupUtils";
+import { clampMenuPosition, menuBoundsWithin, viewportMenuBounds } from "@/utils/menuPosition";
 import { getSourceTableInfo } from "@/plugins/sourceContextDetection/tableDetection";
 import type { SourceTableInfo, TableAlignment } from "@/plugins/sourceContextDetection/tableTypes";
 import {
@@ -222,20 +226,14 @@ class SourceTableContextMenuView {
     this.container.style.top = `${hostPos.top}px`;
 
     requestAnimationFrame(() => {
-      const rect = this.container.getBoundingClientRect();
-      const hostRect = this.host.getBoundingClientRect();
-      const hostWidth = hostRect.width;
-      const hostHeight = hostRect.height;
-
-      if (rect.right > hostRect.right - 10) {
-        const adjustedLeft = hostWidth - rect.width - 10 + this.host.scrollLeft;
-        this.container.style.left = `${adjustedLeft}px`;
-      }
-
-      if (rect.bottom > hostRect.bottom - 10) {
-        const adjustedTop = hostHeight - rect.height - 10 + this.host.scrollTop;
-        this.container.style.top = `${adjustedTop}px`;
-      }
+      // Measured in viewport coordinates; bounded by the editor and the window.
+      const screen = viewportMenuBounds({ width: window.innerWidth, height: window.innerHeight });
+      const bounds = menuBoundsWithin(screen, this.host.getBoundingClientRect());
+      const clamped = clampMenuPosition({ x, y }, this.container.getBoundingClientRect(), bounds);
+      if (clamped.x === x && clamped.y === y) return;
+      const pos = toHostCoords(this.host, { top: clamped.y, left: clamped.x });
+      this.container.style.left = `${pos.left}px`;
+      this.container.style.top = `${pos.top}px`;
     });
 
     this.isVisible = true;

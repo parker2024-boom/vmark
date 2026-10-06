@@ -17,7 +17,7 @@
  *   - Runtime transfers are handled by listeners set up after isReady.
  *   - Workspace resolution: for files opened via Finder/drag, resolves the
  *     workspace root using openPolicy logic. For URL-provided workspace roots,
- *     loads config from disk. Either root's grant is awaited first (#38): a
+ *     loads config from disk. Either root's grant is awaited first: a
  *     root on a slow mount is granted after launch (`openStartupWorkspace`).
  *   - Settings and non-document windows (label !== main/doc-*) skip document
  *     initialization entirely.
@@ -65,7 +65,7 @@ import { windowContextError, appError } from "@/utils/debug";
 import { claimWorkspaceTransferForWindow } from "@/services/workspaces/workspaceWindowActions";
 import { voidAsync } from "@/utils/voidAsync";
 
-/** Open the workspace a window starts on once its grant is in (#38). */
+/** Open the workspace a window starts on once its grant is in. */
 async function openStartupWorkspace(root: string, windowLabel: string) {
   await regrantWorkspaceAccess(root); // never throws; a refusal is ordinary
   return openWorkspaceWithConfig(root, { windowLabel });
@@ -190,7 +190,7 @@ export function WindowProvider({ children }: WindowProviderProps) {
             // (#1313) — a forced blank tab only meant startup could never reach
             // it. Hot-exit/lastOpenTabs still populate tabs afterwards; an empty
             // window is a valid intermediate state, not a broken one.
-            // WI-8.2: restore the window's human browser pages (background).
+            // Restore the window's human browser pages (background).
             restoreWindowBrowserSession(label);
           }
         }

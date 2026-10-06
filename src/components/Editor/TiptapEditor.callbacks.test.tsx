@@ -41,7 +41,6 @@ const mocks = vi.hoisted(() => ({
     setSelectedText: mocks.setSelectedText,
   })),
   useWindowLabel: vi.fn(() => "main"),
-  consumeWysiwygPendingNav: vi.fn(() => false),
   reportUnparseableDocument: vi.fn(),
   // Mock editor returned by useEditor
   mockEditor: null as ReturnType<typeof createMockEditor> | null,
@@ -215,18 +214,8 @@ vi.mock("@/stores/documentStore", () => ({
   useFileLoadStore: { getState: () => ({ active: false }) },
 }));
 
-vi.mock("./wysiwygPendingNav", () => ({
-  consumeWysiwygPendingNav: (...args: unknown[]) => mocks.consumeWysiwygPendingNav(...args),
-}));
-
 vi.mock("@/services/editor/unparseableDocument", () => ({
   reportUnparseableDocument: (...args: unknown[]) => mocks.reportUnparseableDocument(...args),
-}));
-
-vi.mock("./ImageContextMenu", () => ({
-  ImageContextMenu: ({ onAction }: { onAction: (a: string) => void }) => (
-    <button data-testid="image-ctx" onClick={() => onAction("test")} />
-  ),
 }));
 
 import { TiptapEditorInner } from "./TiptapEditor";

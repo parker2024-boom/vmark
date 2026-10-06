@@ -56,8 +56,7 @@ export interface RenderOptions {
    *
    * Server-side rather than in `kb.js`, because the browser begins fetching
    * images while the HTML is still parsing — a DOMContentLoaded rewrite would
-   * always lose that race in the cookie-blocked in-app iframe (audit 20260906,
-   * MCP-C03).
+   * always lose that race in the cookie-blocked in-app iframe.
    */
   resolveAssetUrl?: (url: string) => string;
 }
@@ -111,7 +110,7 @@ function buildHandlers(resolve: (t: string) => WikiResolution): Handlers {
     // inside `<pre class="mermaid|markmap">` is exactly the structure those
     // browser bundles auto-detect (the served page's progressive-enhancement
     // hook runs them when the bundle is present). Other langs keep the default
-    // `<pre><code class="language-…">` shape (WI-3.2 / H-5).
+    // `<pre><code class="language-…">` shape.
     code(_state: unknown, node: unknown) {
       const n = node as { lang?: string | null; value: string };
       const lang = (n.lang ?? "").toLowerCase();
@@ -133,7 +132,7 @@ let purifier: ReturnType<typeof createDOMPurify> | null = null;
 function getPurifier(): ReturnType<typeof createDOMPurify> {
   if (purifier) return purifier;
   const window = new JSDOM("").window;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsdom's DOMWindow does not structurally match DOMPurify's WindowLike, though it is DOMPurify's documented server-side window
   purifier = createDOMPurify(window as any);
   return purifier;
 }

@@ -1,5 +1,5 @@
 /**
- * Workflow run registry (WI-NB6.2) — in-memory, session-scoped state for
+ * Workflow run registry — in-memory, session-scoped state for
  * async workflow runs.
  *
  * A `workflow_run` starts the run detached and returns a `runId` immediately

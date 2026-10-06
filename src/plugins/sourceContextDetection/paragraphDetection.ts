@@ -3,6 +3,8 @@
  *
  * Detects if cursor is at line start of a paragraph (not in container nodes).
  * Used to determine when to show heading toolbar at line start.
+ *
+ * @module plugins/sourceContextDetection/paragraphDetection
  */
 
 import type { EditorView } from "@codemirror/view";

@@ -35,7 +35,7 @@ async function runLinkCommand(
       return;
     }
     case "removeLink": {
-      // Same IME-safe path as regular adapter actions (WI-3.2).
+      // Same IME-safe path as regular adapter actions.
       dispatchAdapterAction("unlink", snapshot);
       return;
     }
@@ -67,7 +67,7 @@ async function runLinkCommand(
 }
 
 /** Dispatch an adapter action on the snapshot surface, IME-safe for the
- *  source editor (WI-3.2): mid-composition activations queue until the
+ *  source editor: mid-composition activations queue until the
  *  composition ends instead of mutating the doc under the IME. */
 function dispatchAdapterAction(action: string, snapshot: EditorContextMenuSnapshot): void {
   if (snapshot.surface === "source") {

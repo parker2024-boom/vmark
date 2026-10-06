@@ -1,3 +1,11 @@
+/**
+ * workspaceTransfer — types for moving or duplicating a workspace instance
+ * between windows: the transfer payload, its acknowledgement, and the action
+ * options and results.
+ *
+ * @module types/workspaceTransfer
+ */
+
 import type { TransferLineMetadata } from "@/utils/transferLineMetadata";
 
 export type WorkspaceWindowOperation = "move" | "duplicate";
@@ -45,7 +53,6 @@ export interface WorkspaceTransferAckPayload {
 
 export interface WorkspaceActionOptions {
   timeoutMs?: number;
-  cleanupTab?: (tabId: string) => void;
 }
 
 type WorkspaceActionFailureReason =

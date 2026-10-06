@@ -7,6 +7,8 @@
  *
  * Uses ProseMirror plugin state (not module-level) so each editor
  * instance has its own stack.
+ *
+ * @module plugins/smartSelectAll/tiptap
  */
 
 import { Extension } from "@tiptap/core";

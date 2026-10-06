@@ -3,6 +3,8 @@
  *
  * Purpose: Flag table body rows whose cell count differs from the header row.
  * The first tableRow is treated as the header and defines the expected count.
+ *
+ * @module lib/lintEngine/rules/tableColumnCount
  */
 
 import { visit } from "unist-util-visit";

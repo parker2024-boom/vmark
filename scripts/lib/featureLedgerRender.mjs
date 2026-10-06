@@ -13,7 +13,7 @@
  * prose and once inside a table CELL. Both sites wrote it between hand-typed
  * backticks, so a backtick in the path would have closed the span early and a
  * `|` would have split the provenance row: the module's own rule, applied
- * everywhere except the two places it was easiest to forget (audit R2 #168).
+ * everywhere except the two places it was easiest to forget.
  *
  * @coordinates-with scripts/gen-feature-ledger.mjs — measures the rows this renders
  * @module scripts/lib/featureLedgerRender
@@ -22,8 +22,7 @@ import { STATUS_TAGS, citedPaths, statusTags } from "./featureLedgerDoc.mjs";
 
 /**
  * Every CommonMark line ending, not just LF and CRLF: a lone CR is one too,
- * and it used to survive `escapeCell` and break the row it was written into
- * (audit R2 #161).
+ * and it used to survive `escapeCell` and break the row it was written into.
  */
 const LINE_ENDING = /\r\n?|\n/g;
 
@@ -31,7 +30,7 @@ const LINE_ENDING = /\r\n?|\n/g;
  * An `&` that OPENS an HTML entity reference. Escaping every ampersand would
  * spell the ordinary `A & B` as `A \& B` on 15 of this table's rows for
  * nothing; only an entity-shaped one changes what a reader sees (`&copy;`
- * renders as `©`), so only that one is escaped (audit R2 #162).
+ * renders as `©`), so only that one is escaped.
  */
 const ENTITY_OPENER = /&(?=[A-Za-z][A-Za-z0-9]*;|#[0-9]+;|#[xX][0-9A-Fa-f]+;)/g;
 
@@ -62,8 +61,7 @@ export function codeSpan(v) {
  * through it: `x || "0"` printed a confident `0` for a missing or `NaN`
  * measurement, which is the one claim this document says it never makes
  * ("`--` means not measured, which is not the same claim as `0`"), and an
- * unexpected non-number would have been interpolated into the row verbatim
- * (audit R2 #165/#166).
+ * unexpected non-number would have been interpolated into the row verbatim.
  */
 const n = (v) => (typeof v === "number" && Number.isFinite(v) ? String(v) : "--");
 
@@ -75,7 +73,7 @@ const n = (v) => (typeof v === "number" && Number.isFinite(v) ? String(v) : "--"
  *
  * A percentage outside 0–100, or a non-finite one, is REFUSED rather than
  * printed: this table's contract is that every number in it was measured, and
- * `NaN%` is not a measurement (audit R2 #163).
+ * `NaN%` is not a measurement.
  */
 export function coverageCell(cov, covPresent) {
   if (cov.pct !== null && cov.pct !== undefined) {
@@ -91,7 +89,7 @@ export function coverageCell(cov, covPresent) {
 /**
  * Test lines ÷ code lines. ZERO test lines against measured code is `0.00`,
  * not `--`: the truthiness test this replaced reported a measured zero as "not
- * measured", the exact distinction the document's legend draws (audit R2 #164).
+ * measured", the exact distinction the document's legend draws.
  * A zero or absent code count has no ratio at all, so that one stays `--`.
  */
 const ratio = (r) =>
@@ -185,7 +183,7 @@ which cites these cells.
 - Gate defaults are VERIFIED against ${codeSpan(defaultsRel)} at generation time; a
   disagreement refuses to generate rather than printing the spine's value.
 - Coverage source: ${covPresent
-    ? "`coverage/coverage-summary.json` (gitignored — regenerate with `pnpm test:coverage`). A cell reads `-- (n/m files)` when the summary holds only some of the feature's coverage-eligible files: the summary lists the files some test loaded, and a fraction is not the feature."
+    ? "`coverage/coverage-summary.json` (gitignored — regenerate with `pnpm test:coverage`). A cell reads `-- (n/m files)` when the summary holds only some of the feature's coverage-eligible files. `vitest.config.ts` sets `coverage.include`, so a full run lists every src file, untested ones at 0%; a summary written before that, or under another coverage config, can lack some, and a fraction is not the feature."
     : "**absent.** Run `pnpm test:coverage`, then regenerate. All coverage cells read `--`."}
 
 ## Measured

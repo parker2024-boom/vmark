@@ -1,21 +1,21 @@
 //! The pre-spawn half of `run_workflow` that touches the filesystem: which
 //! files a run may modify, and the snapshot that makes them recoverable.
 //!
-//! Split from `commands.rs` at the file-size gate (#262). The snapshot is
-//! REQUIRED for a file-modifying workflow (#266): "snapshots created before
+//! Split from `commands.rs` at the file-size gate. The snapshot is
+//! REQUIRED for a file-modifying workflow: "snapshots created before
 //! execution for file-modifying steps" is the recovery guarantee the module
 //! header promises, and a snapshot that failed used to be logged and walked
 //! past — the destructive `save-file` steps then ran with nothing to restore.
-//! And it is the ONLY thing that needs the app-data directory (#265): a
+//! And it is the ONLY thing that needs the app-data directory: a
 //! workflow with nothing to snapshot never asks for it, so a platform that
 //! cannot resolve one still runs action-only workflows. The execution id is
-//! settled here too (`execution_id_for`, #264): it names the snapshot
+//! settled here too (`execution_id_for`): it names the snapshot
 //! directory, so it is validated before anything is built from it.
 //!
 //! `prepare_run` is the whole stretch between admission and the spawn: the
 //! snapshot — bounded, and stopped by the runner's cancel flag between
-//! chunks (#267) — a cancel that landed meanwhile, and the genies directory
-//! the runner reads from. It is AWAITED by the command on purpose: #266
+//! chunks — a cancel that landed meanwhile, and the genies directory
+//! the runner reads from. It is AWAITED by the command on purpose: awaiting
 //! makes a failed snapshot the invoke's own error, and only work the command
 //! waits for can refuse the command.
 //!
@@ -35,7 +35,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Manager, Runtime};
 use uuid::Uuid;
 
-/// The id a run will carry: the caller's, validated (#264), or a fresh UUID.
+/// The id a run will carry: the caller's, validated, or a fresh UUID.
 ///
 /// The RULE — non-empty, at most `snapshots::MAX_ID_LEN`, drawn from
 /// `[A-Za-z0-9_-]` — is `snapshots::validate_id`'s, and is consulted here
@@ -47,7 +47,7 @@ use uuid::Uuid;
 /// `WorkflowRunnerState::begin_execution`.
 ///
 /// What is NOT delegated is the MESSAGE. `validate_id` echoes the whole id,
-/// and echoing an unbounded value is the defect #550 removed from here: a
+/// and echoing an unbounded value is the defect removed from here: a
 /// megabyte-long id produced a megabyte-long `CommandError` across IPC and
 /// into the log. The bound belongs with the message that has to respect it.
 pub(super) fn execution_id_for(supplied: Option<String>) -> Result<String, CommandError> {
@@ -69,7 +69,7 @@ pub(super) fn execution_id_for(supplied: Option<String>) -> Result<String, Comma
 const ID_PREVIEW_CHARS: usize = 32;
 
 /// A bounded, debug-quoted look at a value this function is REFUSING for being
-/// unbounded (#550). Echoing the whole id made the refusal itself the way past
+/// unbounded. Echoing the whole id made the refusal itself the way past
 /// the limit: a megabyte-long id produced a megabyte-long `CommandError`
 /// message, serialized across IPC and written to the log. The LENGTH is what a
 /// caller needs to see; a prefix is what makes it recognisable.
@@ -82,7 +82,7 @@ fn preview(id: &str) -> String {
     }
 }
 
-/// Refuse a `save-file` step whose target cannot be snapshotted (#521/#551).
+/// Refuse a `save-file` step whose target cannot be snapshotted.
 ///
 /// `snapshot_targets` reads `with.path` as written, but a step's `with` values
 /// carry the full expression grammar — `${{ env.OUT }}`, `${{ steps.x.outputs.
@@ -120,7 +120,7 @@ pub(super) fn reject_dynamic_save_paths(workflow: &RawWorkflow) -> Result<(), Co
 /// workspace — each one ONCE. Pure, so the resolution is testable without a
 /// snapshot.
 ///
-/// Deduplicated (#552): a workflow that writes the same file in two steps is
+/// Deduplicated: a workflow that writes the same file in two steps is
 /// ordinary — a draft then a revision — and the pre-run snapshot of a file is
 /// the same copy whichever step is about to overwrite it. Copying it twice
 /// charged it twice against the snapshot's own size and count limits, so a
@@ -151,7 +151,7 @@ pub(super) fn snapshot_targets(workflow: &RawWorkflow, workspace: &Path) -> Vec<
 }
 
 /// The directory snapshots live under, resolved through `app_data_dir` ONLY
-/// when `files` is non-empty (#265). `Ok(None)` means nothing to snapshot —
+/// when `files` is non-empty. `Ok(None)` means nothing to snapshot —
 /// the resolver was never consulted, so its failure cannot refuse the run.
 pub(super) fn snapshot_root(
     files: &[PathBuf],
@@ -171,7 +171,7 @@ pub(super) fn snapshot_root(
 
 /// Snapshot `files` under `app_data_dir`, or refuse the run. A workflow with
 /// nothing to snapshot passes without touching the filesystem. `should_stop`
-/// is consulted between chunks of every copy (#267).
+/// is consulted between chunks of every copy.
 pub(super) async fn snapshot_or_refuse(
     app_data_dir: &Path,
     execution_id: &str,
@@ -186,10 +186,10 @@ pub(super) async fn snapshot_or_refuse(
         .await
         .map(|_| ())
         .map_err(|e| {
-            // A snapshot stops when `should_stop` says so (#267), and that
+            // A snapshot stops when `should_stop` says so, and that
             // stop arrives here as an `Err` like any other — so a user who
             // pressed Cancel was told their workflow had failed to snapshot,
-            // and the log recorded an I/O failure that never happened (#555).
+            // and the log recorded an I/O failure that never happened.
             // The FLAG decides, not the message: `create_snapshot_unless`
             // returns a `String`, and branching on its text is exactly what
             // rule 50 forbids.
@@ -203,7 +203,7 @@ pub(super) async fn snapshot_or_refuse(
         })
 }
 
-/// Everything between admission and the spawn (#262): the snapshot, the
+/// Everything between admission and the spawn: the snapshot, the
 /// cancel check, and the genies directory. Returns the directory the
 /// runner's `genie/*` steps read from — `None` when the platform cannot
 /// resolve app data, in which case genie steps report a clean error and
@@ -226,7 +226,7 @@ pub(super) async fn prepare_run<R: Runtime>(
     }
 
     // A cancel that landed during the snapshot stops the run here rather
-    // than one step in (#267).
+    // than one step in.
     if state.cancel_requested.load(Ordering::SeqCst) {
         return Err(CommandError::cancelled(
             "workflow was cancelled before it started",
@@ -244,7 +244,7 @@ pub(super) async fn prepare_run<R: Runtime>(
         Err(e) => {
             log::warn!(
                 "[workflow] app data directory unavailable ({e}); `genie/*` steps in \
-                 {execution_id} will refuse, action steps still run"
+                 {execution_id:?} will refuse, action steps still run"
             );
             None
         }

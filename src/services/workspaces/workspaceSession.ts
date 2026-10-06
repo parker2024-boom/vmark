@@ -5,15 +5,15 @@
  *   into the workspace config file, and the two-pane split layout (#1081) into
  *   localStorage — so both are restored on reopen.
  *
- * WI-6R (rail mode): EACH workspace instance's root receives ONLY its own
+ * Rail mode: EACH workspace instance's root receives ONLY its own
  * tabs, via a per-root read-modify-write against the ON-DISK config (never
  * the single in-memory legacy config — that was the cross-contamination bug
  * where every window tab landed in whichever root happened to be legacy).
  * Loose tabs belong to no workspace config; browser tabs persist via the
- * window session (WI-8.2), not workspace configs. Failures are isolated per
+ * window session, not workspace configs. Failures are isolated per
  * root. Rail off keeps the original single-root behavior verbatim.
  *
- * Split layouts (WI-10.3): the ACTIVE instance persists its live split; a
+ * Split layouts: the ACTIVE instance persists its live split; a
  * HIDDEN instance persists its stashed snapshot — each keyed by its own root.
  *
  * Exclude defaults (#1187): this is the only config writer that does NOT go
@@ -64,7 +64,7 @@ function splitLayoutOf(split: WindowSplit | null, tabs: Tab[]): SplitLayoutConfi
   };
 }
 
-/** WI-6R: per-instance session write — each root gets only its own tabs. */
+/** Per-instance session write — each root gets only its own tabs. */
 async function persistRailWorkspaceSessions(windowLabel: string): Promise<void> {
   const instances = orderedWindowInstances(windowLabel);
   const workspaceInstances = instances.filter(
@@ -77,7 +77,7 @@ async function persistRailWorkspaceSessions(windowLabel: string): Promise<void> 
     useWorkspaceInstancesStore.getState().windows[windowLabel]?.activeWorkspaceInstanceId ?? null;
   const partition = partitionWindowTabs(tabs, instances, activeId);
 
-  // Audit R2-F10: group instances by canonical root identity and UNION their
+  // Group instances by canonical root identity and UNION their
   // owned tabs — two same-root instances (corrupt restore) must not lose the
   // second one's tabs, and a duplicated root must not double-write its config.
   // The key is the NORMALIZED root path: the config write is keyed by the
@@ -152,7 +152,7 @@ async function persistRailWorkspaceSessions(windowLabel: string): Promise<void> 
  * Persist the current window's open tabs into workspace config.
  */
 export async function persistWorkspaceSession(windowLabel: string): Promise<void> {
-  // WI-8.2: browser pages are window-global — persist the window's
+  // Browser pages are window-global — persist the window's
   // restore-human pages regardless of workspace mode or rail state.
   saveWindowBrowserSession(windowLabel, useTabStore.getState().getTabsByWindow(windowLabel));
 
@@ -169,7 +169,7 @@ export async function persistWorkspaceSession(windowLabel: string): Promise<void
 
   const tabs = useTabStore.getState().getTabsByWindow(windowLabel);
   // Legacy field: document paths only, so a downgraded (older) VMark still
-  // restores document tabs and simply skips browser tabs (WI-1.1 / R1).
+  // restores document tabs and simply skips browser tabs (R1).
   const openPaths = documentPathsOf(tabs);
 
   // Persist the two-pane split layout (#1081) to localStorage by root path —
@@ -179,7 +179,7 @@ export async function persistWorkspaceSession(windowLabel: string): Promise<void
     splitLayoutOf(usePaneStore.getState().byWindow[windowLabel] ?? null, tabs),
   );
 
-  // New field: full ordered tab list incl. browser tabs (WI-1.1). New builds
+  // New field: full ordered tab list incl. browser tabs. New builds
   // prefer this; old builds ignore the unknown field (serde default).
   const updatedConfig = {
     ...config,

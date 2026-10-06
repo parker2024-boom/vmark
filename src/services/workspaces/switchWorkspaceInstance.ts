@@ -1,19 +1,19 @@
 /**
- * Rail-switch coordinator (WI-2R) — a SMALL orchestrator over pure modules.
+ * Rail-switch coordinator — a SMALL orchestrator over pure modules.
  *
  * Pipeline for switching window `windowLabel` to instance `instanceId`:
  *   1. GUARDS — rail on; instance belongs to this window; not already active
  *      (a same-instance click is a strict no-op; startup/repair uses
- *      `hydrateWorkspaceInstanceContext`, WI-13.1, not this).
+ *      `hydrateWorkspaceInstanceContext`, not this).
  *   2. STASH the outgoing instance: owned tab ids from the LIVE ownership
  *      kernel (never trusting stale `tabIds`), the focused tab, the closed
  *      projection from the scoped history (a switch must never erase reopen
- *      history — invariant 6), and the pane layout (WI-10.2).
+ *      history — invariant 6), and the pane layout.
  *   3. ACTIVATE + bump the window's context generation (invariant 5).
  *   4. RESTORE the incoming instance: stashed pane layout through the ONE
- *      atomic pane action (`replaceWindowSplit`, WI-10.1 — the only writer of
+ *      atomic pane action (`replaceWindowSplit` — the only writer of
  *      the activeTabId alias), with `resolveIncomingActiveTab` as fallback.
- *   5. LEGACY SYNC (WI-5R): synchronous sidebar re-root, async generation-
+ *   5. LEGACY SYNC: synchronous sidebar re-root, async generation-
  *      guarded config refresh (the returned `refresh` promise).
  *
  * Nothing here closes tabs or removes documents (issue #1005 principle):
@@ -26,7 +26,7 @@
  * @module services/workspaces/switchWorkspaceInstance
  */
 import { useTabStore } from "@/stores/tabStore";
-import { useUIStore } from "@/stores/uiStore";
+import { useTerminalStore } from "@/stores/terminalStore";
 import { usePaneStore } from "@/stores/paneStore";
 import {
   useWorkspaceInstancesStore,
@@ -57,14 +57,14 @@ const declined = (workspaceInstanceId: string | null = null): SwitchWorkspaceRes
   refresh: Promise.resolve(),
 });
 
-// WI-13.2: while a window's hot-exit restore is rebuilding instances/tabs, a
+// While a window's hot-exit restore is rebuilding instances/tabs, a
 // user rail click must not stash or restore a half-built context. Restore ends
 // with ONE hydrateWorkspaceInstanceContext, after which switching resumes.
 const restoringWindows = new Set<string>();
 
 export function beginWindowContextRestore(windowLabel: string): void {
   restoringWindows.add(windowLabel);
-  // A restore supersedes any in-flight async context work (audit R2-F1): an
+  // A restore supersedes any in-flight async context work: an
   // earlier switch's config read must not land mid-restore.
   bumpContextGeneration(windowLabel);
 }
@@ -88,7 +88,7 @@ function stashOutgoingInstance(windowLabel: string, outgoingId: string): void {
   const ownedIds = partition.byScope.get(outgoingId) ?? [];
 
   const currentActive = useTabStore.getState().activeTabId[windowLabel] ?? null;
-  // Record only an OWNED tab (audit R2-F2): a foreign/stale id would sit on
+  // Record only an OWNED tab: a foreign/stale id would sit on
   // the record until the kernel corrected it at use time.
   const activeForStash =
     currentActive && ownedIds.includes(currentActive)
@@ -112,7 +112,7 @@ function stashOutgoingInstance(windowLabel: string, outgoingId: string): void {
 
 export interface SwitchWorkspaceOptions {
   /**
-   * WI-13.3: config the open path already read — skips the disk re-read.
+   * Config the open path already read — skips the disk re-read.
    * `| undefined`: the caller forwards whatever its read produced, and
    * "nothing was preloaded" is that result rather than an omitted argument.
    */
@@ -146,13 +146,13 @@ export function switchWorkspaceInstance(
   // OUTGOING instance — they were created under it and belong to it. A
   // placeholder outgoing is skipped (placeholders are deleted silently with
   // no lifecycle follower; adopting into one would strand live PTYs) — and so
-  // is a MISSING outgoing record (audit #23: `undefined !== "placeholder"`
+  // is a MISSING outgoing record (`undefined !== "placeholder"`
   // used to stamp sessions with a dead owner).
   const outgoingRecord = outgoingId ? store.instances[outgoingId] : undefined;
   const outgoingIsReal =
     outgoingRecord !== undefined && outgoingRecord.kind !== "placeholder";
   if (outgoingIsReal && outgoingId) {
-    useUIStore.getState().terminalAdoptUnscopedSessions(outgoingId);
+    useTerminalStore.getState().terminalAdoptUnscopedSessions(outgoingId);
   }
 
   useWorkspaceInstancesStore.getState().activateWorkspaceInstance(windowLabel, instanceId);
@@ -164,7 +164,7 @@ export function switchWorkspaceInstance(
   // shown session, activate the incoming scope's remembered ?? first ?? null
   // (D-T2, activity cleared per D-T11). Synchronous store op (invariant 6).
   // A placeholder outgoing writes no memory: its slot could never be read.
-  useUIStore
+  useTerminalStore
     .getState()
     .terminalSwitchScope(outgoingIsReal ? outgoingId : null, instanceId);
 

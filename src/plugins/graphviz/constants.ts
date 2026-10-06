@@ -2,6 +2,8 @@
  * Graphviz Plugin Constants
  *
  * Shared constants for Graphviz diagram functionality.
+ *
+ * @module plugins/graphviz/constants
  */
 
 /**

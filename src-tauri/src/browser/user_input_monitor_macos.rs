@@ -1,4 +1,4 @@
-//! Native user-input takeover signal (WI-NB5.2).
+//! Native user-input takeover signal.
 //!
 //! React cannot see input inside a browser tab: the WKWebView is a native
 //! SIBLING view painted above the DOM placeholder, so a click on the page never
@@ -10,7 +10,7 @@
 //! when — the AI holds that tab; ordinary browsing input is a no-op there, so
 //! the emission itself carries no policy.
 //!
-//! STATIC EXCEPTION (rule 50, WI-20): the installed-once guard and the leaked
+//! STATIC EXCEPTION (rule 50): the installed-once guard and the leaked
 //! monitor are process-global by nature — AppKit's local event monitor is one
 //! hook for the whole app, is never removed for the process lifetime, and must
 //! survive every managed-state teardown. This is the sanctioned "no narrower
@@ -48,6 +48,8 @@ fn install(app: AppHandle, mtm: MainThreadMarker) {
         | NSEventMask::ScrollWheel;
     let handler = RcBlock::new(move |event: NonNull<NSEvent>| -> *mut NSEvent {
         // Observe only: the event is returned unchanged whatever happens here.
+        // SAFETY: AppKit passes a non-null event that stays alive for the duration
+        // of the monitor block; `ev` is not kept past it.
         let ev = unsafe { event.as_ref() };
         if let Some(tab_id) = resolve(ev, mtm) {
             // Broadcast: only the window owning the tab has lease state for it,
@@ -59,6 +61,10 @@ fn install(app: AppHandle, mtm: MainThreadMarker) {
         }
         event.as_ptr()
     });
+    // SAFETY: the block has the signature a local monitor requires (`NSEvent *`
+    // in, `NSEvent *` out) and returns the event it was given. AppKit copies it
+    // and calls it during event dispatch, which happens on the main thread — the
+    // only thread where the `MainThreadMarker` it captures is valid.
     let monitor = unsafe { NSEvent::addLocalMonitorForEventsMatchingMask_handler(mask, &handler) };
     // Deliberately leaked — see the module header's static exception.
     std::mem::forget(monitor);

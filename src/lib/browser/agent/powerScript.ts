@@ -1,10 +1,10 @@
 /**
- * Injected DOM-detection (`query`) and CSS-manipulation (`style`) scripts
- * (WI-P5.1 / WI-P5.2). Prepend `AGENT_LIB` to reuse `__vmarkRefFor` /
+ * Injected DOM-detection (`query`) and CSS-manipulation (`style`) scripts.
+ * Prepend `AGENT_LIB` to reuse `__vmarkRefFor` /
  * `__vmarkQueryByRef` and the core's budgeted composed walk (`__vmarkWalk`) and
  * bounded text head (`__vmarkTextHead`). `query` walks the composed tree, so
  * elements inside open shadow roots are found and counted (S-05), and it is
- * bounded in every dimension (#119): at most SCAN elements visited, at most `cap`
+ * bounded in every dimension: at most SCAN elements visited, at most `cap`
  * kept, at most 500 characters of text per match — a match's textContent is never
  * read, so a hostile page's megabytes cost it nothing.
  *
@@ -92,7 +92,7 @@ export function buildQueryScript(selector: string, generation: number, fields?: 
  *  head verbatim, so it can restyle the whole page (and CSS can reach the network via
  *  `url()`/`@import`). This is act-class and the exact CSS is bound into the one-shot
  *  the user approves, so it cannot be swapped for other CSS after approval — but the
- *  user is approving page-wide CSS, not a scoped rule. (Security review P5, Medium #4.) */
+ *  user is approving page-wide CSS, not a scoped rule. */
 export interface StyleOps {
   set?: Record<string, string>;
   addClasses?: string[];

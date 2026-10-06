@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { Schema } from "@tiptap/pm/model";
 import { EditorState, TextSelection, SelectionRange } from "@tiptap/pm/state";
 import { EditorView } from "@tiptap/pm/view";
-import { MultiSelection } from "../MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 import { multiCursorPlugin } from "../multiCursorPlugin";
 import { addCursorAbove, addCursorBelow } from "../commands";
 

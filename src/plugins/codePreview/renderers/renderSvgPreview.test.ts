@@ -19,17 +19,20 @@ vi.mock("@tiptap/pm/view", () => ({
   },
 }));
 
-vi.mock("../previewHelpers", () => ({
-  installDoubleClickHandler: vi.fn(),
-  createPreviewElement: vi.fn(() => {
-    const el = document.createElement("div");
-    el.className = "code-block-preview mermaid-preview";
-    return el;
-  }),
+// The real preview helpers attach pan/zoom on the next frame; the third-party
+// Panzoom engine needs SVG transforms jsdom lacks, so it is the one faked.
+vi.mock("@panzoom/panzoom", () => ({
+  default: vi.fn(() => ({
+    zoomWithWheel: vi.fn(),
+    handleDown: vi.fn(),
+    handleMove: vi.fn(),
+    handleUp: vi.fn(),
+    reset: vi.fn(),
+    destroy: vi.fn(),
+  })),
 }));
 
 import { renderSvgBlock } from "@/plugins/svg/svgRender";
-import { installDoubleClickHandler, createPreviewElement } from "../previewHelpers";
 import { updateSvgLivePreview, createSvgPreviewWidget } from "./renderSvgPreview";
 
 describe("updateSvgLivePreview", () => {
@@ -88,11 +91,12 @@ describe("createSvgPreviewWidget", () => {
   beforeEach(() => {
     capturedFactory = null;
     vi.mocked(renderSvgBlock).mockReset();
-    vi.mocked(createPreviewElement).mockClear();
-    vi.mocked(installDoubleClickHandler).mockClear();
   });
 
-  it("creates preview element for valid SVG", () => {
+  const dblclick = (el: HTMLElement) =>
+    el.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+
+  it("creates a rendered preview element for valid SVG", () => {
     vi.mocked(renderSvgBlock).mockReturnValueOnce("<svg><rect/></svg>");
 
     const cache = new Map();
@@ -101,18 +105,13 @@ describe("createSvgPreviewWidget", () => {
 
     expect(capturedFactory).not.toBeNull();
     const element = capturedFactory!(null);
-    expect(element).toBeDefined();
+
+    // SVG output shares the diagram preview chrome.
+    expect(element.className).toBe("code-block-preview mermaid-preview");
+    expect(element.querySelector("svg rect")).not.toBeNull();
 
     // Cache should be populated
     expect(cache.get("key1")).toEqual({ rendered: "<svg><rect/></svg>" });
-
-    // createPreviewElement should have been called
-    expect(createPreviewElement).toHaveBeenCalledWith(
-      "svg",
-      "<svg><rect/></svg>",
-      expect.any(Function),
-      "<svg><rect/></svg>"
-    );
   });
 
   it("creates error widget for invalid SVG", () => {
@@ -128,15 +127,17 @@ describe("createSvgPreviewWidget", () => {
     expect(element.innerHTML).toContain("Invalid SVG");
   });
 
-  it("installs double-click handler on error widget", () => {
+  it("double-clicking the error widget enters edit mode for its view", () => {
     vi.mocked(renderSvgBlock).mockReturnValueOnce(null);
 
     const cache = new Map();
     const handleEnterEdit = vi.fn();
     createSvgPreviewWidget(10, "bad", "key1", cache, handleEnterEdit);
 
-    capturedFactory!(null);
-    expect(installDoubleClickHandler).toHaveBeenCalled();
+    const view = { state: {} };
+    const element = capturedFactory!(view);
+    dblclick(element);
+    expect(handleEnterEdit).toHaveBeenCalledWith(view);
   });
 
   it("does not cache invalid SVG", () => {
@@ -148,19 +149,17 @@ describe("createSvgPreviewWidget", () => {
     expect(cache.has("key1")).toBe(false);
   });
 
-  it("invokes handleEnterEdit via double-click callback for valid SVG", () => {
+  it("double-clicking a valid preview enters edit mode for its view", () => {
     vi.mocked(renderSvgBlock).mockReturnValueOnce("<svg></svg>");
 
     const cache = new Map();
     const handleEnterEdit = vi.fn();
     createSvgPreviewWidget(10, "<svg></svg>", "key1", cache, handleEnterEdit);
 
-    // The factory was called; createPreviewElement gets a callback
-    capturedFactory!({ state: {} });
-    const call = vi.mocked(createPreviewElement).mock.calls[0];
-    // Third arg is the onDoubleClick callback
-    const onDoubleClick = call[2] as () => void;
-    onDoubleClick();
-    expect(handleEnterEdit).toHaveBeenCalledWith({ state: {} });
+    const view = { state: {} };
+    const element = capturedFactory!(view);
+    expect(handleEnterEdit).not.toHaveBeenCalled();
+    dblclick(element);
+    expect(handleEnterEdit).toHaveBeenCalledWith(view);
   });
 });

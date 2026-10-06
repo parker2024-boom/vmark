@@ -1,3 +1,10 @@
+/**
+ * Code block bounds — find the content range of the code block containing a
+ * position, and keep only the multi-cursor ranges that lie inside it.
+ *
+ * @module plugins/multiCursor/codeBlockBounds
+ */
+
 import type { EditorState } from "@tiptap/pm/state";
 import { SelectionRange } from "@tiptap/pm/state";
 

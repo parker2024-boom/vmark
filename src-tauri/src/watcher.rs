@@ -1,46 +1,55 @@
 //! # File System Watcher
 //!
 //! Purpose: Watches workspace directories for external changes and notifies
-//! the frontend via `fs:changed` events so the file explorer stays in sync.
+//! the owning window via `fs:changed` batches so the file explorer and open
+//! documents stay in sync.
 //!
 //! Pipeline: `start_watching` invoke → `notify` crate recursive watcher →
-//! debounce + filter → `app.emit("fs:changed", ...)` → frontend `useFileTree`.
+//! `signal_for` (classify + filter) → bounded queue → `batch::run_batch_loop`
+//! on the watcher's batch thread → `emit_to(<window label>, "fs:changed", …)`
+//! → frontend `services/workspaceEvents`.
 //!
 //! Key decisions:
 //!   - Paths are reported under the root the caller asked to watch, not the
-//!     realpath the OS returns (see `rebase_onto_root`).
-//!   - Debouncing (200ms) keyed by (watch_id, path, kind) suppresses duplicate
-//!     events from macOS FSEvents, which fires multiple events for a single
-//!     write. Kind is part of the key so a `create` followed by a `remove`
-//!     within the window is never swallowed.
+//!     realpath the OS returns (see `paths::rebase_onto_root`).
+//!   - A watcher that lost track of the tree says so. A watcher error and the
+//!     OS's own overflow report (`EventKind::Other` / the rescan flag) both
+//!     become `Signal::Rescan`, which the frontend answers by re-listing.
+//!   - Changes are batched per watcher (see `watcher/batch.rs`) and delivered
+//!     only to the window that owns the watcher: every window runs its own
+//!     watcher, so an app-global event woke every window for every change.
 //!   - Specific noise directories (.git, node_modules, .obsidian) are filtered,
 //!     but user-visible dot-dirs (.github, .vscode) are allowed through.
-//!   - Each watcher is keyed by `watch_id` (typically window label) so multi-window
-//!     setups can watch different directories independently.
+//!   - Each watcher is keyed by `watch_id`, which IS the owning window's label:
+//!     it names both the registry entry and the event target.
+//!   - `start_watching` is async — creating a recursive watcher walks the tree
+//!     on some platforms and must not hold the IPC thread. That removes the
+//!     serialization against the window-destroyed cleanup the IPC thread used
+//!     to provide, so a watcher registered for a window that is already gone
+//!     is removed again before the command returns.
 //!
-//! Known limitations:
-//!   - No recursive ignore patterns — filtering is component-based, not glob-based.
-//!   - Debounce is leading-edge only (suppress, not defer): when a burst of
-//!     same-kind events lands within the window, the trailing events are
-//!     dropped rather than re-emitted after the window, so the frontend may
-//!     briefly show content one write behind until the next event arrives.
+//! @coordinates-with watcher/batch.rs — the batching and the `fs:changed` payload
+//! @coordinates-with watcher/paths.rs — the ignore list and root rebasing
+//! @coordinates-with app_setup.rs — stops a window's watcher when it is destroyed
+//! @module watcher
 
+mod batch;
+mod paths;
+
+use crate::command_error::CommandError;
+use batch::{BatchConfig, FsChange, FsChangeBatch, FsChangeKind, Signal};
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
-use serde::Serialize;
+use paths::{rebase_onto_root, should_ignore_path};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
-/// Minimum interval between emitting events for the same path (debounce).
-const DEBOUNCE_INTERVAL: Duration = Duration::from_millis(200);
+/// The event a watcher's batches are delivered under.
+const FS_CHANGED_EVENT: &str = "fs:changed";
 
-/// Maximum age of debounce entries before pruning (10 minutes).
-/// Prevents unbounded growth of LAST_EMITTED in long sessions.
-const DEBOUNCE_MAX_AGE: Duration = Duration::from_secs(600);
-
-/// Watchers keyed by watch_id (typically window label or unique identifier)
+/// Watchers keyed by watch_id (the owning window's label). A static because
+/// the window-destroyed cleanup stops a watcher by label alone.
 static WATCHERS: Mutex<Option<HashMap<String, WatcherEntry>>> = Mutex::new(None);
 
 struct WatcherEntry {
@@ -48,250 +57,214 @@ struct WatcherEntry {
     _watcher: RecommendedWatcher,
 }
 
-/// File system change event emitted via `fs:changed` to the frontend.
-///
-/// Scoped by `watch_id` so multi-window setups can filter events.
-#[derive(Clone, Serialize)]
-pub struct FsChangeEvent {
-    /// Unique identifier for this watcher (window label)
-    #[serde(rename = "watchId")]
-    pub watch_id: String,
-    /// Root path being watched
-    #[serde(rename = "rootPath")]
-    pub root_path: String,
-    /// Changed paths (may be multiple for batch operations)
-    pub paths: Vec<String>,
-    /// Event kind: "create", "modify", "remove", "rename"
-    pub kind: String,
+/// What a notify event kind means for the owning window.
+#[derive(Debug, PartialEq, Eq)]
+enum KindClass {
+    Change(FsChangeKind),
+    /// The watcher lost track of the tree; the frontend must re-list.
+    Rescan,
+    /// Nothing the window needs (a file was merely read).
+    Ignore,
 }
 
-/// Map notify event kinds to simple string identifiers.
-/// Returns None for events we don't care about (Access, Other, Any).
-fn event_kind_to_string(kind: &notify::EventKind) -> Option<&'static str> {
+/// `Other` is how notify reports a condition of the watch itself — FSEvents'
+/// "must scan subdirs" and an inotify queue overflow both arrive as it — and
+/// `Any` is an event notify could not classify. Neither names what changed,
+/// so both mean "re-list", never "nothing happened".
+fn classify_kind(kind: &notify::EventKind) -> KindClass {
     use notify::EventKind::*;
     match kind {
-        Create(_) => Some("create"),
-        Remove(_) => Some("remove"),
-        Modify(modify_kind) => match modify_kind {
-            notify::event::ModifyKind::Name(_) => Some("rename"),
-            _ => Some("modify"),
-        },
-        _ => None,
+        Create(_) => KindClass::Change(FsChangeKind::Create),
+        Remove(_) => KindClass::Change(FsChangeKind::Remove),
+        Modify(notify::event::ModifyKind::Name(_)) => KindClass::Change(FsChangeKind::Rename),
+        Modify(_) => KindClass::Change(FsChangeKind::Modify),
+        Access(_) => KindClass::Ignore,
+        Other | Any => KindClass::Rescan,
     }
 }
 
-/// Directory/file names that should always be ignored by the file watcher.
-/// Only list specific high-frequency noise sources — do NOT blanket-ignore
-/// all dot-directories, since user-visible ones like `.github/`, `.vscode/`,
-/// `.husky/` need external change detection.
-const IGNORED_DIRS: &[&str] = &[
-    ".git",
-    ".obsidian",
-    ".svn",
-    ".hg",
-    "node_modules",
-    ".DS_Store",
-    ".Trash",
-    "__pycache__",
-];
+/// The root one watcher covers: as the caller spelled it, and as the OS
+/// reports paths under it.
+struct WatchScope {
+    watch_id: String,
+    root_path: String,
+    canonical_root: String,
+}
 
-/// Check whether a filesystem path should be ignored by the watcher.
-///
-/// Returns true if any path component matches the explicit ignore list,
-/// or if the filename matches temp file patterns from atomic writes.
-/// User-visible dot-directories (`.github`, `.vscode`, etc.) are allowed
-/// through so that external changes to those files are detected.
-fn should_ignore_path(path: &Path) -> bool {
-    // Filter temp files created by atomic writes to reduce event noise.
-    // NamedTempFile (lib.rs): dot-prefixed names like ".tmpXXXXXX" (6+ random chars)
-    // app_paths.rs: names like ".{name}.tmp.{pid}" (contains ".tmp." infix)
-    // We require the name to start with a dot to avoid filtering user files.
-    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-        if name.starts_with('.') && (name.starts_with(".tmp") || name.contains(".tmp.")) {
-            return true;
+/// Reduce one notify callback result to what the owning window needs, or
+/// `None` when it carries nothing for it (a read, or only ignored paths).
+fn signal_for(result: Result<Event, notify::Error>, scope: &WatchScope) -> Option<Signal> {
+    let event = match result {
+        Ok(event) => event,
+        Err(error) => {
+            log::warn!(
+                "[watcher] {:?} reported an error, asking for a rescan: {error}",
+                scope.watch_id
+            );
+            return Some(Signal::Rescan);
         }
-    }
-
-    for component in path.components() {
-        if let std::path::Component::Normal(name) = component {
-            let name_str = name.to_string_lossy();
-            if IGNORED_DIRS.contains(&name_str.as_ref()) {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-/// Debounce key: (watch_id, path, kind). Kind is part of the key so distinct
-/// kinds for the same path (e.g. `create` then `remove`) never suppress each
-/// other.
-type DebounceKey = (String, String, String);
-
-/// Per-path debounce state to suppress duplicate events from macOS FSEvents.
-/// Value: last emitted time for the key.
-static LAST_EMITTED: Mutex<Option<HashMap<DebounceKey, Instant>>> = Mutex::new(None);
-
-/// Decide whether an event for `(watch_id, path, kind)` should be emitted,
-/// recording `now` as its emission time when it should. Only a repeat of the
-/// SAME kind within `DEBOUNCE_INTERVAL` is suppressed.
-fn should_emit_and_record(
-    map: &mut HashMap<DebounceKey, Instant>,
-    watch_id: &str,
-    path: &str,
-    kind: &str,
-    now: Instant,
-) -> bool {
-    let key = (watch_id.to_string(), path.to_string(), kind.to_string());
-    if let Some(last) = map.get(&key) {
-        if now.duration_since(*last) < DEBOUNCE_INTERVAL {
-            return false; // Skip: same kind within debounce window
-        }
-    }
-    map.insert(key, now);
-    true
-}
-
-/// Handle a notify event and emit it to the frontend.
-/// Deduplicates same-kind events for the same path within DEBOUNCE_INTERVAL.
-/// Spell a path the watcher reported under the root the caller asked to watch.
-///
-/// The OS reports the REAL path (`/private/var/…` for a root given as
-/// `/var/…`, the target for a root reached through any symlink), while the
-/// window's scope filter compares against the root string it started the watch
-/// with. Every event under a symlinked root therefore fell out of scope, the
-/// explorer never refreshed on fs events there, and only the window-focus refresh
-/// masked it (found by #1357's live check, whose workspace lived under macOS's
-/// `/var` → `/private/var` link). `canonical_root` is the resolved root; a
-/// reported path under it is rebased onto `root`; anything else is returned as
-/// it came. The prefix must end at a path separator so `/root2/x` never matches
-/// `/root`.
-fn rebase_onto_root(path: &str, root: &str, canonical_root: &str) -> String {
-    if canonical_root == root || !path.starts_with(canonical_root) {
-        return path.to_string();
-    }
-    let rest = &path[canonical_root.len()..];
-    if rest.is_empty() {
-        return root.to_string();
-    }
-    if !rest.starts_with(std::path::MAIN_SEPARATOR) && !rest.starts_with('/') {
-        return path.to_string();
-    }
-    format!("{root}{rest}")
-}
-
-fn handle_event(
-    app: &AppHandle,
-    watch_id: &str,
-    root_path: &str,
-    canonical_root: &str,
-    event: Event,
-) {
-    let Some(kind_str) = event_kind_to_string(&event.kind) else {
-        return;
     };
-
-    let now = Instant::now();
-
-    // Collect paths, filtering ignored dirs and those within the debounce window
-    let mut guard = LAST_EMITTED.lock().unwrap_or_else(|p| p.into_inner());
-    let map = guard.get_or_insert_with(HashMap::new);
-
-    // Periodically prune stale entries to prevent unbounded growth
-    if map.len() > 100 {
-        map.retain(|_, last| now.duration_since(*last) < DEBOUNCE_MAX_AGE);
-    }
-
+    // The rescan flag wins over the kind: whatever the event names, the OS is
+    // saying it is not the whole story.
+    let class = if event.need_rescan() {
+        KindClass::Rescan
+    } else {
+        classify_kind(&event.kind)
+    };
+    let kind = match class {
+        KindClass::Change(kind) => kind,
+        KindClass::Rescan => {
+            log::info!(
+                "[watcher] {:?} lost track of changes, asking for a rescan",
+                scope.watch_id
+            );
+            return Some(Signal::Rescan);
+        }
+        KindClass::Ignore => return None,
+    };
     let paths: Vec<String> = event
         .paths
         .iter()
-        .filter(|p| !should_ignore_path(p))
-        .filter_map(|p| {
-            let path_str = rebase_onto_root(&p.to_string_lossy(), root_path, canonical_root);
-            should_emit_and_record(map, watch_id, &path_str, kind_str, now).then_some(path_str)
+        .filter(|path| !should_ignore_path(path))
+        .map(|path| {
+            rebase_onto_root(
+                &path.to_string_lossy(),
+                &scope.root_path,
+                &scope.canonical_root,
+            )
         })
         .collect();
-
-    drop(guard); // Release lock before emitting
-
     if paths.is_empty() {
-        return;
+        return None;
     }
+    Some(Signal::Change(FsChange { kind, paths }))
+}
 
-    let payload = FsChangeEvent {
-        watch_id: watch_id.to_string(),
-        root_path: root_path.to_string(),
-        paths,
-        kind: kind_str.to_string(),
-    };
+/// Deliver one batch to the window that owns the watcher, and to no other.
+fn emit_batch<R: Runtime>(app: &AppHandle<R>, batch: &FsChangeBatch) {
+    if let Err(error) = app.emit_to(batch.watch_id.as_str(), FS_CHANGED_EVENT, batch) {
+        log::warn!(
+            "[watcher] failed to deliver {FS_CHANGED_EVENT} to {:?}: {error}",
+            batch.watch_id
+        );
+    }
+}
 
-    let _ = app.emit("fs:changed", payload);
+fn lock_watchers() -> std::sync::MutexGuard<'static, Option<HashMap<String, WatcherEntry>>> {
+    WATCHERS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Take a watcher out of the registry. The entry is returned so the caller
+/// drops it AFTER the lock is released — dropping joins the watcher's thread.
+fn take_watcher(watch_id: &str) -> Option<WatcherEntry> {
+    lock_watchers().as_mut()?.remove(watch_id)
 }
 
 /// Start watching a directory.
 ///
 /// # Arguments
 /// * `app` - Tauri app handle for emitting events
-/// * `watch_id` - Unique identifier for this watcher (typically window label)
+/// * `watch_id` - The owning window's label
 /// * `path` - Directory path to watch recursively
+///
+/// # Errors
+/// `not-found` when `path` does not exist, `io` when the OS refuses the
+/// watch, `conflict` when the window was closed while the watcher started,
+/// `internal` when the blocking task itself failed.
 #[tauri::command]
-pub fn start_watching(app: AppHandle, watch_id: String, path: String) -> Result<(), String> {
+pub async fn start_watching<R: Runtime>(
+    app: AppHandle<R>,
+    watch_id: String,
+    path: String,
+) -> Result<(), CommandError> {
+    tokio::task::spawn_blocking(move || start_watching_blocking(&app, watch_id, path))
+        .await
+        .map_err(|e| CommandError::internal(format!("watcher start task failed: {e}")))?
+}
+
+/// The synchronous body of `start_watching` (runs inside `spawn_blocking`).
+fn start_watching_blocking<R: Runtime>(
+    app: &AppHandle<R>,
+    watch_id: String,
+    path: String,
+) -> Result<(), CommandError> {
     let watch_path = Path::new(&path);
     if !watch_path.exists() {
-        return Err(format!("Path does not exist: {path}"));
+        return Err(CommandError::not_found(format!(
+            "Path does not exist: {path}"
+        )));
     }
 
     // Stop any existing watcher for this watch_id first
-    stop_watching(watch_id.clone())?;
+    drop(take_watcher(&watch_id));
 
-    let app_handle = app.clone();
-    let watch_id_clone = watch_id.clone();
-    let root_path_clone = path.clone();
-    // Resolved once: the spelling the OS will report events under.
-    let canonical_root = std::fs::canonicalize(watch_path)
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| path.clone());
+    let scope = WatchScope {
+        watch_id: watch_id.clone(),
+        root_path: path.clone(),
+        // Resolved once: the spelling the OS will report events under.
+        canonical_root: std::fs::canonicalize(watch_path)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| path.clone()),
+    };
+    let config = BatchConfig {
+        watch_id: watch_id.clone(),
+        root_path: path.clone(),
+        window: batch::BATCH_WINDOW,
+        max_changes: batch::MAX_BATCH_CHANGES,
+    };
+
+    let (signals, queue) = batch::signal_queue();
+    let batch_app = app.clone();
+    // Ends on its own when the watcher (and with it the queue's sender) drops.
+    std::thread::Builder::new()
+        .name("fs-watch-batch".to_string())
+        .spawn(move || {
+            batch::run_batch_loop(&queue, &config, |batch| emit_batch(&batch_app, &batch));
+        })
+        .map_err(|e| {
+            CommandError::internal(format!("Failed to start watcher batch thread: {e}"))
+        })?;
 
     let mut watcher = RecommendedWatcher::new(
-        move |res: Result<Event, notify::Error>| {
-            if let Ok(event) = res {
-                handle_event(
-                    &app_handle,
-                    &watch_id_clone,
-                    &root_path_clone,
-                    &canonical_root,
-                    event,
-                );
+        move |result: Result<Event, notify::Error>| {
+            if let Some(signal) = signal_for(result, &scope) {
+                // Blocks while the queue is full; fails only once the batch
+                // thread is gone, which means this watcher is being dropped.
+                let _ = signals.send(signal);
             }
         },
         Config::default(),
     )
-    .map_err(|e| format!("Failed to create watcher: {e}"))?;
+    .map_err(|e| CommandError::io(format!("Failed to create watcher: {e}")))?;
 
     watcher
         .watch(watch_path, RecursiveMode::Recursive)
-        .map_err(|e| format!("Failed to watch path: {e}"))?;
+        .map_err(|e| CommandError::io(format!("Failed to watch path: {e}")))?;
 
-    let mut guard = WATCHERS.lock().map_err(|e| format!("Lock error: {e}"))?;
-    let watchers = guard.get_or_insert_with(HashMap::new);
-    watchers.insert(watch_id, WatcherEntry { _watcher: watcher });
+    let replaced = lock_watchers()
+        .get_or_insert_with(HashMap::new)
+        .insert(watch_id.clone(), WatcherEntry { _watcher: watcher });
+    drop(replaced);
+
+    // The window-destroyed cleanup may have run while this watcher was being
+    // created. Tauri forgets a window before it reports the destruction, so a
+    // label that no longer resolves here will never be stopped by anyone else.
+    if app.get_webview_window(&watch_id).is_none() {
+        drop(take_watcher(&watch_id));
+        return Err(CommandError::conflict(format!(
+            "Window '{watch_id}' closed before its watcher started"
+        )));
+    }
 
     Ok(())
 }
 
-/// Stop watching for a specific watch_id.
+/// Stop watching for a specific watch_id. Idempotent: an unknown id is fine.
 #[tauri::command]
-pub fn stop_watching(watch_id: String) -> Result<(), String> {
-    let mut guard = WATCHERS.lock().map_err(|e| format!("Lock error: {e}"))?;
-    if let Some(watchers) = guard.as_mut() {
-        watchers.remove(&watch_id);
-    }
-    // Clean up debounce entries for this watch_id
-    if let Ok(mut debounce_guard) = LAST_EMITTED.lock() {
-        if let Some(map) = debounce_guard.as_mut() {
-            map.retain(|(wid, _, _), _| wid != &watch_id);
-        }
-    }
+pub fn stop_watching(watch_id: String) -> Result<(), CommandError> {
+    drop(take_watcher(&watch_id));
     Ok(())
 }
 

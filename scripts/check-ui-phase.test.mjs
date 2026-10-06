@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmdirSync, rmSync, writeFileSync, chmodSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,10 +61,9 @@ function runWithShim(shim, ...args) {
     env: {
       ...process.env,
       PATH: `${shim}:${process.env.PATH}`,
-      // clean-dev.test.mjs fabricates fixtures under the REAL dev-docs/ in
-      // this same tier, so a `-d dev-docs` probe mid-run is a race with a
-      // sibling worker. Force the absent branch so the assertion set is
-      // deterministic on every machine class.
+      // dev-docs/ is maintainer-local: present on some machines, absent on
+      // CI and fresh worktrees. Force the absent branch so the assertion set
+      // is deterministic on every machine class.
       VMARK_UI_PHASE_NO_DEVDOCS: "1",
     },
   });
@@ -149,8 +148,7 @@ describe("check-ui-phase.sh", () => {
     expect(res.status, res.stdout + res.stderr).toBe(0);
     expect(res.stdout).toContain("confirmAction.ts exists");
     // Pins that the no-devdocs override took effect — without it this run
-    // would race clean-dev.test.mjs's fixture on any checkout where
-    // dev-docs/ is absent (CI, fresh worktrees).
+    // would take the maintainer branch on a maintainer tree.
     expect(res.stdout).toContain("dev-docs/ absent or disabled");
   });
 
@@ -158,10 +156,9 @@ describe("check-ui-phase.sh", () => {
   // maintainer tree run phases 0 and 4 once without it. The condition is
   // dev-docs/README.md — the index AGENTS.md mandates — chosen because it is
   // INDEPENDENT of every artifact these runs assert: deleting an asserted
-  // artifact fails the test rather than skipping it. No gate test fabricates
-  // README.md in the real repo (clean-dev.test.mjs creates only grills/
-  // fixtures; the followups tests build temp roots), and on a tree where
-  // README.md exists dev-docs/ itself is permanent, so nothing here races.
+  // artifact fails the test rather than skipping it. No gate test creates
+  // anything under the real dev-docs/ (fixtures live in temp roots), and on a
+  // tree where README.md exists dev-docs/ itself is permanent.
   const MAINTAINER_TREE = existsSync(path.join(REPO, "dev-docs/README.md"));
 
   function runMaintainer(phase) {
@@ -191,35 +188,30 @@ describe("check-ui-phase.sh", () => {
     expect(res.stdout).toContain("baseline screenshot night exists");
   });
 
-  it("phase 4 stays green while a sibling test's transient dev-docs fixture exists", () => {
-    // clean-dev.test.mjs creates dev-docs/grills/… in the REAL repo root and
-    // removes it in afterEach; on a tree with no dev-docs (CI, fresh worktree)
-    // that window overlaps this tier's parallel pool. A markerless dev-docs is
-    // a fixture, not a maintainer tree — the probe keys on dev-docs/README.md.
-    // Directly under dev-docs/, NOT under dev-docs/grills/: clean-dev's own
-    // "no-op when grills is absent" test early-returns whenever grills
-    // exists, and a probe inside grills would make it skip silently.
+  it("phase 4 stays green while a markerless dev-docs directory exists", () => {
+    // WI-RA13B.7 — the probe keys on dev-docs/README.md, so a dev-docs/ with
+    // no README (a fixture, a stray directory) is not a maintainer tree. The
+    // case runs in a MIRROR of the repository — a scratch root whose entries
+    // are symlinks to the real ones, minus dev-docs/ — with its own markerless
+    // dev-docs/. It used to create the probe inside the REAL repository, where
+    // sibling gate tests walking the tree under the same parallel pool saw
+    // dev-docs/ appear and vanish mid-walk.
     //
-    // runMaintainer, not run: run() forces the absent branch via
+    // runMaintainer semantics, not run: run() forces the absent branch via
     // VMARK_UI_PHASE_NO_DEVDOCS=1, which would green this test without ever
     // exercising the README-marker probe it exists to pin.
-    const probe = path.join(REPO, "dev-docs/__ui-phase-race-probe__");
-    mkdirSync(probe, { recursive: true });
-    try {
-      const res = runMaintainer("4");
-      expect(res.status, res.stdout + res.stderr).toBe(0);
-    } finally {
-      // Remove only what is certainly ours: the probe itself, then a
-      // NON-recursive rmdir on dev-docs — it fails on any directory that
-      // still has content (a maintainer's real dev-docs, or a sibling test's
-      // live fixture), which is exactly the safe outcome.
-      rmSync(probe, { recursive: true, force: true });
-      try {
-        rmdirSync(path.dirname(probe));
-      } catch {
-        // non-empty or already gone — leave it alone
-      }
+    const mirror = mkdtempSync(path.join(tmpdir(), "ui-phase-mirror-"));
+    for (const entry of readdirSync(REPO)) {
+      if (entry !== "dev-docs") symlinkSync(path.join(REPO, entry), path.join(mirror, entry));
     }
+    mkdirSync(path.join(mirror, "dev-docs/__ui-phase-probe__"), { recursive: true });
+    const res = spawnSync("bash", ["scripts/check-ui-phase.sh", "4"], {
+      cwd: mirror,
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${shimDir}:${process.env.PATH}`, VMARK_UI_PHASE_NO_DEVDOCS: "0" },
+    });
+    expect(res.status, res.stdout + res.stderr).toBe(0);
+    expect(res.stdout).toContain("dev-docs/ absent or disabled");
   });
 
   it("phase 0 reports every gate wiring assertion", () => {

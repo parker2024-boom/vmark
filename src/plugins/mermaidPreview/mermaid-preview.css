@@ -49,7 +49,7 @@
   gap: var(--space-half);
 }
 
-/* Zoom buttons are canonical `.vm-icon-btn--sm` (WI-UI2.3); the class name
+/* Zoom buttons are canonical `.vm-icon-btn--sm`; the class name
    stays in the DOM as the view's event-delegation hook. The residual below is
    glyph-only: these draw text (+ / −), not svgs. */
 .mermaid-preview-zoom-glyph {
@@ -151,6 +151,11 @@
   flex: 1;
   /* Scale container based on --mermaid-scale (set by JS from editor font size) */
   zoom: var(--mermaid-scale, 1);
+  /* The rendered markup is the document's: without a containing block,
+     WebKit hit-tests an absolutely positioned element in an SVG
+     foreignObject against the whole window. Pinned by
+     svgStyleContainment.webkit.test.ts. */
+  contain: paint;
 }
 
 .mermaid-preview-content svg {

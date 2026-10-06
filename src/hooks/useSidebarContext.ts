@@ -1,5 +1,5 @@
 /**
- * useSidebarContext — the sidebar follows the active tab's kind (ADR-2, WI-S2.1).
+ * useSidebarContext — the sidebar follows the active tab's kind (ADR-2).
  *
  * When a browser tab is active the sidebar shows browser views (browsing history,
  * bookmarks); when a document tab is active it shows file views (explorer, outline, file
@@ -7,7 +7,7 @@
  * sidebar tracks what they are actually looking at, the same way the tab strip already
  * holds both kinds side by side.
  *
- * Each kind remembers its OWN sub-view (WI-S2.3), so glancing at a browser tab and coming
+ * Each kind remembers its OWN sub-view, so glancing at a browser tab and coming
  * back does not cost you the file tree you had open. The two are separate fields rather
  * than one union, which also keeps a browser value from ever being written into the
  * persisted (document-only) hot-exit field.

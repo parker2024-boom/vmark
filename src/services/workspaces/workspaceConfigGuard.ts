@@ -1,7 +1,7 @@
 /**
  * Runtime shape guard for the `read_workspace_config` IPC payload (T1/ADR-2).
  *
- * Extracted to a LEAF module (WI-13.3): both the open path
+ * Extracted to a LEAF module: both the open path
  * (`openWorkspaceWithConfig`) and the rail-switch refresh
  * (`syncLegacyWorkspaceContext`) validate the same boundary, and importing
  * the guard from the open path made the coordinator's import chain circular
@@ -11,7 +11,7 @@
  * highest-blast-radius boundary (drives tab restore + file-explorer
  * filtering), so the frontend re-checks the core fields before trusting the
  * typed result. Mirrors what the Rust `WorkspaceConfig` struct actually
- * serializes (`workspace.rs`): `version` (number), `excludeFolders` /
+ * serializes (`src-tauri/src/workspace/mod.rs`): `version` (number), `excludeFolders` /
  * `lastOpenTabs` (string arrays), `showHiddenFiles` (bool). `showAllFiles`
  * is a frontend-only field the store defaults — Rust never emits it, so it
  * is NOT required here. `version` is checked as a number (not literal `1`)

@@ -49,12 +49,13 @@ Se você também usa essas ferramentas para programação com IA (Claude Code, C
 
 ## Provedores de API REST
 
-Os provedores REST se conectam diretamente a APIs de nuvem. Cada um requer um endpoint, chave de API e nome de modelo.
+Os provedores REST se conectam diretamente a APIs de nuvem (ou locais). Cada um requer um endpoint, chave de API e nome de modelo. As respostas chegam de uma só vez quando a solicitação termina — provedores REST não transmitem tokens em streaming; provedores CLI sim.
 
 | Provedor | Endpoint Padrão | Variável de Ambiente |
 |----------|----------------|---------------------|
 | Anthropic | `https://api.anthropic.com` | `ANTHROPIC_API_KEY` |
 | OpenAI | `https://api.openai.com` | `OPENAI_API_KEY` |
+| Compatível com OpenAI | *(você define)* | — |
 | Google AI | *(integrado)* | `GOOGLE_API_KEY` ou `GEMINI_API_KEY` |
 | Ollama (API) | `http://localhost:11434` | — |
 
@@ -62,8 +63,8 @@ Os provedores REST se conectam diretamente a APIs de nuvem. Cada um requer um en
 
 Quando você seleciona um provedor REST, três campos aparecem:
 
-- **Endpoint da API** — A URL base (oculta para Google AI, que usa um endpoint fixo)
-- **Chave de API** — Sua chave secreta (armazenada apenas na memória — nunca gravada em disco)
+- **Endpoint da API** — A URL base (oculta para Google AI, que usa um endpoint fixo). Um `/v1` no final não tem problema — o VMark o normaliza para que o caminho não fique duplicado (por exemplo, `https://host/v1` e `https://host` funcionam)
+- **Chave de API** — Sua chave secreta. Ela fica no repositório de credenciais do seu sistema operacional, nunca no `localStorage` nem em um arquivo de configurações em texto simples — veja [Onde ficam as chaves de API](#onde-ficam-as-chaves-de-api)
 - **Modelo** — O identificador do modelo (por exemplo, `claude-sonnet-4-5-20250929`, `gpt-4o`, `gemini-2.0-flash`)
 
 ### Preenchimento Automático de Variáveis de Ambiente
@@ -92,6 +93,23 @@ só chega ao VMark quando você abre o aplicativo a partir desse shell. Iniciado
 3. Cole sua chave de API
 4. Escolha um modelo (padrão: `gpt-4o`)
 
+### Configuração: Compatível com OpenAI (DeepSeek, Groq, OpenRouter, …)
+
+Muitos provedores falam o mesmo protocolo que a OpenAI (`/v1/chat/completions`, autenticação `Bearer`). O slot **Compatível com OpenAI** se conecta a qualquer um deles — DeepSeek, Groq, OpenRouter, Together, Moonshot, um gateway auto-hospedado e assim por diante — sem precisar de uma entrada por fornecedor.
+
+Ele acrescenta um campo extra em relação aos outros provedores REST: um **Nome do provedor** editável, para que a linha mostre "DeepSeek" (ou o que você definir) em vez do rótulo genérico.
+
+Exemplo — DeepSeek:
+
+1. Obtenha uma chave de API em [platform.deepseek.com](https://platform.deepseek.com)
+2. Em Configurações > Integrações do VMark, selecione **Compatível com OpenAI**
+3. Defina **Nome do provedor** como `DeepSeek` (opcional, apenas visual)
+4. Defina **Endpoint da API** como `https://api.deepseek.com` (um `/v1` no final não tem problema — o VMark o normaliza)
+5. Cole sua chave de API
+6. Defina **Modelo** como `deepseek-chat` (ou `deepseek-reasoner`). Digite-o diretamente ou clique em atualizar para buscar a lista de modelos do endpoint
+
+O endpoint é obrigatório — não há host padrão para este slot. Use os botões **Testar chave de API** (⚡) e **Testar modelo** (🧪) para confirmar a conectividade antes de executar um gênio.
+
 ### Configuração: Google AI (REST)
 
 1. Obtenha uma chave de API em [aistudio.google.com](https://aistudio.google.com)
@@ -117,6 +135,7 @@ Use isso quando quiser acesso no estilo REST a uma instância local do Ollama, o
 | Já tem Codex ou Gemini instalado | **Codex / Gemini (CLI)** — usa sua assinatura |
 | Precisa de privacidade / offline | Instale o Ollama → **Ollama (API)** em `http://localhost:11434` |
 | Modelo personalizado ou auto-hospedado | **Ollama (API)** com seu endpoint |
+| DeepSeek / Groq / OpenRouter / qualquer API compatível com OpenAI | **Compatível com OpenAI** — defina o endpoint, a chave e o modelo |
 | Quer a opção de nuvem mais barata | **Qualquer provedor CLI** — assinatura é dramaticamente mais barata que API |
 | Sem assinatura, uso leve apenas | Defina a variável de ambiente da chave de API → **provedor REST** (pague por token) |
 | Precisa da maior qualidade de saída | **Claude (CLI)** ou **Anthropic (REST)** com `claude-sonnet-4-5-20250929` |
@@ -146,10 +165,16 @@ O VMark protege cada chamada de provedor para que um CLI travado ou uma resposta
 - **Cliente HTTP compartilhado**: provedores REST compartilham um único cliente `reqwest` com pool de conexões, então execuções consecutivas de gênio não pagam o custo do handshake TCP/TLS a cada vez.
 - **Descoberta de caminho no Windows**: no Windows, o VMark lê o `PATH` completo do usuário (incluindo entradas exclusivas do PowerShell) ao detectar CLIs, então ferramentas instaladas pelo usuário que funcionam em um terminal também funcionam dentro do VMark.
 
+## Onde ficam as chaves de API
+
+As chaves de API ficam no repositório de credenciais do sistema operacional — Keychain do macOS, Gerenciador de Credenciais do Windows ou Secret Service do Linux — sob o nome de serviço `app.vmark.secrets`, uma entrada por provedor. O VMark mantém uma cópia na memória apenas durante a sessão em execução; as configurações de provedor persistidas nunca contêm uma chave, e nada é gravado no `localStorage`. Uma chave salva por uma versão mais antiga do VMark em um arquivo de configurações em texto simples é movida para o chaveiro na primeira vez que a versão mais nova a carrega, e a cópia em texto simples só é descartada depois que a gravação no chaveiro foi lida de volta com sucesso.
+
+Se o chaveiro recusar uma gravação, o VMark mostra um aviso de erro em vez de manter a chave silenciosamente na memória. No macOS, uma build de desenvolvimento com assinatura ad hoc pode pedir acesso ao chaveiro de novo após cada nova assinatura; uma build de lançamento pede uma única vez.
+
 ## Notas de Segurança
 
-- **As chaves de API são efêmeras** — armazenadas apenas na memória, nunca gravadas em disco ou `localStorage`
-- **Variáveis de ambiente** são lidas uma vez ao iniciar e armazenadas em cache na memória
+- **As chaves de API ficam no chaveiro do sistema** — veja acima; elas nunca são gravadas nos arquivos de configuração do VMark nem no `localStorage`
+- **Variáveis de ambiente** são lidas quando você seleciona um provedor e só preenchem um campo de chave vazio
 - **Provedores CLI** usam sua autenticação CLI existente — o VMark nunca vê suas credenciais
 - **Todas as solicitações vão diretamente** da sua máquina para o provedor — sem servidores VMark no caminho
 

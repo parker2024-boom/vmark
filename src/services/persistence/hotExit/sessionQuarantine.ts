@@ -1,5 +1,5 @@
 /**
- * Quarantine writer for corrupt hot-exit payload fragments (WI-3).
+ * Quarantine writer for corrupt hot-exit payload fragments.
  *
  * Purpose: preserve — never delete — any payload that failed schema
  * validation, by writing it next to the session file in the app-data dir.
@@ -10,7 +10,7 @@
  *     quarantine is idempotent and can never grow without bound; a
  *     DIFFERENT corruption gets a different name, so an earlier artifact is
  *     never overwritten (preserve, never destroy).
- *   - SHA-256, truncated to 16 hex digits (audit 20260804-F13). The name was
+ *   - SHA-256, truncated to 16 hex digits. The name was
  *     a 32-bit FNV-1a, which makes the second half of that sentence false:
  *     8 hex digits is a space small enough for two genuinely different corrupt
  *     payloads to collide, and a collision here OVERWRITES the earlier

@@ -18,7 +18,7 @@ use super::scan_report::ScanReport;
 use super::state::WorkspaceKernel;
 use super::types::Envelope;
 
-/// How a scan learns the workspace's git state (WI-4.1).
+/// How a scan learns the workspace's git state.
 ///
 /// A seam, not indirection for its own sake: the `ObservationUnreliable` branch
 /// below fires only when `git` FAILS to resolve a HEAD it previously could — a

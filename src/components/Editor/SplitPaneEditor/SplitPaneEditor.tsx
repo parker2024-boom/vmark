@@ -1,24 +1,29 @@
-// WI-1A.4 + WI-1A.10 — SplitPaneEditor.
-//
-// Mounted by Editor.tsx (after WI-1A.5) for FormatConfig.kind === "split-pane"
-// or "viewer". Composes:
-//
-//   ┌──────────────────────────┬──────────────────────────┐
-//   │ SourcePane               │ Preview slot             │
-//   │ (CodeMirror — WI-1A.9+)  │ (genericPreview or       │
-//   │                          │  schemaRenderers)        │
-//   │                          │                          │
-//   └──────────────────────────┴──────────────────────────┘
-//                              ▲
-//                              │
-//                          resize handle
-//                          (keyboard ArrowLeft/Right)
-//
-// Validation: SourcePane runs the adapter's validator and reports its
-// diagnostics (`onDiagnostics`); this component renders them in
-// ValidationGutter beside the source pane, with click-to-jump back into the
-// source. The split fraction is held in component state and clamped to
-// [0.2, 0.8].
+/**
+ * SplitPaneEditor — the side-by-side source and preview editor for
+ * non-markdown formats.
+ *
+ * Mounted by Editor.tsx for FormatConfig.kind === "split-pane"
+ * or "viewer". Composes:
+ *
+ *   ┌──────────────────────────┬──────────────────────────┐
+ *   │ SourcePane               │ Preview slot             │
+ *   │ (CodeMirror)             │ (genericPreview or       │
+ *   │                          │  schemaRenderers)        │
+ *   │                          │                          │
+ *   └──────────────────────────┴──────────────────────────┘
+ *                              ▲
+ *                              │
+ *                          resize handle
+ *                          (keyboard ArrowLeft/Right)
+ *
+ * Validation: SourcePane runs the adapter's validator and reports its
+ * diagnostics (`onDiagnostics`); this component renders them in
+ * ValidationGutter beside the source pane, with click-to-jump back into the
+ * source. The split fraction is held in component state and clamped to
+ * [0.2, 0.8].
+ *
+ * @module components/Editor/SplitPaneEditor/SplitPaneEditor
+ */
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -79,7 +84,7 @@ export function SplitPaneEditor({ tabId, formatConfig }: SplitPaneEditorProps) {
     },
     [],
   );
-  // WI-4.3 — per-tab editing override sourced from tabStore so it
+  // Per-tab editing override sourced from tabStore so it
   // survives tab switches. The Tab.editingEnabled flag persists in
   // the store; SplitPaneEditor reads it and dispatches to set it.
   const editingEnabled = useTabStore((s) => {
@@ -87,7 +92,7 @@ export function SplitPaneEditor({ tabId, formatConfig }: SplitPaneEditorProps) {
     return found?.kind === "document" ? Boolean(found.editingEnabled) : false;
   });
 
-  // WI-2.4 — schema-aware preview dispatch. When the format declares a
+  // Schema-aware preview dispatch. When the format declares a
   // schemaDetector AND the active document matches a registered
   // schemaRenderer, prefer the schema renderer over the generic preview.
   const content = useDocumentStore(
@@ -104,7 +109,7 @@ export function SplitPaneEditor({ tabId, formatConfig }: SplitPaneEditorProps) {
     () => presentDiagnostics(diagnostics, formatConfig.infoWhenTrusted, trusted),
     [diagnostics, formatConfig.infoWhenTrusted, trusted],
   );
-  // WI-1A.13 — an explicit schema choice (set via setTabActiveSchemaId, and
+  // An explicit schema choice (set via setTabActiveSchemaId, and
   // restored verbatim by hot-exit so the pick survives a restart) outranks the
   // detector. `null`/`undefined` means "let the detector decide on each render".
   const activeSchemaId = useTabStore((s) => {
@@ -124,7 +129,7 @@ export function SplitPaneEditor({ tabId, formatConfig }: SplitPaneEditorProps) {
   // Per-tab view mode (Source/Split/Preview), falling back to the global
   // default setting, then "split". Clamped to "source" for formats without a
   // preview so a stale "preview" on a now-preview-less tab can't blank the
-  // editor. See dev-docs/plans/20260703-split-pane-view-modes.md.
+  // editor. See .claude/adr/plans/20260703-split-pane-view-modes.md.
   const tabViewMode = useTabStore((s) => {
     const t = s.findTabById?.(tabId);
     return t?.kind === "document" ? t.viewMode : undefined;
@@ -169,7 +174,7 @@ export function SplitPaneEditor({ tabId, formatConfig }: SplitPaneEditorProps) {
     }
   }, []);
 
-  // WI-4.2 — read-only banner for kind="viewer" tabs. Hidden when the
+  // Read-only banner for kind="viewer" tabs. Hidden when the
   // user has clicked "Enable editing" or when the format isn't read-
   // only-default.
   const showReadOnlyBanner =
@@ -177,7 +182,7 @@ export function SplitPaneEditor({ tabId, formatConfig }: SplitPaneEditorProps) {
     formatConfig.adapters.readOnlyDefault &&
     !editingEnabled;
 
-  // WI-4.4 — Open in external editor handler. The Tauri command lives
+  // Open in external editor handler. The Tauri command lives
   // in src-tauri/src/external_editor.rs (added in this phase). It
   // reads $EDITOR (or platform default) and spawns it with the file
   // path. Failure is surfaced via the toast pipeline; we don't block

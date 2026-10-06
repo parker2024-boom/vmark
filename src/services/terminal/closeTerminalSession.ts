@@ -23,6 +23,7 @@
  */
 import { getCurrentWindowLabel } from "@/services/persistence/workspaceStorage";
 import { useUIStore } from "@/stores/uiStore";
+import { useTerminalStore } from "@/stores/terminalStore";
 import { getVisibleTerminalSessions } from "./visibleTerminalSessions";
 import { restoreEditorFocusIfOrphaned } from "./terminalFocus";
 
@@ -36,7 +37,7 @@ export function removeTerminalSessionWithPanelPolicy(
   const isMember = visibleIds.includes(sessionId);
   if (opts?.onlyIfVisible && !isMember) return;
   const wasLastVisible = isMember && visibleIds.length === 1;
-  useUIStore.getState().terminalRemoveSession(sessionId, { visibleIds });
+  useTerminalStore.getState().terminalRemoveSession(sessionId, { visibleIds });
   if (!wasLastVisible) return;
   const now = useUIStore.getState();
   if (!now.terminalVisible) return;

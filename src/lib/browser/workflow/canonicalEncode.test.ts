@@ -13,7 +13,7 @@ describe("isPrimitive", () => {
   });
 
   it("rejects objects, functions and symbols", () => {
-    const rejected: unknown[] = [{}, [], new Date(), new Map(), () => 1, Symbol("x"), Object.create(null)];
+    const rejected: unknown[] = [{}, [], new Date(0), new Map(), () => 1, Symbol("x"), Object.create(null)];
     for (const v of rejected) expect(isPrimitive(v)).toBe(false);
   });
 });
@@ -174,9 +174,26 @@ describe("array elements must be data properties (round 3)", () => {
   });
 
   it("refuses a huge sparse array before iterating it slot by slot", () => {
-    const started = Date.now();
-    expect(() => encodeCanonical({ a: new Array(50_000_000) })).toThrow(/longer than/);
-    expect(Date.now() - started).toBeLessThan(1_000);
+    // Count every per-slot read the encoder makes; refusing on `length` alone
+    // makes none, where iterating the holes would make fifty million.
+    let slotReads = 0;
+    const isSlot = (key: string | symbol) => typeof key === "string" && /^\d+$/.test(key);
+    const huge = new Proxy(new Array(50_000_000), {
+      get(target, key, receiver) {
+        if (isSlot(key)) slotReads += 1;
+        return Reflect.get(target, key, receiver);
+      },
+      has(target, key) {
+        if (isSlot(key)) slotReads += 1;
+        return Reflect.has(target, key);
+      },
+      getOwnPropertyDescriptor(target, key) {
+        if (isSlot(key)) slotReads += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+    });
+    expect(() => encodeCanonical({ a: huge })).toThrow(/longer than/);
+    expect(slotReads).toBe(0);
     expect(() => encodeCanonical({ a: new Array(3) })).not.toThrow(); // holes are fine
   });
 

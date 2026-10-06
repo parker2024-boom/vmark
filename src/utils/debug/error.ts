@@ -118,11 +118,6 @@ export const imagePreviewError = isDev
   ? (...args: unknown[]) => console.error("[ImagePreview]", ...args)
   : (...args: unknown[]) => prodError("[ImagePreview]", ...args);
 
-/** Error logger for Link Commands. */
-export const linkCommandsError = isDev
-  ? (...args: unknown[]) => console.error("[LinkCommands]", ...args)
-  : (...args: unknown[]) => prodError("[LinkCommands]", ...args);
-
 /** Error logger for Media Handler. */
 export const mediaHandlerError = isDev
   ? (...args: unknown[]) => console.error("[MediaHandler]", ...args)

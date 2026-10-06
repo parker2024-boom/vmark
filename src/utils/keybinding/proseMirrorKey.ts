@@ -11,8 +11,11 @@
  * The base-key token is matched case-INSENSITIVELY (the shortcuts store and the
  * canonicalizer both accept `Mod-Alt-up` / `arrowup` etc.), and an already-prefixed
  * `ArrowUp` is idempotent — so a lowercase/mixed-case rebind still produces the
- * exact `KeyboardEvent.key` ProseMirror matches (audit-fix #3).
+ * exact `KeyboardEvent.key` ProseMirror matches.
+ *
+ * @module utils/keybinding/proseMirrorKey
  */
+
 // Match an arrow token as a whole "-"-delimited segment: preceded by start-of-string
 // or "-" (captured), an optional "arrow" prefix, the direction, and followed by
 // end-of-string or "-" (lookahead — not consumed, so adjacent segments like

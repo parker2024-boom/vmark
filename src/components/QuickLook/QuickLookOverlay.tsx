@@ -43,7 +43,7 @@ export function QuickLookOverlay() {
   const { t } = useTranslation("common");
   const isOpen = useQuickLookStore((s) => s.isOpen);
   // The native browser view paints over all React DOM in its rect, so freeze every
-  // mounted browser tab while this overlay is up (WI-SOC.1).
+  // mounted browser tab while this overlay is up.
   useBrowserOccluder(isOpen, "quick-look");
   const path = useQuickLookStore((s) => s.path);
   const index = useQuickLookStore((s) => s.index);

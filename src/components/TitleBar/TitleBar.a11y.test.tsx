@@ -38,8 +38,9 @@ vi.mock("@/stores/settingsStore", () => ({
     }),
 }));
 
-vi.mock("./useTitleBarRename", () => ({
-  useTitleBarRename: () => ({ renameFile: vi.fn(), isRenaming: false }),
+// The disk rename is the boundary under the title bar's real rename hook.
+vi.mock("@/services/persistence/renameFile", () => ({
+  renameFile: vi.fn(() => Promise.resolve({ status: "renamed" })),
 }));
 
 import { TitleBar } from "./TitleBar";

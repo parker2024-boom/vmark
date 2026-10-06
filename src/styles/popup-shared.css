@@ -75,10 +75,10 @@
   font-family: var(--font-mono);
 }
 
-/* ---- Media popup (folded in from media-popup-shared.css, WI-UI3.2) ---- */
+/* ---- Media popup (folded in from media-popup-shared.css) ---- */
 
 /* --- Container --- */
-/* Shell chrome comes from `.popup-container` (WI-UI3.2). */
+/* Shell chrome comes from `.popup-container`. */
 .media-popup {
   flex-direction: column;
   align-items: stretch;

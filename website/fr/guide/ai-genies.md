@@ -22,7 +22,7 @@ Appuyez sur `Mod + Y` (ou menu **Édition → Génies → Rechercher des génies
 
 **Cycle de portée** — Appuyez sur `Tab` pour parcourir les portées : sélection → bloc → document → tout.
 
-**Historique des invites** — En mode formulaire libre (aucun génie correspondant), appuyez sur `Flèche Haut` / `Flèche Bas` pour parcourir les invites précédentes. Appuyez sur `Ctrl + R` pour ouvrir un menu déroulant d'historique consultable. Le texte fantôme affiche l'invite correspondante la plus récente sous forme d'indice grisé — appuyez sur `Tab` pour l'accepter, ou sur `Échap` pour l'ignorer (il réapparaît dès que vous modifiez ce que vous avez tapé).
+**Historique des invites** — En mode formulaire libre (aucun génie correspondant), appuyez sur `Flèche Haut` / `Flèche Bas` pour parcourir les invites précédentes. Appuyez sur `Ctrl + R` pour ouvrir un menu déroulant d'historique consultable ; son bouton **Effacer l'historique** vide d'un coup l'historique enregistré (jusqu'à 100 invites), sans demander de confirmation. Le texte fantôme affiche l'invite correspondante la plus récente sous forme d'indice grisé — appuyez sur `Tab` pour l'accepter, ou sur `Échap` pour l'ignorer (il réapparaît dès que vous modifiez ce que vous avez tapé).
 
 ### Retour de traitement
 
@@ -32,7 +32,7 @@ Après avoir sélectionné un génie ou soumis une invite libre, le sélecteur a
 - **Aperçu** — La réponse de l'IA apparaît au fur et à mesure qu'elle arrive&nbsp;: les fournisseurs CLI la diffusent pendant sa génération, tandis que les fournisseurs REST livrent la réponse entière d'un seul coup à la fin de la requête. Utilisez `Accepter` pour appliquer ou `Rejeter` pour ignorer.
 - **Erreur** — En cas de problème, le message d'erreur apparaît avec un bouton `Réessayer`.
 
-La barre d'état affiche également la progression de l'IA — une icône tournante avec le temps écoulé pendant l'exécution, un bref flash « Terminé » en cas de succès, ou un indicateur d'erreur avec des boutons Réessayer/Ignorer. La barre d'état s'affiche automatiquement quand l'IA a un statut actif, même si vous l'avez précédemment masquée avec `F7`.
+La barre d'état affiche également la progression de l'IA — une icône tournante avec le temps écoulé pendant l'exécution, un bref flash « Terminé » en cas de succès, ou un indicateur d'erreur avec des boutons **Réessayer** et **Ignorer**. **Réessayer** relance la requête en échec — le même génie ou la même invite, sur la sélection actuelle — même après la fermeture du sélecteur ; le bouton est absent quand il n'y a rien à relancer, par exemple sans fournisseur. La barre d'état s'affiche automatiquement quand l'IA a un statut actif, même si vous l'avez précédemment masquée avec `F7`.
 
 ## Génies intégrés
 

@@ -7,18 +7,18 @@
  * App.tsx passed the entire suite: macOS would lose its title bar and
  * Windows/Linux would get the empty strip back, with every test still green.
  *
- * So this renders MainLayout with AppShell replaced by a prop recorder. The
- * recorder renders only the `overlays` slot — that one is App.tsx's own
- * composition, including the drop overlay defined in this very file. The editor
- * and sidebar slots stay unmounted: they are separate features with their own
- * suites, and mounting them here would drag their module graphs in behind them.
+ * So this renders MainLayout through the REAL AppShell and asserts what the
+ * window shows: the app's title bar in the chrome slot, the space the primary
+ * column holds for it, and the CSS variables the shell root publishes. The
+ * platform is the lever (`usesOverlayTitleBar`). The feature subtrees stubbed
+ * below are separate features with their own suites; the shell, the editor
+ * area and the title bar are this file's subject and run for real.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { isValidElement } from "react";
-import type { ReactElement } from "react";
 import { SHELL_TOP_INSET } from "@/shell/shellChrome";
+import { CHROME_HEIGHT } from "@/shell/AppShell";
 
 const platform = vi.hoisted(() => ({ overlayTitleBar: true, boom: false }));
 vi.mock("@/utils/platform", async (importOriginal) => ({
@@ -35,22 +35,6 @@ const appError = vi.hoisted(() => vi.fn());
 vi.mock("@/utils/debug", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   appError: (...args: unknown[]) => appError(...args),
-}));
-
-// The recorder. Captures the props the composition root passes and renders
-// nothing, so no feature subtree mounts.
-const shellProps = vi.hoisted(() => ({
-  current: null as null | { chrome: unknown; style: Record<string, string> },
-}));
-vi.mock("@/shell", () => ({
-  AppShell: (props: { chrome?: unknown; style?: Record<string, string>; overlays?: unknown }) => {
-    shellProps.current = { chrome: props.chrome ?? null, style: props.style ?? {} };
-    // Overlays ARE rendered: they are App.tsx's own composition (the drop
-    // overlay lives in this file), and every component among them is already
-    // loaded by its own suite, so mounting them costs no coverage denominator.
-    return <>{props.overlays as ReactElement}</>;
-  },
-  EditorArea: () => null,
 }));
 
 // The feature subtrees App.tsx composes are stubbed, and deliberately so: this
@@ -91,68 +75,103 @@ vi.mock("@/contexts/WindowContext", () => ({
 const AppModule = await import("./App");
 const { MainLayout } = AppModule;
 const App = AppModule.default;
+const { useTabStore } = await import("@/stores/tabStore");
 
 beforeEach(() => {
   platform.overlayTitleBar = true;
   platform.boom = false;
   appError.mockReset();
-  shellProps.current = null;
+  useTabStore.setState({ tabs: {}, activeTabId: {}, untitledCounter: 0 });
 });
 
-/** The captured chrome slot, asserted to be an element or null — never `false`. */
-function capturedChrome(): ReactElement | null {
-  const chrome = shellProps.current?.chrome ?? null;
-  if (chrome === null) return null;
-  expect(isValidElement(chrome)).toBe(true);
-  return chrome as ReactElement;
+/** What one render of the layout put on screen, scoped to its own container. */
+function rendered(container: HTMLElement) {
+  const shell = container.querySelector<HTMLElement>(".app-shell");
+  if (!shell) throw new Error("the layout rendered no .app-shell root");
+  const primary = shell.querySelector<HTMLElement>(":scope > .app-shell__primary");
+  if (!primary) throw new Error("the shell rendered no primary column");
+  return {
+    shell,
+    /** The app's own title bar, or null where the window shows none. */
+    titleBar: within(container).queryByRole("banner", { name: "Application title bar" }),
+    /** The space the primary column holds above itself for the chrome strip. */
+    chromeSpace: primary.style.paddingTop,
+    cssVar: (name: string) => shell.style.getPropertyValue(name),
+  };
 }
 
 describe("MainLayout — chrome is mounted only where the app overlays the title bar", () => {
-  it("passes a chrome element on macOS", () => {
-    render(<MainLayout />);
-    const chrome = capturedChrome();
-    expect(chrome).not.toBeNull();
-    // Named, so swapping the slot's occupant is a deliberate edit.
-    expect((chrome?.type as { name?: string })?.name).toBe("AppTitleBar");
+  it("mounts the app's title bar in the chrome slot on macOS, and holds its space", () => {
+    const view = rendered(render(<MainLayout />).container);
+    expect(view.titleBar).not.toBeNull();
+    // In the chrome slot itself — a direct child of the shell root — not
+    // somewhere inside a feature subtree.
+    expect(view.titleBar?.parentElement).toBe(view.shell);
+    expect(view.chromeSpace).toBe(`${CHROME_HEIGHT}px`);
   });
 
-  it("passes NO chrome off macOS", () => {
+  it("fills the chrome slot with the BROWSER-AWARE title bar", async () => {
+    // What separates the app's title bar from a plain one: in a browser
+    // workspace it carries the webpage tabs. Swapping the slot's occupant for
+    // anything else loses them, so that swap has to be a deliberate edit.
+    // The browser workspace observes its viewport's size; jsdom has no
+    // ResizeObserver, and setup.ts leaves it to the tests that need one.
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    useTabStore.getState().createBrowserTab("main", "https://one.example", "One");
+    const view = rendered(render(<MainLayout />).container);
+    if (!view.titleBar) throw new Error("no title bar in the chrome slot");
+    const titleBar = within(view.titleBar);
+    expect(titleBar.getByRole("tablist", { name: "Webpages" })).toBeInTheDocument();
+    expect(titleBar.getByRole("textbox", { name: "Address bar" })).toHaveValue("https://one.example/");
+    // The page's native view is created asynchronously; once it exists the
+    // title bar's omnibox stops loading and offers Reload instead of Stop.
+    expect(await titleBar.findByRole("button", { name: "Reload" })).toBeInTheDocument();
+  });
+
+  it("mounts NO title bar off macOS, and holds no space for one", () => {
     platform.overlayTitleBar = false;
-    render(<MainLayout />);
-    expect(capturedChrome()).toBeNull();
+    const view = rendered(render(<MainLayout />).container);
+    expect(view.titleBar).toBeNull();
+    // The empty band above the editor that #1296 reported.
+    expect(view.chromeSpace).toBe("0px");
   });
 
   it("reserves the shell top inset on macOS", () => {
-    render(<MainLayout />);
+    const view = rendered(render(<MainLayout />).container);
     // Read from the constant, not restated: shellChrome.test.ts owns the
     // derivation, this owns only that the shell root publishes it.
-    expect(shellProps.current?.style["--shell-top-inset"]).toBe(`${SHELL_TOP_INSET}px`);
+    expect(view.cssVar("--shell-top-inset")).toBe(`${SHELL_TOP_INSET}px`);
   });
 
   it("reserves no shell top inset off macOS", () => {
     platform.overlayTitleBar = false;
-    render(<MainLayout />);
-    expect(shellProps.current?.style["--shell-top-inset"]).toBe("0px");
+    const view = rendered(render(<MainLayout />).container);
+    expect(view.cssVar("--shell-top-inset")).toBe("0px");
   });
 
   it("publishes the rail width on both platforms", () => {
-    render(<MainLayout />);
-    expect(shellProps.current?.style["--workspace-rail-width"]).toBe("30px");
+    expect(rendered(render(<MainLayout />).container).cssVar("--workspace-rail-width")).toBe("30px");
     platform.overlayTitleBar = false;
-    render(<MainLayout />);
-    expect(shellProps.current?.style["--workspace-rail-width"]).toBe("30px");
+    expect(rendered(render(<MainLayout />).container).cssVar("--workspace-rail-width")).toBe("30px");
   });
 
   // The route table is the only thing between the app's entry point and the
   // layout under test; without this the wiring above is proven for a component
   // nothing is shown to reach.
   it("is what the app's own '/' route renders", () => {
-    render(
+    const { container } = render(
       <MemoryRouter initialEntries={["/"]}>
         <App />
       </MemoryRouter>
     );
-    expect(capturedChrome()).not.toBeNull();
+    expect(rendered(container).titleBar).not.toBeNull();
   });
 
   it("keeps the chrome slot and the inset on the SAME side of the decision", () => {
@@ -161,9 +180,9 @@ describe("MainLayout — chrome is mounted only where the app overlays the title
     // no title bar of its own.
     for (const overlay of [true, false]) {
       platform.overlayTitleBar = overlay;
-      render(<MainLayout />);
-      const hasChrome = capturedChrome() !== null;
-      const reservesInset = shellProps.current?.style["--shell-top-inset"] !== "0px";
+      const view = rendered(render(<MainLayout />).container);
+      const hasChrome = view.titleBar !== null;
+      const reservesInset = view.cssVar("--shell-top-inset") !== "0px";
       expect(hasChrome).toBe(reservesInset);
     }
   });
@@ -176,13 +195,13 @@ describe("MainLayout — chrome is mounted only where the app overlays the title
 describe("App — the root error boundary", () => {
   it("renders the fallback instead of propagating a render failure", () => {
     platform.boom = true;
-    render(
+    const { container } = render(
       <MemoryRouter initialEntries={["/"]}>
         <App />
       </MemoryRouter>
     );
     // The layout never composed; the boundary took over.
-    expect(shellProps.current).toBeNull();
+    expect(container.querySelector(".app-shell")).toBeNull();
     expect(document.body.textContent).toContain("layout exploded");
   });
 
@@ -212,7 +231,8 @@ describe("App — the file-drop overlay", () => {
     useUIStore.setState({ isDraggingFiles: true });
     render(<MainLayout />);
     expect(screen.getByText("Drop to open")).toBeInTheDocument();
-    useUIStore.setState({ isDraggingFiles: false });
+    // Still mounted: the reset re-renders the overlay, so it belongs in act.
+    act(() => useUIStore.setState({ isDraggingFiles: false }));
   });
 });
 

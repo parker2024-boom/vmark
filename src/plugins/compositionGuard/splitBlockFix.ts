@@ -10,7 +10,8 @@
  * This function detects that split and moves the composed text back into
  * the original heading.
  *
- * @coordinates-with plugins/compositionGuard/tiptap.ts — called from scheduleImeCleanup
+ * @coordinates-with plugins/compositionGuard/imeCleanup.ts — called from cleanUpAfterComposition
+ * @coordinates-with plugins/compositionGuard/tiptap.ts — called from the post-composition fallback
  * @module plugins/compositionGuard/splitBlockFix
  */
 

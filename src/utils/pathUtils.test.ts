@@ -9,8 +9,10 @@ import {
   getFileNameWithoutExtension,
   getDirectory,
   joinPath,
-  getRevealInFileManagerLabel,
+  revealInFileManagerKey,
 } from "./pathUtils";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 describe("pathUtils", () => {
   describe("getFileName", () => {
@@ -189,7 +191,10 @@ describe("pathUtils", () => {
     });
   });
 
-  describe("getRevealInFileManagerLabel", () => {
+  // WI-RA19.4 — the label is a translation KEY, chosen per platform; the
+  // caller translates it. It used to return English literals, so Windows and
+  // Linux users in every locale read "Show in Explorer" / "Show in File Manager".
+  describe("revealInFileManagerKey", () => {
     let originalNavigator: typeof navigator;
 
     beforeEach(() => {
@@ -203,44 +208,35 @@ describe("pathUtils", () => {
       });
     });
 
-    it("returns 'Reveal in Finder' for macOS", () => {
+    const onPlatform = (platform: string | undefined) =>
       Object.defineProperty(global, "navigator", {
-        value: { platform: "MacIntel" },
+        value: platform === undefined ? undefined : { platform },
         writable: true,
       });
-      expect(getRevealInFileManagerLabel()).toBe("Reveal in Finder");
+
+    it.each([
+      ["MacIntel", "sidebar:contextMenu.revealInFinder"],
+      ["MacARM", "sidebar:contextMenu.revealInFinder"],
+      ["Win32", "sidebar:contextMenu.showInExplorer"],
+      ["Linux x86_64", "sidebar:contextMenu.showInFileManager"],
+      [undefined, "sidebar:contextMenu.showInFileManager"],
+    ])("platform %s → %s", (platform, key) => {
+      onPlatform(platform);
+      expect(revealInFileManagerKey()).toBe(key);
     });
 
-    it("returns 'Reveal in Finder' for mac arm", () => {
-      Object.defineProperty(global, "navigator", {
-        value: { platform: "MacARM" },
-        writable: true,
-      });
-      expect(getRevealInFileManagerLabel()).toBe("Reveal in Finder");
-    });
-
-    it("returns 'Show in Explorer' for Windows", () => {
-      Object.defineProperty(global, "navigator", {
-        value: { platform: "Win32" },
-        writable: true,
-      });
-      expect(getRevealInFileManagerLabel()).toBe("Show in Explorer");
-    });
-
-    it("returns 'Show in File Manager' for Linux", () => {
-      Object.defineProperty(global, "navigator", {
-        value: { platform: "Linux x86_64" },
-        writable: true,
-      });
-      expect(getRevealInFileManagerLabel()).toBe("Show in File Manager");
-    });
-
-    it("returns 'Show in File Manager' when navigator is undefined", () => {
-      Object.defineProperty(global, "navigator", {
-        value: undefined,
-        writable: true,
-      });
-      expect(getRevealInFileManagerLabel()).toBe("Show in File Manager");
+    it("every key it can return is translated in every locale", () => {
+      const localesDir = join(import.meta.dirname, "../locales");
+      const locales = readdirSync(localesDir).filter((d) => !d.startsWith("_") && !d.includes("."));
+      expect(locales.length).toBeGreaterThan(1);
+      for (const platform of ["MacIntel", "Win32", "Linux x86_64"]) {
+        onPlatform(platform);
+        const local = revealInFileManagerKey().replace(/^sidebar:/, "");
+        for (const locale of locales) {
+          const sidebar = JSON.parse(readFileSync(join(localesDir, locale, "sidebar.json"), "utf8")) as Record<string, unknown>;
+          expect(typeof sidebar[local], `${locale}/${local}`).toBe("string");
+        }
+      }
     });
   });
 });

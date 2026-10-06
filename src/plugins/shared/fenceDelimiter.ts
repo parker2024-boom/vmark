@@ -48,8 +48,7 @@ export const TAB_STOP = 4;
  * CommonMark — how deep an item is nested, whether a line is indented code —
  * is stated in columns. Counting characters made `>` + TAB + `- x` (marker at
  * column 4) compare equal to `> - x` (marker at column 2), so a NESTED item
- * read as a sibling and ended the enclosing item's fence early (audit R2,
- * #868).
+ * read as a sibling and ended the enclosing item's fence early.
  */
 export function columnAfter(text: string, start = 0): number {
   let column = start;
@@ -212,7 +211,7 @@ export function parseFenceDelimiter(
  *
  * COLUMNS, with tabs expanded (`columnAfter`): a character index is the same
  * number only while the prefix holds no tab, and a blockquote marker may
- * legally be followed by one (audit R2, #868).
+ * legally be followed by one.
  */
 export function listItemStart(line: string): number | null {
   let column = 0;

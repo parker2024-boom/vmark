@@ -7,7 +7,8 @@
  * `get_state` action that returns every window, every tab, and per-tab
  * metadata (filePath, dirty, revision, kind).
  *
- * Origin: MCP pruning plan (2026-05-04, retired) ADR-6.
+ * Origin: the MCP pruning plan's ADR-6, recorded in
+ * `.claude/adr/plans/20260504-mcp-pruning.md`.
  */
 
 import { z } from 'zod';
@@ -49,7 +50,7 @@ export function registerSessionTool(server: VMarkMcpServer): void {
       // a tab's field set is versioned by the app, and a rejected payload would
       // turn a successful call into an SDK output-validation error.
       //
-      // Round-2 audit finding 10 (tighten to per-action envelopes) does not
+      // Tightening the schema to per-action envelopes does not
       // apply here — `get_state` is the tool's only action, so the schema is
       // already action-specific. What stays loose is the ARRAY ELEMENT, and
       // deliberately: `windows[].tabs[]` gains fields with app releases (browser

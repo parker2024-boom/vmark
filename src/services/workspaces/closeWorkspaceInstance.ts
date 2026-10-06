@@ -20,6 +20,15 @@
  * guarantee is that the instance itself is not removed and the window is not
  * closed.
  *
+ * PINNED TABS CLOSE WITH THEIR WORKSPACE. A pin protects a tab against an
+ * accidental single close; closing the workspace is deliberate, and the rail
+ * promises it closes the workspace's tabs. The close lifecycle refuses a
+ * pinned tab and the bulk close stops at the first refusal, so passing pinned
+ * ids through made one pinned tab turn Close into a silent "cancelled".
+ * Unpinned tabs close first in one call; each pinned tab then closes on its
+ * own with its pin lifted for that attempt and restored, in place, if its
+ * save prompt is cancelled (services/tabs/closeLiftingPin).
+ *
  * Ownership is resolved LIVE from the tab store via `tabBelongsToWorkspace`,
  * not from `instance.tabIds`. That field can be stale or shared: its own
  * docstring notes that trusting it "let two instances both collect the same
@@ -32,10 +41,12 @@
  *
  * @coordinates-with workspaceTabCollection.ts — shared ownership predicate
  * @coordinates-with workspaceWindowActions.ts — same invariants, move/duplicate
+ * @coordinates-with services/tabs/closeLiftingPin.ts — closing pinned tabs
  * @module services/workspaces/closeWorkspaceInstance
  */
 
 import { useTabStore } from "@/stores/tabStore";
+import { closeLiftingPin } from "@/services/tabs/closeLiftingPin";
 import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
 import { finalizeInstanceRemoval } from "./finalizeInstanceRemoval";
 import {
@@ -56,8 +67,7 @@ export interface CloseWorkspaceInstanceOptions {
    *
    * INJECTED rather than imported: `services/` must not import from `hooks/`
    * (ADR-013 tiering, enforced by `pnpm lint:deps`). The caller is a component,
-   * which may import both tiers — the same shape
-   * `moveWorkspaceInstanceToNewWindow` uses for `cleanupTab`.
+   * which may import both tiers.
    */
   closeTabs: (windowLabel: string, tabIds: string[]) => Promise<boolean>;
 }
@@ -98,6 +108,29 @@ function ownedTabIds(windowLabel: string, workspaceInstanceId: string): string[]
     .map((tab) => tab.id);
 }
 
+/**
+ * Close the given owned tabs: unpinned ones in a single `closeTabs` call (it
+ * is consulted even for an empty list — its verdict is the user's answer),
+ * then pinned ones right to left, each with its pin lifted for its own close.
+ */
+async function closeOwnedTabs(
+  windowLabel: string,
+  tabIds: readonly string[],
+  closeTabs: CloseWorkspaceInstanceOptions["closeTabs"],
+): Promise<boolean> {
+  const wanted = new Set(tabIds);
+  const live = useTabStore.getState().getTabsByWindow(windowLabel).filter((tab) => wanted.has(tab.id));
+  const pinned = live.filter((tab) => tab.isPinned).map((tab) => tab.id);
+  const unpinned = tabIds.filter((id) => !pinned.includes(id));
+
+  if (!(await closeTabs(windowLabel, unpinned))) return false;
+  for (const id of [...pinned].reverse()) {
+    const closed = await closeLiftingPin(windowLabel, id, (tabId) => closeTabs(windowLabel, [tabId]));
+    if (!closed) return false;
+  }
+  return true;
+}
+
 export async function closeWorkspaceInstance(
   windowLabel: string,
   workspaceInstanceId: string,
@@ -123,7 +156,7 @@ export async function closeWorkspaceInstance(
     let freshRemaining = false;
     for (let attempt = 0; attempt < MAX_CLOSE_CONVERGENCE_PASSES; attempt++) {
       for (const id of toClose) attempted.add(id);
-      const allClosed = await closeTabs(windowLabel, toClose);
+      const allClosed = await closeOwnedTabs(windowLabel, toClose, closeTabs);
       if (!allClosed) {
         // Leave the instance in place. Tabs closed before the cancelled
         // prompt stay closed (see CANCELLATION above) — the guarantee is that
@@ -141,7 +174,7 @@ export async function closeWorkspaceInstance(
     }
     if (freshRemaining) return { ok: false, reason: "busy" };
 
-    // The shared post-removal lifecycle (audit #25/#26): store removal,
+    // The shared post-removal lifecycle: store removal,
     // per-instance UI/pane cleanup, terminal + closed-history cleanup, the
     // placeholder/empty-window invariants, and FULL successor hydration when
     // the closed instance was active.

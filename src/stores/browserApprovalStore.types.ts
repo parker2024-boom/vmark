@@ -40,7 +40,7 @@ export interface PendingApproval {
    * (`style`/`eval`). Shown to the user so they approve the real payload — not just
    * "run eval on this site" — and bound into the one-shot so an approved script A
    * cannot be spent on a substituted script B. Absent for target-based ops (a click
-   * binds role+name instead). (Security review P5, High #1.)
+   * binds role+name instead).
    */
   script?: string;
   /**
@@ -51,11 +51,11 @@ export interface PendingApproval {
    * the binding is `script`.
    */
   payloadSummary?: string;
-  /** For a profile-OPEN approval (WI-P6.1 H1): the named profile the AI wants to
+  /** For a profile-OPEN approval: the named profile the AI wants to
    *  open. Present only for that approval kind; on "Allow once" it mints a
    *  ProfileOpenApproval instead of a tab-bound one-shot. */
   profile?: string;
-  /** The workflow run that raised this prompt (WI-NB5.3). Present only for a
+  /** The workflow run that raised this prompt. Present only for a
    *  run's prompts, so `withdrawByRun` can drop exactly them when the run ends,
    *  closing the late-Allow race. Absent for a one-off act's prompt. */
   runId?: string;
@@ -108,7 +108,7 @@ export interface HumanTabAttachment {
   once: boolean;
 }
 
-/** A single-use grant to open a named persistent context (WI-P6.1 H1), bound to
+/** A single-use grant to open a named persistent context, bound to
  *  (profile, origin). Minted from a per-use approval, mirrored to the driver, and
  *  consumed authoritatively by `browser_ai_create` before the profile is applied. */
 export interface ProfileOpenApproval {

@@ -1,5 +1,5 @@
 /**
- * Purpose: the sanctioned lucide glyph sizes (WI-UI2.3, C7).
+ * Purpose: the sanctioned lucide glyph sizes.
  *
  * Every `<Icon size={…}>` in chrome draws at one of these four sizes; the
  * ui-consistency gate (C7) fails on any other number. Named constants exist so
@@ -11,6 +11,7 @@
  *
  * @module utils/iconSizes
  */
+
 export const ICON_XS = 12;
 export const ICON_SM = 14;
 export const ICON_MD = 16;

@@ -7,16 +7,16 @@ VMark ist für tastaturorientierte Workflows konzipiert. Die meisten Tastaturkü
 - **Mod** = Cmd auf macOS, Strg auf Windows/Linux
 - **Alt** = Option auf macOS
 
-## Funktionstaste auf macOS
+## Funktionstasten auf macOS
 
-VMark verwendet Funktionstasten (F4–F10) für schnelle Moduswechsel. Auf macOS sind diese Tasten standardmäßig Systemfunktionen zugeordnet (Helligkeit, Lautstärke usw.).
+VMark verwendet Funktionstasten (F2–F10) für schnelle Moduswechsel. Auf macOS sind diese Tasten standardmäßig Systemfunktionen zugeordnet (Helligkeit, Lautstärke usw.).
 
 **Um F-Tasten direkt ohne Fn zu verwenden:**
 
 1. **Systemeinstellungen** → **Tastatur** öffnen
-2. **„F1, F2 usw. als Standard-Funktionstasten verwenden"** aktivieren
+2. **„F1, F2 usw. als Standard-Funktionstasten verwenden“** aktivieren
 
-Alternativ halten Sie die **Fn**-Taste beim Drücken von F4–F10, um VMark-Tastaturkürzel auszulösen.
+Alternativ halten Sie die **Fn**-Taste beim Drücken von F2–F10, um VMark-Tastaturkürzel auszulösen.
 
 ::: tip
 Wenn Sie die Systemfunktionen auf F-Tasten bevorzugen, können Sie VMark-Tastaturkürzel in den Einstellungen (`Mod + ,`) für andere Tastenkombinationen anpassen.
@@ -27,11 +27,13 @@ Wenn Sie die Systemfunktionen auf F-Tasten bevorzugen, können Sie VMark-Tastatu
 | Taste | Aktion |
 |-------|--------|
 | `F2` | Nächstes Problem |
-| `Shift + F2` | Vorheriges Problem |
-| `F4` | Zeilen aufsteigend sortieren |
-| `Umschalt + F4` | Zeilen absteigend sortieren |
+| `Umschalt + F2` | Vorheriges Problem |
+| `F3` | Unsichtbare Zeichen umschalten |
+| `F4` | Zeilen aufsteigend sortieren _(nur im Quellmodus; im WYSIWYG-Modus ohne Wirkung)_ |
+| `Umschalt + F4` | Zeilen absteigend sortieren _(nur im Quellmodus; im WYSIWYG-Modus ohne Wirkung)_ |
 | `F5` | Quellvorschau |
-| `F6` | Quellmodus umschalten |
+| `F6` | Quellansicht (Markdown: WYSIWYG ⇄ Quelle; andere Formate: Quelle ⇄ Geteilt) |
+| `Umschalt + F6` | Geteilt / Vorschau (Markdown: geteilte Ansicht; andere Formate: Vorschau ⇄ Geteilt) |
 | `F7` | Statusleiste umschalten |
 | `F8` | Fokusmodus |
 | `F9` | Schreibmaschinenmodus |
@@ -52,7 +54,7 @@ Wenn Sie die Systemfunktionen auf F-Tasten bevorzugen, können Sie VMark-Tastatu
 | Kursiv | `Mod + I` |
 | Unterstrichen | `Mod + U` |
 | Durchgestrichen | `Mod + Umschalt + X` |
-| Inline-Code | `Mod + Umschalt` + `` ` `` |
+| Inline-Code | Mod + Umschalt + `` ` `` |
 | Hervorhebung | `Mod + Umschalt + M` |
 | Tiefgestellt | `Alt + Mod + =` |
 | Hochgestellt | `Alt + Mod + Umschalt + =` |
@@ -62,7 +64,6 @@ Wenn Sie die Systemfunktionen auf F-Tasten bevorzugen, können Sie VMark-Tastatu
 | Wiki-Link | `Alt + Mod + K` |
 | Lesezeichen-Link | `Alt + Mod + B` |
 | Formatierung löschen | `Mod + \` |
-| Betonung durchschalten | `Mod + Alt + E` _(kein → kursiv → fett → fett+kursiv)_ |
 
 ## Blockformatierung
 
@@ -72,14 +73,12 @@ Wenn Sie die Systemfunktionen auf F-Tasten bevorzugen, können Sie VMark-Tastatu
 | Absatz | `Mod + Umschalt + 0` |
 | Überschriften-Ebene erhöhen | `Alt + Mod + ]` |
 | Überschriften-Ebene verringern | `Alt + Mod + [` |
-| Überschrift durchschalten | `Mod + Alt + H` _(Absatz → H1 → H2 → … → H6)_ |
 | Blockzitat | `Alt + Mod + Q` |
 | Codeblock | `Alt + Mod + C` |
 | Aufzählungsliste | `Alt + Mod + U` |
 | Geordnete Liste | `Alt + Mod + O` |
 | Aufgabenliste | `Alt + Mod + X` |
 | Aufgaben-Checkbox umschalten | `Mod + Umschalt + Eingabe` _(kontextabhängig; nicht anpassbar)_ |
-| Listentyp durchschalten | _(anpassbar)_ |
 | Einzug erhöhen | `Mod + ]` |
 | Einzug verringern | `Mod + [` |
 | Horizontale Linie | `Alt + Mod + -` |
@@ -103,6 +102,8 @@ Wenn Sie die Systemfunktionen auf F-Tasten bevorzugen, können Sie VMark-Tastatu
 | GROSSBUCHSTABEN | `Strg + Umschalt + U` | `Alt + Umschalt + U` |
 | kleinbuchstaben | `Strg + Umschalt + L` | `Alt + Umschalt + L` |
 | Titel-Schreibweise | `Strg + Umschalt + T` | `Alt + Umschalt + T` |
+| Groß-/Kleinschreibung wechseln | _(anpassbar)_ | _(anpassbar)_ |
+| Leerzeilen entfernen | _(anpassbar)_ | _(anpassbar)_ |
 | Anführungsstil wechseln | `Umschalt + Mod + '` | `Umschalt + Mod + '` |
 
 ## Einfügen
@@ -113,6 +114,7 @@ Wenn Sie die Systemfunktionen auf F-Tasten bevorzugen, können Sie VMark-Tastatu
 | Video einfügen | — |
 | Audio einfügen | — |
 | Tabelle einfügen | `Mod + Umschalt + T` |
+| Inhaltsverzeichnis | _(anpassbar)_ |
 | Inline-Mathematik | `Alt + Mod + M` |
 | Mathematik-Block | `Alt + Mod + Umschalt + M` |
 | Hinweis einfügen | `Alt + Mod + N` |
@@ -121,9 +123,9 @@ Wenn Sie die Systemfunktionen auf F-Tasten bevorzugen, können Sie VMark-Tastatu
 | Wichtig einfügen | `Alt + Mod + Umschalt + I` |
 | Vorsicht einfügen | `Mod + Umschalt + U` |
 | Einklappbar einfügen | `Alt + Mod + D` |
-| Diagramm einfügen | `Alt + Umschalt + Mod + D` |
+| Diagramm einfügen | `Alt + Mod + Umschalt + D` |
 | Graphviz-Diagramm einfügen | _(anpassbar)_ |
-| Mindmap einfügen | `Alt + Umschalt + Mod + K` |
+| Mindmap einfügen | `Alt + Mod + Umschalt + K` |
 | Kommentar umschalten | `Mod + /` |
 
 ## Auswahl & Mehrcursor
@@ -131,6 +133,7 @@ Wenn Sie die Systemfunktionen auf F-Tasten bevorzugen, können Sie VMark-Tastatu
 | Aktion | Tastenkürzel |
 |--------|--------------|
 | Zeile auswählen | `Mod + L` |
+| Alle Vorkommen im Block auswählen | `Alt + Mod + Umschalt + L` |
 | Auswahl erweitern | `Strg + Umschalt + Auf` |
 | Nächstes Vorkommen auswählen | `Mod + D` |
 | Vorkommen überspringen | `Mod + Umschalt + D` |
@@ -154,7 +157,9 @@ Wenn Sie die Systemfunktionen auf F-Tasten bevorzugen, können Sie VMark-Tastatu
 
 | Aktion | Tastenkürzel |
 |--------|--------------|
-| Quellmodus umschalten | `F6` |
+| Quellansicht (Markdown ⇄ Quelle; andere Formate Quelle ⇄ Geteilt) | `F6` |
+| Geteilt / Vorschau (Markdown geteilt; andere Formate Vorschau ⇄ Geteilt) | `Umschalt + F6` |
+| Editor teilen — zwei Dokumente | `Alt + Mod + \` |
 | Statusleiste umschalten | `F7` |
 | Fokusmodus | `F8` |
 | Schreibmaschinenmodus | `F9` |
@@ -163,18 +168,35 @@ Wenn Sie die Systemfunktionen auf F-Tasten bevorzugen, können Sie VMark-Tastatu
 | Vergrößern | `Mod + =` |
 | Verkleinern | `Mod + -` |
 | Zeilenumbruch | `Alt + Z` |
+| Zuletzt verwendeter Tab | `Strg + Tab` |
+| Editor teilen — zwei Dokumente | `Alt + Mod + \` |
+| Bereich schließen | `Alt + Mod + Umschalt + \` |
+| Anderen Bereich fokussieren | `Alt + Mod + Umschalt + O` |
+| Seitenleiste umschalten | `Strg + Umschalt + 0` |
 | Gliederung umschalten | `Strg + Umschalt + 1` |
 | Datei-Explorer umschalten | `Strg + Umschalt + 2` |
 | Verlauf umschalten | `Strg + Umschalt + 3` |
+| Wissensdatenbank umschalten | `Strg + Umschalt + 4` |
+| Fensterstatus umschalten | `Strg + Umschalt + 5` |
 | Zeilennummern umschalten (Codeblöcke) | `Alt + Mod + L` |
 | Terminal umschalten | Strg + `` ` `` |
+| Terminal oder Editor fokussieren | Strg + Umschalt + `` ` `` (Alt + Umschalt + `` ` `` unter Windows/Linux) |
 | Diagramm-Vorschau umschalten | `Alt + Mod + P` |
 | Tabellen an Breite anpassen | _(anpassbar)_ |
-| Universelle Symbolleiste | `Mod + Umschalt + P` |
+| Universelle Symbolleiste öffnen | `Mod + Umschalt + B` |
 | Quellvorschau | `F5` |
 | Markdown prüfen | `Alt + Mod + V` |
 | Nächstes Problem | `F2` |
-| Vorheriges Problem | `Shift + F2` |
+| Vorheriges Problem | `Umschalt + F2` |
+
+::: tip Wissensdatenbank umschalten
+`Strg + Umschalt + 4` ist standardmäßig ausgeblendet, ebenso der Menüeintrag **Ansicht → Wissensdatenbank**
+und der Palettenbefehl. Kein Release-Build auf irgendeiner Plattform liefert die
+Content-Server-Laufzeit mit, die die Funktion benötigt, daher erscheinen die Einstiegspunkte
+nur, wenn **Einstellungen → Erweitert → Entwickler-Tools** eingeschaltet ist — siehe
+[Wissensdatenbank & Slidev](/de/guide/knowledge-base#voraussetzungen). Das Tastaturkürzel
+bleibt in jedem Fall unter **Einstellungen → Tastenkürzel** aufgeführt und anpassbar.
+:::
 
 ## Dateioperationen
 
@@ -182,6 +204,7 @@ Wenn Sie die Systemfunktionen auf F-Tasten bevorzugen, können Sie VMark-Tastatu
 |--------|--------------|
 | Neue Datei | `Mod + N` |
 | Schnell öffnen | `Mod + O` _(Fuzzy-Dateibrowser)_ |
+| Befehlspalette öffnen | `Mod + Umschalt + P` |
 | Datei öffnen... | Nur Menü _(nativer Dateidialog)_ |
 | Arbeitsbereich öffnen | `Mod + Umschalt + O` |
 | Speichern | `Mod + S` |
@@ -226,12 +249,33 @@ Wenn Sie die Systemfunktionen auf F-Tasten bevorzugen, können Sie VMark-Tastatu
 |--------|--------------|
 | Neues Fenster | `Mod + Umschalt + N` |
 | Neuer Tab | `Mod + T` |
+| Neuer Browser-Tab | `Alt + Mod + Umschalt + B` |
+| Nächster Tab | `Mod + Umschalt + ]` |
+| Vorheriger Tab | `Mod + Umschalt + [` |
 | Tab schließen | `Mod + W` |
+| Geschlossenen Tab wieder öffnen | _(anpassbar)_ |
 | Versteckte Dateien umschalten | `Mod + Umschalt + .` |
-| Alle Dateien umschalten | _(anpassbar)_ |
+| Alle Dateien umschalten | `Mod + Umschalt + A` |
 
 ::: tip Windows/Linux-Hinweis
 Versteckte Dateien umschalten verwendet `Strg + H` unter Windows und Linux.
+
+Seitenleiste umschalten verwendet `Alt + Umschalt + 0` unter Windows und Linux, weil `Mod` dort
+Strg ist — die macOS-Kombination `Strg + Umschalt + 0` würde also mit
+`Mod + Umschalt + 0` für Absatz kollidieren.
+:::
+
+::: tip Neuer Browser-Tab
+`Alt + Mod + Umschalt + B` öffnet einen Tab des eingebetteten Browsers und erscheint auch im
+Menü **Datei**. Der eingebettete Browser ist auf macOS standardmäßig eingeschaltet; wenn Sie ihn
+unter **Einstellungen → Erweitert → Eingebetteter Browser** ausschalten, wird der Menüeintrag ausgeblendet
+(nicht ausgegraut), bis Sie ihn wieder einschalten. Den Browser gibt es nur auf macOS, daher
+erscheint der Eintrag unter Windows oder Linux nie.
+
+Es ist ein echter Menüeintrag und nicht nur eine Tastenbelegung, und das ist wichtig: Sobald
+eine Webseite den Tastaturfokus hat, verbraucht die Browser-Engine Tastendrücke, bevor VMark
+sie sieht, sodass ein App-internes Tastaturkürzel nicht auslösen kann. Ein Menübeschleuniger wird
+von macOS selbst ausgelöst und funktioniert daher auch beim Surfen.
 :::
 
 ## Hilfe (nur macOS)
@@ -277,12 +321,6 @@ Wenn der Cursor sich in einer Tabelle befindet:
 | Zeile darunter hinzufügen | `Mod + Eingabe` |
 | Zeile darüber hinzufügen | `Mod + Umschalt + Eingabe` |
 | Zeile löschen | `Mod + Rücktaste` |
-| Spalte links hinzufügen | `Alt + Mod + Left` |
-| Spalte rechts hinzufügen | `Alt + Mod + Right` |
-| Spalte löschen | `Alt + Mod + Rücktaste` |
-| Spalte linksbündig ausrichten | `Mod + Alt + Umschalt + L` |
-| Spalte rechtsbündig ausrichten | `Mod + Umschalt + R` |
-| Spalte zentriert ausrichten | _(anpassbar)_ |
 | Tabelle formatieren | `Alt + Mod + T` |
 | Tabelle verlassen | Pfeiltasten am Tabellenrand |
 
@@ -312,12 +350,12 @@ Wenn das integrierte Terminal fokussiert ist:
 | Aktion | Tastenkürzel |
 |--------|--------------|
 | Terminal umschalten | `` Strg + ` `` |
-| Fokus auf Terminal oder Editor | `` Strg + Umschalt + ` `` |
-| Kopieren | `Mod + C` (mit Auswahl) |
-| Einfügen | `Mod + V` |
-| Alles auswählen (nur Terminalausgabe) | `Mod + A` |
-| Löschen | `Mod + K` |
-| Suchen | `Mod + F` |
+| Terminal oder Editor fokussieren | `` Strg + Umschalt + ` `` (`` Alt + Umschalt + ` `` unter Windows/Linux) |
+| Kopieren | `Mod + C` (mit Auswahl); unter Linux auch `Strg + Umschalt + C` oder `Strg + Einfg` |
+| Einfügen | `Mod + V`; unter Linux auch `Strg + Umschalt + V` oder `Umschalt + Einfg` |
+| Alles auswählen (nur Terminalausgabe) | `Mod + A` (`Strg + Umschalt + A` unter Linux) |
+| Löschen | `Mod + K` (`Strg + Umschalt + K` unter Linux) |
+| Suchen | `Mod + F` (`Strg + Umschalt + F` unter Linux) |
 | Zu Sitzung 1–5 wechseln | `Mod + 1` bis `Mod + 5` |
 | Terminal-Schrift vergrößern | `Mod + =` |
 | Terminal-Schrift verkleinern | `Mod + -` |
@@ -339,6 +377,8 @@ Unter macOS übersetzt das Terminal außerdem die üblichen Textbearbeitungs-Tas
 | Eingabezeile löschen (sendet `Strg + U`) | `Cmd + Rücktaste` |
 
 `Strg`-Kombinationen wie `Strg + A`, `Strg + R` und `Strg + W` gehen unter macOS direkt an die Shell.
+
+Unter Linux folgt das Terminal der dort üblichen Terminal-Konvention: Einfache `Strg`-Buchstaben-Kombinationen gehen an die Shell, sodass Readline-Tasten wie `Strg + A`, `Strg + E`, `Strg + K`, `Strg + F`, `Strg + U` und `Strg + W` wie in jedem anderen Linux-Terminal funktionieren. Die eigenen Aktionen des Terminals liegen auf `Strg + Umschalt`: `Strg + Umschalt + A` wählt alles aus, `Strg + Umschalt + K` leert, `Strg + Umschalt + F` sucht, und `Strg + Umschalt + C` / `Strg + Umschalt + V` kopieren und fügen ein. Auch `Strg + Einfg` und `Umschalt + Einfg` kopieren und fügen ein. Zwei einfache `Strg`-Kombinationen behält das Terminal: `Strg + C` kopiert eine Auswahl (ohne Auswahl sendet es SIGINT), und `Strg + V` fügt ein. `Strg + 1` bis `Strg + 5` wechseln weiterhin die Sitzung.
 
 Wenn die Terminal-Suchleiste geöffnet ist:
 

@@ -42,7 +42,7 @@ export const initialState: SettingsState = {
     confirmQuit: true,
     // #1419 — opt-in, Windows only: the last window's close button parks VMark in the tray.
     closeToTray: false,
-    // fix(#946) — opt-in: open existing files in a new tab (off keeps the legacy "reuse untitled tab" behavior).
+    // Opt-in: open existing files in a new tab (off keeps the legacy "reuse untitled tab" behavior).
     openInNewTab: false,
     workspaceRailMode: false,
     // fix(#1224) — show the name that is on disk; hiding extensions is opt-in.
@@ -163,9 +163,9 @@ export const initialState: SettingsState = {
     associations: {},
   },
   browser: {
-    // Embedded browser ships ON (maintainer decision, 2026-08-15), superseding
-    // the default-off posture of WI-1.10 and the KEEP-DARK recommendation in
-    // .claude/rules/60-ai-governance.md §12, whose 2026-11-01 exit criterion
+    // Embedded browser ships ON (maintainer decision), superseding
+    // the earlier default-off posture and the KEEP-DARK recommendation in
+    // .claude/rules/60-ai-governance.md §12, whose exit criterion
     // was resolved early in favour of shipping.
     //
     // Consequences a reader should know about, because they are not obvious:

@@ -10,6 +10,10 @@
  *   - Drag and resize state
  *   - destroy cleanup
  *   - getMermaidPreviewView singleton
+ *
+ * The real popup DOM builder and preview renderer run. Only the third-party
+ * `mermaid` package underneath the renderer is replaced (its layout needs a
+ * real layout engine); a render is observed as a call into `mermaid.render`.
  */
 
 vi.mock("@/plugins/shared/diagramCleanup", () => ({
@@ -35,60 +39,27 @@ vi.mock("@/plugins/shared/popupHostDom", () => ({
   ),
 }));
 
-const mockRenderPreview = vi.fn(() => 1);
-vi.mock("./mermaidPreviewRender", () => ({
-  renderPreview: (...args: unknown[]) => mockRenderPreview(...args),
-}));
-
-vi.mock("./mermaidPreviewDOM", () => ({
-  buildContainer: vi.fn(() => {
-    const container = document.createElement("div");
-    container.className = "mermaid-preview";
-
-    const header = document.createElement("div");
-    header.className = "mermaid-preview-header";
-    container.appendChild(header);
-
-    const zoomControls = document.createElement("div");
-    zoomControls.className = "mermaid-preview-zoom";
-    const zoomIn = document.createElement("button");
-    zoomIn.className = "mermaid-preview-zoom-btn";
-    zoomIn.dataset.action = "in";
-    const zoomOut = document.createElement("button");
-    zoomOut.className = "mermaid-preview-zoom-btn";
-    zoomOut.dataset.action = "out";
-    const zoomValue = document.createElement("span");
-    zoomValue.className = "mermaid-preview-zoom-value";
-    zoomValue.textContent = "100%";
-    zoomControls.appendChild(zoomOut);
-    zoomControls.appendChild(zoomValue);
-    zoomControls.appendChild(zoomIn);
-    header.appendChild(zoomControls);
-
-    const content = document.createElement("div");
-    content.className = "mermaid-preview-content";
-    container.appendChild(content);
-
-    const error = document.createElement("div");
-    error.className = "mermaid-preview-error";
-    container.appendChild(error);
-
-    // Resize handles
-    for (const corner of ["nw", "ne", "sw", "se"]) {
-      const handle = document.createElement("div");
-      handle.className = "mermaid-preview-resize";
-      handle.dataset.corner = corner;
-      container.appendChild(handle);
-    }
-
-    return container;
-  }),
+const { mockMermaidRender } = vi.hoisted(() => ({ mockMermaidRender: vi.fn() }));
+vi.mock("mermaid", () => ({
+  default: {
+    initialize: () => undefined,
+    render: (...args: unknown[]) => mockMermaidRender(...args),
+  },
 }));
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MermaidPreviewView, getMermaidPreviewView } from "./MermaidPreviewView";
 
 const ANCHOR = { top: 100, left: 200, bottom: 120, right: 250 };
+
+/** Let the async mermaid render chain (lazy import, render lock) settle. */
+const flushRender = () => vi.advanceTimersByTimeAsync(0);
+
+beforeEach(() => {
+  mockMermaidRender.mockImplementation(async (_id: string, source: string) => ({
+    svg: '<svg viewBox="0 0 200 100"><text>' + source + "</text></svg>",
+  }));
+});
 
 describe("MermaidPreviewView", () => {
   let preview: MermaidPreviewView;
@@ -113,9 +84,12 @@ describe("MermaidPreviewView", () => {
     expect(preview.isVisible()).toBe(true);
   });
 
-  it("calls renderPreview on show", () => {
+  it("renders the diagram on show", async () => {
     preview.show("graph LR; A-->B", ANCHOR);
-    expect(mockRenderPreview).toHaveBeenCalled();
+    await flushRender();
+    expect(mockMermaidRender).toHaveBeenCalledWith(expect.any(String), "graph LR; A-->B");
+    const content = document.querySelector(".mermaid-preview-content") as HTMLElement;
+    expect(content.querySelector("svg text")?.textContent).toBe("graph LR; A-->B");
   });
 
   it("hides and resets state", () => {
@@ -124,24 +98,27 @@ describe("MermaidPreviewView", () => {
     expect(preview.isVisible()).toBe(false);
   });
 
-  it("debounces mermaid updateContent", () => {
+  it("debounces mermaid updateContent", async () => {
     preview.show("graph LR; A-->B", ANCHOR);
-    mockRenderPreview.mockClear();
+    await flushRender();
+    mockMermaidRender.mockClear();
 
     preview.updateContent("graph LR; A-->C");
-    expect(mockRenderPreview).not.toHaveBeenCalled();
+    await flushRender();
+    expect(mockMermaidRender).not.toHaveBeenCalled();
 
-    vi.advanceTimersByTime(200);
-    expect(mockRenderPreview).toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(mockMermaidRender).toHaveBeenCalledWith(expect.any(String), "graph LR; A-->C");
   });
 
   it("renders SVG content immediately without debounce", () => {
     preview.show("<svg></svg>", ANCHOR, undefined, "svg");
-    mockRenderPreview.mockClear();
 
-    preview.updateContent("<svg><rect/></svg>", "svg");
-    // SVG should render immediately
-    expect(mockRenderPreview).toHaveBeenCalled();
+    preview.updateContent('<svg xmlns="http://www.w3.org/2000/svg"><rect width="3"/></svg>', "svg");
+    // SVG should render immediately, with no timer advanced
+    const content = document.querySelector(".mermaid-preview-content") as HTMLElement;
+    expect(content.querySelector("rect")?.getAttribute("width")).toBe("3");
+    expect(mockMermaidRender).not.toHaveBeenCalled();
   });
 
   it("updatePosition is no-op after drag", () => {
@@ -159,7 +136,7 @@ describe("MermaidPreviewView", () => {
     document.dispatchEvent(mouseup);
 
     // After dragging, updatePosition should be a no-op
-    const container = document.querySelector(".mermaid-preview") as HTMLElement;
+    const container = document.querySelector(".mermaid-preview-popup") as HTMLElement;
     const topBefore = container?.style.top;
     preview.updatePosition(ANCHOR);
     expect(container?.style.top).toBe(topBefore);
@@ -174,14 +151,14 @@ describe("MermaidPreviewView", () => {
     removeSpy.mockRestore();
   });
 
-  it("destroy clears debounce timer", () => {
+  it("destroy clears debounce timer", async () => {
     preview.show("graph LR; A-->B", ANCHOR);
     preview.updateContent("graph LR; A-->C");
     // Timer is pending — destroy should clear it
     preview.destroy();
-    mockRenderPreview.mockClear();
-    vi.advanceTimersByTime(500);
-    expect(mockRenderPreview).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(500);
+    // Only show()'s render ran; the pending update never fired
+    expect(mockMermaidRender.mock.calls.map(([, source]) => source)).toEqual(["graph LR; A-->B"]);
   });
 
   it("zoom buttons change zoom level", () => {
@@ -231,7 +208,7 @@ describe("MermaidPreviewView — resize onMouseDown no-op on non-handle target",
 
   it("returns early when mousedown target is not a resize handle (line 126)", () => {
     preview2.show("graph LR; A-->B", ANCHOR);
-    const container = document.querySelector(".mermaid-preview") as HTMLElement;
+    const container = document.querySelector(".mermaid-preview-popup") as HTMLElement;
 
     // Fire mousedown on a non-handle element (the container itself)
     const event = new MouseEvent("mousedown", {
@@ -301,7 +278,7 @@ describe("MermaidPreviewView — drag with no initial style position", () => {
 
   it("drag start defaults left/top to 0 when style values are empty (lines 93-94)", () => {
     preview4.show("graph LR; A-->B", ANCHOR);
-    const container = document.querySelector(".mermaid-preview") as HTMLElement;
+    const container = document.querySelector(".mermaid-preview-popup") as HTMLElement;
 
     // Ensure container has no left/top style set (parseInt("") → NaN → || 0)
     container.style.left = "";
@@ -322,7 +299,7 @@ describe("MermaidPreviewView — drag with no initial style position", () => {
 
   it("resize start defaults left/top to 0 when style values are empty (lines 134-135)", () => {
     preview4.show("graph LR; A-->B", ANCHOR);
-    const container = document.querySelector(".mermaid-preview") as HTMLElement;
+    const container = document.querySelector(".mermaid-preview-popup") as HTMLElement;
 
     // Clear style positions
     container.style.left = "";
@@ -359,7 +336,7 @@ describe("MermaidPreviewView — resize from west and north corners", () => {
 
   it("resizes from west (w) corner adjusting left and width (line 156)", () => {
     preview5.show("graph LR; A-->B", ANCHOR);
-    const container = document.querySelector(".mermaid-preview") as HTMLElement;
+    const container = document.querySelector(".mermaid-preview-popup") as HTMLElement;
 
     // Find a resize handle and override its corner to "w"
     const handles = container.querySelectorAll(".mermaid-preview-resize");
@@ -387,7 +364,7 @@ describe("MermaidPreviewView — resize from west and north corners", () => {
 
   it("resizes from north (n) corner adjusting top and height (line 165)", () => {
     preview5.show("graph LR; A-->B", ANCHOR);
-    const container = document.querySelector(".mermaid-preview") as HTMLElement;
+    const container = document.querySelector(".mermaid-preview-popup") as HTMLElement;
 
     const handles = container.querySelectorAll(".mermaid-preview-resize");
     const handle = handles[0] as HTMLElement;
@@ -413,7 +390,7 @@ describe("MermaidPreviewView — resize from west and north corners", () => {
 
   it("resizes from nw corner adjusting both top/left and width/height", () => {
     preview5.show("graph LR; A-->B", ANCHOR);
-    const container = document.querySelector(".mermaid-preview") as HTMLElement;
+    const container = document.querySelector(".mermaid-preview-popup") as HTMLElement;
 
     const handles = container.querySelectorAll(".mermaid-preview-resize");
     const handle = handles[0] as HTMLElement;

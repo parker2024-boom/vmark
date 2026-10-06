@@ -42,7 +42,7 @@ function pipeIsEscaped(body, end) {
  * literal backslash followed by a real DELIMITER, not an escaped pipe. The
  * single-character lookahead this replaced read every `\` before a `|` as an
  * escape, so an even run merged two cells into one — and the trailing-pipe
- * test had the same flaw (audit R2 #142).
+ * test had the same flaw.
  */
 export function splitRow(line) {
   let body = line.trim();

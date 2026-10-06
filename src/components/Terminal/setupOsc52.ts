@@ -1,7 +1,7 @@
 /**
  * setupOsc52
  *
- * Purpose: OSC 52 clipboard support (T13/WI-3.5) — lets a program running
+ * Purpose: OSC 52 clipboard support (T13) — lets a program running
  * inside the terminal (over `ssh`, inside `tmux`, a remote editor) put text on
  * the HOST clipboard by printing an escape sequence. Without it, "yank" in a
  * remote vim goes nowhere the user can paste from.

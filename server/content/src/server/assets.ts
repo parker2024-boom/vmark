@@ -7,6 +7,13 @@
  * are a documented follow-up (they would be appended here / served from a
  * separate route).
  *
+ * `KB_JS` also carries the session token onto same-origin links — but only on
+ * a page that itself arrived with `?s=`, which `/__auth` gives only to a
+ * client that cannot hold the session cookie (the in-app frame). In a browser
+ * that holds the cookie no URL ever carries the token, so none reaches its
+ * history.
+ *
+ * @coordinates-with auth.ts — decides which client is sent `?s=`
  * @module server/assets
  */
 
@@ -27,7 +34,9 @@ pre { overflow-x: auto; }
 
 export const KB_JS = `
 (function () {
-  // Session token from ?s= (in-app iframe path where cookies are blocked).
+  // Session token from ?s=. Present only where the server found the cookie
+  // unusable (the in-app frame); a browser that holds the cookie is never
+  // sent a URL carrying it, so nothing below runs there.
   var s = new URLSearchParams(location.search).get("s");
   var suffix = s ? "?s=" + encodeURIComponent(s) : "";
   try {

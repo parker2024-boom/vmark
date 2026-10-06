@@ -4,7 +4,7 @@ import { Schema } from "@tiptap/pm/model";
 import { EditorState, SelectionRange } from "@tiptap/pm/state";
 import { DecorationSet } from "@tiptap/pm/view";
 import { multiCursorPlugin } from "../multiCursorPlugin";
-import { MultiSelection } from "../MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 import { createMultiCursorDecorations } from "../decorations";
 
 // Simple schema for testing

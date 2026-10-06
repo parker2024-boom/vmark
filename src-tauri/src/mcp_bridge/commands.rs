@@ -1,7 +1,7 @@
 //! Tauri commands for the MCP bridge.
 //!
 //! Provides the `mcp_bridge_respond` command and query helpers
-//! used by the frontend and `mcp_server` module.
+//! used by the frontend and the `control` module.
 
 use super::managed::McpBridgeState;
 use super::types::{ConnectedClientInfo, McpResponse, McpResponsePayload};
@@ -29,11 +29,14 @@ pub async fn mcp_bridge_respond(
     let delivered = super::state::resolve_pending(&mut guard, &payload.id, response)
         .map_err(CommandError::conflict)?;
     if delivered {
-        log::debug!("[MCP Bridge] Response received for {}", payload.id);
+        log::debug!(
+            "[MCP Bridge] Response received for {}",
+            crate::peer_text::peer_text(&payload.id)
+        );
     } else {
         log::debug!(
             "[MCP Bridge] Response for unknown/expired request {}",
-            payload.id
+            crate::peer_text::peer_text(&payload.id)
         );
     }
 
@@ -69,15 +72,18 @@ pub async fn connected_clients(bridge: &McpBridgeState) -> Vec<ConnectedClientIn
         .collect()
 }
 
-/// F5 (WI-3.5): register (or clear) a window's open-workspace root so the
-/// router can send workspace-scoped requests to the owning window. The
-/// frontend calls this on workspace open (Some) and close (None).
+/// F5: register (or clear) the calling window's open-workspace root
+/// so the router can send workspace-scoped requests to the owning window. The
+/// frontend calls this on workspace open (Some) and close (None). The window
+/// is the caller, never a label: one window could otherwise claim another's
+/// workspace and receive the MCP requests meant for it.
 #[tauri::command]
-pub async fn mcp_bridge_set_window_workspace(
+pub async fn mcp_bridge_set_window_workspace<R: tauri::Runtime>(
+    window: tauri::Window<R>,
     bridge: State<'_, McpBridgeState>,
-    window_label: String,
     workspace_root: Option<String>,
 ) -> Result<(), CommandError> {
+    let window_label = window.label().to_string();
     let mut guard = bridge.lock().await;
     match workspace_root {
         Some(root) => {

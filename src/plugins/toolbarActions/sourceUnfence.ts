@@ -9,15 +9,15 @@
  *   - A fence that OPENS a list item carries the markers on its opener line
  *     (`- ```, `- - ```). The opener goes with the fence, so they are restored
  *     onto the first body line — or the item vanished with the fence and the
- *     list broke (#444).
+ *     list broke.
  *   - EVERY marker, read through `fenceDelimiter`'s own container walk rather
  *     than a local regex. A regex that matched one marker restored the outer
  *     item and flattened the inner one into spaces, which is the same
- *     destruction one level in (#444, round 3).
+ *     destruction one level in.
  *   - Only the item's CONTINUATION is stripped from that first body line: the
  *     opener's own indentation, its quote markers, and at most the content
  *     column each marker occupies. Whatever indentation the line carries past
- *     that is the code's own and stays (#444, round 2 — a `\s*` that consumed
+ *     that is the code's own and stays (a `\s*` that consumed
  *     the whole leading run deleted it). Later body lines are untouched: their
  *     indentation is what continues the item.
  *
@@ -36,7 +36,7 @@ import { columnAfter, containerPrefixParts, type ContainerPart } from "@/plugins
  *
  * Read through the fence grammar's own walk rather than a local regex: a local
  * one matched a single marker, so `- - ``` ` restored the outer item and turned
- * the inner one into spaces — the same destruction, one level in (#444, round 3).
+ * the inner one into spaces — the same destruction, one level in.
  * A prefix of quotes alone needs no restoration: a quote marker repeats on every
  * line, so the body already carries it.
  */
@@ -58,7 +58,7 @@ function quoteContinuation(part: ContainerPart): RegExp {
  * a tab is one character worth up to four columns. A ` {0,N}` pattern matched
  * nothing against a tab-indented body line, so unfencing `-` + TAB + fence
  * re-emitted the marker AND kept the tab — one whole tab stop of indentation
- * the code never had (audit R2, #878). A tab that STRADDLES the boundary is
+ * the code never had. A tab that STRADDLES the boundary is
  * re-expanded: the columns past it are the code's own and stay.
  */
 function dropColumns(line: string, start: number, columns: number): { rest: string; column: number } {

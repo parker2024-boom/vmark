@@ -212,8 +212,7 @@ impl Envelope {
                 }
             }
             // NOTE: `group-prepare` / `group-abort` deliberately have NO arm here.
-            // The group-commit subsystem was severed (see
-            // dev-docs/plans/20260806-coherence-runtime-landing.md §Scope split);
+            // The group-commit subsystem was severed from the runtime landing;
             // its 2PC protocol failed review and is being rebuilt as format 1 on
             // branch `coherence/group-commit-2pc`. Falling through to `Unknown`
             // means such a line parses but is never projected, so a group entry
@@ -230,3 +229,7 @@ impl Envelope {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "envelope_typed.test.rs"]
+mod tests;

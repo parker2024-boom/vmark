@@ -19,7 +19,7 @@ import type { TerminalBellMode } from "@/stores/settingsStore";
 import { terminalLog } from "@/utils/debug";
 
 /**
- * The one AudioContext the bell ever creates (WI-1.4).
+ * The one AudioContext the bell ever creates.
  *
  * An AudioContext is a capped process resource — WebKit refuses to hand out
  * more than a handful concurrently. Constructing one per BEL and closing it in
@@ -138,7 +138,7 @@ export function playTerminalBell(): void {
  * Lives here rather than inline in `useTerminalSessions` because it is bell
  * policy, not session lifecycle — and because that hook was over the 300-line
  * limit with it inlined. `bellMode` is read LIVE so a settings change takes
- * effect on already-running sessions (WI-4.3).
+ * effect on already-running sessions.
  */
 export function applyTerminalBell(
   sessionId: string,

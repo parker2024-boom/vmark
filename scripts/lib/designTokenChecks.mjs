@@ -1,6 +1,6 @@
 /**
- * WI-UI0.2 — declaration-integrity checks for the design-token gate
- * (C2b–C2f of dev-docs/plans/20260829-ui-consistency.md).
+ * Declaration-integrity checks for the design-token gate
+ * (C2b–C2f of the UI-consistency plan).
  *
  * Pure functions over source text; scripts/check-design-tokens.mjs owns the
  * filesystem, the baseline and the exit code.
@@ -235,7 +235,7 @@ export function rule31Parity({ indexCss, ruleMd, declaredVars, consumedVars }) {
   const indexDeclared = [];
   let inThemeBlock = false;
   for (let i = 0; i < lines.length; i++) {
-    // Declarations inside `@theme` are TAILWIND theme keys (the WI-UI2.2
+    // Declarations inside `@theme` are TAILWIND theme keys (the Tailwind
     // bridge), not VMark tokens — rule 31 does not document them and nothing
     // consumes them via var() (utilities inline the values).
     if (/^@theme\b/.test(lines[i])) inThemeBlock = true;

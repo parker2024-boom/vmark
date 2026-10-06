@@ -2,6 +2,7 @@
 // WI-14 — vmark.workspace.open error branches + background-activation
 // restore edge cases (split-enabled restore, no-previous-active).
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { fileBytes } from "@/test/fileBytes";
 import { useTabStore } from "@/stores/tabStore";
 import { useDocumentStore, useRevisionStore } from "@/stores/documentStore";
 import { usePaneStore } from "@/stores/paneStore";
@@ -12,7 +13,7 @@ vi.mock("@/services/persistence/workspaceStorage", () => ({
 }));
 const readMock = vi.fn<(path: string) => Promise<string>>(async () => "# doc\n");
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: (path: string) => readMock(path),
+  readFile: (path: string) => fileBytes(readMock(path)),
   writeTextFile: vi.fn(async () => undefined),
   exists: vi.fn(async () => false),
 }));

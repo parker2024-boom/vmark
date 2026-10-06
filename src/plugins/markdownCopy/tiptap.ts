@@ -1,7 +1,7 @@
 /**
  * Markdown Copy Extension
  *
- * Two features in one plugin:
+ * Purpose: two features in one plugin.
  *
  * 1. **Copy format**: Customizes text/plain clipboard content on copy/cut.
  *    When "markdown", converts the selection to markdown syntax instead of
@@ -9,76 +9,41 @@
  *
  * 2. **Copy on select**: Automatically copies selected text to clipboard
  *    on mouseup, similar to terminal behavior.
+ *
+ * Key decisions:
+ *   - Copied markdown is the serializer's output for the selection
+ *     (`serializeSlice`, shared with Source Peek), with only the blank lines
+ *     around it removed. It is NOT cleaned further: every escape it holds
+ *     keeps text from pasting back as something else (`\#` from becoming a
+ *     heading, `\|` from splitting a table cell), and code is copied byte for
+ *     byte.
+ *   - The document's hard-break style is used, resolved the way a save
+ *     resolves it, from the host seams (`hostSettings`, `hostDocument`).
+ *
+ * @coordinates-with utils/markdownPipeline/docFromSlice.ts — serializeSlice
+ * @coordinates-with plugins/shared/hostSettings.ts — the hard-break setting
+ * @coordinates-with plugins/shared/hostDocument.ts — the document's hard-break style
+ * @module plugins/markdownCopy/tiptap
  */
 
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
-import { Fragment, Slice, type Schema, type Node as PMNode, type NodeType } from "@tiptap/pm/model";
-import { serializeMarkdown } from "@/utils/markdownPipeline";
+import type { Schema, Slice } from "@tiptap/pm/model";
+import { serializeSlice } from "@/utils/markdownPipeline/docFromSlice";
+import type { MarkdownPipelineOptions } from "@/utils/markdownPipeline/types";
+import { resolveHardBreakStyle } from "@/utils/linebreaks";
+import { hostSettings } from "@/plugins/shared/hostSettings";
+import { hostDocument } from "@/plugins/shared/hostDocument";
 import { clipboardWarn, markdownCopyWarn } from "@/utils/debug";
 import { errorMessage } from "@/utils/errorMessage";
 
 const markdownCopyPluginKey = new PluginKey("markdownCopy");
 
 /**
- * Ensures content has at least one block node.
- * Wraps inline content in a paragraph if needed.
- */
-function ensureBlockContent(content: Fragment, paragraphType: NodeType | undefined): Fragment {
-  if (content.childCount === 0 && paragraphType) {
-    return Fragment.from(paragraphType.create());
-  }
-  const firstChild = content.firstChild;
-  if (firstChild && !firstChild.isBlock && paragraphType) {
-    return Fragment.from(paragraphType.create(null, content));
-  }
-  return content;
-}
-
-function createDocFromSlice(schema: Schema, slice: Slice): PMNode {
-  const docType = schema.topNodeType;
-  const content = ensureBlockContent(slice.content, schema.nodes.paragraph);
-
-  try {
-    return docType.create(null, content);
-  } catch {
-    return docType.createAndFill() ?? docType.create();
-  }
-}
-
-/**
- * Clean up markdown for clipboard use.
- *
- * The serializer produces round-trip-safe markdown with backslash escapes
- * for special characters ($, ~, @, [, *, _, :, & …). This is correct for
- * file saving but produces noisy clipboard text.  Strip them here so
- * users get clean, readable output.
- *
- * Also collapses autolink expansions:
- *   [https://example.com](https://example.com) → https://example.com
- *   [user@host.com](mailto:user@host.com)      → user@host.com
- */
-export function cleanMarkdownForClipboard(md: string): string {
-  let result = md;
-
-  // 1. Strip backslash escapes added by remark-stringify for round-trip safety.
-  //    Only strip known serializer-added escapes (punctuation), not arbitrary chars.
-  //    Must run before autolink collapsing because link text has escapes
-  //    (e.g. user\@host) but the URL does not — back-reference won't match
-  //    unless we clean escapes first.
-  result = result.replace(/\\([#\-*_`|[\]()>+.!~$@&:\\])/g, "$1");
-
-  // 2. Collapse redundant autolinks where text equals URL
-  result = result.replace(/\[([^\]]+)\]\((?:mailto:)?\1\)/g, "$1");
-
-  return result;
-}
-
-/**
  * Normalize whitespace for clipboard content.
  *
- * Applied to ALL clipboard writes (WYSIWYG and Source mode):
+ * For PLAIN TEXT only (the default copy format), never for markdown:
  * 1. Trim trailing whitespace from each line
  * 2. Collapse runs of 3+ blank lines into a single blank line
  * 3. Trim leading/trailing blank lines from the whole string
@@ -95,14 +60,47 @@ export function cleanTextForClipboard(text: string): string {
 }
 
 /**
- * Serialize a Slice to markdown with blank-line collapsing.
+ * Remove the blank lines before and the whitespace after copied markdown.
+ *
+ * Unlike `cleanTextForClipboard`, nothing inside is touched: trailing spaces
+ * on a line are a hard break or part of code, and a run of blank lines inside
+ * a fence is code. Used for every markdown copy, WYSIWYG and Source mode alike.
+ */
+export function trimMarkdownForClipboard(markdown: string): string {
+  return markdown.replace(/^(?:[ \t]*\r?\n)+/, "").replace(/\s+$/, "");
+}
+
+/** The window the editor is in, or null when the host cannot say. */
+function currentWindowLabel(): string | null {
+  try {
+    return hostDocument.currentWindowLabel();
+  } catch (error) {
+    // The host's lookup throws outside an app window; the document's own
+    // style is then unknown and the setting decides.
+    markdownCopyWarn("No window to read the hard-break style from:", error);
+    return null;
+  }
+}
+
+/** Serializer options for copied markdown: the ones a save of this document uses. */
+function copyMarkdownOptions(): MarkdownPipelineOptions {
+  const label = currentWindowLabel();
+  return {
+    hardBreakStyle: resolveHardBreakStyle(
+      label === null ? "unknown" : hostDocument.activeHardBreakStyle(label),
+      hostSettings.hardBreakStyleOnSave(),
+    ),
+    preserveBlankLines: hostSettings.preserveBlankLines(),
+  };
+}
+
+/**
+ * Serialize a Slice to markdown for the clipboard.
  * Returns null on failure (caller decides fallback).
  */
 function serializeSliceAsMarkdown(schema: Schema, slice: Slice): string | null {
   try {
-    const doc = createDocFromSlice(schema, slice);
-    const md = serializeMarkdown(schema, doc);
-    return cleanTextForClipboard(cleanMarkdownForClipboard(md));
+    return trimMarkdownForClipboard(serializeSlice(schema, slice, copyMarkdownOptions()));
   } catch (error) {
     markdownCopyWarn("Serialization failed:", error);
     return null;

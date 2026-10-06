@@ -1,5 +1,5 @@
 /**
- * Shared overlay / menu shells (WI-UI3.1, D14).
+ * Shared overlay / menu shells (D14).
  *
  * Every full-screen overlay in VMark is the same three-part anatomy — a
  * backdrop, a panel, rows — and before this file each of the four finders
@@ -16,7 +16,7 @@
  *
  * The width clamp is `min(var(--vm-overlay-width), calc(100vw - 2 *
  * var(--space-4)))` — a plain `min(640px, 90vw)` still overflows a very
- * narrow window's gutters (Codex #7).
+ * narrow window's gutters.
  */
 
 .vm-overlay {
@@ -25,7 +25,7 @@
   z-index: var(--z-popup);
   display: flex;
   justify-content: center;
-  /* Finder scrim (WI-UA3, audit 20260901) — a real scrim step, not a hover
+  /* Finder scrim — a real scrim step, not a hover
      token doing scrim duty: 8% gave the panel almost no figure-ground
      separation over a busy document. Black in both modes, like the 35%
      modal scrim below (one owner each). */
@@ -106,7 +106,7 @@
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-sm);
   color: var(--text-color);
-  cursor: var(--cursor-interactive, default); /* D7, platform-scoped (WI-UA15) */
+  cursor: var(--cursor-interactive, default); /* D7, platform-scoped */
 }
 
 .vm-overlay__row:hover {
@@ -136,7 +136,7 @@
   border-radius: var(--radius-sm);
   background: var(--bg-secondary);
   font-family: var(--font-ui);
-  /* 11px floor for interactive-chrome text (WI-UA8, audit 20260901). */
+  /* 11px floor for interactive-chrome text. */
   font-size: var(--font-size-xs);
 }
 
@@ -162,7 +162,7 @@
   box-shadow: var(--popup-shadow-dark);
 }
 
-/* WI-UI4.5 (R13): state must survive forced-colors mode, where every theme
+/* R13: state must survive forced-colors mode, where every theme
    token collapses to the system palette. This block lives HERE, below the
    base rules it overrides — from index.css it loses the equal-specificity
    cascade to this later-imported file and paints nothing (same-file-below is

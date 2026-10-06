@@ -1,5 +1,5 @@
 /**
- * Push `advanced.workflowEngine` to the Rust runner (WI-19).
+ * Push `advanced.workflowEngine` to the Rust runner.
  *
  * Purpose: the backend cannot read the flag. Settings persist to the webview's
  * localStorage (zustand `persist` over `createSafeStorage`), so before this
@@ -19,7 +19,7 @@
  *     startup", and a later change is only meaningful against a known baseline.
  *   - **Push in BOTH directions.** A one-way latch would leave the runner armed
  *     for the rest of the session after the user switches the engine off.
- *   - **The two directions do NOT fail the same way** (audit 20260804-F11).
+ *   - **The two directions do NOT fail the same way**.
  *     A failed ENABLE fails closed: Rust stays off, the feature is merely
  *     unavailable, and a warning is the right response. A failed DISABLE fails
  *     OPEN — the runner stays armed after the user asked for it to stop, which

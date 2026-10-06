@@ -33,7 +33,7 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { imeToast as toast } from "@/services/ime/imeToast";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useMcpStore, type UpdateStatus } from "@/stores/mcpStore";
-import { useDocumentStore } from "@/stores/documentStore";
+import { openDirtyTabIds } from "@/services/tabs/openDocuments";
 import { useUpdateOperationHandler, clearPendingUpdate } from "./useUpdateOperations";
 import { restartWithHotExit } from "@/services/persistence/hotExit/restartWithHotExit";
 import { updateCheckerLog, appError } from "@/utils/debug";
@@ -150,7 +150,7 @@ export function useUpdateChecker() {
 
   // Show toasts for MANUAL CHECK FEEDBACK only. The update LIFECYCLE
   // (available/ready/stalled/transfer failures) is owned by
-  // hooks/useStatusToasts since WI-UB3 — one owner per concern, so a state
+  // hooks/useStatusToasts — one owner per concern, so a state
   // change never raises two toasts. "error" toasts here only when the user
   // manually triggered the check — background-retry errors stay quiet so a
   // flapping network doesn't pop a notification every few seconds. The
@@ -354,7 +354,7 @@ export function useUpdateChecker() {
     const unlistenPromise = listen(EVENTS.REQUEST_RESTART, () => {
       void (async () => {
         try {
-          const dirtyTabs = useDocumentStore.getState().getAllDirtyDocuments();
+          const dirtyTabs = openDirtyTabIds(); // open tabs only: a tabless document is not asked about
 
           if (dirtyTabs.length === 0) {
             // No unsaved documents - capture session and restart

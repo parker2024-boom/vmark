@@ -118,4 +118,17 @@ describe("assetHref", () => {
   it("does not emit a path that climbs above the workspace root", () => {
     expect(assetHref("note.md", "../../../etc/passwd", "t")).not.toContain("..");
   });
+
+  // WI-RA18.10 — a page served on the cookie gets token-free asset URLs, and
+  // an author's own query joins the token instead of being read as part of it.
+  it("carries no token when the page needs none", () => {
+    expect(assetHref("dir/note.md", "picture.png", null)).toBe("/asset/dir/picture.png");
+    expect(assetHref("note.md", "a.svg#icon", null)).toBe("/asset/a.svg#icon");
+  });
+
+  it("keeps the author's own query beside the token, not inside it", () => {
+    expect(assetHref("note.md", "a.png?v=2", "t")).toBe("/asset/a.png?s=t&v=2");
+    expect(assetHref("note.md", "a.png?v=2#x", "t")).toBe("/asset/a.png?s=t&v=2#x");
+    expect(assetHref("note.md", "a.png?v=2", null)).toBe("/asset/a.png?v=2");
+  });
 });

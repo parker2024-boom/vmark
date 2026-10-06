@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fileBytes } from "@/test/fileBytes";
 import { render, act } from "@testing-library/react";
 
 // --- Mocks ---
@@ -50,7 +51,7 @@ const mockReadTextFile = vi.fn<(path: string) => Promise<string>>(() =>
   Promise.resolve("# Content"),
 );
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: (path: string) => mockReadTextFile(path),
+  readFile: (path: string) => fileBytes(mockReadTextFile(path)),
 }));
 
 let mockWindowLabel = "main";

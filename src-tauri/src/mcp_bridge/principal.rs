@@ -1,7 +1,7 @@
 //! Who a bridge connection is — derived from the credential it authenticated
 //! with, never from a name it asserts about itself.
 //!
-//! ## What this replaced (audit 20260728 §2.1)
+//! ## What this replaced
 //!
 //! The authorization principal used to be `identity.name`: a string out of the
 //! client's own `identify` message, which any authenticated client could send
@@ -30,7 +30,7 @@
 //! the bridge's 0600 port file (§2.4, accepted), so it can still obtain another
 //! client's credential. What changed is real but bounded, and it is worth
 //! stating precisely rather than overstating — overstatement is the defect
-//! WI-6 existed to correct:
+//! this module exists to correct:
 //!
 //! - Impersonation now costs *reading another client's config file* instead of
 //!   *typing a different string*. Against a different-UID or browser attacker

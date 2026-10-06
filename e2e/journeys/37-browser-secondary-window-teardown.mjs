@@ -61,6 +61,25 @@ async function invokeFromApp(client, command, args) {
   );
 }
 
+/**
+ * Close `label` the only way the app allows: from inside it. `close_window`
+ * closes the window that calls it — a label in its arguments is ignored — so
+ * the call is made in that window's webview. It is fired, not awaited: the
+ * webview is destroyed before it could answer, so the window's disappearance
+ * is the evidence.
+ */
+async function closeWindowFromWithin(client, label) {
+  const r = await client.send(
+    "execute_js",
+    {
+      windowLabel: label,
+      script: `(() => { void window.__TAURI__.core.invoke("close_window"); return true; })()`,
+    },
+    15000,
+  );
+  if (r?.success !== true) throw new Error(`could not ask ${label} to close: ${JSON.stringify(r)}`);
+}
+
 async function pollUntil(label, predicate, timeoutMs = 10_000, stepMs = 200) {
   const until = Date.now() + timeoutMs;
   for (;;) {
@@ -101,8 +120,25 @@ export default {
           (await listWindows(client)).some((w) => w.label === secondary && !before.has(w.label)),
         );
         ctx.log(`secondary window ${secondary}`);
-        // Give the new webview its bootstrap: the DEV seam is installed by the app shell.
-        await new Promise((r) => setTimeout(r, 1500));
+        // Wait for the new webview's bootstrap to publish the DEV seam. A fixed
+        // sleep here raced the bootstrap: on a slow macOS CI runner the seam was
+        // not there yet and the journey failed with NO_SEAM (issue #1513). The
+        // seam's own presence is the precondition, so poll for exactly that.
+        await pollUntil(
+          `the DEV runCommand seam in ${secondary}`,
+          async () => {
+            const r = await client.send(
+              "execute_js",
+              {
+                windowLabel: secondary,
+                script: `(typeof (window.__VMARK_DEBUG__ && window.__VMARK_DEBUG__.runCommand) === "function" ? "SEAM" : "NO_SEAM")`,
+              },
+              15000,
+            );
+            return r?.success === true && r.data === "SEAM";
+          },
+          30_000,
+        );
 
         // --- a browser tab created BY the secondary window --------------------
         const nativeBefore = new Set(await nativeBrowserTabIds(client));
@@ -165,8 +201,7 @@ export default {
         });
 
         // --- destroy the window ---------------------------------------------
-        const closed = await invokeFromApp(client, "close_window", { label: secondary });
-        if (closed !== "OK") throw new Error(`close_window failed: ${closed}`);
+        await closeWindowFromWithin(client, secondary);
         await pollUntil("the secondary window to disappear", async () =>
           !(await listWindows(client)).some((w) => w.label === secondary),
         );
@@ -202,7 +237,7 @@ export default {
         ctx.log("native view gone, authority gone, main window untouched");
       });
     } finally {
-      if (secondary) await invokeFromApp(client, "close_window", { label: secondary }).catch(() => {});
+      if (secondary) await closeWindowFromWithin(client, secondary).catch(() => {});
       // The temporary workspace went into the persisted recents when its window
       // opened; take it out through the store's own action (DEV seam), so the run
       // leaves no dead "Open Recent" entry behind.

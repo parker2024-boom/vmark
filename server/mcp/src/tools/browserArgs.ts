@@ -2,7 +2,7 @@
  * Argument guards for the two embedded-browser tools.
  *
  * Split out of `browser.ts` so the tool file stays dispatch-only, and so the
- * two guards the 2026-07-28 round-2 audit flagged can be unit-tested directly:
+ * two guards an earlier audit flagged can be unit-tested directly:
  *
  *   - The 64 KiB payload cap was enforced with `.length` and Zod's string
  *     `.max()`, both of which count UTF-16 CODE UNITS. A 30,000-character CJK
@@ -57,7 +57,7 @@ export function withinScriptBytes(value: string): boolean {
  * approval dialog. Every other caller-supplied payload on this tool — the text
  * an `act` types, a workflow's `source`, a `style` map, a class list, a
  * workflow's `inputs` — reaches the same dialog by the same route and had NO
- * bound at all (audit R3 #208). One constant, one reason, applied to all of
+ * bound at all. One constant, one reason, applied to all of
  * them; a separate item-count cap is deliberately NOT invented here, because
  * the byte bound is the one that was measured and the one the approval surface
  * needs.
@@ -105,7 +105,7 @@ export function boundedStringRecordSchema(description: string) {
  * The advertised schema accepted ANY string while the description promised an
  * HTTP(S) destination, so a client's generated tooling could not see the
  * constraint and a `file:` or `javascript:` URL was a valid MCP request that
- * only failed several layers down (audit R3 #209). Rust remains AUTHORITATIVE
+ * only failed several layers down. Rust remains AUTHORITATIVE
  * — `src-tauri/src/browser/navigation_policy.rs` and `ai_policy.rs` enforce the
  * same rule, including the backslash — and this is the necessary condition
  * stated where the client can read it, in the same shape `boundedTextSchema`
@@ -133,7 +133,7 @@ export function urlSchema(description: string) {
  * and the refusal text has ONE home. Its predecessor answered
  * `number | undefined` for both, so every caller re-derived the difference and
  * re-spelled the refusal — four copies of one contract across open, navigate,
- * wait and wait_for (audit row #176).
+ * wait and wait_for.
  */
 export function readTimeout(value: unknown): ArgCheck<number | undefined> {
   if (value === undefined) return { ok: true, value: undefined };

@@ -11,7 +11,7 @@
  * other 19 were parallel reimplementations of heading, list, blockquote, CJK,
  * text-transform and line operations that the action system had already taken
  * over — dead in production, kept alive only by their own tests, and free to
- * drift from the implementations users actually reached (WI-2.1).
+ * drift from the implementations users actually reached.
  *
  * @coordinates-with plugins/codemirror/sourceShortcuts.ts — consumes these helpers
  * @coordinates-with plugins/codemirror/__tests__/dispatchBoundary.test.ts — the gate
@@ -58,7 +58,7 @@ export function copySelectionAsHtml(view: EditorView): boolean {
     from === to ? view.state.doc.toString() : view.state.doc.sliceString(from, to);
 
   // Dynamic import to avoid loading exportStyles.css at startup. The path is
-  // what a relative image in the copied markup resolves against (#704).
+  // what a relative image in the copied markup resolves against.
   const sourceFilePath = activeFilePathForCurrentWindow();
   void import("@/export/useExportOperations")
     .then(({ copyAsHtml }) => copyAsHtml(markdown, sourceFilePath))

@@ -3,11 +3,11 @@
  *
  * Purpose: `url.ts` is the URL-shape module; this is the SECURITY judgement it
  * applies — which path segments and which parameter names carry a secret. Split
- * out when the vocabulary and the reasoning behind it outgrew the file
- * (audit R3 #783/#789); `url.ts` re-exports `credentialPath` so its existing
+ * out when the vocabulary and the reasoning behind it outgrew the file;
+ * `url.ts` re-exports `credentialPath` so its existing
  * consumers (the workflow recorder) are unaffected.
  *
- * It is a SUPERSET of the recorder shim's `SENSITIVE_TOKENS` (#789), and
+ * It is a SUPERSET of the recorder shim's `SENSITIVE_TOKENS`, and
  * `url.test.ts` reads that list out of `recorderShimSensitivity.src.js` and
  * fails if it ever stops being one. The two lists were written independently
  * and had drifted: `pwd`, `passphrase`, `totp`, `mfa`, `2fa`, `cvv`, `cvv2`,
@@ -76,7 +76,7 @@ const CREDENTIAL_WORD = /^(reset|magic|token|verify|confirm|invite|activate|auth
 /** A segment names a flow when ANY of its hyphen/underscore-delimited words does:
  *  `password-reset`, `password_reset`, `reset_password`, `verify-email` and
  *  `magic_link` are all real spellings, and the whole-segment match that preceded
- *  this let every compound one through (WI-FL6.4). `oauth` and `tokens` are still
+ *  this let every compound one through. `oauth` and `tokens` are still
  *  whole words, so they do not match. */
 function credentialSegment(segment: string): boolean {
   return segment.split(/[-_]/).some((word) => CREDENTIAL_WORD.test(word));

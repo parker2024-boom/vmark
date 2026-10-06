@@ -2,7 +2,7 @@
  * revealTerminalSession
  *
  * Purpose: The one place that turns "I want a terminal session" into a live,
- * visible one. Both `openTerminalHere` (WI-4.2) and `runInTerminal` (WI-4.3)
+ * visible one. Both `openTerminalHere` and `runInTerminal`
  * need the same steps — pick or create a session, re-read the store, reveal
  * the panel — and had grown near-duplicate copies of them.
  *
@@ -17,6 +17,7 @@
  * @module services/terminal/revealTerminalSession
  */
 import { useUIStore } from "@/stores/uiStore";
+import { useTerminalStore } from "@/stores/terminalStore";
 import { getCurrentWindowLabel } from "@/services/persistence/workspaceStorage";
 import { getVisibleTerminalSessions } from "./visibleTerminalSessions";
 import { createTerminalSessionInScope } from "./createTerminalSession";
@@ -39,10 +40,10 @@ function revealPanel(): void {
  * the session that receives the command is the session on screen.
  */
 export function reuseOrCreateTerminalSession(): string {
-  const store = useUIStore.getState();
+  const store = useTerminalStore.getState();
   const windowLabel = getCurrentWindowLabel();
   const visible = getVisibleTerminalSessions(windowLabel);
-  const activeId = store.terminal.activeSessionId;
+  const activeId = store.activeSessionId;
   const existing =
     activeId && visible.some((s) => s.id === activeId)
       ? activeId

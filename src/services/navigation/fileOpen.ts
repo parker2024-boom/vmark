@@ -1,7 +1,15 @@
+/**
+ * fileOpen — the file-open pipeline: opening a file in a new tab, the Open
+ * dialog, opening by path, and the New command.
+ *
+ * @module services/navigation/fileOpen
+ */
+
 import { imeToast as toast } from "@/services/ime/imeToast";
 import i18n from "@/i18n";
 import { open } from "@tauri-apps/plugin-dialog";
-import { readTextFile } from "@tauri-apps/plugin-fs";
+import { readDocumentText } from "@/services/files/readDocumentText";
+import { openFailureDetail } from "@/services/files/openFailureDetail";
 import { fileOpsError } from "@/utils/debug";
 import { perfReset, perfStart, perfEnd, perfMark } from "@/utils/perfLog";
 import { useDocumentStore, useFileLoadStore } from "@/stores/documentStore";
@@ -97,11 +105,11 @@ export async function openFileInNewTabCore(
   }
 
   try {
-    perfStart("readTextFile");
-    const content = await readTextFile(path);
-    perfEnd("readTextFile", { size: content.length });
+    perfStart("readDocumentText");
+    const content = await readDocumentText(path);
+    perfEnd("readDocumentText", { size: content.length });
 
-    // Close-during-open guard (WI-0.2, C1): the tab can be closed while this
+    // Close-during-open guard (C1): the tab can be closed while this
     // read is in flight. Writing the document now would resurrect an orphan
     // entry for a tab that no longer exists. Re-check existence post-await —
     // mirrors the `updateDoc` missing-key guard the sibling mutators use.
@@ -111,7 +119,7 @@ export async function openFileInNewTabCore(
       return "closed";
     }
 
-    // WI-2.6 — YAML force-source bandaid retired. YAML files now route
+    // YAML force-source bandaid retired. YAML files now route
     // through the YAML adapter (kind: split-pane) via the format
     // registry, so they bypass the markdown WYSIWYG path entirely.
 
@@ -127,7 +135,7 @@ export async function openFileInNewTabCore(
     useRecentFilesStore.getState().addFile(path);
 
     // Large / huge file: mark the tab as forced-source via the markdown
-    // adapter helper (WI-1A.6). For non-markdown formats this is a no-op
+    // adapter helper. For non-markdown formats this is a no-op
     // since they don't have a WYSIWYG path.
     maybeMarkLargeMarkdownAsSource(tabId, path, route.forceSourceMode);
 
@@ -140,9 +148,9 @@ export async function openFileInNewTabCore(
     // Clean up the orphaned tab — without initDocument, it renders blank.
     // Use detachTab (not closeTab) to avoid polluting the "reopen closed tab" history.
     useTabStore.getState().detachTab(windowLabel, tabId);
-    // Two-line toast (WI-UI4.4): paths/codes as the detail.
-    // Raw error — errorDetail owns the normalization (commandErrorMessage).
-    toast.errorDetail(i18n.t("dialog:toast.failedToOpenFile"), error);
+    // Two-line toast: paths/codes as the detail.
+    // A cause VMark diagnosed is translated; any other error goes through raw and errorDetail normalizes it.
+    toast.errorDetail(i18n.t("dialog:toast.failedToOpenFile"), openFailureDetail(error));
     // Clear the indicator immediately on error so no stale spinner lingers.
     if (loadId !== null) useFileLoadStore.getState().endLoad(loadId);
     return "failed";
@@ -163,7 +171,7 @@ export async function openFileInNewTab(
   // Check for existing tab first
   const existingTabId = findExistingTabForPath(windowLabel, path);
   if (existingTabId) {
-    // WI-12.2: ownership-aware — the visible workspace follows the owner.
+    // Ownership-aware — the visible workspace follows the owner.
     activateTabWithWorkspaceContext(windowLabel, existingTabId);
     perfMark("openFileInNewTab:activatedExisting");
     return;
@@ -181,7 +189,7 @@ export async function handleOpen(windowLabel: string): Promise<void> {
     perfMark("handleOpen:start");
 
     perfStart("openDialog");
-    // WI-1B.1 — "All Supported" preset (every registered format) plus
+    // "All Supported" preset (every registered format) plus
     // a Markdown-only preset for the user who wants the legacy filter.
     // Filter names are localized via dialog:openFilter.* — only the
     // extension lists stay registry-driven.
@@ -245,7 +253,7 @@ export async function handleOpenFile(
   path: string
 ): Promise<void> {
   // Identical semantics to openFileInNewTab (existing → ownership-aware
-  // activate, else create) — delegate rather than duplicate (WI-12.2).
+  // activate, else create) — delegate rather than duplicate.
   await openFileInNewTab(windowLabel, path);
 }
 

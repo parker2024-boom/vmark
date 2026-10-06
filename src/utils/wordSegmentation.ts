@@ -73,7 +73,8 @@ export function findWordBoundaries(
   return findWordBoundariesWithRegex(text, posInText);
 }
 
-type WordSegment = { start: number; end: number };
+/** A word-like span of a text, as UTF-16 offsets `[start, end)`. */
+export type WordSegment = { start: number; end: number };
 
 /**
  * Get all word-like segments in a text.
@@ -107,37 +108,49 @@ export function findWordEdge(
   dir: -1 | 1
 ): number | null {
   if (!text) return null;
-  const segments = getWordSegments(text);
-  if (!segments.length) return null;
+  return findWordEdgeInSegments(getWordSegments(text), text.length, posInText, dir);
+}
 
-  const pos = Math.max(0, Math.min(text.length, posInText));
+/**
+ * `findWordEdge` over segments already computed for a text of `textLength`.
+ *
+ * For a caller that moves many positions in one text — every cursor of a
+ * multi-cursor selection in one paragraph — so the text is segmented once,
+ * not once per position. Each lookup is a binary search over the segments
+ * (`getWordSegments` returns them in order and disjoint).
+ *
+ * Left: the start of the last segment that starts before the position, else
+ * the first segment's start. Right: the end of the first segment that ends
+ * after the position, else the last segment's end. Null with no segments.
+ */
+export function findWordEdgeInSegments(
+  segments: readonly WordSegment[],
+  textLength: number,
+  posInText: number,
+  dir: -1 | 1
+): number | null {
+  if (!segments.length) return null;
+  const pos = Math.max(0, Math.min(textLength, posInText));
 
   if (dir < 0) {
-    for (let i = segments.length - 1; i >= 0; i--) {
-      const seg = segments[i];
-      if (pos > seg.start && pos <= seg.end) {
-        return seg.start;
-      }
-      if (pos <= seg.start) continue;
-      /* v8 ignore start -- @preserve if not (pos > start && pos <= end) and not (pos <= start), then pos > end is guaranteed */
-      if (pos > seg.end) {
-        return seg.start;
-      }
-      /* v8 ignore stop */
-    }
-    return segments[0].start;
+    // The first segment that starts at or after `pos`; the one before it starts before.
+    const after = firstIndex(segments, (seg) => seg.start >= pos);
+    return segments[Math.max(0, after - 1)].start;
   }
+  const ending = firstIndex(segments, (seg) => seg.end > pos);
+  return segments[Math.min(segments.length - 1, ending)].end;
+}
 
-  for (let i = 0; i < segments.length; i++) {
-    const seg = segments[i];
-    if (pos >= seg.start && pos < seg.end) {
-      return seg.end;
-    }
-    if (pos < seg.start) {
-      return seg.end;
-    }
+/** The first index whose segment satisfies `test`, which is monotone over the segments; length if none. */
+function firstIndex(segments: readonly WordSegment[], test: (seg: WordSegment) => boolean): number {
+  let low = 0;
+  let high = segments.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (test(segments[mid])) high = mid;
+    else low = mid + 1;
   }
-  return segments[segments.length - 1].end;
+  return low;
 }
 
 /**

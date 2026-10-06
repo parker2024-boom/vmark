@@ -66,7 +66,7 @@ export function toggleListType(view: EditorView, target: ListTypeName): boolean 
 /**
  * Range strategy: a selection spanning SEVERAL items honours the full range —
  * every intersecting list converts, covered paragraphs wrap, adjacent
- * same-type lists join (WI-3). A no-op conversion declines so the cursor
+ * same-type lists join. A no-op conversion declines so the cursor
  * semantics handle a range that is already the target type.
  */
 function toggleAcrossRange(view: EditorView, target: ListTypeName): StrategyResult {
@@ -186,7 +186,7 @@ function convertListType(view: EditorView, listDepth: number, newListType: ListT
   // Shared primitives with the range path (one behavior, one implementation):
   // convert in place (checked attrs cleared — checkboxes make no sense after
   // a type conversion), then join type-gated touching neighbours so ordered
-  // numbering stays continuous (WI-3).
+  // numbering stays continuous.
   const tr = state.tr;
   convertListNode(tr, listPos, listNode, newListType);
   joinTouchingLists(tr, newListType, listPos, listPos + listNode.nodeSize);

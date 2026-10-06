@@ -19,8 +19,8 @@ vi.mock("@/stores/uiStore", () => ({
   },
 }));
 
-vi.mock("@/components/Sidebar/outlineUtils", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/components/Sidebar/outlineUtils")>();
+vi.mock("@/utils/markdownOutline", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/utils/markdownOutline")>();
   return actual;
 });
 

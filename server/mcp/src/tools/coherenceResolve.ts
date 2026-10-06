@@ -16,7 +16,7 @@
  * and fail-closed — it keys off the authenticated bridge principal, never off
  * anything the client asserts, so this split changes no security property.
  *
- * Origin: Coherence layer plan (2026-07-18, retired) WI-1.10.
+ * Origin: Coherence layer plan (retired).
  *
  * @coordinates-with tools/coherence.ts (the read-only view)
  */
@@ -59,8 +59,7 @@ export function registerCoherenceResolveTool(server: VMarkMcpServer): void {
         // REQUIRED, not optional: `resolve` is the only action, and it needs
         // all three. Declaring them optional made a request missing any of
         // them valid against the ADVERTISED schema, and the handler then
-        // forwarded `undefined` into a non-undoable, audit-logged ledger write
-        // (audit R2 #221).
+        // forwarded `undefined` into a non-undoable, audit-logged ledger write.
         txf: z.string().trim().min(1).describe('The edge transformation id (from coherence edges rows).'),
         input: z
           .number()
@@ -75,7 +74,7 @@ export function registerCoherenceResolveTool(server: VMarkMcpServer): void {
       // The valid action comes from the exported list the schema also uses.
       // Spelling it again created a second source of truth that a new action
       // would leave stale — the refusal would name only `resolve` while the
-      // schema accepted more (audit R3 #223).
+      // schema accepted more.
       if (!(COHERENCE_RESOLVE_ACTIONS as readonly string[]).includes(String(args.action))) {
         return VMarkMcpServer.errorResult(
           `Invalid action: ${String(args.action)}. Expected: ${COHERENCE_RESOLVE_ACTIONS.join(', ')}`,
@@ -91,7 +90,7 @@ export function registerCoherenceResolveTool(server: VMarkMcpServer): void {
       }
       // The defensive half. `VMarkMcpServer.callTool` performs no schema
       // validation, so the schema above is not what holds for an in-process
-      // caller — and this write cannot be undone (audit R2 #221).
+      // caller — and this write cannot be undone.
       if (typeof args.txf !== 'string' || args.txf.trim().length === 0) {
         return VMarkMcpServer.errorResult('txf (non-empty string) is required — take it from a `coherence` action `edges` row');
       }
@@ -102,8 +101,7 @@ export function registerCoherenceResolveTool(server: VMarkMcpServer): void {
         return VMarkMcpServer.errorResult('resolution must be "accept-newer" or "waive"');
       }
       // A waiver with no reason is an unauditable entry in an audit log, and
-      // the tool's own description already calls the reason required for it
-      // (audit R2 #222).
+      // the tool's own description already calls the reason required for it.
       if (args.resolution === 'waive' && (typeof args.reason !== 'string' || args.reason.trim().length === 0)) {
         return VMarkMcpServer.errorResult('reason (non-blank string) is required when resolution is "waive" — the ledger entry is permanent and auditable');
       }

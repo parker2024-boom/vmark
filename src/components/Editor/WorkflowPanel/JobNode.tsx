@@ -44,7 +44,7 @@ import "./job-node.css";
 // shape required `position`, which xyflow doesn't pass through to the
 // inner component — that mismatch forced the type-erasure cast in the
 // node-types registry. Using NodeProps now makes that cast safe at the
-// integration boundary (cross-validator audit round 2 finding).
+// integration boundary.
 type JobNodeProps = NodeProps<Node<JobNodeData>>;
 
 const STEP_PREVIEW_MAX_CHARS = 48;
@@ -124,8 +124,8 @@ export function JobNode(props: JobNodeProps): ReactElement {
       e.preventDefault();
       useWorkflowStore.getState().clearSelection();
       // Hand focus back to this workbench's own source view. A global
-      // querySelector picked up the first .cm-editor in the DOM (Codex audit
-      // round 5), and the bare active view can be the other pane's document.
+      // querySelector picked up the first .cm-editor in the DOM,
+      // and the bare active view can be the other pane's document.
       paneSourceView(e.currentTarget)?.focus();
     }
   };

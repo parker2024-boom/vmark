@@ -246,12 +246,12 @@ fn create_in_place(
     sync_parent_dir(path);
 
     log::warn!(
-        "Created {} without the usual crash-safety: this filesystem refused to \
+        "Created {:?} without the usual crash-safety: this filesystem refused to \
          hard-link a staged copy into place ({link_err}), most often a network \
          or FUSE-mounted home directory. The config is complete and fsynced, \
          and an existing file was never at risk, but a crash during a future \
          first-time write here could leave a partial file.",
-        path.display()
+        path
     );
     Ok(true)
 }

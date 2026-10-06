@@ -11,7 +11,7 @@
  *
  * Esc = Deny (consistent with VMark's other dialogs).
  *
- * It is also the window's workflow-EVENT OWNER (audit 20260928 #115): always
+ * It is also the window's workflow-EVENT OWNER: always
  * mounted in a document window, it holds the one subscription that routes the
  * runner's frames — for panel runs and workflow genies alike. Run panels
  * subscribe nothing.
@@ -81,7 +81,7 @@ export function ApprovalDialog() {
   }, [pending, respond]);
 
   // The native browser view paints over all React DOM in its rect, so freeze every
-  // mounted browser tab while this overlay is up (WI-SOC.1).
+  // mounted browser tab while this overlay is up.
   useBrowserOccluder(Boolean(pending), "workflow-approval");
 
   if (!pending) return null;

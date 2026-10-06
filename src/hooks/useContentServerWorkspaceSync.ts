@@ -3,7 +3,7 @@
  * server's lifecycle, split out of useContentServer.ts (which sits at the
  * file-size cap). One subscription, two verdicts, in this order:
  *
- *   1. Workspace SWITCH while serving (audit #513): a server the store reports
+ *   1. Workspace SWITCH while serving: a server the store reports
  *      as running belongs to the root it was started for. When `rootPath`
  *      changes, this window knows of no server for the new root — the verdict
  *      useContentServer's header already gives a start whose workspace moved
@@ -12,7 +12,7 @@
  *      no Rust stop: ContentServerManager is app-wide and keyed by root, so
  *      another window may be serving that root; the manager reuses the child
  *      on return, and shutdown_all reaps it at exit.
- *   2. Trust flip while serving (WI-FL3.6): the served CSP is baked into the
+ *   2. Trust flip while serving: the served CSP is baked into the
  *      child at spawn, so a flip restarts through the supervisor start path.
  *
  * The order is load-bearing: `openWorkspace` writes `rootPath` and `config` in
@@ -23,11 +23,11 @@
  * `superseded()` in useContentServer; a stopped or errored store has nothing
  * to say about a root it is not serving.
  *
- * That predicate is only as good as the status (audit #725), so `"error"` now
+ * That predicate is only as good as the status, so `"error"` now
  * means "no child of ours is serving" in EVERY path: a stop the backend refused
- * re-queries and goes back to `"running"` (#719), and an action failure — a
+ * re-queries and goes back to `"running"`, and an action failure — a
  * Slidev preview, an export, an external-browser open — is a toast rather than
- * a lifecycle transition (#758). Before that, any of them could leave a live
+ * a lifecycle transition. Before that, any of them could leave a live
  * child parked at `"error"`, where a trust flip was ignored and the server went
  * on serving the old CSP.
  *

@@ -2,7 +2,7 @@
 //!
 //! When the user opens or hovers a `uses: owner/repo@ref` step, the
 //! frontend asks for the action's `action.yml` so it can populate the
-//! structured editor's `with:` form (Phase 6 / WI-6.3 of the GHA
+//! structured editor's `with:` form (Phase 6 of the GHA
 //! workflow viewer plan).
 //!
 //! Pipeline:
@@ -135,7 +135,7 @@ pub struct ActionRef {
 /// (for `refs/heads/main`) and `+` (for tag escapes); paths similarly
 /// allow `/`. Anything else (control chars, percent-encoding, `..`)
 /// is rejected to prevent URL coercion / traversal once the value is
-/// formatted into a raw.githubusercontent.com URL (Rust audit round 5).
+/// formatted into a raw.githubusercontent.com URL.
 fn is_valid_segment(s: &str, allow_slash: bool) -> bool {
     if s.is_empty() {
         return false;
@@ -276,7 +276,7 @@ fn build_url(action: &ActionRef, filename: &str) -> String {
 /// under 100 KB (the largest in actions/ org is ~30 KB); 1 MiB leaves
 /// generous headroom while preventing untrusted-or-MITM responses
 /// from forcing a deeply-nested YAML parse that could exhaust the
-/// stack (Rust audit round 5 finding).
+/// stack.
 const MAX_ACTION_YML_BYTES: u64 = 1_048_576;
 
 /// Network fetch with action.yml → action.yaml fallback. Caps response

@@ -3,10 +3,13 @@
  *
  * Creates visual decorations for multi-cursor selections.
  * Uses a custom caret when multi-cursor is active so all cursors blink in sync.
+ *
+ * @module plugins/multiCursor/decorations
  */
+
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { EditorState } from "@tiptap/pm/state";
-import { MultiSelection } from "./MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 
 /** CSS class for cursor widget */
 const CURSOR_CLASS = "multi-cursor-caret";

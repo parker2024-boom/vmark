@@ -166,7 +166,7 @@ export function handleCollapseBlankLines(view: EditorView): boolean {
 }
 
 /**
- * Record the document's line-ending convention. METADATA-ONLY (WI-1.7): the
+ * Record the document's line-ending convention. METADATA-ONLY: the
  * buffer is LF-canonical — CodeMirror normalises CRLF on insert anyway, so the
  * old whole-document round-trip changed nothing while adding a useless undo
  * entry and collapsing the selection.

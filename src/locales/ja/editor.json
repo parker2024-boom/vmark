@@ -333,7 +333,6 @@
   "terminal.restarting": "シェルを再起動しています...",
   "media.cannotPreview": "この形式はプレビューできません",
   "media.openExternally": "デフォルトアプリで開く",
-  "media.revealInFinder": "Finderで表示",
   "preview.surfaceFailed": "{{format}} エディタが動作しなくなりました。",
   "splitPane.errorCount_one": "{{count}}件のエラー",
   "splitPane.errorCount_other": "{{count}}件のエラー",

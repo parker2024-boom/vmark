@@ -1,4 +1,4 @@
-//! Pure geometry for the native browser view (WI-S0.3).
+//! Pure geometry for the native browser view.
 //!
 //! The frontend measures the reserved viewport with `getBoundingClientRect()`,
 //! which is a **DOM** rect: top-left origin, y growing **down**. AppKit's `NSView`

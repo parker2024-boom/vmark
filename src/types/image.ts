@@ -1,5 +1,7 @@
 /**
- * Shared image-related types.
+ * Image types shared by the image tooltip and popup stores.
+ *
+ * @module types/image
  */
 
 /**

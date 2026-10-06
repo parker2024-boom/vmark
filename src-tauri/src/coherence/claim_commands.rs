@@ -1,4 +1,4 @@
-//! Claim lifecycle commands (WI-2b.2; design-2a.md D2, spec §5.4.5
+//! Claim lifecycle commands (design-2a.md D2, spec §5.4.5
 //! revision 1). Service tier (ADR-C4): every act is an explicit human
 //! action appending a `claim` entry with the recorded actor — the only
 //! mutating surface until Phase 3's delegation model (D2.6). Scoping

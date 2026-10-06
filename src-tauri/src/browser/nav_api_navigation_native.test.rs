@@ -31,6 +31,7 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 use super::super::super::super::driver_loop::pump_until;
+use super::super::super::webview::observed_web_view;
 
 /// Set in the child: where to write the report. Its presence IS the request.
 const REPORT_ENV: &str = "VMARK_API_NAVIGATION_PROBE_REPORT";
@@ -57,6 +58,9 @@ struct ProbeReport {
     page_b: String,
     pushed_url: String,
     push_state_seen: bool,
+    /// WI-RA12A.4: the `URL` observer's class check accepts a real webview, and
+    /// hands back that same object.
+    web_view_recognized: bool,
     phases: Vec<Phase>,
 }
 
@@ -92,6 +96,8 @@ impl ProbeDelegate {
             starts: Cell::new(0),
             finishes: Cell::new(0),
         };
+        // SAFETY: the ivars are set before `init` is sent to the superclass, and
+        // `NSObject`'s `init` takes no arguments and returns the receiver.
         unsafe { objc2::msg_send![super(Self::alloc(mtm).set_ivars(counters)), init] }
     }
     fn snapshot(&self) -> (u32, u32) {
@@ -144,6 +150,7 @@ fn serve_pages() -> String {
 }
 
 fn url_of(web_view: &WKWebView) -> String {
+    // SAFETY: a property read on a live webview on the main thread.
     unsafe { web_view.URL() }
         .and_then(|u| u.absoluteString())
         .map(|s| s.to_string())
@@ -152,6 +159,8 @@ fn url_of(web_view: &WKWebView) -> String {
 
 fn load(web_view: &WKWebView, url: &str) -> bool {
     let ns = NSURL::URLWithString(&NSString::from_str(url)).expect("a valid URL");
+    // SAFETY: a live webview on the main thread and a live request, which
+    // WebKit copies.
     unsafe { web_view.loadRequest(&NSURLRequest::requestWithURL(&ns)) }.is_some()
 }
 
@@ -162,6 +171,9 @@ fn push_state(web_view: &WKWebView, path: &str) {
         sink.set(true);
     });
     let js = NSString::from_str(&format!("history.pushState({{}}, '', '{path}')"));
+    // SAFETY: a live webview and script string. WebKit copies the block and
+    // calls it once, on this (main) thread, which owns the `Rc` it captures; the
+    // block ignores both pointers.
     unsafe { web_view.evaluateJavaScript_completionHandler(&js, Some(&handler)) };
     pump_until(&NSRunLoop::currentRunLoop(), LOAD_TIMEOUT, 0.02, || {
         done.get()
@@ -179,9 +191,11 @@ fn phase(
     let before = delegate.snapshot();
     let returned_navigation = call();
     let url_after_call = url_of(web_view);
+    // SAFETY: a property read on a live webview on the main thread.
     let loading_after_call = unsafe { web_view.isLoading() };
     let idle_after_pump = pump_until(&NSRunLoop::currentRunLoop(), LOAD_TIMEOUT, 0.02, || {
         let (starts, finishes) = delegate.snapshot();
+        // SAFETY: a property read on a live webview on the main thread.
         !unsafe { web_view.isLoading() } && (starts == before.0 || finishes > before.1)
     });
     let after = delegate.snapshot();
@@ -202,11 +216,17 @@ fn run_probe(mtm: MainThreadMarker) -> ProbeReport {
     let page_a = format!("{origin}/a");
     let page_b = format!("{origin}/b");
     let pushed_url = format!("{origin}/a-pushed");
+    // SAFETY: `new` on a main-thread-only class; `mtm` proves the main thread.
     let config = unsafe { WKWebViewConfiguration::new(mtm) };
+    // SAFETY: initializes the webview allocated on the next line exactly once,
+    // with the live configuration above, which WebKit copies.
     let web_view: Retained<WKWebView> = unsafe {
         WKWebView::initWithFrame_configuration(WKWebView::alloc(mtm), CGRect::ZERO, &config)
     };
     let delegate = ProbeDelegate::new(mtm);
+    // SAFETY: `ProbeDelegate` implements `WKNavigationDelegate` (above). The
+    // webview holds its delegate weakly, so it cannot dangle; `delegate` stays
+    // alive until this function returns, after the last phase has gone idle.
     unsafe { web_view.setNavigationDelegate(Some(ProtocolObject::from_ref(&*delegate))) };
 
     let mut phases = Vec::new();
@@ -217,6 +237,7 @@ fn run_probe(mtm: MainThreadMarker) -> ProbeReport {
         load(&web_view, &page_b)
     }));
     phases.push(phase("back-cross", &web_view, &delegate, || {
+        // SAFETY: a live webview on the main thread; nil when there is no item.
         unsafe { web_view.goBack() }.is_some()
     }));
     push_state(&web_view, "/a-pushed");
@@ -224,17 +245,24 @@ fn run_probe(mtm: MainThreadMarker) -> ProbeReport {
         url_of(&web_view) == pushed_url
     });
     phases.push(phase("back-same", &web_view, &delegate, || {
+        // SAFETY: a live webview on the main thread; nil when there is no item.
         unsafe { web_view.goBack() }.is_some()
     }));
     phases.push(phase("forward-same", &web_view, &delegate, || {
+        // SAFETY: a live webview on the main thread; nil when there is no item.
         unsafe { web_view.goForward() }.is_some()
     }));
+
+    let as_object: &AnyObject = web_view.as_ref();
+    let web_view_recognized =
+        observed_web_view(as_object).is_some_and(|found| std::ptr::eq(found, &*web_view));
 
     ProbeReport {
         page_a,
         page_b,
         pushed_url,
         push_state_seen,
+        web_view_recognized,
         phases,
     }
 }
@@ -246,7 +274,8 @@ fn probe() -> &'static ProbeReport {
     REPORT.get_or_init(|| {
         let dir = tempfile::tempdir().expect("temp dir for the report");
         let report_path = dir.path().join("report.json");
-        let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+        let probe = std::env::current_exe().expect("test binary");
+        let output = crate::ai_provider::build_command(&probe.to_string_lossy(), &[])
             .env(REPORT_ENV, &report_path)
             .output()
             .expect("spawn the test binary as the probe");
@@ -281,6 +310,17 @@ fn loaded_report() -> &'static ProbeReport {
         "pushState published its URL: {report:?}"
     );
     report
+}
+
+/// The other half of `nav_webview_macos.test.rs`: the class check that refuses an
+/// impostor must not refuse the real thing, or same-document navigations would
+/// stop expiring authority.
+#[test]
+fn the_url_observer_recognizes_a_real_web_view() {
+    assert!(
+        loaded_report().web_view_recognized,
+        "a live WKWebView passes the observer's class check as itself"
+    );
 }
 
 #[test]

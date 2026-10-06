@@ -1,5 +1,3 @@
-import { expect } from "vitest";
-
 /**
  * Purpose: one way to assert "this finished in bounded time" without turning
  *   machine load into a test failure.
@@ -34,6 +32,8 @@ import { expect } from "vitest";
  *
  * @module test/timeBudget
  */
+
+import { expect } from "vitest";
 
 /** True when the caller has asked for tight timing budgets to be enforced.
  *  Deliberately NOT exported — nothing outside this module needs to branch on

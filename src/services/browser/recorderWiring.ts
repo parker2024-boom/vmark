@@ -1,5 +1,5 @@
 /**
- * Recorder event wiring (WI-NB7.1) — the real-world edges a cross-document
+ * Recorder event wiring — the real-world edges a cross-document
  * recording needs, in the shape of `browserLeaseWiring`.
  *
  * A page-world DOM buffer dies on navigation, so a multi-page recording only works

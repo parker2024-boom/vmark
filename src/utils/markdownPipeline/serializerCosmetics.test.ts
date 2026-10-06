@@ -43,11 +43,19 @@ describe("the cosmetic-pass size ceiling is documented behaviour", () => {
   });
 
   it("refuses an edit that would change meaning", () => {
-    // TWO dollar signs would reparse as inline MATH, so the same `\$` that
-    // is safe to unescape above must stay escaped here. That distinction is
-    // exactly what verification buys over a per-character guess, and the
-    // pass is all-or-nothing per document.
-    expect(applyCosmeticPass("Costs \\$5 and \\$10.\n\n")).toContain("\\$5");
+    // Unescaped, `$x$` reparses as inline MATH, so the same `\$` that is safe
+    // to unescape above must stay escaped here. That distinction is exactly
+    // what verification buys over a per-character guess, and the pass is
+    // all-or-nothing per document.
+    expect(applyCosmeticPass("Costs \\$x\\$ here.\n\n")).toContain("\\$x\\$");
+  });
+
+  it("unescapes a dollar pair the parser reads as text", () => {
+    // WI-RA26.2 — `$5 and $` is not math in this dialect (math with a space at
+    // either edge is text), so the unescaped line parses to the same single
+    // text node and the author's spelling is kept. It used to stay escaped
+    // only because the parse split that text into three sibling nodes.
+    expect(applyCosmeticPass("Costs \\$5 and \\$10.\n\n")).toBe("Costs $5 and $10.\n\n");
   });
 
   it("keeps the conservative form above the ceiling", () => {

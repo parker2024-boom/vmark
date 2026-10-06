@@ -1,6 +1,6 @@
 /**
  * browserApprovalFlow — the ONE approval state machine behind every gated browser
- * operation (round 3, #43/#59/#42).
+ * operation.
  *
  * Purpose: decide → spend a one-shot → queue a prompt → confirm the driver's mint,
  * with an explicit outcome at each exit. The act, power (`style`/`eval`), session
@@ -14,9 +14,9 @@
  *  - `denied` is final and prompts nothing; `allowed` (a standing grant) touches no
  *    one-shot and no driver.
  *  - A one-shot is spent against the EXACT bindings (target, script, generation):
- *    approving script A never authorizes script B (security review P5, High #1).
+ *    approving script A never authorizes script B (security review P5, High).
  *  - The frontend copy is spent first and the driver's mint AWAITED before the
- *    caller may act (one mint path, audit A-04); a refused mint is a refusal.
+ *    caller may act (one mint path); a refused mint is a refusal.
  *  - `needsApproval` is answered only when a prompt actually exists: over the cap
  *    the request is refused as such, and an operation the store cannot queue is
  *    refused as one that cannot be approved.

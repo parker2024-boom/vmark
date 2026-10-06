@@ -1,5 +1,5 @@
 /**
- * The provider block `run_workflow` takes (audit #762).
+ * The provider block `run_workflow` takes.
  *
  * ONE derivation of four fields from the AI provider store. There were two,
  * character-for-character identical — `workflowProviderConfig` in

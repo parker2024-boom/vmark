@@ -240,13 +240,13 @@ A configuração não aparece no macOS nem no Linux.
 | Configuração | Descrição | Padrão | Opções |
 |-------------|-----------|--------|--------|
 | Habilitar salvamento automático | Salvar arquivos automaticamente após a edição | Ligado | Ligado / Desligado |
-| Gravar bloco de identidade ao salvar | Permite que o VMark insira um bloco de identidade `vmark:` no frontmatter de um arquivo e crie uma pasta `.vmark` no espaço de trabalho, para que a camada de coerência acompanhe o documento. Vale para toda gravação: salvamentos, edições de IA e MCP, restaurações de versões anteriores e arquivos novos. Desativado, nada é inserido e nenhuma pasta `.vmark` é criada; um espaço de trabalho que já tenha uma continua registrando as alterações dos documentos que acompanha — um documento que já registrou antes, ou um que já traz sua própria identidade `vmark:`, como um arquivo acompanhado que você moveu ou obteve por checkout. Veja [Coerência](/pt-BR/guide/coherence) | Desligado | Ligado / Desligado |
+| Gravar bloco de identidade ao salvar | Permite que o VMark insira um bloco de identidade `vmark:` no frontmatter de um arquivo e crie uma pasta `.vmark` no espaço de trabalho, para que a camada de coerência acompanhe o documento. Vale para toda gravação: salvamentos, edições de IA e MCP, restaurações de versões anteriores e arquivos novos. Desativado, nada é inserido e nenhuma pasta `.vmark` é criada; um espaço de trabalho que já tenha uma continua registrando as alterações dos documentos que acompanha — um documento que já registrou antes, ou um que já traz sua própria identidade `vmark:`, como um arquivo acompanhado que você moveu ou obteve por checkout. Veja [Coerência](/pt-BR/guide/coherence#como-funciona-30-segundos) | Desligado | Ligado / Desligado |
 | Intervalo de salvamento | Tempo entre salvamentos automáticos. Disponível apenas quando o salvamento automático estiver habilitado | 30 segundos | 10s, 30s, 1 min, 2 min, 5 min |
 | Manter histórico de documentos | Rastrear versões de documentos para desfazer e recuperação | Ligado | Ligado / Desligado |
 | Máximo de versões | Número de instantâneos de histórico a manter por documento | 50 versões | 10, 25, 50, 100 |
 | Manter versões por | Idade máxima dos instantâneos de histórico antes de serem removidos | 7 dias | 1 dia, 7 dias, 14 dias, 30 dias |
 | Janela de mesclagem | Salvamentos automáticos consecutivos dentro desta janela se consolidam em um único instantâneo, reduzindo o ruído de armazenamento | 30 segundos | Desligado, 10s, 30s, 1 min, 2 min |
-| Tamanho máximo de arquivo para histórico | Pular instantâneos de histórico para arquivos maiores que este limite | 512 KB | 256 KB, 512 KB, 1 MB, 5 MB, Ilimitado |
+| Tamanho máximo de arquivo para histórico | Pular instantâneos de histórico do salvamento automático para arquivos maiores que este limite. Salvamentos manuais, salvamentos via MCP e a cópia de segurança feita antes de restaurar uma versão são sempre mantidos | 512 KB | 256 KB, 512 KB, 1 MB, 5 MB, Ilimitado |
 
 ### Imagens
 
@@ -335,7 +335,7 @@ você pode alternar qualquer aba com o botão na tela ou `F6` / `Shift + F6`.
 
 ### Editor externo
 
-Para o botão **Abrir no editor externo** em abas de código somente leitura, escolha o editor que deve ser iniciado. Um bundle de app (ex.: `/Applications/Visual Studio Code.app`) ou um executável.
+Para o botão **Abrir no editor externo** em abas de código somente leitura, escolha o editor que deve ser iniciado: o nome de um editor conhecido (`code`, `zed`, `subl`, `vim`, …) ou o caminho completo de um bundle de app (ex.: `/Applications/Visual Studio Code.app`) ou de um executável. Shells, interpretadores e emuladores de terminal são recusados, assim como um caminho que não existe.
 
 A configuração da interface substitui qualquer variável de ambiente — explícito prevalece sobre implícito. Deixe vazio para usar a cadeia de fallback de variáveis de ambiente `$VMARK_EXTERNAL_EDITOR → $VISUAL → $EDITOR → padrão da plataforma`. Veja [Abrir no editor externo](/pt-BR/guide/formats#abrir-no-editor-externo) para a ordem de resolução completa e a barreira de segurança.
 
@@ -435,7 +435,7 @@ Configure o painel de terminal integrado. Abra o terminal com `` Ctrl + ` ``.
 
 | Configuração | Descrição | Padrão | Opções |
 |-------------|-----------|--------|--------|
-| Shell | Qual shell usar. Requer reinício do terminal para ter efeito | Padrão do Sistema | Shells detectados automaticamente no seu sistema (ex: zsh, bash, fish) |
+| Shell | Qual shell usar. Requer reinício do terminal para ter efeito. Um shell salvo que não está mais disponível aparece como *(indisponível)* e o padrão é usado | Padrão do Sistema | Shells detectados automaticamente no seu sistema (ex: zsh, bash, fish) |
 | Posição do Painel | Onde colocar o painel do terminal | Auto | Auto (baseado na proporção da janela), Acima, Embaixo, Esquerda, Direita |
 | Tamanho do Painel | Proporção do espaço disponível que o terminal ocupa. Arrastar para redimensionar o painel também atualiza este valor | 40% | 10% a 80% |
 | Tamanho da Fonte | Tamanho do texto no terminal | 13px | 10px a 24px |
@@ -444,7 +444,7 @@ Configure o painel de terminal integrado. Abra o terminal com `` Ctrl + ` ``.
 | Cursor Piscante | Se o cursor do terminal pisca | Ligado | Ligado / Desligado |
 | Copiar ao Selecionar | Copiar automaticamente o texto do terminal selecionado para a área de transferência | Desligado | Ligado / Desligado |
 | Renderizar transcrições automaticamente | Exibir Markdown, tabelas e diagramas Mermaid do Claude/Codex ao lado da CLI do terminal. Adiciona um hook SessionStart local à configuração do Claude Code e do Codex; reinicie as sessões CLI em execução após ativar | Desligado | Ligado / Desligado |
-| Renderizador WebGL | Usar renderização acelerada por GPU para o terminal. Desabilite se tiver problemas de entrada IME. Requer reinício do terminal | Ligado | Ligado / Desligado |
+| Renderizador WebGL | Usar renderização acelerada por GPU para o terminal. Desabilite se tiver problemas de entrada IME. Requer reinício do terminal. Apenas macOS e Windows — o Linux sempre usa o renderizador DOM | Ligado | Ligado / Desligado |
 | Área de transferência remota (OSC 52) | Permitir que programas em execução no terminal — por ssh, dentro do tmux — copiem para a área de transferência do sistema. O canal é somente de escrita: a leitura da área de transferência é sempre recusada, pois qualquer saída impressa no terminal poderia solicitá-la | Ligado | Ligado / Desligado |
 | Histórico de rolagem | Número de linhas de saída que cada sessão mantém no histórico de rolagem. Valores maiores usam mais memória | 5.000 | 1.000 / 5.000 / 10.000 / 50.000 |
 | Modo leitor de tela | Expor a saída do terminal a tecnologias assistivas (VoiceOver). Desativado por padrão por questões de desempenho | Desligado | Ligado / Desligado |
@@ -463,7 +463,7 @@ Veja [Terminal Integrado](/pt-BR/guide/terminal) para mais sobre sessões, atalh
 
 ## Sobre
 
-Exibe a versão do aplicativo, links para o site e repositório GitHub e gerenciamento de atualizações.
+Exibe a versão do aplicativo, links para o site e repositório GitHub e gerenciamento de atualizações. O link **Avisos de terceiros** abre os textos de licença do software de código aberto incluído no VMark no app padrão do sistema para arquivos de texto.
 
 ### Atualizações
 
@@ -535,7 +535,22 @@ Os quatro padrões estão sempre incluídos: remover um deles só dura até o VM
 |-------------|-----------|--------|
 | Manter ambos os editores ativos | Montar os editores dos modos WYSIWYG e Fonte simultaneamente para alternância mais rápida entre modos. Aumenta o uso de memória | Desligado |
 
-### Motor de workflow
+### Coerência
+
+| Configuração | Descrição | Padrão | Opções |
+|--------------|-----------|--------|--------|
+| Confiança da verificação semântica | Quanta certeza uma verificação precisa ter para que sua resposta seja registrada como veredito. Abaixo disso, a resposta é mantida, mas marcada como desconhecida | 0.9 | 0.7, 0.8, 0.9, 0.95 |
+
+Veja [Coerência](/pt-BR/guide/coherence) para saber o que é uma verificação e como os vereditos são registrados.
+
+### Arquivos de fluxo de trabalho
+
+| Configuração | Descrição | Padrão | Opções |
+|--------------|-----------|--------|--------|
+| Buscar metadados de actions | Permite que o VMark busque o `action.yml` das GitHub Actions referenciadas para preencher o formulário `with:` do editor estruturado. Desative para manter o editor de workflow totalmente offline | Ligado | Ligado / Desligado |
+| Usar actionlint quando disponível | Se o binário `actionlint` estiver no seu PATH, ele é executado nos arquivos de workflow para diagnósticos mais ricos. Sem efeito se o binário não estiver instalado | Ligado | Ligado / Desligado |
+
+### Workflow
 
 O visualizador do GitHub Actions não tem interruptor: abrir um arquivo em
 `.github/workflows/` mostra o grafo e o editor de formulários, e os recursos do

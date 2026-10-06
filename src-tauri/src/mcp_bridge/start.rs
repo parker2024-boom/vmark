@@ -1,4 +1,4 @@
-//! Bringing the bridge up: bind, publish, refresh, spawn (#167).
+//! Bringing the bridge up: bind, publish, refresh, spawn.
 //!
 //! Four steps whose ORDER is the contract, and none of it was reachable from
 //! a test while `start_bridge` took a Wry `AppHandle` and reached the real
@@ -14,7 +14,7 @@
 //!     than no file. It is published BEFORE the refresh so a failed write
 //!     refuses the start without first parsing tens of megabytes of client
 //!     config — and the awaits that follow it are covered by a rollback guard
-//!     rather than by reordering (audit #383): a start that unwinds or is
+//!     rather than by reordering: a start that unwinds or is
 //!     dropped after publishing drops its listener, so the file it left behind
 //!     names a closed port. `PublishedPort` deletes it unless the start
 //!     reaches the spawn.
@@ -22,30 +22,30 @@
 //!     so no connection is ever judged against a registry that has not been
 //!     built yet. It parses up to four config files (`~/.claude.json` can
 //!     reach tens of MB), so it runs on the blocking pool rather than
-//!     stalling this async worker. A PANIC in it publishes an EMPTY registry
-//!     (audit #384): the documented degraded mode is "that client is not
+//!     stalling this async worker. A PANIC in it publishes an EMPTY registry:
+//!     the documented degraded mode is "that client is not
 //!     identified", and keeping a snapshot this start failed to rebuild would
 //!     instead go on authenticating whatever the last one held.
 //!   - The loop refuses to admit a socket once the bridge is marked
-//!     `Stopped` (audit #394). `stop_bridge` signals the loop and then drains,
+//!     `Stopped`. `stop_bridge` signals the loop and then drains,
 //!     but the loop is a separate task: it can accept one more socket AFTER
 //!     the connection-generation bump, and that socket captures the bumped
 //!     generation, passes the registration re-check, and joins a bridge the
-//!     user has already stopped. `mcp_server::shutdown` marks the phase before
+//!     user has already stopped. `mcp_bridge::control::shutdown` marks the phase before
 //!     it signals, so reading the phase here closes the window without having
 //!     to await the loop. `Starting` is deliberately admitted — the phase only
 //!     becomes `Running` once `mcp_bridge_start` returns, and the port file is
 //!     out by then.
 //!   - A failed publish refuses the start, and the listener is dropped with
-//!     it — no bridge is left running behind a failed command (`#180` is the
-//!     other half of that story, in `lifecycle.rs`).
+//!     it — no bridge is left running behind a failed command (a publish that cannot
+//!     fail once the listener is up is the other half, in `lifecycle.rs`).
 //!   - The shutdown sender is installed before the loop is spawned, so a stop
 //!     always has something to signal. Start and stop cannot interleave in
 //!     the first place — `BridgeLifecycle::serialize` holds one lock across
-//!     each whole operation (#179) — and `start.test.rs` drives the pair.
+//!     each whole operation — and `start.test.rs` drives the pair.
 //!
 //! @coordinates-with server.rs — `stop_bridge`, the other half
-//! @coordinates-with mcp_server.rs — the commands that drive both
+//! @coordinates-with control.rs — the commands that drive both
 //! @module mcp_bridge::start
 
 use super::accept_loop::accept_loop;
@@ -65,7 +65,7 @@ use tokio::sync::oneshot;
 /// `on_exit` is called when the server loop terminates (shutdown signal or
 /// unexpected exit) so the caller can reset the lifecycle state.
 ///
-/// Typed (#164): every failure here is an `io` `CommandError` the command
+/// Typed: every failure here is an `io` `CommandError` the command
 /// returns as-is, so the frontend branches on a code, never on prose.
 pub async fn start_bridge(
     app: AppHandle,
@@ -81,7 +81,7 @@ pub async fn start_bridge(
     .await
 }
 
-/// [`start_bridge`] with its two out-of-process effects injected (#167).
+/// [`start_bridge`] with its two out-of-process effects injected.
 ///
 /// `publish` writes the `port:token` file the sidecar discovers the bridge
 /// through; `refresh` re-reads the AI clients' own MCP configs so a
@@ -104,7 +104,7 @@ pub(super) async fn start_bridge_with<R: tauri::Runtime>(
     publish(actual_port, &auth_token).map_err(CommandError::io)?;
     // From here the file exists and the listener does not outlive this
     // function unless the loop takes it, so every remaining exit that is not
-    // the spawn has to take the file with it (#383).
+    // the spawn has to take the file with it.
     let published = PublishedPort(Some(app.clone()));
 
     // Never fatal: an unreadable third-party config is skipped with a log line
@@ -112,7 +112,7 @@ pub(super) async fn start_bridge_with<R: tauri::Runtime>(
     // JoinError is different — the task PANICKED, so the registry was not
     // rebuilt at all — and the fail-closed answer is an empty one: identify
     // nobody rather than go on judging credentials against a snapshot this
-    // start never refreshed (#384).
+    // start never refreshed.
     if let Err(e) = tokio::task::spawn_blocking(refresh).await {
         log::error!(
             "[MCP Bridge] client-token refresh panicked ({e}); starting with NO client \
@@ -132,13 +132,13 @@ pub(super) async fn start_bridge_with<R: tauri::Runtime>(
     let app_handle = app.clone();
 
     // The loop itself lives in `accept_loop.rs`, where it is tested against a
-    // real listener (#167). Admission (the connection-slot reservation) is
+    // real listener. Admission (the connection-slot reservation) is
     // decided inside it, synchronously, before anything is spawned or cloned
     // — see `admit_connection`.
     //
     // The `JoinHandle` is deliberately dropped: `on_exit` is run by a drop
     // guard INSIDE `accept_loop`, so it fires on a panic and on the runtime
-    // dropping the task, not only when the loop returns (audit #385). Holding
+    // dropping the task, not only when the loop returns. Holding
     // the handle would let us await the loop's end, but it would not make the
     // cleanup any more certain — and nothing here has an end to await.
     crate::task::spawn_logged(
@@ -147,7 +147,7 @@ pub(super) async fn start_bridge_with<R: tauri::Runtime>(
             listener,
             shutdown_rx,
             move |stream, addr| {
-                // #394 — see the header. Dropping `stream` closes the socket.
+                // A stopped bridge admits nothing — see the header. Dropping `stream` closes the socket.
                 if bridge(&app_handle).lifecycle().snapshot() == BridgePhase::Stopped {
                     log::warn!("[MCP Bridge] Refusing {addr}: the bridge is stopped");
                     return;

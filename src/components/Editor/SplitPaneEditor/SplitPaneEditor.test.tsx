@@ -5,21 +5,12 @@
 
 import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { FormatConfig, ValidationDiagnostic } from "@/lib/formats/types";
 import { useTabStore } from "@/stores/tabStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useDocumentStore } from "@/stores/documentStore";
 import { SplitPaneEditor } from "./SplitPaneEditor";
-
-// CodeMirror is heavy and requires DOM; mock the source pane.
-vi.mock("./SourcePane", () => ({
-  SourcePane: ({ tabId, formatId }: { tabId: string; formatId: string }) => (
-    <div data-testid="source-pane" data-tab-id={tabId} data-format-id={formatId}>
-      source
-    </div>
-  ),
-}));
 
 const baseAdapters: FormatConfig["adapters"] = {
   saveDialogFilters: [{ name: "JSON", extensions: ["json"] }],

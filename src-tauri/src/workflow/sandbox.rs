@@ -53,8 +53,7 @@ pub fn validate_path(path: &str, workspace_root: &Path) -> Result<PathBuf, Strin
     // an EXISTING ancestor could be a symlink pointing outside the
     // workspace — `workspace/links/new.txt` with `links -> /etc` passed the
     // lexical prefix check above while actually writing to /etc. Resolve
-    // the deepest existing ancestor and re-check containment
-    // (audit 20260612).
+    // the deepest existing ancestor and re-check containment.
     let mut existing = normalized.clone();
     let mut tail: Vec<std::ffi::OsString> = Vec::new();
     // Walk up only within the workspace root — if even the root doesn't
@@ -175,7 +174,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn test_symlinked_dir_escape_rejected_for_nonexistent_target() {
-        // audit 20260612: workspace/links -> outside; links/new.txt must not
+        // workspace/links -> outside; links/new.txt must not
         // pass validation even though the target file does not exist yet.
         let ws = tempfile::tempdir().expect("ws");
         let outside = tempfile::tempdir().expect("outside");

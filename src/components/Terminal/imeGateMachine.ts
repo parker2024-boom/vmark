@@ -1,5 +1,5 @@
 /**
- * imeGateMachine — the PURE state at the heart of the terminal IME gate (WI-4).
+ * imeGateMachine — the PURE state at the heart of the terminal IME gate.
  *
  * Every decision the gate makes — commit, drop, clear — is computed here from
  * five pieces of temporal state, with no DOM, no timers, no logging. The DOM
@@ -22,8 +22,8 @@
  *     The HOST clears it on the next macrotask (`clearEcho`) — timers are an
  *     effect.
  *   - externalWrote — did the wiring ACTUALLY forward an onData to the PTY
- *     since the last insert? Ownership derives from writes, never keydowns
- *     (WI-13): IME inserts arrive before their own keydown, non-inserting
+ *     since the last insert? Ownership derives from writes, never keydowns:
+ *     IME inserts arrive before their own keydown, non-inserting
  *     keydowns write nothing, and a mid-composition keydown's onData is
  *     suppressed by the wiring. The flag EXPIRES on the next macrotask (same
  *     lifetime as echoText, host-scheduled): a keystroke's paired input event
@@ -79,7 +79,7 @@ export interface ImeGateMachine {
     ev: { data: string | null; inputType: string; isComposing: boolean },
     textareaValue: string
   ): GateAction;
-  /** The wiring forwarded this onData to the PTY (WI-13). Returns a
+  /** The wiring forwarded this onData to the PTY. Returns a
    *  generation token the host passes back to `expireExternalWrite`. */
   externalWrite(data: string): number;
   /** Next-macrotask callback: `gen`'s write can no longer own an insert.

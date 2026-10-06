@@ -24,9 +24,8 @@
  * @coordinates-with spawnPty.ts — consumes { cwd, workspaceRoot }
  * @module components/Terminal/resolveTerminalSpawnContext
  */
-import { useUIStore } from "@/stores/uiStore";
 import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
-import type { TerminalSession } from "@/stores/uiStore/types";
+import { useTerminalStore, type TerminalSession } from "@/stores/terminalStore";
 import {
   resolveActiveFileCwd,
   resolveTerminalWorkspaceRoot,
@@ -58,14 +57,14 @@ export function resolveTerminalSpawnContext(
     ? owner.rootPath ?? undefined
     : resolveTerminalWorkspaceRoot(windowLabel);
 
-  // WI-4.2: an explicit request outranks everything.
+  // An explicit request outranks everything.
   let cwd: string | undefined = session?.requestedCwd;
 
-  // WI-2.2, scope-narrowed (D-T9): inherit a live sibling's cwd, but only
+  // Scope-narrowed (D-T9): inherit a live sibling's cwd, but only
   // from the SAME scope — another workspace's shell is somewhere the user
   // never put THIS scope.
   if (!cwd && session) {
-    for (const sibling of useUIStore.getState().terminal.sessions) {
+    for (const sibling of useTerminalStore.getState().sessions) {
       if (sibling.id === session.id) continue;
       if ((sibling.workspaceInstanceId ?? null) !== scopeKey) continue;
       const live = liveSiblingCwd(sibling.id);

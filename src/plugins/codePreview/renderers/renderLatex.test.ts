@@ -27,10 +27,6 @@ vi.mock("@tiptap/pm/view", () => ({
   },
 }));
 
-vi.mock("../previewHelpers", () => ({
-  installDoubleClickHandler: vi.fn(),
-}));
-
 import { renderLatex } from "@/plugins/latex";
 import { parseLatexError } from "@/plugins/latex/latexErrorParser";
 import { renderWarn } from "@/utils/debug";

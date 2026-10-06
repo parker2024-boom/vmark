@@ -40,7 +40,7 @@ export function FileNode({ node, style, dragHandle, currentFilePath }: FileNodeP
       <span className="file-node-indent" />
 
       {data.isFolder ? (
-        // WI-2.1 (a11y) — folder expand/collapse chevron is a real button.
+        // A11y — folder expand/collapse chevron is a real button.
         // Keyboard users press Enter or Space to toggle; mouse click still
         // works. aria-expanded reflects the live folder state so screen
         // readers announce open/closed correctly.

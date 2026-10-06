@@ -1,3 +1,11 @@
+/**
+ * FileExplorer types — the tree node and directory-entry shapes the file
+ * explorer works with, plus the DOM class and attribute names its rows and
+ * scroller share.
+ *
+ * @module components/Sidebar/FileExplorer/types
+ */
+
 /** A node in the file explorer tree (file or folder). */
 export interface FileNode {
   id: string; // Full path
@@ -22,7 +30,7 @@ export const FILE_TREE_SCROLLER_CLASS = "file-explorer-scroller";
  * The row element's class, and the attribute carrying its node id.
  *
  * `FileNode.tsx` writes both and `useExplorerContextMenu.ts` reads both back —
- * as string literals, in two files, with nothing joining them (audit R3 #648).
+ * as string literals, in two files, with nothing joining them.
  * A row renamed on one side answers `null` on the other, and the context menu
  * silently degrades to the workspace-level one over a file.
  */
@@ -38,10 +46,11 @@ export interface DirectoryEntry {
 }
 
 /**
- * One node of the one-call tree listing (`list_directory_tree`, #1357): a
- * `DirectoryEntry` plus its pruned children. `unreadable` marks a directory the
- * walker could not read (shown empty, logged); a pruned directory has `children:
- * []` and is not unreadable.
+ * One node of the one-call tree listing (`list_directory_tree`, #1357), with
+ * its absolute path rebuilt by `treeListingPaths` (the wire form carries names
+ * only): a `DirectoryEntry` plus its pruned children. `unreadable` marks a
+ * directory the walker could not read (shown empty, logged); a pruned directory
+ * has `children: []` and is not unreadable.
  */
 export interface TreeEntry extends DirectoryEntry {
   unreadable?: boolean;

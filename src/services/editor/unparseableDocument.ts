@@ -29,7 +29,7 @@
  *     the unmount flush that runs as the tab switches to Source mode.
  *
  * @coordinates-with components/Editor/TiptapEditor.tsx — initial parse
- * @coordinates-with components/Editor/tiptapEditorHelpers.ts — external sync
+ * @coordinates-with components/Editor/tiptapContentLoad.ts — external sync
  * @coordinates-with components/Editor/useTiptapFlush.ts — no writes while refused
  * @coordinates-with stores/documentStore/largeFileSession.ts — the marker
  * @coordinates-with components/StatusBar/SourceModeUpgrade.tsx — the status line

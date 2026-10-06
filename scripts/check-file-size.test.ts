@@ -15,7 +15,22 @@ import {
   validateBaseline,
   evaluateSizes,
   TYPE_ONLY_ALLOWLIST,
+  ROOTS,
 } from "./check-file-size.mjs";
+
+describe("ROOTS", () => {
+  // WI-RA13B.7 — the gate scripts obey the rule they enforce. With `scripts`
+  // absent, gate scripts grew to 1,300 lines while every app file ratcheted.
+  it("scans the gate scripts themselves", () => {
+    expect(ROOTS).toContain("scripts");
+  });
+
+  // WI-RA24.8 — the Claude Code hooks are code the repo runs on every edit;
+  // they grew outside the gate the same way the gate scripts once did.
+  it("scans the Claude Code hooks", () => {
+    expect(ROOTS).toContain(".claude/hooks");
+  });
+});
 
 describe("countLines", () => {
   it.each([
@@ -35,7 +50,9 @@ describe("isTestFile", () => {
     ["src/foo.bench.ts", true],
     ["src/__tests__/foo.ts", true],
     ["src/__mocks__/foo.ts", true],
+    ["scripts/check-foo.test.mjs", true],
     ["src/foo.ts", false],
+    ["scripts/check-foo.mjs", false],
   ])("%s → %s", (p, expected) => {
     expect(isTestFile(p)).toBe(expected);
   });

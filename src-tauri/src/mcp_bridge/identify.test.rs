@@ -31,10 +31,10 @@ fn the_stored_label_loses_its_control_characters_and_keeps_its_text() {
 
 #[test]
 fn the_stored_label_is_bounded() {
-    let huge = "n".repeat(crate::mcp_bridge::peer_text::MAX_PEER_TEXT * 3);
+    let huge = "n".repeat(crate::peer_text::MAX_PEER_TEXT * 3);
     let kept = sanitize(identity(&huge, Some(&huge))).expect("a usable name");
     // Bounded, and visibly bounded, so a truncated name cannot read as whole.
-    assert!(kept.name.chars().count() <= crate::mcp_bridge::peer_text::MAX_PEER_TEXT + 1);
+    assert!(kept.name.chars().count() <= crate::peer_text::MAX_PEER_TEXT + 1);
     assert!(kept.name.ends_with('…'));
     assert!(kept.version.expect("version").ends_with('…'));
 }

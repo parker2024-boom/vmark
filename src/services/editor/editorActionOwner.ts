@@ -11,7 +11,7 @@
  *   teardown, and a stale double-dispose never evicts a replacement owner.
  *
  * Replaces the pre-extraction module-global timer set, where one window's
- * unmount cancelled every window's pending retries (command-registry WI-1.3).
+ * unmount cancelled every window's pending retries.
  *
  * @module services/editor/editorActionOwner
  */

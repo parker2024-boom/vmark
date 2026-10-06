@@ -2,7 +2,7 @@
  * HTML Sanitization Utilities
  *
  * Purpose: Secure HTML sanitization via DOMPurify to prevent XSS attacks. Tailored
- * allowlists per content type — general HTML (including media tags), SVG, KaTeX.
+ * allowlists per content type — general HTML, SVG, KaTeX.
  *
  * Key decisions:
  *   - Separate functions for each content type (general HTML, SVG, KaTeX) because
@@ -11,8 +11,8 @@
  *     (Mermaid uses HTML inside SVG for text layout)
  *   - Style attribute sanitization uses a property allowlist to block
  *     expression() and javascript: attacks in inline styles
- *   - Video, audio, and source tags are allowed in sanitizeMediaHtml (separate function)
- *   - Iframe is allowed in sanitizeMediaHtml but restricted to whitelisted video domains via post-pass
+ *   - DOMPurify's output is re-parsed (the style filter) only in an inert
+ *     document: the page's own document would load what it parses
  *   - escapeHtml is a simple entity escape for non-HTML text display
  *   - Preview allow-lists (strict/extended) + the always-on `DANGEROUS_TAGS`
  *     deny-list live in `utils/htmlAllowlists.ts`; `FORBID_TAGS` overrides
@@ -20,17 +20,13 @@
  *
  * @coordinates-with htmlAllowlists.ts — preview allow/deny tag + attr lists
  * @coordinates-with mermaid/index.ts — uses sanitizeSvg for Mermaid diagram output
- * @coordinates-with latex/katexLoader.ts — uses sanitizeKatex for math rendering
+ * @coordinates-with codePreview/renderers/renderLatex.ts — uses sanitizeKatex for math rendering
  * @module utils/sanitize
  */
 
 import DOMPurify from "dompurify";
 export { sanitizeSvg } from "./svgSanitize";
-import {
-  KATEX_STYLE_PROPS,
-  filterStyleAttributes,
-  isSafeStyleValue,
-} from "./styleSafety";
+import { KATEX_STYLE_PROPS, filterStyleAttributes } from "./styleSafety";
 import {
   type HtmlAllowlistLevel,
   PREVIEW_TAGS_INLINE_STRICT,
@@ -84,115 +80,7 @@ export function sanitizeHtmlPreview(html: string, options?: HtmlPreviewOptions):
     return sanitized;
   }
 
-  return filterAllowedStyles(sanitized);
-}
-
-function filterAllowedStyles(html: string): string {
-  if (typeof document === "undefined") {
-    // No DOM available — strip style attrs entirely for safety
-    return html.replace(/\s+style="[^"]*"/gi, "");
-  }
-
-  const container = document.createElement("div");
-  container.innerHTML = html;
-
-  const elements = container.querySelectorAll<HTMLElement>("[style]");
-  elements.forEach((element) => {
-    /* v8 ignore next -- @preserve querySelectorAll("[style]") only matches elements that have the attribute */
-    const style = element.getAttribute("style") ?? "";
-    const sanitizedStyle = sanitizeStyleAttribute(style);
-    if (!sanitizedStyle) {
-      element.removeAttribute("style");
-      return;
-    }
-    element.setAttribute("style", sanitizedStyle);
-  });
-
-  return container.innerHTML;
-}
-
-function sanitizeStyleAttribute(style: string): string {
-  const declarations = style.split(";").map((decl) => decl.trim()).filter(Boolean);
-  const safeDeclarations: string[] = [];
-
-  for (const declaration of declarations) {
-    const [rawProperty, ...rest] = declaration.split(":");
-    if (!rawProperty || rest.length === 0) continue;
-
-    const property = rawProperty.trim().toLowerCase();
-    if (!HTML_PREVIEW_STYLE_PROPS.has(property)) continue;
-
-    const value = rest.join(":").trim();
-    if (!isSafeStyleValue(value, property)) continue;
-
-    safeDeclarations.push(`${property}: ${value}`);
-  }
-
-  return safeDeclarations.join("; ");
-}
-
-
-/**
- * Sanitize media HTML content (video, audio, video embed iframes).
- * Allows media-specific tags and attributes while preventing XSS.
- *
- * Video embed iframes are restricted to whitelisted domains (YouTube, Vimeo, Bilibili)
- * via a post-sanitize DOM pass that strips non-whitelisted iframes.
- */
-export function sanitizeMediaHtml(html: string): string {
-  // Sanitize with DOMPurify, then post-process to strip non-whitelisted video-provider iframes
-  const result = DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: [
-      "video",
-      "audio",
-      "source",
-      "iframe",
-    ],
-    ALLOWED_ATTR: [
-      "src",
-      "title",
-      "controls",
-      "preload",
-      "poster",
-      "loop",
-      "muted",
-      "width",
-      "height",
-      "type",
-      "allowfullscreen",
-      "frameborder",
-      "allow",
-    ],
-    ALLOW_DATA_ATTR: false,
-  });
-
-  // Post-process: strip iframes with non-whitelisted src (case-insensitive check)
-  if (/<iframe\b/i.test(result)) {
-    return stripNonWhitelistedIframes(result);
-  }
-  return result;
-}
-
-const VIDEO_EMBED_DOMAIN_RE = /^https?:\/\/(www\.)?(youtube\.com|youtube-nocookie\.com|player\.vimeo\.com|player\.bilibili\.com)\//;
-
-function stripNonWhitelistedIframes(html: string): string {
-  if (typeof document === "undefined") {
-    // No DOM — strip all iframes for safety (can't verify src)
-    // Handles both paired (<iframe>...</iframe>) and self-closing (<iframe ... />) forms
-    return html
-      .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, "")
-      .replace(/<iframe\b[^>]*\/\s*>/gi, "");
-  }
-  const container = document.createElement("div");
-  container.innerHTML = html;
-  const iframes = container.querySelectorAll("iframe");
-  for (const iframe of iframes) {
-    const src = iframe.getAttribute("src") ?? "";
-    if (!VIDEO_EMBED_DOMAIN_RE.test(src)) {
-      iframe.remove();
-    }
-  }
-  return container.innerHTML;
+  return filterStyleAttributes(sanitized, HTML_PREVIEW_STYLE_PROPS);
 }
 
 /**

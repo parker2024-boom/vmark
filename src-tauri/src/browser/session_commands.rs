@@ -1,4 +1,4 @@
-//! Session & storage-state commands (WI-P6.2 / P6.3) — save and load a context's
+//! Session & storage-state commands — save and load a context's
 //! credential blob by an opaque HANDLE, **user-approved per call** (op `session`).
 //!
 //! Security model (ADR-A7):
@@ -103,7 +103,7 @@ fn host_of(url: &str) -> Option<String> {
 /// The command-boundary shape of a refused cross-origin replay: a CONFLICT (the page
 /// is not the one the blob was saved for) carrying the session layer's own token,
 /// `STORAGE_STATE_ORIGIN_MISMATCH` — not a native surface failure, which is what
-/// routing it through `surface_failure` used to call it (round 4, #31).
+/// routing it through `surface_failure` used to call it.
 pub(crate) fn origin_mismatch(message: String) -> CommandError {
     with_mcp_code(
         CommandError::new(ErrorCode::Conflict, message),
@@ -164,7 +164,7 @@ fn apply(
     // Defence in depth: refuse a cross-origin blob on the COMMAND thread before we
     // even dispatch. But the authoritative check is IN the replay script below —
     // the command-thread check can be raced by a navigation before the main-thread
-    // write actually runs (Sec review P6 re-verify, PARTIAL #1).
+    // write actually runs.
     ensure_same_origin(committed, state).map_err(origin_mismatch)?;
     // Cookies first: replayed into the native store, DOMAIN-SCOPED to the committed
     // host (apply_cookies drops any cookie whose domain doesn't cover it), so a saved

@@ -2,13 +2,17 @@
 
 VMark include un insieme completo di regole di formattazione per testo cinese, giapponese e coreano. Questi strumenti aiutano a mantenere una tipografia coerente quando si mischiano caratteri CJK e latini.
 
+::: info Il coreano viene volutamente lasciato invariato
+Il coreano usa una propria spaziatura tra le parole, e le particelle si attaccano direttamente alla parola precedente — `VMark에는`, mai `VMark 에는`. Inserire uno spazio in quel punto è un errore grammaticale, non una preferenza tipografica, quindi **l'Hangul è escluso da ogni regola di spaziatura** e dalla conversione della punteggiatura a larghezza intera. Il testo coreano passa invariato; vengono formattati solo i caratteri Han al suo interno.
+:::
+
 ## Avvio Rapido
 
 Usa **Formato → CJK → Formatta intero file** o premi `Alt + Mod + Shift + F` per formattare l'intero documento.
 
 **Formato → CJK → Formatta selezione** (`Mod + Shift + F`) formatta **i blocchi attraversati dalla selezione** — l'intero paragrafo, elenco o tabella toccato dal cursore o dalla selezione, non i caratteri esattamente selezionati. La spaziatura CJK è una proprietà del confine *tra* due caratteri adiacenti, e una selezione a metà parola non contiene alcun confine di questo tipo: il comando indica quindi una regione da correggere anziché il testo da riscrivere. Senza selezione formatta il blocco in cui si trova il cursore.
 
-Entrambi i comandi proteggono esattamente le stesse cose (vedi «Contenuto protetto»), quindi selezionare tutto prima di `Mod + Shift + F` è sicuro.
+Entrambi i comandi proteggono esattamente le stesse cose (vedi [Contenuto protetto](#contenuto-protetto)), quindi selezionare tutto prima di `Mod + Shift + F` è sicuro.
 
 ---
 
@@ -16,13 +20,52 @@ Entrambi i comandi proteggono esattamente le stesse cose (vedi «Contenuto prote
 
 ### 1. Spaziatura CJK-Latino
 
-Aggiunge automaticamente spazi tra caratteri/numeri CJK e latini.
+Aggiunge automaticamente spazi tra caratteri/numeri CJK e latini, inclusi i
+numeri con segno (negativi, positivi, più-meno) e i numeri preceduti da un
+simbolo di valuta.
 
 | Prima | Dopo |
 |-------|------|
 | 学习Python编程 | 学习 Python 编程 |
 | 共100个 | 共 100 个 |
 | 使用macOS系统 | 使用 macOS 系统 |
+| 我有-1个 | 我有 -1 个 |
+| 我有+1个 | 我有 +1 个 |
+| 误差±5%范围 | 误差 ±5% 范围 |
+| 中文-$100元 | 中文 -$100 元 |
+| 范围-100到-200 | 范围 -100 到 -200 |
+
+I caratteri di segno riconosciuti sono `-` `+` ASCII, `－` `＋` a larghezza
+intera, il segno meno Unicode `−` e il più-meno `±`. Un segno viene unito al
+numero solo se è seguito da una cifra (o da un simbolo di valuta seguito da una
+cifra), quindi gli identificatori CJK-latini con trattino (es. `中文-Web`) e le
+frasi CJK-CJK con trattino (es. `中文-我`) restano intatti, e gli intervalli come
+`5-10` vengono preservati.
+
+**Cosa conta come CJK e cosa come latino.** Un carattere CJK è un carattere
+Han, Hiragana, Katakana o Bopomofo secondo lo script Unicode. Ciò include i
+blocchi Han più rari (Extension A, le estensioni del piano supplementare e gli
+ideogrammi di compatibilità), il segno di iterazione `々`, lo zero ideografico
+`〇`, i katakana a mezza larghezza e il segno di prolungamento `ー`. Un carattere
+latino è qualsiasi lettera dell'alfabeto latino, lettere accentate comprese,
+quindi entrambi i lati di una parola vengono spaziati:
+
+| Prima | Dopo |
+|-------|------|
+| 中文café中文 | 中文 café 中文 |
+| 中文𠀀abc | 中文𠀀 abc |
+| ｶﾀｶﾅabc | ｶﾀｶﾅ abc |
+| 日本・東京 | 日本・東京 |
+
+Le lettere latine a larghezza intera (`Ａ`) hanno già una propria spaziatura e
+non vengono mai spaziate. Il punto centrale katakana `・` è punteggiatura, non
+una lettera, quindi accanto a esso non viene aggiunto alcuno spazio.
+
+**Collegamenti.** La parentesi di chiusura di un collegamento viene separata da
+uno spazio dal testo CJK che la segue solo quando il testo visibile del
+collegamento termina con una lettera latina o una cifra — è lo stacco che vede
+chi legge. `参见[link](https://x.com)中文` diventa
+`参见[link](https://x.com) 中文`; `参见[中文](https://x.com)中文` resta invariato.
 
 ### 2. Punteggiatura a Larghezza Intera
 
@@ -45,7 +88,7 @@ Converte lettere e numeri a larghezza intera in mezza larghezza.
 
 ### 4. Conversione Parentesi
 
-Converte le parentesi a mezza larghezza in parentesi a larghezza intera quando circondano contenuto CJK.
+Converte le parentesi a mezza larghezza in parentesi a larghezza intera quando circondano contenuto CJK. Entrambe le parentesi devono trovarsi nello stesso paragrafo: separate da una riga vuota restano come sono state digitate.
 
 | Prima | Dopo |
 |-------|------|
@@ -78,6 +121,8 @@ VMark usa un **algoritmo di abbinamento virgolette basato su stack** che gestisc
 | "don't worry" | “don't worry” |
 | 5'10" tall | 5'10" tall |
 
+Non viene inserito alcuno spazio tra un carattere CJK e un glifo di virgoletta. `“ ”`, `‘ ’`, `「 」` e `『 』` sono a larghezza intera nel contesto CJK — GB/T 15834 e JLREQ prevedono entrambi per essi un proprio margine laterale — quindi `他说“你好”然后走了` resta esattamente com'è scritto. Il testo latino riceve comunque uno spazio: `word“text”` diventa `word “text”`.
+
 Con l'opzione parentesi a forcella abilitata:
 
 | Prima | Dopo |
@@ -87,7 +132,7 @@ Con l'opzione parentesi a forcella abilitata:
 
 ### 7. Normalizzazione dei Puntini di Sospensione
 
-Standardizza la formattazione dei puntini di sospensione.
+Standardizza la formattazione dei puntini di sospensione, nella forma usata dalla scrittura circostante. Non esiste un'unica risposta corretta: il cinese (GB/T 15834) e il giapponese (JIS X 4051) usano i puntini di sospensione a sei punti `……` e **non** vogliono uno spazio dopo, il coreano usa `…`, e solo il testo latino usa `...` seguito da uno spazio.
 
 | Prima | Dopo |
 |-------|------|
@@ -96,6 +141,8 @@ Standardizza la formattazione dei puntini di sospensione.
 | そして...続く | そして……続く |
 | 그리고...계속 | 그리고…계속 |
 | wait...ok | wait... ok |
+
+La scrittura viene decisa in base ai caratteri immediatamente accanto ai puntini, non in base al documento, quindi `...` all'interno di una citazione inglese in un file cinese mantiene la forma latina.
 
 ### 8. Punteggiatura Ripetuta
 
@@ -111,7 +158,7 @@ Limita i segni di punteggiatura consecutivi (limite configurabile).
 - Spazi multipli compressi: `多个   空格` → `多个 空格`
 - Spazi finali rimossi
 - Spaziatura barre: `A / B` → `A/B`
-- Spaziatura valute: `$ 100` → `$100`
+- Unione di valute e unità: `$ 100` → `$100`, `100 %` → `100%`. Vengono rimossi solo spazi e tabulazioni: un numero alla fine di una riga o di un paragrafo non viene mai unito a un'unità o a una valuta sulla riga successiva, e uno spazio indivisibile che hai digitato tra un numero e la sua unità viene mantenuto
 
 ---
 
@@ -189,7 +236,7 @@ Le opzioni di formattazione CJK possono essere configurate in Impostazioni → L
 
 ### Virgolette Contestuali
 
-Quando le **Virgolette Contestuali** sono abilitate (predefinito):
+Quando **Virgolette contestuali** è abilitato (predefinito):
 
 - Virgolette intorno al contenuto CJK → virgolette curve `""`
 - Virgolette intorno al contenuto puramente latino → virgolette dritte `""`
@@ -198,15 +245,15 @@ Questo preserva l'aspetto naturale del testo inglese formattando correttamente i
 
 ### Parentesi a forcella CJK *(disattivato per impostazione predefinita)*
 
-Quando **Virgolette a forcella CJK** è abilitato, le virgolette curve attorno al contenuto CJK vengono convertite in parentesi a forcella (`「」` per primarie, `『』` per annidate) — la forma di citazione tipograficamente tradizionale per la composizione tipografica CJK verticale. Il contenuto latino mantiene le virgolette curve standard indipendentemente da questa impostazione.
+Quando **Virgolette ad angolo CJK** è abilitato, le virgolette curve attorno al contenuto CJK vengono convertite in parentesi a forcella (`「」` per primarie, `『』` per annidate) — la forma di citazione tipograficamente tradizionale per la composizione tipografica CJK verticale. Il contenuto latino mantiene le virgolette curve standard indipendentemente da questa impostazione.
 
 ### Salto della sezione di riferimenti
 
-Il formattatore CJK rileva le intestazioni «References» / «参考文献» / «参考资料» / «Bibliography» e salta la riformattazione in quelle sezioni — il testo formattato per le citazioni si basa spesso su una punteggiatura specifica che le regole CJK normalizzerebbero altrimenti.
+Quando **Salta le sezioni di riferimento** è abilitato in Impostazioni → Lingua → Gestione delle sezioni (disattivato per impostazione predefinita), il formattatore CJK rileva le intestazioni «References» / «Further Reading» / «参考文献» / «参考资料» / «Bibliography» e salta la riformattazione in quelle sezioni — il testo formattato per le citazioni si basa spesso su una punteggiatura specifica che le regole CJK normalizzerebbero altrimenti. Attivalo per i documenti accademici; lascialo disattivato per formattare l'intero file.
 
 ### Verifica di integrità
 
-Dopo ogni passaggio di formattazione CJK, il formattatore confronta lo **scheletro del contenuto** del documento prima e dopo: il testo privato di spazi e punteggiatura e con la larghezza dei caratteri normalizzata. Tutte le regole di formattazione modificano soltanto spazi, punteggiatura o la larghezza di un carattere alfanumerico, quindi quello scheletro deve tornare identico — e, trattandosi di una sequenza e non di un conteggio, individua anche il contenuto riordinato. Contano lettere, cifre, ideogrammi, kana, hangul ed emoji.
+Dopo ogni passaggio di formattazione CJK, il formattatore confronta lo **scheletro del contenuto** del documento prima e dopo: il testo privato di spazi e punteggiatura e con la larghezza dei caratteri normalizzata. Tutte le regole di formattazione modificano soltanto spazi, punteggiatura o la larghezza di un carattere alfanumerico, quindi quello scheletro deve tornare identico — e, trattandosi di una sequenza e non di un conteggio, anche il contenuto riordinato non supera il controllo. Contano lettere, cifre, ideogrammi, kana, hangul ed emoji.
 
 Se il controllo fallisce, il documento resta **completamente immutato** e una notifica te lo comunica. Un rifiuto non è mai silenzioso e non viene mai confuso con «non c'era nulla da cambiare».
 
@@ -218,7 +265,7 @@ VMark include una funzione dedicata di spaziatura tra lettere per il testo CJK c
 
 ### Impostazioni
 
-Configura in **Impostazioni → Editor → Tipografia → Spaziatura tra Lettere CJK**:
+Configura in **Impostazioni → Editor → Tipografia → Spaziatura lettere CJK**:
 
 | Opzione | Valore | Descrizione |
 |---------|--------|-------------|
@@ -227,6 +274,8 @@ Configura in **Impostazioni → Editor → Tipografia → Spaziatura tra Lettere
 | Leggera | 0.03em | Spaziatura leggera |
 | Normale | 0.05em | Consigliata per la maggior parte dei casi |
 | Ampia | 0.08em | Spaziatura più pronunciata |
+| Più ampia | 0.10em | Ancora più ampia, per dimensioni di visualizzazione grandi |
+| Extra | 0.12em | L'impostazione più ampia |
 
 ### Come Funziona
 
@@ -268,7 +317,7 @@ VMark usa un sofisticato algoritmo basato su stack per l'abbinamento delle virgo
 3. **Rilevamento Apostrofi**: Riconosce le contrazioni (don't, it's) e le preserva
 4. **Rilevamento Apici**: Riconosce le misure (5'10") e le preserva
 5. **Rilevamento Contesto CJK**: Verifica se il contenuto citato coinvolge caratteri CJK
-6. **Pulizia Virgolette Solitarie**: Gestisce le virgolette senza corrispondenza con grazia
+6. **Pulizia Virgolette Solitarie**: Gestisce le virgolette senza corrispondenza con grazia; una virgoletta ancora aperta alla fine di un paragrafo resta senza coppia, quindi le virgolette non si accoppiano mai attraverso una riga vuota
 
 ### Esempi
 
@@ -309,7 +358,7 @@ Puoi cambiare rapidamente lo stile delle virgolette esistenti senza riformattare
 **Rilevamento intelligente**: Gli apostrofi (`don't`), gli apici (`5'10"`) e le abbreviazioni di decennio (`'90s`) non vengono mai trattati come coppie di virgolette.
 
 ::: tip
-Passa tra la modalità semplice e quella a ciclo completo in Impostazioni → Lingua → Formattazione CJK → Modalità Alternanza Virgolette.
+Passa tra la modalità semplice e quella a ciclo completo in Impostazioni → Lingua → Formattazione CJK → Comportamento del cambio virgolette.
 :::
 
 ### Configurazione
@@ -320,11 +369,12 @@ Abilita la Conversione Virgolette Tipografiche in Impostazioni → Lingua → Fo
 
 ## Conversione Parentesi a Forcella CJK
 
-Quando le **Virgolette a Forcella CJK** sono abilitate, le virgolette curve intorno al contenuto CJK vengono automaticamente convertite in parentesi a forcella.
+Quando **Virgolette ad angolo CJK** è abilitato, le virgolette curve intorno al contenuto CJK vengono automaticamente convertite in parentesi a forcella.
 
 ### Caratteri Supportati
 
-La conversione delle parentesi a forcella si attiva quando il contenuto citato contiene **caratteri cinesi** (CJK Unified Ideographs U+4E00–U+9FFF):
+La conversione delle parentesi a forcella si attiva quando il contenuto citato
+— o il testo immediatamente accanto — è Han, Hiragana, Katakana o Bopomofo:
 
 | Tipo di Contenuto | Esempio | Converte? |
 |-------------------|---------|-----------|
@@ -335,7 +385,8 @@ La conversione delle parentesi a forcella si attiva quando il contenuto citato c
 | Coreano | `"한글"` | ✗ rimane `"한글"` |
 | Inglese | `"hello"` | ✗ rimane `"hello"` |
 
-**Suggerimento:** Per il testo giapponese con solo Kana, usa manualmente le parentesi a forcella `「」` o includi almeno un carattere Kanji.
+Il coreano è escluso per lo stesso motivo delle regole di spaziatura: il coreano usa `“ ”`,
+non le parentesi a forcella.
 
 ---
 
@@ -375,7 +426,7 @@ Dopo la formattazione, il testo apparirà così:
 
 学习过程中遇到的最大挑战是 —— 状态管理。Redux 的概念……说实话有点难理解。后来换成了 Zustand，简单多了！
 
-老师说 "don't give up" 然后继续讲 "写代码要注重可读性"，我觉得很有道理。
+老师说“don't give up”然后继续讲“写代码要注重可读性”，我觉得很有道理。
 
 访问 https://example.com/docs 获取 v2.0.0 版本文档，价格 $99.99，时间 12:30 开始。
 
@@ -393,7 +444,14 @@ Dopo la formattazione, il testo apparirà così:
 - Spaziatura CJK-Latino aggiunta (学习 TypeScript)
 - Punteggiatura a larghezza intera convertita (，。！)
 - Numeri a larghezza intera normalizzati (３→3, １０００→1000, ２００→200)
-- Doppi trattini convertiti in em-dash (-- → ——)
-- Puntini di sospensione normalizzati (. . . → ...)
-- Virgolette tipografiche applicate, apostrofo preservato (don't)
+- Doppi trattini convertiti in em-dash (是--状态 → 是 —— 状态)
+- Puntini di sospensione normalizzati nella forma cinese, senza spazio dopo (. . . → ……)
+- Virgolette tipografiche applicate senza spazio accanto al testo CJK, apostrofo preservato (don't)
 - Costrutti tecnici protetti (https://example.com/docs, v2.0.0, $99.99, 12:30)
+
+**E cosa _non_ cambia:** il `--` in `**Frontend**--React` resta un doppio
+trattino. La conversione dei trattini richiede un carattere CJK o un carattere
+alfanumerico immediatamente accanto ai trattini, e `*` non è né l'uno né
+l'altro. Attivarla anche sui marcatori di enfasi convertirebbe il `--` in ogni
+voce di elenco puramente inglese di un documento cinese, il che è peggio che
+lasciare invariati questi tre.

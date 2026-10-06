@@ -19,6 +19,7 @@
  * @module services/navigation/loadFileIntoTab.closeDuringRead.test
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fileBytes } from "@/test/fileBytes";
 
 const { mockReadTextFile, mockFindTabById, mockAddFile } = vi.hoisted(() => ({
   mockReadTextFile: vi.fn(),
@@ -27,7 +28,7 @@ const { mockReadTextFile, mockFindTabById, mockAddFile } = vi.hoisted(() => ({
 }));
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: (...args: unknown[]) => mockReadTextFile(...args),
+  readFile: (...args: unknown[]) => fileBytes(mockReadTextFile(...args)),
 }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(vi.fn())) }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve([])) }));

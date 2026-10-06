@@ -46,6 +46,15 @@ import { restartWithHotExit, checkAndRestoreSession } from './restartWithHotExit
 import { HOT_EXIT_EVENTS, SCHEMA_VERSION } from './types';
 import { migrateSession } from './schemaMigration';
 import type { SessionData } from './types';
+import { restoreMainWindowState } from '../resilience/_hotExitRestore';
+import { ASYNC_IMPORT_WAIT } from '@/test/waitBudget';
+
+/** A fixed capture time (seconds); restore never compares it with the clock. */
+const SESSION_TIMESTAMP = 1_768_478_400;
+
+/** The restore command has run, so the outcome listeners are armed. */
+const untilRestoreInvoked = () =>
+  vi.waitFor(() => expect(vi.mocked(restoreMainWindowState)).toHaveBeenCalled(), ASYNC_IMPORT_WAIT);
 
 // ---------------------------------------------------------------
 // restartWithHotExit
@@ -147,7 +156,7 @@ describe('checkAndRestoreSession — additional coverage', () => {
     mockInvoke
       .mockResolvedValueOnce({
         version: 0, // incompatible
-        timestamp: Date.now() / 1000,
+        timestamp: SESSION_TIMESTAMP,
         vmark_version: '0.1.0',
         windows: [],
       })
@@ -162,7 +171,7 @@ describe('checkAndRestoreSession — additional coverage', () => {
   it('uses multi-window restore for sessions with secondary windows', async () => {
     const session = {
       version: 2,
-      timestamp: Date.now() / 1000,
+      timestamp: SESSION_TIMESTAMP,
       vmark_version: '0.5.0',
       windows: [
         { window_label: 'main', is_main_window: true, tabs: [] },
@@ -177,7 +186,7 @@ describe('checkAndRestoreSession — additional coverage', () => {
 
     const restorePromise = checkAndRestoreSession();
 
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await untilRestoreInvoked();
 
     // Verify multi-window restore was used (session passes through migration
     // and is bumped to current SCHEMA_VERSION before being sent)
@@ -195,7 +204,7 @@ describe('checkAndRestoreSession — additional coverage', () => {
   it('cleans up listeners and returns false when invoke fails', async () => {
     const session = {
       version: 2,
-      timestamp: Date.now() / 1000,
+      timestamp: SESSION_TIMESTAMP,
       vmark_version: '0.5.0',
       windows: [{ window_label: 'main', is_main_window: true, tabs: [] }],
     };
@@ -243,7 +252,7 @@ describe('checkAndRestoreSession — additional coverage', () => {
   it('handles clear session failure gracefully', async () => {
     const session = {
       version: 0, // incompatible — triggers clearSessionFile
-      timestamp: Date.now() / 1000,
+      timestamp: SESSION_TIMESTAMP,
       vmark_version: '0.1.0',
       windows: [],
     };
@@ -260,7 +269,7 @@ describe('checkAndRestoreSession — additional coverage', () => {
   it('migrates v1 session to current schema before restoring', async () => {
     const v1Session = {
       version: 1,
-      timestamp: Date.now() / 1000,
+      timestamp: SESSION_TIMESTAMP,
       vmark_version: '0.3.0',
       windows: [{ window_label: 'main', is_main_window: true, tabs: [] }],
     };
@@ -272,7 +281,7 @@ describe('checkAndRestoreSession — additional coverage', () => {
 
     const restorePromise = checkAndRestoreSession();
 
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await untilRestoreInvoked();
 
     // Session should be migrated to current SCHEMA_VERSION
     const restoreCall = mockInvoke.mock.calls.find(c => c[0] === 'hot_exit_restore');
@@ -288,7 +297,7 @@ describe('checkAndRestoreSession — additional coverage', () => {
   it('handles double-resolve in setupRestoreListeners (both events fire)', async () => {
     const session = {
       version: 2,
-      timestamp: Date.now() / 1000,
+      timestamp: SESSION_TIMESTAMP,
       vmark_version: '0.5.0',
       windows: [{ window_label: 'main', is_main_window: true, tabs: [] }],
     };
@@ -300,7 +309,7 @@ describe('checkAndRestoreSession — additional coverage', () => {
 
     const restorePromise = checkAndRestoreSession();
 
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await untilRestoreInvoked();
 
     // Fire complete
     const completeHandler = eventListeners.get(HOT_EXIT_EVENTS.RESTORE_COMPLETE);
@@ -329,7 +338,7 @@ describe('checkAndRestoreSession — additional coverage', () => {
 
     const restorePromise = checkAndRestoreSession();
 
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await untilRestoreInvoked();
 
     const completeHandler = eventListeners.get(HOT_EXIT_EVENTS.RESTORE_COMPLETE);
     completeHandler?.({ payload: {} });
@@ -353,7 +362,7 @@ describe('checkAndRestoreSession — additional coverage', () => {
 
     const restorePromise = checkAndRestoreSession();
 
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await untilRestoreInvoked();
 
     const completeHandler = eventListeners.get(HOT_EXIT_EVENTS.RESTORE_COMPLETE);
     completeHandler?.({ payload: {} });
@@ -362,50 +371,25 @@ describe('checkAndRestoreSession — additional coverage', () => {
     // Should not throw on invalid timestamp
   });
 
-  it('handles session with NaN timestamp (formatTimestamp catch branch)', async () => {
+  // A non-finite timestamp cannot reach `formatTimestamp`: the session schema
+  // rejects it at the salvage boundary, so the payload is refused before any
+  // restore runs — and the session file is kept for the quarantine path.
+  it.each([NaN, Infinity])('refuses a session whose timestamp is %s without restoring or clearing', async (timestamp) => {
     const session = {
       version: 2,
-      timestamp: NaN, // triggers !Number.isFinite check in formatTimestamp
+      timestamp,
       vmark_version: '0.5.0',
       windows: [{ window_label: 'main', is_main_window: true, tabs: [] }],
     };
 
-    mockInvoke
-      .mockResolvedValueOnce(session)
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(undefined);
+    mockInvoke.mockResolvedValueOnce(session).mockResolvedValue(undefined);
 
-    const restorePromise = checkAndRestoreSession();
+    const result = await checkAndRestoreSession();
 
-    await new Promise(resolve => setTimeout(resolve, 50));
-
-    const completeHandler = eventListeners.get(HOT_EXIT_EVENTS.RESTORE_COMPLETE);
-    completeHandler?.({ payload: {} });
-
-    await restorePromise;
-    // formatTimestamp returns "invalid(NaN)" without throwing
-  });
-
-  it('handles session with Infinity timestamp (formatTimestamp catch branch)', async () => {
-    const session = {
-      version: 2,
-      timestamp: Infinity, // triggers !Number.isFinite check
-      vmark_version: '0.5.0',
-      windows: [{ window_label: 'main', is_main_window: true, tabs: [] }],
-    };
-
-    mockInvoke
-      .mockResolvedValueOnce(session)
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(undefined);
-
-    const restorePromise = checkAndRestoreSession();
-
-    await new Promise(resolve => setTimeout(resolve, 50));
-
-    const completeHandler = eventListeners.get(HOT_EXIT_EVENTS.RESTORE_COMPLETE);
-    completeHandler?.({ payload: {} });
-
-    await restorePromise;
+    expect(result).toBe(false);
+    const commands = mockInvoke.mock.calls.map((call) => call[0]);
+    expect(commands).not.toContain('hot_exit_restore');
+    expect(commands).not.toContain('hot_exit_clear_session');
+    expect(vi.mocked(restoreMainWindowState)).not.toHaveBeenCalled();
   });
 });

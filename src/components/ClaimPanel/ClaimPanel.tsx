@@ -1,5 +1,5 @@
 /**
- * ClaimPanel (WI-2b.6) — the minimal canon-claim surface: current claims
+ * ClaimPanel — the minimal canon-claim surface: current claims
  * with their maturity, the four explicit lifecycle acts (design-2a.md
  * D2 — creation only via extract-from-selection, which hands a draft
  * statement to this panel), and the reversible default-context

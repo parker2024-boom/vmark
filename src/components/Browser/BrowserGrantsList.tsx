@@ -1,5 +1,5 @@
 /**
- * BrowserGrantsList — see and revoke the standing permissions the AI holds (WI-S0.8).
+ * BrowserGrantsList — see and revoke the standing permissions the AI holds.
  *
  * Purpose: "Allow on this site" in the approval prompt mints standing authority for an
  * origin, and a permission model without revocation is not a permission model. This is

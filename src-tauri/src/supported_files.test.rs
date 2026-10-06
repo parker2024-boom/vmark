@@ -188,7 +188,7 @@ fn cli_filter_empty_input_returns_empty() {
 #[test]
 fn finder_and_cli_share_acceptance_policy() {
     // The Finder RunEvent::Opened handler uses `is_openable_supported`
-    // directly (file_open.rs `handle_finder_opened`). The CLI filter
+    // directly (files/open.rs `handle_finder_opened`). The CLI filter
     // routes through the same predicate via filter_supported_args. This
     // test pins that invariant — if either surface diverges, this
     // fails loudly rather than letting drift recur silently.

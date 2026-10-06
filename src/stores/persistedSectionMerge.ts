@@ -136,7 +136,7 @@ export function createSectionMergingStorage(base: StateStorage): StateStorage {
       // merged disk result. Recording `merged` would fold in other windows'
       // sections (which this window has not adopted into memory), so this
       // window's still-stale value for such a section would read as "changed"
-      // on the next write and clobber the peer's value (audit High-1).
+      // on the next write and clobber the peer's value.
       baseline = outgoingState;
     },
 

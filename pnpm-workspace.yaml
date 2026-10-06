@@ -10,3 +10,18 @@ packages:
   - 'server/mcp'
   - 'server/content'
   - 'website'
+
+# Minutes. pnpm refuses to RESOLVE a version published less than a week ago,
+# so a compromised release of a package already in the tree has time to be
+# noticed and unpublished before it can enter the lockfile. This is a different
+# threat from the one scripts/check-new-deps.sh covers (a package NAME that is
+# new, checked at 30 days): a 30-day wait here would also hold back a security
+# fix for a month. Installing from the lockfile (`--frozen-lockfile`) resolves
+# nothing, so CI is unaffected.
+#
+# The npm `cooldown` in .github/dependabot.yml must be at least this long, or
+# Dependabot proposes versions pnpm will not resolve. If a fix is needed
+# sooner, list the package in `minimumReleaseAgeExclude` for that one change
+# and remove it afterwards; scripts/check-supply-chain-pins.test.mjs fails
+# while an exclusion is present.
+minimumReleaseAge: 10080

@@ -1,4 +1,4 @@
-//! Crash-recovery policy (WI-1.8) — decide whether a crashed browser tab may
+//! Crash-recovery policy — decide whether a crashed browser tab may
 //! auto-reload or must wait for a manual reload, bounding a reload-crash loop.
 //!
 //! A killed web-content process leaves the tab in `Lifecycle::Crashed`
@@ -6,7 +6,7 @@
 //! this policy caps *consecutive* crashes (those with no successful load between
 //! them): under the budget the surface auto-reloads; past it, it holds a manual
 //! "page crashed — reload" state until the user acts. A clean load forgives the
-//! streak. This is the pure decision half of WI-1.8; the native delegate that
+//! streak. This is the pure decision half of crash recovery; the native delegate that
 //! observes the crash and the store that renders the manual state are the gated
 //! integration points that call into it.
 //!

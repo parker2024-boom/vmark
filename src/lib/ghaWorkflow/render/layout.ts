@@ -1,9 +1,13 @@
-// WI-2.2 — dagre-based layout for the workflow DAG.
-//
-// Plan §6 Phase 2 + ADR-1. Pure transform: takes the nodes/edges from
-// toGraph() and reassigns each node's position based on a dagre
-// layered layout. ELK fallback for very large graphs is a follow-up
-// (>50 nodes per plan); this file ships dagre only.
+/**
+ * Dagre-based layout for the workflow DAG.
+ *
+ * ADR-1. Pure transform: takes the nodes/edges from
+ * toGraph() and reassigns each node's position based on a dagre
+ * layered layout. ELK fallback for very large graphs is a follow-up
+ * (>50 nodes); this file ships dagre only.
+ *
+ * @module lib/ghaWorkflow/render/layout
+ */
 
 import dagre from "@dagrejs/dagre";
 import type { Edge, Node } from "@xyflow/react";

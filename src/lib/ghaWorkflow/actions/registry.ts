@@ -6,7 +6,7 @@
  *   cache; this module adds an in-session memoization layer so the
  *   same uses-string invokes Rust at most once per session.
  *
- * Origin: GitHub Actions workflow viewer plan (2026-05-04, retired) WI-6.1
+ * Origin: GitHub Actions workflow viewer plan (retired)
  *
  * Failure mode is "return null":
  *   - Unparseable uses (./local, docker://, missing @ref): null, no invoke
@@ -88,7 +88,7 @@ type FetchResult =
   | RustInvalidUses;
 
 // Bounded so a long session that references many distinct actions doesn't grow
-// the cache unboundedly (WI-4.5, R2). 200 distinct action refs is far beyond
+// the cache unboundedly (R2). 200 distinct action refs is far beyond
 // any real workflow set; LRU evicts the rest.
 const sessionCache = new LruCache<string, ActionMetadata | null>(200);
 const inflight = new Map<string, Promise<ActionMetadata | null>>();
@@ -203,7 +203,7 @@ async function getLocalActionMetadata(
  * workflowFetchActionMetadata). lib/ may not import stores (ADR-013), so
  * the settings bridge pushes the flag in. Defaults on, matching the
  * setting's default. Local-ref resolution is filesystem-only and stays
- * available regardless (audit 20260612 H28: the website promised this
+ * available regardless (the website promised this
  * off-switch but it didn't exist).
  */
 let remoteMetadataFetchEnabled = true;
@@ -218,13 +218,13 @@ export function setActionMetadataFetchEnabled(enabled: boolean): void {
  * the session. Returns null in all failure modes; never throws.
  *
  * For local refs (./, ../), pass `workflowFile` + `wsRoot` to enable
- * filesystem resolution (WI-B.1); without them local refs return null.
+ * filesystem resolution; without them local refs return null.
  */
 export async function getActionMetadata(
   uses: string,
   context?: { workflowFile: string; wsRoot: string },
 ): Promise<ActionMetadata | null> {
-  // Local-action path (WI-B.1) — filesystem only, not gated by the
+  // Local-action path — filesystem only, not gated by the
   // network toggle.
   if (isLocalUsesRef(uses)) {
     if (!context) return null;

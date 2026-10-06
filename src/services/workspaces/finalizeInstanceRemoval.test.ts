@@ -4,20 +4,15 @@
 // table: what each mode cleans, what move deliberately leaves (rail-plan gap
 // G2), the main-placeholder / empty-window invariants, and successor
 // hydration only when the removed instance was ACTIVE.
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const invoke = vi.fn();
-const hydrateWorkspaceInstanceContext = vi.fn();
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invoke(...args),
 }));
-vi.mock("./hydrateWorkspaceInstanceContext", () => ({
-  hydrateWorkspaceInstanceContext: (...args: unknown[]) =>
-    hydrateWorkspaceInstanceContext(...args),
-}));
 
-import { resetTerminalSessionStore, useUIStore } from "@/stores/uiStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import { useClosedTabScopesStore } from "@/stores/tabStoreClosedScopes";
 import { useWorkspaceInstanceUiStore } from "@/stores/workspaceInstanceUiStore";
 import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
@@ -28,6 +23,9 @@ import {
   createWorkspaceRootIdentity,
 } from "@/utils/workspaceIdentity";
 import { finalizeInstanceRemoval } from "./finalizeInstanceRemoval";
+import { useSettingsStore } from "@/stores/settingsStore";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
+import { currentContextGeneration, resetContextGenerations } from "./workspaceContextGeneration";
 
 function seedInstance(windowLabel: string, instanceId: string, path: string): void {
   const rootResult = createWorkspaceRootIdentity(path, { platform: "macos" });
@@ -70,7 +68,7 @@ function seedParallelState(windowLabel: string, instanceId: string): void {
     focusedPane: "primary",
     syncScroll: false,
   });
-  useUIStore.getState().terminalCreateSession({ ownerInstanceId: instanceId });
+  useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: instanceId });
   const tab: Tab = {
     kind: "document",
     id: `closed-${instanceId}`,
@@ -95,9 +93,9 @@ const uiStates = () => useWorkspaceInstanceUiStore.getState().instanceUiStates;
 const paneLayout = (id: string) =>
   useWorkspacePaneLayoutsStore.getState().getPaneLayout(id);
 const terminalScopeSessions = (id: string) =>
-  useUIStore
+  useTerminalStore
     .getState()
-    .terminal.sessions.filter((s) => s.workspaceInstanceId === id);
+    .sessions.filter((s) => s.workspaceInstanceId === id);
 const closedScope = (windowLabel: string, id: string) =>
   useClosedTabScopesStore.getState().scopesByWindow[windowLabel]?.[id];
 
@@ -108,8 +106,21 @@ beforeEach(() => {
   useWorkspacePaneLayoutsStore.getState().resetPaneLayouts();
   useClosedTabScopesStore.getState().resetClosedScopes();
   invoke.mockReset().mockResolvedValue(undefined);
-  hydrateWorkspaceInstanceContext.mockReset().mockResolvedValue(undefined);
+  resetContextGenerations();
+  useWorkspaceStore.getState().closeWorkspace();
 });
+
+afterEach(() => {
+  useSettingsStore.getState().updateGeneralSetting("workspaceRailMode", false);
+});
+
+/** Successor hydration only does work with the rail on; it reads the
+ *  promoted instance's workspace config, so that read is its fingerprint. */
+const configReads = () =>
+  invoke.mock.calls.filter(([cmd]) => cmd === "read_workspace_config").map(([, args]) => args);
+
+/** Every Tauri command invoked, in order — `close_window` takes no arguments, so only its name shows a close. */
+const invokedCommands = () => invoke.mock.calls.map(([command]) => command);
 
 describe("finalizeInstanceRemoval — mode dispatch table (R2-10)", () => {
   it.each([
@@ -145,7 +156,7 @@ describe("finalizeInstanceRemoval — mode dispatch table (R2-10)", () => {
     expect(ids.some((id) => instancesState().instances[id]?.kind === "placeholder")).toBe(
       true,
     );
-    expect(invoke).not.toHaveBeenCalledWith("close_window", expect.anything());
+    expect(invokedCommands()).not.toContain("close_window");
   });
 
   it("a non-main window emptied by the removal closes itself", async () => {
@@ -153,7 +164,7 @@ describe("finalizeInstanceRemoval — mode dispatch table (R2-10)", () => {
 
     await finalizeInstanceRemoval("doc-1", "wsi-a", { cleanupPerInstanceUi: true });
 
-    expect(invoke).toHaveBeenCalledWith("close_window", { label: "doc-1" });
+    expect(invoke).toHaveBeenCalledWith("close_window");
   });
 
   it("a non-main window with instances left does NOT close", async () => {
@@ -162,24 +173,35 @@ describe("finalizeInstanceRemoval — mode dispatch table (R2-10)", () => {
 
     await finalizeInstanceRemoval("doc-1", "wsi-b", { cleanupPerInstanceUi: true });
 
-    expect(invoke).not.toHaveBeenCalledWith("close_window", expect.anything());
+    expect(invokedCommands()).not.toContain("close_window");
   });
 
   it("removing the ACTIVE instance hydrates the promoted successor's full context", async () => {
+    useSettingsStore.getState().updateGeneralSetting("workspaceRailMode", true);
     seedInstance("main", "wsi-a", "/repo-a"); // active (seeded first)
     seedInstance("main", "wsi-b", "/repo-b");
+    const before = currentContextGeneration("main");
 
     await finalizeInstanceRemoval("main", "wsi-a", { cleanupPerInstanceUi: true });
 
-    expect(hydrateWorkspaceInstanceContext).toHaveBeenCalledWith("main");
+    // The successor's context was applied: a new context generation, the
+    // sidebar re-rooted on its folder, and its config read.
+    expect(instancesState().windows["main"]?.activeWorkspaceInstanceId).toBe("wsi-b");
+    expect(currentContextGeneration("main")).toBeGreaterThan(before);
+    expect(useWorkspaceStore.getState().rootPath).toBe("/repo-b");
+    expect(configReads()).toEqual([{ rootPath: "/repo-b" }]);
   });
 
   it("removing an INACTIVE instance touches no context", async () => {
+    useSettingsStore.getState().updateGeneralSetting("workspaceRailMode", true);
     seedInstance("main", "wsi-a", "/repo-a"); // active
     seedInstance("main", "wsi-b", "/repo-b");
+    const before = currentContextGeneration("main");
 
     await finalizeInstanceRemoval("main", "wsi-b", { cleanupPerInstanceUi: true });
 
-    expect(hydrateWorkspaceInstanceContext).not.toHaveBeenCalled();
+    expect(currentContextGeneration("main")).toBe(before);
+    expect(useWorkspaceStore.getState().rootPath).toBeNull();
+    expect(configReads()).toEqual([]);
   });
 });

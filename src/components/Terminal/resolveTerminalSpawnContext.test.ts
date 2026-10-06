@@ -9,7 +9,7 @@ import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useTabStore } from "@/stores/tabStore";
 import { useDocumentStore } from "@/stores/documentStore";
-import { resetTerminalSessionStore, useUIStore } from "@/stores/uiStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import {
   createWorkspaceInstance,
   createWorkspaceRootIdentity,
@@ -39,8 +39,8 @@ function addWorkspace(id: string, rootPath: string): void {
 }
 
 const create = (options?: Parameters<
-  ReturnType<typeof useUIStore.getState>["terminalCreateSession"]
->[0]) => useUIStore.getState().terminalCreateSession(options)!;
+  ReturnType<typeof useTerminalStore.getState>["terminalCreateSession"]
+>[0]) => useTerminalStore.getState().terminalCreateSession(options)!;
 
 beforeEach(() => {
   resetTerminalSessionStore();

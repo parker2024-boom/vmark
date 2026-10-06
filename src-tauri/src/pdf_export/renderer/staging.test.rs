@@ -87,3 +87,37 @@ fn a_failed_publish_removes_the_staging_file_and_keeps_the_old_output() {
     assert!(!staging.exists(), "no stray sibling after a failed publish");
     assert!(!output.exists());
 }
+
+/// WI-RA7C.3 — the publication survives a crash. The rename is an edit of the
+/// output's DIRECTORY, so until that directory is synced a crash can come back
+/// with the previous PDF under the user's file name, or with none. (Unix: a
+/// directory cannot be flushed through a file handle on Windows.)
+#[cfg(unix)]
+#[test]
+fn publishing_makes_the_rename_durable() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let output = dir.path().join("out.pdf");
+    let staging = staging_path_for(&output);
+    std::fs::write(&staging, b"%PDF-fresh").expect("write staging");
+    crate::atomic_persist::SYNCED_DIRECTORIES.with(|synced| synced.borrow_mut().clear());
+
+    publish(&staging, &output).expect("publish");
+
+    let synced = crate::atomic_persist::SYNCED_DIRECTORIES.with(|synced| synced.borrow().clone());
+    assert_eq!(synced, vec![dir.path().to_path_buf()]);
+}
+
+/// A publication that failed moved nothing, so there is nothing to make durable.
+#[cfg(unix)]
+#[test]
+fn a_failed_publish_syncs_no_directory() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let staging = dir.path().join("Report.vmark-staging-y.pdf");
+    std::fs::write(&staging, b"%PDF-fresh").expect("write staging");
+    crate::atomic_persist::SYNCED_DIRECTORIES.with(|synced| synced.borrow_mut().clear());
+
+    publish(&staging, &dir.path().join("gone").join("Report.pdf")).expect_err("no such directory");
+
+    let synced = crate::atomic_persist::SYNCED_DIRECTORIES.with(|synced| synced.borrow().clone());
+    assert!(synced.is_empty(), "{synced:?}");
+}

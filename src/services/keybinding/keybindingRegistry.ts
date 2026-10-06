@@ -6,7 +6,7 @@
  * the shortcut store changes (rebind propagation). Each `shortcutId` resolves to
  * a `CanonicalChord` through the store; a `fixedChord` binding resolves directly.
  * Bindings whose chord can't be resolved are dropped and logged (referential
- * integrity, WI-1.3).
+ * integrity).
  *
  * @coordinates-with stores/settingsStore/shortcuts.ts — the shortcut→key source
  * @coordinates-with utils/keybinding/canonicalChord.ts — the identity primitive

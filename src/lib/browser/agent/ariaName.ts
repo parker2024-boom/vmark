@@ -1,6 +1,6 @@
 /**
  * Accessible-name computation — the TypeScript mirror of `agentCore.src.js`'s
- * `__vmarkNorm` / `__vmarkNameFull` / `__vmarkName` (WI-2.2, audit 2026-09-03
+ * `__vmarkNorm` / `__vmarkNameFull` / `__vmarkName` (audit 2026-09-03
  * S-02 / S-06 / S-09).
  *
  * A pragmatic subset of the WAI-ARIA accname algorithm: aria-labelledby (each
@@ -14,7 +14,7 @@
  * result is capped at `NAME_CAP`, which is also the cap the snapshot shows and a
  * locator matches, so a capped name still targets its element.
  *
- * The name-from-content walk is bounded the same way on both sides (#105): an
+ * The name-from-content walk is bounded the same way on both sides: an
  * iterative cursor over each open node's live child list (never a copied list,
  * never recursion — a page a billion wide or a hundred thousand deep costs a
  * cursor per open node), gathering text a window of `CONTENT_BUDGET` characters at
@@ -97,7 +97,7 @@ function contentText(el: Element, all: boolean): string {
   // Iterative cursor walk with TWO budgets: characters gathered (CONTENT_BUDGET)
   // and nodes visited (CONTENT_VISIT_BUDGET) — a hostile subtree of a million
   // empty or format-only spans yields no characters, so a character budget alone
-  // never stops it (round 4, #105). The stack is bounded by depth and nothing is
+  // never stops it. The stack is bounded by depth and nothing is
   // pushed before either budget is checked.
   let out = "";
   let visited = 0;
@@ -146,7 +146,7 @@ function rootOf(el: Element): IdScope | null {
 }
 
 /** Text of the elements referenced by an id-list attribute (aria-labelledby).
- *  The AGGREGATE is budgeted too (#105): each reference contributes at most
+ *  The AGGREGATE is budgeted too: each reference contributes at most
  *  CONTENT_BUDGET characters, and the list stops once the whole has gathered
  *  CONTENT_BUDGET — an attribute naming ten thousand elements cannot build ten
  *  thousand bounded strings before the cap applies. Ids past `ID_LIST_MAX` are
@@ -172,7 +172,7 @@ export const ID_LIST_MAX = 64;
 /** The text of every `<label>` associated with a form control, in document order.
  *  Uses the platform's own `labels` association (both `for=` and wrapping); a
  *  custom control the platform associates nothing with can still be named by a
- *  wrapping <label>. Budgeted across labels like `idListText` (#105). */
+ *  wrapping <label>. Budgeted across labels like `idListText`. */
 function labelFor(el: Element): string {
   const labels = (el as Partial<HTMLInputElement>).labels;
   if (labels && labels.length > 0) {

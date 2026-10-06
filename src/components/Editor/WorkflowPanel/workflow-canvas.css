@@ -1,4 +1,4 @@
-/* WI-2.4 — canvas chrome. Inherits xyflow's bundled style.css.
+/* Canvas chrome. Inherits xyflow's bundled style.css.
  *
  * The react-flow DESCENDANT theming below scopes to the consumer wrapper
  * (`.gha-workflow-workbench__canvas` from GhaWorkflowWorkbench.tsx) — it

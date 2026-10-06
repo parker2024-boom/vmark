@@ -4,16 +4,16 @@
 //! killing, reaping and port-file removal happen here, after the lock is
 //! released. Holding the registry lock across `Child::wait` let one slow reap
 //! block status, stop, start and every supervisor poll for every workspace
-//! (audit 20260907 #121). Failures are LOGGED, never discarded (#114): a child
+//! (audit 20260907 #121). Failures are LOGGED, never discarded: a child
 //! that could not be killed is a process the user cannot see, and a port file
 //! that could not be removed is a stale destination the next start reads.
 //!
 //! Every teardown — a registration loser, shutdown, a poll failure, a failed
-//! start, an explicit stop — is this ONE path (#123). Each hands back a
+//! start, an explicit stop — is this ONE path. Each hands back a
 //! `CleanupOutcome`: the best-effort paths log and move on; the explicit stop
 //! refuses to report success over it.
 //!
-//! A refused kill is never followed by a blocking wait (#122). On a child this
+//! A refused kill is never followed by a blocking wait. On a child this
 //! process spawned and has not reaped, `Child::kill` is `libc::kill(pid,
 //! SIGKILL)` on Unix and `TerminateProcess` on Windows, and std answers `Ok`
 //! itself once the child has exited — so a refusal means the signal was NOT
@@ -27,7 +27,7 @@
 //! (`ContentServerManager::retain_orphan`) and tries once more at quit.
 //!
 //! The handle is dropped ONLY when the OS has proved the pid is no longer
-//! this process's child (#122): `waitpid` answering `ECHILD` means the child
+//! this process's child: `waitpid` answering `ECHILD` means the child
 //! was reaped elsewhere, and its pid may already belong to another process
 //! — a kill through the handle could then reach that one. Any other reap
 //! failure leaves the process ours and its state unknown, and the handle is
@@ -115,7 +115,7 @@ pub struct CleanupOutcome {
 impl CleanupOutcome {
     /// Nothing was left behind: no failure to report AND no handle still held.
     ///
-    /// The orphan clause is not redundant (#270). Every value this module
+    /// The orphan clause is not redundant. Every value this module
     /// PRODUCES satisfies `orphan.is_some() ⇒ child.is_some()`, but the fields
     /// are `pub` — and `content_server_stop` reports success on `is_clean`, so
     /// a value assembled elsewhere could hand the frontend a "stopped" for a
@@ -228,7 +228,7 @@ impl Terminable for Child {
 /// Kill and reap `child`. A delivered kill — or one std answers `Ok` for
 /// because the child had already exited — is followed by the reap, which is
 /// prompt. A REFUSED kill is followed by a non-blocking poll instead: a wait
-/// would last as long as a child nobody has stopped chooses to run (#122).
+/// would last as long as a child nobody has stopped chooses to run.
 /// What is reported is whether the process was REAPED, and — when it was
 /// not — whether the handle still names it.
 pub(super) fn terminate<C: Terminable>(root: &str, child: &mut C) -> Result<(), ChildFailure> {
@@ -246,11 +246,11 @@ pub(super) fn terminate<C: Terminable>(root: &str, child: &mut C) -> Result<(), 
     };
     match reaped {
         Ok(status) => {
-            log::debug!("[content-server {root}] child reaped ({status})");
+            log::debug!("[content-server {root:?}] child reaped ({status})");
             Ok(())
         }
         Err(failure) => {
-            log::warn!("[content-server {root}] {failure}");
+            log::warn!("[content-server {root:?}] {failure}");
             Err(failure)
         }
     }
@@ -267,7 +267,7 @@ fn not_reaped(pid: u32, detail: String, error: &io::Error) -> ChildFailure {
 }
 
 /// `waitpid` answering `ECHILD` is the one proof that a pid has left this
-/// process (#122). Nothing else is: on Windows an open handle pins the
+/// process. Nothing else is: on Windows an open handle pins the
 /// process object, so the pid under it cannot be recycled and a retry
 /// through it can only ever reach this child.
 #[cfg(unix)]
@@ -287,8 +287,8 @@ fn remove_port_file(root: &str, path: &Path) -> Result<(), String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => {
             log::warn!(
-                "[content-server {root}] could not remove port file {}: {e}",
-                path.display()
+                "[content-server {root:?}] could not remove port file {:?}: {e}",
+                path
             );
             Err(format!("{}: {e}", path.display()))
         }

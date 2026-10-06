@@ -1,5 +1,5 @@
 /**
- * Browser-operation request schemas (WI-NB4.1) — split from
+ * Browser-operation request schemas — split from
  * `operationSchemas.ts` for the file-size gate, along the tool boundary. Same
  * contract discipline: schemas MIRROR the wire exactly (the handler validates
  * combinations); regenerate with `pnpm gen:mcp-contracts` after any change.

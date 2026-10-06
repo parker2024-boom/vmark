@@ -10,7 +10,10 @@
  *
  * @coordinates-with i18n.ts — relies on Rust locale being set first
  * @coordinates-with rebuildNativeMenu.ts — shared rebuild pipeline
+ *
+ * @module services/menu/startupMenuSync
  */
+
 import { invoke } from "@tauri-apps/api/core";
 import { menuSyncWarn } from "@/utils/debug";
 import { useSettingsStore } from "@/stores/settingsStore";

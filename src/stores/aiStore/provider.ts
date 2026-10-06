@@ -54,7 +54,7 @@ interface AiProviderState {
 
 interface AiProviderActions {
   detectProviders(): Promise<void>;
-  /** Ensure a provider is available. Auto-detects if none set. Returns true if ready. */
+  /** Ensure a provider is selected (auto-detecting a CLI or keyed REST one); false when none is set up. */
   ensureProvider(): Promise<boolean>;
   /** Activate a provider — sets it as active and syncs REST `enabled` flags. */
   activateProvider(type: ProviderType): void;
@@ -129,22 +129,19 @@ export const useAiProviderStore = create<AiProviderState & AiProviderActions>()(
           }));
           set({ cliProviders: providers, detecting: false });
 
-          // Auto-select only when no provider is set.
-          // Never overwrite an explicit user selection — if the CLI
-          // they chose is unavailable, surface the error at invocation time.
+          // Auto-select only when none is set, and only a provider the user
+          // evidently set up: an installed CLI or a REST provider with a key.
+          // Never key-optional Ollama (API): its defaults look ready on every
+          // machine; it is used once the user activates it in Settings. An
+          // explicit selection is never overwritten.
           const { activeProvider, restProviders } = get();
           if (!activeProvider) {
             const firstCli = providers.find((p) => p.available);
-            if (firstCli) {
-              set({ activeProvider: firstCli.type });
-            } else {
-              const firstReadyRest = restProviders.find(
-                (p) => p.apiKey && !KEY_OPTIONAL_REST.has(p.type)
-              ) ?? restProviders.find((p) => KEY_OPTIONAL_REST.has(p.type));
-              if (firstReadyRest) {
-                set({ activeProvider: firstReadyRest.type });
-              }
-            }
+            const firstKeyedRest = restProviders.find(
+              (p) => !KEY_OPTIONAL_REST.has(p.type) && Boolean(p.apiKey?.trim())
+            );
+            const chosen = firstCli?.type ?? firstKeyedRest?.type;
+            if (chosen) set({ activeProvider: chosen });
           }
         } catch (e) {
           aiProviderLog("Failed to detect providers:", e);

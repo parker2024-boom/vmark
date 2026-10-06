@@ -83,7 +83,7 @@ export const codeHighlightStyle = HighlightStyle.define([
   // Strikethrough
   { tag: tags.strikethrough, textDecoration: "line-through" },
   // Markdown structure characters (#, >, -) read as SYNTAX, not prose
-  // (WI-UI3.6): the same --md-char-color WYSIWYG uses. ONLY
+  // — the same --md-char-color WYSIWYG uses. ONLY
   // processingInstruction — Lezer's markdown parser tags QuoteMark/ListMark
   // with it, while `tags.quote`/`tags.list` cover the WHOLE blockquote/list
   // subtrees, prose included (audit 20260829 caught the overreach).

@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useTabStore } from "@/stores/tabStore";
 import { useDocumentStore } from "@/stores/documentStore";
 import type { TabTransferPayload } from "@/types/tabTransfer";
+import { startTabStateCleanup } from "@/services/windowClose/tabCleanup";
 import { moveTabToNewWindow } from "./moveTabToNewWindow";
 
 const bridge = vi.hoisted(() => ({ label: "main" }));
@@ -32,6 +33,9 @@ vi.mock("sonner", () => ({
 
 const mockInvoke = vi.mocked(invoke);
 const mockToast = vi.mocked(toast);
+
+// The window runs this for its lifetime: a detached tab's state goes with it.
+startTabStateCleanup();
 
 type UndoToastOptions = { action: { label: string; onClick: () => void } };
 
@@ -197,7 +201,7 @@ describe("moveTabToNewWindow — the transfer", () => {
     mockInvoke.mockResolvedValueOnce("doc-3");
 
     await moveTabToNewWindow(args("doc-2", id));
-    expect(closeCalls()).toEqual([["close_window", { label: "doc-2" }]]);
+    expect(closeCalls()).toEqual([["close_window"]]);
 
     mockInvoke.mockClear();
     bridge.label = "main";

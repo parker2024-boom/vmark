@@ -23,6 +23,7 @@
  * + returning true.
  *
  * @coordinates-with shared/listHelpers.ts — shared list item lookup and ancestor walk
+ * @module plugins/listBackspace/tiptap
  */
 
 import { Extension, isAtStartOfNode } from "@tiptap/core";

@@ -88,8 +88,8 @@ export function registerBrowserReadTool(server: VMarkMcpServer): void {
         // said `z.string().optional()`, so a whitespace-only `ref`, `role`,
         // `selector`, `navigationId` or `runId` validated against the
         // ADVERTISED contract and was refused one layer later, with a
-        // different message and only on the paths that check it (audit R2
-        // #214/#216). `toolArgs.ts` documents the two layers: the schema is
+        // different message and only on the paths that check it.
+        // `toolArgs.ts` documents the two layers: the schema is
         // what the SDK enforces before a handler runs, the guard is what holds
         // for `callTool`, which validates nothing.
         selector: optionalIdSchema('CSS selector (query only).'),

@@ -1,5 +1,5 @@
 /**
- * MCP v2 scripted power tools (WI-P5.2 / P5.3): `style` and `execute_js`
+ * MCP v2 scripted power tools: `style` and `execute_js`
  * (`query` moved to `browserQuery.ts` for the file-size gate and is re-exported).
  *
  * All three run in the driver's ISOLATED content world (DOM + CSS, never the
@@ -30,14 +30,15 @@ import { readStyleOps } from "./browserStyleOps";
 import { requireHumanAttachment, parseEvalResult } from "./browserReadClass";
 
 export { handleBrowserQuery } from "./browserQuery";
-import { readOperationArgs } from "./readOperationArgs";
+import { readOperationArgsChecked } from "./readOperationArgs";
 import { unwrapExecuteJsResult, wrapExecuteJsScript } from "./browserExecuteJs";
+import { truncateToLength } from "@/utils/truncateText";
 
 /**
  * The shared tail of both write-class tools: attachment gate → approval →
  * native invoke → response. The approval is the shared state machine
  * (`browserApprovalFlow`) with the EXACT script bound into the one-shot, so an
- * approved payload cannot be swapped on the retry (security review P5, High #1);
+ * approved payload cannot be swapped on the retry (security review P5, High);
  * `extraEnvelope` is folded into its needs-approval envelope. The attachment
  * mirror follows the driver through `invokeAttached` (`browserAccess.ts`): spent
  * on success, reconciled to the driver's own attachment report after a
@@ -74,16 +75,17 @@ export async function handleBrowserStyle(id: string, args: Record<string, unknow
   return wrapHandler(id, async () => {
     // Gate + tab first; payload validation and the attachment gate come AFTER
     // (the ordering rule in the header).
-    const tab = await resolveBrowserTarget(id, args);
+    const read = readOperationArgsChecked("vmark.browser.style", args);
+    const tab = await resolveBrowserTarget(id, read);
     if (!tab) return;
-    const wire = readOperationArgs("vmark.browser.style", args);
+    const wire = read.wire;
     const ref = typeof wire.ref === "string" && wire.ref.trim() ? wire.ref : undefined;
     const selector = typeof wire.selector === "string" && wire.selector.trim() ? wire.selector : undefined;
     if (ref && selector) {
       await respond({ id, success: false, error: "style takes {ref} OR {selector}, not both" });
       return;
     }
-    const parsed = readStyleOps(args);
+    const parsed = readStyleOps(read);
     if ("error" in parsed) {
       await respond({ id, success: false, error: parsed.error });
       return;
@@ -99,7 +101,7 @@ export async function handleBrowserStyle(id: string, args: Record<string, unknow
     }
     // Build the exact script BEFORE approval so the one-shot binds this payload — a
     // later retry with different ops rebuilds a different script and is refused rather
-    // than riding the prior approval. (Security review P5, High #1 / Medium #4.)
+    // than riding the prior approval. (Security review P5.)
     // Only the targeting key the caller actually supplied: the script builder
     // branches on which one is PRESENT, and a `selector: undefined` alongside
     // a ref would claim the caller asked to target both.
@@ -126,14 +128,15 @@ export async function handleBrowserStyle(id: string, args: Record<string, unknow
  *  The USER'S script is what the prompt shows and what the one-shot binds — but
  *  what runs is `wrapExecuteJsScript(script)`: the driver returns strings only
  *  (a non-string result came back as Apple's `description` text and a throw as
- *  `<null>` with success — audit E-04), so the wrapper JSON-encodes the value and
+ *  `<null>` with success), so the wrapper JSON-encodes the value and
  *  reports a throw as a failure. Both layers bind the WRAPPED script's hash: the
  *  wrapper is deterministic, so an approved script still cannot be swapped. */
 export async function handleBrowserExecuteJs(id: string, args: Record<string, unknown>): Promise<void> {
   return wrapHandler(id, async () => {
-    const tab = await resolveBrowserTarget(id, args);
+    const read = readOperationArgsChecked("vmark.browser.execute_js", args);
+    const tab = await resolveBrowserTarget(id, read);
     if (!tab) return;
-    const wire = readOperationArgs("vmark.browser.execute_js", args);
+    const wire = read.wire;
     const script = typeof wire.script === "string" && wire.script.trim() ? wire.script : "";
     if (!script) {
       await respond({ id, success: false, error: "execute_js requires a non-empty 'script' string" });
@@ -151,9 +154,9 @@ export async function handleBrowserExecuteJs(id: string, args: Record<string, un
     // The approval envelope shows the exact script (truncated) — the user must see
     // what they authorize — and the FULL wrapped script is bound into the one-shot,
     // so an approved script cannot be swapped for another on the retry. `eval` is
-    // never grantable, so this is always per-call. (Security review P5, High #1.)
+    // never grantable, so this is always per-call. (Security review P5, High.)
     // The result is page-derived and UNTRUSTED — never auto-feed it into a later act.
-    await runWriteOp(id, tab, "eval", wrapped, { script: script.slice(0, 2000) }, (raw) => {
+    await runWriteOp(id, tab, "eval", wrapped, { script: truncateToLength(script, 2000) }, (raw) => {
       const outcome = unwrapExecuteJsResult(raw);
       if (!outcome.ok) throw new Error(`script threw: ${outcome.error}`);
       return { result: outcome.value, untrusted: true };

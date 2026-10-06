@@ -1,14 +1,15 @@
 {
-  "//": "Ceiling for .dependency-cruiser-known-violations.json (plugin-isolation, severity error). Ratchets DOWN only — see scripts/check-extension-budget.mjs and dev-docs/plans/20260722-extension-architecture.md WI-1.7/1.8.",
+  "//": "Ceiling for .dependency-cruiser-known-violations.json (plugin-isolation, severity error). Ratchets DOWN only — see scripts/check-extension-budget.mjs.",
   "//rebased-20260803": "WI-8 (arch review B3): the 17 plugin-wide 'verified dependency' pathNot licenses (plus 2 dead entries and the deleted registry.ts target) were retired and every real edge frozen INDIVIDUALLY. Measured at the flip: stripping ALL from-licenses exposed 209 edges; keeping only the 5 coordination licenses (toolbarActions/codemirror/editorPlugins/formatToolbar/codePreview) and dropping sourcePopup's blanket target status left 74 real edges — frozen per-edge below. maxKnownViolations therefore moved 7→74 while maxRuleExemptions.plugin-isolation moved 28→7: the same debt, made visible per-edge instead of masked plugin-wide. From here BOTH numbers ratchet down only.",
   "//rule-level-exemptions": "GATED by maxRuleExemptions below. A pathNot entry removes paths from a rule's scope, so its violations never reach the known-violations list. Measure with: strip the plugin-isolation pathNot list, run `pnpm exec depcruise src --config .dependency-cruiser.cjs --no-ignore-known`.",
-  "maxKnownViolations": 72,
+  "maxKnownViolations": 35,
   "maxRuleExemptions": {
     "leaf-modules-stay-pure": 5,
     "utils-no-platform": 1,
     "services-no-upward": 3,
     "node-safe-markdown-seam": 1,
-    "plugin-isolation": 7
+    "plugin-isolation": 6
   },
-  "//wi-10-straggler-20260804": "WI-10 (hooks→services migration, B1): moving mcpBridge/v2 into services/ made the PRE-EXISTING browserNavigation → components/Browser/useBrowserNativeView edge visible to services-no-upward (it was an unmodeled hooks→components edge before). The ensure/waitFor native-view helpers share module-scope mount-token state with the hook lifecycle, so extracting them is a behavioral refactor, not a mechanical move — frozen per-edge in known-violations instead (74→75). Same debt, now visible; BOTH numbers still ratchet DOWN only from here."
+  "//wi-10-straggler-20260804": "WI-10 (hooks→services migration, B1): moving mcpBridge/v2 into services/ made the PRE-EXISTING browserNavigation → components/Browser/useBrowserNativeView edge visible to services-no-upward (it was an unmodeled hooks→components edge before). The ensure/waitFor native-view helpers share module-scope mount-token state with the hook lifecycle, so extracting them is a behavioral refactor, not a mechanical move — frozen per-edge in known-violations instead (74→75). Same debt, now visible; BOTH numbers still ratchet DOWN only from here.",
+  "//wi-ra17c-20261002": "WI-RA17C.3 (audit 20261002 \u00a75): modules that other plugins import were moved into plugins/shared, so their edges became plugin-to-shared, which the rule allows. Moved: the Source popup infrastructure (SourcePopupView, createSourcePopupPlugin, sourcePopupUtils, -18 edges), MultiSelection with rangeUtils (-8), the markdown slice builder (-3, plus the three pasteSettings.test edges whose checks moved into each paste plugin), and katexLoader (-4). 72 -> 36. The formatToolbar license was then retired: its only edges (5) went to toolbarContext/types.ts, a pure type file, which moved to plugins/shared/toolbarContextTypes.ts, so maxRuleExemptions.plugin-isolation fell 7 -> 6. The 4 remaining coordination licenses still mask edges into modules this lane did not own (142 when measured)."
 }

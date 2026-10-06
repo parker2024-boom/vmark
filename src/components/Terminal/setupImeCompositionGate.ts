@@ -1,5 +1,5 @@
 /**
- * setupImeCompositionGate — Channel Ownership (plan WI-2.2/2.4/3.x)
+ * setupImeCompositionGate — Channel Ownership
  *
  * The gate-mode IME handler. VMark takes the text channel; xterm keeps keys.
  * There is exactly ONE writer, so this has NONE of the legacy dedup machinery
@@ -23,7 +23,7 @@
  *     commit?", where e.data can lie and the textarea diff is the tiebreak.
  *     Outside a composition there is no diff to weigh — the question is only
  *     "did anyone else already write this?", which resolveCommit cannot see.
- *   - Insert OWNERSHIP is WRITE-derived, never keydown-derived (WI-13). The
+ *   - Insert OWNERSHIP is WRITE-derived, never keydown-derived. The
  *     session wiring reports every onData it ACTUALLY forwarded to the PTY
  *     via `noteExternalWrite`; an insert arriving while such a write is
  *     unclaimed is xterm's echo of that write and is dropped, anything else
@@ -41,7 +41,7 @@
  *
  * Commits are delivered via onCompositionCommit, which the wiring writes DIRECTLY
  * to the PTY (bypassing xterm's onData), so the single-writer guarantee holds end
- * to end. This is the SOLE terminal IME path (WI-4b deleted the legacy module).
+ * to end. This is the SOLE terminal IME path (the legacy module was deleted).
  *
  * @coordinates-with createTerminalInstance.ts — sole caller
  * @coordinates-with terminalKeyHandler.ts — T2 (IME keydown returns false)
@@ -51,8 +51,8 @@ import { terminalLog } from "@/utils/debug";
 import { createImeGateMachine, type GateAction } from "./imeGateMachine";
 
 /**
- * Public surface of the terminal IME handle (gate is the sole implementation
- * since WI-4b; legacy was deleted).
+ * Public surface of the terminal IME handle (gate is the sole implementation;
+ * legacy was deleted).
  */
 export interface ImeCompositionHandle {
   /** True while a composition is active. */
@@ -62,7 +62,7 @@ export interface ImeCompositionHandle {
   onCompositionCommit: ((text: string) => void) | null;
   /**
    * The wiring reports every byte-run it ACTUALLY forwarded from xterm's
-   * onData to the PTY (WI-13). Ownership of the next insert derives from a
+   * onData to the PTY. Ownership of the next insert derives from a
    * write that happened, never from the keydown's shape — a suppressed onData
    * (mid-composition) therefore no longer masquerades as "xterm wrote it".
    */

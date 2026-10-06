@@ -4,6 +4,8 @@
  * Theme and window configuration. The theme group offers manual selection,
  * or — with follow-system-appearance on (#1125) — a paired light/dark theme
  * that auto-switches with the OS.
+ *
+ * @module pages/settings/AppearanceSettings
  */
 
 import { useTranslation } from "react-i18next";
@@ -17,14 +19,14 @@ import { selectableThemeIds } from "@/theme/themeAvailability";
 import { themes as themeCatalog } from "@/theme/themes";
 import { isMacPlatform, usesOverlayTitleBar } from "@/utils/platform";
 
-/** One row of theme swatches (WI-UI4.6): each swatch is a MINI PAGE from the
+/** One row of theme swatches: each swatch is a MINI PAGE from the
  *  typed catalog — an "Aa" specimen in the theme's ink on its paper, a
  *  hairline in its border and a 2px rule in its accent — so night/solarized
  *  stay legible on a night page (the specimen carries the identity where a
  *  flat fill would sit at 1.00:1). The swatch is a MINI WINDOW, so its
  *  radius is the popup/window family (--radius-lg), and `selected` is a
  *  LIFT — the theme-adaptive popup shadow — not a box around the page
- *  (maintainer direction 2026-09-02). */
+ *  (maintainer direction). */
 function ThemeSwatchRow({
   selected,
   onSelect,
@@ -33,7 +35,7 @@ function ThemeSwatchRow({
   selected: ThemeId;
   onSelect: (id: ThemeId) => void;
   /** Paired rows (#1125) offer only THEIR mode — both rows listing all six
-   *  read as an inexplicable duplicate (maintainer, 2026-09-02). Absent in
+   *  read as an inexplicable duplicate (maintainer). Absent in
    *  manual mode, where one mixed row shows everything. */
   mode?: "light" | "dark";
 }) {
@@ -154,7 +156,7 @@ export function AppearanceSettings() {
           in the native title bar unconditionally, so there is nothing to choose
           (#1296) and the whole group is withheld rather than shown empty. (The
           "Auto-hide status bar" toggle that used to share this group was wired
-          to nothing and was removed — D8, WI-FL2.2.) */}
+          to nothing and was removed — D8.) */}
       {usesOverlayTitleBar() && (
         <SettingsGroup title={t("appearance.group.window")}>
           <SettingRow

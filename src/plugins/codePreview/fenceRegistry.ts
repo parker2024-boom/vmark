@@ -1,5 +1,5 @@
 /**
- * Fence-language extension point — ADR-015 D3, Phase 5 WI-5.1.
+ * Fence-language extension point — ADR-015 D3.
  *
  * Purpose: let markdown OWN a keyed registry of fenced-code renderers, so
  * mermaid, graphviz, markmap, svg and the workflow preview stop being an
@@ -69,7 +69,7 @@ export type Unregister = () => void;
 /**
  * Register a fence renderer. Throws if it collides with an existing claim.
  *
- * Returns an unregister function (WI-5.6). Obsidian's `Component` ties every
+ * Returns an unregister function. Obsidian's `Component` ties every
  * `register*` call to plugin unload, and the lesson from that API is that
  * teardown has to exist BEFORE third parties arrive — retrofitting it means
  * every existing extension leaks. A first-party renderer never unregisters

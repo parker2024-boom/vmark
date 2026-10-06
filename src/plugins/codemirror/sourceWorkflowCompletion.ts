@@ -49,7 +49,7 @@ function findJobAtLine(workflow: WorkflowIR, line: number): string | null {
  * Find the index of the step whose source range contains the cursor
  * line. Returns the largest index whose start <= line — gives the
  * "current step" semantics needed for scoping `steps.*` completions
- * to prior-or-current (Codex audit MED-3).
+ * to prior-or-current.
  */
 function findStepIndexAtLine(
   workflow: WorkflowIR,
@@ -106,7 +106,7 @@ export function workflowCompletionSource(
   // Resolve the active job from the cursor line via JobIR.position
   // ranges. Without this, step-scoped completions (`steps.*`, job
   // `env.*`, `matrix.*`) drop to workflow-level and produce empty
-  // or misleading suggestions (Codex audit HIGH-1).
+  // or misleading suggestions.
   const cursorLine = context.state.doc.lineAt(context.pos).number;
   const activeJobId = findJobAtLine(workflow, cursorLine);
   const cursorStepIdx = activeJobId
@@ -133,7 +133,7 @@ export function workflowCompletionSource(
     // Validate token chars so CM keeps the popup open as the user
     // types more identifier characters. GHA expression identifiers
     // permit `-` (e.g., `inputs.node-version`); closes on `.` / `}` /
-    // space (Codex audit HIGH-2).
+    // space.
     validFor: /^[A-Za-z0-9_-]*$/,
   };
 }

@@ -2,9 +2,9 @@
 //!
 //! Scans directories for `.md` (markdown one-shot) and `.yml`/`.yaml`
 //! (workflow) genie files, extracting names from filenames and categories
-//! from subdirectory structure (WI-7.1).
+//! from subdirectory structure.
 //!
-//! Both scanners share ONE walk, and it is bounded (#144): a worklist rather
+//! Both scanners share ONE walk, and it is bounded: a worklist rather
 //! than recursion, so a deep tree cannot grow the stack; a depth ceiling, so
 //! a tree that is not a genie tree is not descended into; and an entry
 //! ceiling, so a directory of a hundred thousand files does not hold the
@@ -38,7 +38,7 @@ fn classify(ext: Option<&std::ffi::OsStr>) -> Option<GenieKind> {
     }
 }
 
-/// Every genie file under `dir`, iteratively and bounded (#144).
+/// Every genie file under `dir`, iteratively and bounded.
 ///
 /// `visit` receives each genie file's path and kind, in the filesystem's
 /// order — callers sort. Returns `true` when the listing is INCOMPLETE for any
@@ -67,7 +67,7 @@ fn walk_bounded(
         let read_dir = match fs::read_dir(&current) {
             Ok(read_dir) => read_dir,
             Err(e) => {
-                // Loud, not silent (#340): an unreadable genies directory
+                // Loud, not silent: an unreadable genies directory
                 // produced an EMPTY picker that looked exactly like a user
                 // who has no genies, with nothing anywhere saying why.
                 log::warn!("[genies] cannot list {current:?}: {e}");
@@ -77,7 +77,7 @@ fn walk_bounded(
         };
         for entry in read_dir {
             // `flatten()` here dropped an `io::Error` the directory iterator
-            // reported — the one silent discard the #340 fix left behind, one
+            // reported — the one silent discard the loud-error fix left behind, one
             // layer in: an entry the OS could not hand over vanished from the
             // listing with nothing logged and the listing still reported
             // COMPLETE. Same treatment as an entry that cannot be typed.
@@ -126,7 +126,7 @@ fn walk_bounded(
                 // the picker offered a row that could only ever fail — and a
                 // FIFO is exactly the shape whose open would block if the
                 // reader ever stopped passing `O_NONBLOCK`.
-                // A path that is not UTF-8 cannot round-trip (#355): the
+                // A path that is not UTF-8 cannot round-trip: the
                 // entry travels to the picker as a lossy `String`, and
                 // `read_genie` then canonicalizes THAT and fails — while two
                 // different names can flatten to the same key and evict each
@@ -160,7 +160,7 @@ fn category_of(path: &Path, base: &Path) -> Option<String> {
 /// the bidi overrides, embeddings and isolates. `char::is_control` does not
 /// cover a single one of them (they are `Cf`, not `Cc`), so a genie named
 /// `harmless\u{202E}gnp.exe.md` still rendered a menu label reading
-/// `harmless.exe.png` (#353) — the Trojan-Source class, in a list the user
+/// `harmless.exe.png` — the Trojan-Source class, in a list the user
 /// clicks to RUN something.
 const BIDI_CONTROLS: [char; 9] = [
     '\u{061C}', // ARABIC LETTER MARK
@@ -242,7 +242,7 @@ pub fn scan_genies_with_titles(dir: &Path) -> Vec<GenieMenuEntry> {
     });
     // Path breaks a title tie: two genies in different categories share a
     // stem, and leaving those in filesystem order made the menu's order
-    // differ between machines and between runs (#341).
+    // differ between machines and between runs.
     entries.sort_by(|a, b| a.title.cmp(&b.title).then_with(|| a.path.cmp(&b.path)));
     entries
 }

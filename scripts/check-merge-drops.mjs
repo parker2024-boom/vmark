@@ -8,9 +8,9 @@
  * conflict marker, no failing test, nothing to review. Both directions of that
  * happened in the origin/main merge on this branch:
  *
- *   - `fileOpen.ts` taken from our side would have reverted main's WI-12.2
+ *   - `fileOpen.ts` taken from our side would have reverted main's
  *     ownership-aware activate, which lived inside the switch we had moved out.
- *   - Rebuilding it from main's side then dropped OUR WI-1.5 ingest routing.
+ *   - Rebuilding it from main's side then dropped OUR ingest routing.
  *
  * The check is a four-way comparison per file: base, ours, theirs, merged. If
  * the merged content is byte-identical to one side while the OTHER side had
@@ -30,21 +30,99 @@
  * so a discarded side is caught before the merge commit exists — which is the
  * only moment the fix is still cheap.
  *
- * Exit 0 when every drop is accounted for; 1 when one is not.
+ * Exit 0 when every drop is accounted for; 1 when one is not, and 1 whenever
+ * the merge cannot be read: not a repository, a commit argument that does not
+ * resolve, an octopus merge, no merge base, a failing `git diff`, or an
+ * acknowledgement list with an empty or stale entry.
+ *
+ * Run from the repository root: the acknowledgement list and, for an
+ * in-progress merge, the working-tree files are read relative to it.
+ *
+ * @coordinates-with scripts/merge-drop-allowlist.json — the acknowledgement list
+ * @coordinates-with scripts/check-merge-drops.test.mjs — runs this against real scratch merges
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 const ALLOWLIST = "scripts/merge-drop-allowlist.json";
+/**
+ * The file types a silent drop is looked for in: code, and the text that
+ * behaves like code — workflows, shell gates, docs that tests join against,
+ * Cargo manifests. A lane merge discards a change in a `.yml` as easily as in
+ * a `.ts`.
+ */
+const CHECKED_FILE = /\.(ts|tsx|rs|json|mjs|css|yml|yaml|sh|md|toml)$/;
 
-/** `git` with arguments, trimmed stdout, empty string on non-zero exit. */
+/**
+ * `git` with arguments; stdout, or an empty string on non-zero exit.
+ *
+ * Only for questions where "no" is a legitimate answer (is this a repository,
+ * does this ref resolve, is there a merge base). The caller must turn the
+ * empty answer into a decision — see `gitOrFail` for everything else.
+ */
 function git(...args) {
   try {
-    return execFileSync("git", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    return execFileSync("git", args, {
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
   } catch {
     return "";
   }
+}
+
+function fail(message) {
+  console.error(`❌ ${message}`);
+  process.exit(1);
+}
+
+/**
+ * `git` for commands whose failure means the check cannot be made. An empty
+ * string here used to read as "no files changed", i.e. as a clean merge.
+ */
+function gitOrFail(...args) {
+  try {
+    return execFileSync("git", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  } catch (error) {
+    return fail(`git ${args.join(" ")} failed: ${String(error.stderr ?? error.message).trim()}`);
+  }
+}
+
+/**
+ * The acknowledgement list, validated. Keys starting with `_` are notes.
+ *
+ * Every entry must name a file that still exists and say, in words, where the
+ * dropped change was re-applied. Checked on every run, merge or not: the list
+ * outlives the merge it was written for, and an entry for a path that has
+ * since moved would silently acknowledge nothing while looking like cover.
+ */
+function readAllowlist() {
+  if (!existsSync(ALLOWLIST)) return {};
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(ALLOWLIST, "utf8"));
+  } catch (error) {
+    return fail(`Cannot parse ${ALLOWLIST}: ${error.message}`);
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return fail(`${ALLOWLIST} must be a JSON object of path -> where the change was re-applied.`);
+  }
+  const entries = {};
+  const problems = [];
+  for (const [path, note] of Object.entries(parsed)) {
+    if (path.startsWith("_")) continue;
+    if (typeof note !== "string" || !note.trim()) {
+      problems.push(`${path}: must say where the change was re-applied (a non-empty string).`);
+    } else if (!existsSync(path)) {
+      problems.push(`${path}: names a file that does not exist — delete the stale entry.`);
+    } else {
+      entries[path] = note;
+    }
+  }
+  if (problems.length > 0) fail(`${ALLOWLIST}:\n   ${problems.join("\n   ")}`);
+  return entries;
 }
 
 /** File content at a revision, or null when the file does not exist there. */
@@ -61,44 +139,63 @@ function blob(rev, path) {
 }
 
 const gitDir = git("rev-parse", "--git-dir").trim();
-const mergeHeadPath = gitDir ? join(gitDir, "MERGE_HEAD") : "";
-const inProgress = !process.argv[2] && mergeHeadPath && existsSync(mergeHeadPath);
+if (!gitDir) fail("Not inside a git repository — there is no merge to read.");
+const mergeHeadPath = join(gitDir, "MERGE_HEAD");
+const inProgress = !process.argv[2] && existsSync(mergeHeadPath);
+
+const allow = readAllowlist();
+
+/** Only two-parent merges are modelled; a third parent would go unexamined. */
+function refuseOctopus(label, parentCount) {
+  if (parentCount > 2) {
+    fail(`${label} has ${parentCount} parents — an octopus merge cannot be checked side against side.`);
+  }
+}
 
 let merged, ours, theirs;
 if (inProgress) {
   // Merged content is the WORKING TREE, read from disk rather than a rev.
   merged = null;
-  ours = git("rev-parse", "HEAD").trim();
-  theirs = readFileSync(mergeHeadPath, "utf8").trim().split("\n")[0];
+  ours = gitOrFail("rev-parse", "HEAD").trim();
+  const heads = readFileSync(mergeHeadPath, "utf8").trim().split("\n").filter(Boolean);
+  refuseOctopus("The in-progress merge", heads.length + 1);
+  theirs = heads[0];
 } else {
   const mergeRef = process.argv[2] ?? "HEAD";
-  const parents = git("rev-list", "--parents", "-n", "1", mergeRef).trim().split(/\s+/);
+  // A ref that names nothing has no parents either, which is exactly what a
+  // non-merge commit looks like. Tell them apart before counting.
+  if (!git("rev-parse", "--verify", "--quiet", `${mergeRef}^{commit}`).trim()) {
+    fail(`${mergeRef} does not resolve to a commit.`);
+  }
+  const parents = gitOrFail("rev-list", "--parents", "-n", "1", mergeRef).trim().split(/\s+/);
   if (parents.length < 3) {
     console.log(`✅ ${mergeRef} is not a merge commit and no merge is in progress — nothing to check.`);
     process.exit(0);
   }
+  refuseOctopus(`Merge ${mergeRef}`, parents.length - 1);
   [merged, ours, theirs] = parents;
 }
 const base = git("merge-base", ours, theirs).trim();
-if (!base) {
-  console.error(`❌ No merge base between ${ours} and ${theirs}.`);
-  process.exit(1);
-}
+if (!base) fail(`No merge base between ${ours} and ${theirs}.`);
 
-/** Files each side changed since the base, as sets. */
+/**
+ * Files each side changed since the base, as sets.
+ *
+ * `core.quotePath=false` because git otherwise prints a non-ASCII path as a
+ * quoted, octal-escaped string, which matches no extension and no file.
+ */
 const changed = (rev) =>
   new Set(
-    git("diff", "--name-only", `${base}..${rev}`)
+    gitOrFail("-c", "core.quotePath=false", "diff", "--name-only", `${base}..${rev}`)
       .split("\n")
       .filter(Boolean)
-      .filter((p) => /\.(ts|tsx|rs|json|mjs|css)$/.test(p))
+      .filter((p) => CHECKED_FILE.test(p))
   );
 
 const oursChanged = changed(ours);
 const theirsChanged = changed(theirs);
 const bothTouched = [...oursChanged].filter((p) => theirsChanged.has(p)).sort();
 
-const allow = existsSync(ALLOWLIST) ? JSON.parse(readFileSync(ALLOWLIST, "utf8")) : {};
 const drops = [];
 
 for (const path of bothTouched) {
@@ -110,6 +207,9 @@ for (const path of bothTouched) {
   // A file deleted on a side is a resolution question of its own, not a
   // silent drop — `git` always conflicts on modify/delete.
   if (b === null || o === null || t === null || m === null) continue;
+  // Both sides made the SAME change (a cherry-pick on each branch): the result
+  // equals both, and nothing was discarded.
+  if (o === t) continue;
 
   if (m === t && o !== b) drops.push({ path, lost: "ours", kept: "theirs" });
   else if (m === o && t !== b) drops.push({ path, lost: "theirs", kept: "ours" });

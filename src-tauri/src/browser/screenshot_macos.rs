@@ -1,4 +1,4 @@
-//! Native screenshot capture for the browser surface (WI-P1.1, macOS).
+//! Native screenshot capture for the browser surface (macOS).
 //!
 //! Included via `#[path]` from surface_macos.rs; `super::` is that module.
 //!
@@ -60,12 +60,18 @@ pub fn screenshot(app: &AppHandle, tab_id: String) -> Result<String, NativeSurfa
         // aspect preserved). Downscale ONLY: never upscale a narrow view (that
         // would just inflate the payload); leave the natural width when the view
         // is within the cap or not yet laid out (width 0).
+        // SAFETY: `new` on a main-thread-only class; `mtm` proves the main thread.
         let config = unsafe { WKSnapshotConfiguration::new(mtm) };
         let view_width = webview.frame().size.width;
         if view_width > MAX_SNAPSHOT_WIDTH {
             let width = NSNumber::numberWithDouble(MAX_SNAPSHOT_WIDTH);
+            // SAFETY: a property write on the configuration just created, with a
+            // live, positive `NSNumber` (it is the cap, a constant above zero).
             unsafe { config.setSnapshotWidth(Some(&width)) };
         }
+        // SAFETY: `webview` and `config` are live. WebKit copies the block and
+        // calls it once, on the main thread — the thread that owns the `Rc` it
+        // captures — with pointers `encode_snapshot` null-checks before use.
         unsafe { webview.takeSnapshotWithConfiguration_completionHandler(Some(&config), &handler) };
 
         let run_loop = NSRunLoop::mainRunLoop();
@@ -92,17 +98,23 @@ fn encode_snapshot(image: *mut NSImage, error: *mut NSError) -> CaptureResult {
     if image.is_null() {
         return Err("SNAPSHOT_EMPTY");
     }
+    // SAFETY: non-null (checked above), and WebKit keeps the image alive for the
+    // duration of the completion handler; `image` is not kept past this call.
     let image: &NSImage = unsafe { &*image };
     let tiff = image.TIFFRepresentation().ok_or("SNAPSHOT_NO_TIFF")?;
     let rep = NSBitmapImageRep::imageRepWithData(&tiff).ok_or("SNAPSHOT_NO_BITMAP")?;
 
     // JPEG with an explicit compression factor: { NSImageCompressionFactor: 0.7 }.
     let factor: Retained<NSNumber> = NSNumber::numberWithDouble(JPEG_QUALITY);
+    // SAFETY: an AppKit constant, initialized when the framework loads and never
+    // written again.
     let key: &NSBitmapImageRepPropertyKey = unsafe { NSImageCompressionFactor };
     let value: &AnyObject = factor.as_ref();
     let props: Retained<NSDictionary<NSBitmapImageRepPropertyKey, AnyObject>> =
         NSDictionary::from_slices(&[key], &[value]);
 
+    // SAFETY: `props` maps `NSImageCompressionFactor` to an `NSNumber`, the value
+    // type AppKit documents for that key; `rep` is the live bitmap built above.
     let jpeg: Retained<NSData> =
         unsafe { rep.representationUsingType_properties(NSBitmapImageFileType::JPEG, &props) }
             .ok_or("SNAPSHOT_ENCODE_FAILED")?;

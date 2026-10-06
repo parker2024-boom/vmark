@@ -12,12 +12,6 @@ vi.mock("./BrowserSurface", () => ({
   BrowserSurface: ({ tabId }: { tabId: string }) => <div data-testid="surface">{tabId}</div>,
 }));
 
-vi.mock("./BrowserChrome", () => ({
-  BrowserChrome: ({ activePageId }: { activePageId?: string | null }) => (
-    <div data-testid="chrome">{activePageId}</div>
-  ),
-}));
-
 // #1296 — where the browser's chrome lives is a platform fact: macOS puts it in
 // the app's own title-bar strip, and off macOS there is no such strip, so it
 // belongs at the top of the pane like every other desktop browser.
@@ -26,6 +20,9 @@ vi.mock("@/utils/platform", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/utils/platform")>()),
   usesOverlayTitleBar: () => platform.overlayTitleBar,
 }));
+
+/** The real browser chrome, found by its workspace-placement class. */
+const chrome = (): HTMLElement | null => document.querySelector(".browser-chrome--workspace");
 
 function reset() {
   useTabStore.setState({
@@ -79,12 +76,12 @@ describe("BrowserWorkspaceSurface — chrome placement", () => {
     useTabStore.getState().createBrowserPage("main", "https://a.example/");
     render(<BrowserWorkspaceSurface />);
 
-    const chrome = screen.getByTestId("chrome");
+    const bar = chrome();
     const surface = screen.getByTestId("surface");
-    expect(chrome).toBeInTheDocument();
+    expect(bar).not.toBeNull();
     // Order is the whole point: the native webview is positioned from the
     // viewport's client rect, so chrome BELOW it would sit under the page.
-    expect(chrome.compareDocumentPosition(surface) & Node.DOCUMENT_POSITION_FOLLOWING).
+    expect(bar!.compareDocumentPosition(surface) & Node.DOCUMENT_POSITION_FOLLOWING).
       toBeTruthy();
   });
 
@@ -94,21 +91,22 @@ describe("BrowserWorkspaceSurface — chrome placement", () => {
     render(<BrowserWorkspaceSurface />);
 
     // Two address bars is worse than the one this fixes.
-    expect(screen.queryByTestId("chrome")).not.toBeInTheDocument();
+    expect(chrome()).toBeNull();
     expect(screen.getByTestId("surface")).toBeInTheDocument();
   });
 
   it("gives the chrome the page THIS pane shows, not the window's", () => {
-    const a = useTabStore.getState().createBrowserPage("main", "https://a.example/");
-    useTabStore.getState().createBrowserPage("main", "https://b.example/"); // window-active
+    const a = useTabStore.getState().createBrowserPage("main", "https://a.example/", "Page A");
+    useTabStore.getState().createBrowserPage("main", "https://b.example/", "Page B"); // window-active
     paneCtx.value = { tabId: a };
     render(<BrowserWorkspaceSurface />);
 
-    expect(screen.getByTestId("chrome")).toHaveTextContent(a);
+    expect(screen.getByRole("tab", { name: /Page A/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: /Page B/ })).toHaveAttribute("aria-selected", "false");
   });
 
   it("renders no chrome when the pane has no page to address", () => {
     render(<BrowserWorkspaceSurface />);
-    expect(screen.queryByTestId("chrome")).not.toBeInTheDocument();
+    expect(chrome()).toBeNull();
   });
 });

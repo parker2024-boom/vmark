@@ -16,11 +16,9 @@ const ops = vi.hoisted(() => ({
   copyPath: vi.fn(),
   revealInFinder: vi.fn(),
 }));
-const createEntryAndEdit = vi.hoisted(() => vi.fn());
 const toastError = vi.hoisted(() => vi.fn());
 
 vi.mock("./useExplorerOperations", () => ({ useExplorerOperations: () => ops }));
-vi.mock("./useExplorerCreateFlow", () => ({ useExplorerCreateFlow: () => ({ createEntryAndEdit }) }));
 vi.mock("@/services/ime/imeToast", () => ({ imeToast: { error: toastError } }));
 const openDialog = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: openDialog }));
@@ -59,7 +57,6 @@ function nodesFor(...ids: string[]) {
 
 beforeEach(() => {
   for (const fn of Object.values(ops)) fn.mockReset();
-  createEntryAndEdit.mockReset();
   toastError.mockReset();
   openDialog.mockReset();
   openDialog.mockResolvedValue(null);
@@ -208,12 +205,12 @@ describe("useExplorerActionWiring", () => {
     expect(ops.moveItem.mock.calls.map((c) => c[0])).toEqual(["/ws/dir", "/ws/other.md"]);
   });
 
-  it("new file / new folder go through the create-then-rename flow with the default names", () => {
+  it("new file / new folder create under the given folder, or the workspace root, with the default names", async () => {
     const w = wiring();
-    w.handleNewFile("/ws/sub");
-    w.handleNewFolder();
-    expect(createEntryAndEdit).toHaveBeenNthCalledWith(1, ops.createFile, expect.any(String), "/ws/sub");
-    expect(createEntryAndEdit).toHaveBeenNthCalledWith(2, ops.createFolder, expect.any(String), undefined);
+    await w.handleNewFile("/ws/sub");
+    await w.handleNewFolder();
+    expect(ops.createFile).toHaveBeenCalledWith("/ws/sub", "Untitled");
+    expect(ops.createFolder).toHaveBeenCalledWith("/ws", "New Folder");
   });
 });
 

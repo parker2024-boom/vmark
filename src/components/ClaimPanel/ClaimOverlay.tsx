@@ -1,5 +1,5 @@
 /**
- * ClaimOverlay (WI-2b.6) — app-level mount for the claim panel.
+ * ClaimOverlay — app-level mount for the claim panel.
  * Registered in App.tsx's overlay slot (ADR-007 — no shell edits).
  *
  * @module components/ClaimPanel/ClaimOverlay

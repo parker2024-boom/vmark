@@ -11,6 +11,7 @@
  */
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fileBytes } from "@/test/fileBytes";
 import { useWorkspaceStore, type WorkspaceConfig } from "@/stores/workspaceStore";
 
 // --- Mocks (hoisted before the hook import) ---
@@ -22,7 +23,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 const mockReadTextFile = vi.fn();
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: (...args: unknown[]) => mockReadTextFile(...args),
+  readFile: (...args: unknown[]) => fileBytes(mockReadTextFile(...args)),
 }));
 
 vi.mock("@tauri-apps/api/webviewWindow", () => ({

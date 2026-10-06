@@ -1,4 +1,4 @@
-//! The bridge's accept loop, as a function of its inputs (#167).
+//! The bridge's accept loop, as a function of its inputs.
 //!
 //! Purpose: `start_bridge` used to spawn this loop inline, which made the
 //! only things worth testing about it — that a shutdown signal ends it, that
@@ -16,14 +16,14 @@
 //!   - The listener is OWNED by the loop and dropped when it returns, so
 //!     "the loop ended" and "the port is closed" are one event — the
 //!     property the test checks by connecting after shutdown.
-//!   - **`on_exit` runs from a DROP GUARD** (audit #385). It used to be a
+//!   - **`on_exit` runs from a DROP GUARD**. It used to be a
 //!     plain call after the loop, so it ran on the two paths the loop
 //!     *returns* on and on neither of the two it can leave without returning:
 //!     a panic inside `admit`, and the runtime dropping the task at shutdown.
 //!     Either one left the bridge marked running, with a live `port:token`
 //!     file, behind a listener that was gone. `spawn_logged` catches the panic
 //!     OUTSIDE this future, so it never saw the difference.
-//!   - **The accept side is a trait, not `TcpListener`** (audit #363). The
+//!   - **The accept side is a trait, not `TcpListener`**. The
 //!     retry counter, its threshold, the backoff and the reset are recovery
 //!     logic no test could reach: producing 30 consecutive real `accept`
 //!     failures means exhausting the process's file descriptors, which is not
@@ -95,12 +95,12 @@ pub(super) async fn accept_loop<L: Accept>(
     let mut consecutive_errors: u32 = 0;
     loop {
         tokio::select! {
-            // `biased`, so shutdown WINS a tie (audit #362). `select!` is
+            // `biased`, so shutdown WINS a tie. `select!` is
             // otherwise random between ready branches, and a socket already
             // waiting in the listener's backlog when the stop signal arrives
             // was admitted about half the time — a connection joining a bridge
             // the user had just stopped. The admission callback re-checks the
-            // phase (`start.rs`, #394) and would have refused it, but a gate
+            // phase (`start.rs`) and would have refused it, but a gate
             // that fires after the decision is a second chance, not the rule.
             biased;
             _ = &mut shutdown => {

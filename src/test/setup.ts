@@ -1,3 +1,8 @@
+/**
+ * setup — global setup for the app test tier: jest-dom, the localStorage shim, and i18n/Tauri/xterm mocks.
+ * @module test/setup
+ */
+
 import "@testing-library/jest-dom";
 import { configure as configureTestingLibrary } from "@testing-library/react";
 import { vi } from "vitest";
@@ -15,11 +20,6 @@ configureTestingLibrary({ asyncUtilTimeout: ASYNC_IMPORT_WAIT.timeout });
 // files assert on accessibility — every other file paid for it. The five
 // `*.a11y.test.tsx` suites now `import "@/test/axeMatchers"` themselves, which
 // extends `expect` at import time just as this did. See that file.
-
-// Provide the build-time __VMARK_VERSION__ define for tests. Production
-// gets it from vite.config.ts's `define`; vitest does not run the
-// frontend Vite config, so we stub a stable test value here.
-vi.stubGlobal("__VMARK_VERSION__", "0.0.0-test");
 
 // NOTE: deliberately NO global ResizeObserver shim. Defining it makes
 // mermaid/markmap render code proceed past the ResizeObserver check and then

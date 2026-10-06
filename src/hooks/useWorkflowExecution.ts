@@ -1,7 +1,7 @@
 /**
  * useWorkflowExecution — the window's workflow-event owner, and the run commands.
  *
- * Purpose: split the two things a workflow run needs (audit 20260928 #115):
+ * Purpose: split the two things a workflow run needs:
  *   - `useWorkflowEventLifecycle` HOLDS the window's one subscription to the
  *     runner's events (`services/workflow/workflowRunEvents.ts`) while it is
  *     mounted. The approval dialog — always mounted in a document window —
@@ -12,7 +12,7 @@
  *
  * Key decisions:
  *   - A start registers its execution id AND the tab that started it in one
- *     store write, before `run_workflow` resolves (#113/#114, via
+ *     store write, before `run_workflow` resolves (via
  *     `dispatchWorkflowRun`). Ownership bound after the start resolved left a
  *     window in which a panel's Cancel could target another pane's or a
  *     genie's run, and a panel remounted mid-start saw its own run as
@@ -20,7 +20,7 @@
  *   - Cancel names an EXPLICIT execution id — the one the caller owns — never
  *     "whatever the store holds now".
  *   - A second start while a run is registered is refused before the store is
- *     touched (#770), so the live run keeps its id and its events.
+ *     touched, so the live run keeps its id and its events.
  *
  * @coordinates-with services/workflow/workflowRunEvents.ts — the subscription
  * @coordinates-with services/workflow/dispatchWorkflowRun.ts — the run_workflow transaction

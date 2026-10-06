@@ -1,5 +1,7 @@
 // WI-1.4 — vmark.document.{read, write, transform} including the
-// load-bearing STALE-revision concurrency path (ADR-4).
+// load-bearing STALE-revision concurrency path (ADR-4). These suites pin the
+// buffer, revision and checkpoint behaviour; what a write puts on DISK is
+// asserted against a stateful disk in mcpSavePipeline.test.ts.
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { getSchema } from "@tiptap/core";
@@ -33,32 +35,6 @@ vi.mock("@/stores/editorStore", () => ({
   useEditorStore: {
     getState: () => mockEditorState,
   },
-}));
-
-const writeTextFileMock = vi.fn(async () => undefined);
-vi.mock("@tauri-apps/plugin-fs", () => ({
-  writeTextFile: (path: string, content: string) =>
-    writeTextFileMock(path, content),
-}));
-
-const registerPendingSaveMock = vi.fn(() => 1);
-const clearPendingSaveMock = vi.fn();
-vi.mock("@/utils/pendingSaves", () => ({
-  registerPendingSave: (path: string, content: string) =>
-    registerPendingSaveMock(path, content),
-  clearPendingSave: (path: string, token?: number) =>
-    clearPendingSaveMock(path, token),
-}));
-
-// The path guard is unit-tested in services/mcpBridge/bridgePathGuard.test.ts
-// and utils/mcpBridgePathPolicy.test.ts. Here we mock it (default: allow) so
-// handler tests stay focused on wiring — and can flip it to denied to assert
-// the defense-in-depth disk-write block.
-const checkBridgePathMock = vi.fn<
-  (p: string) => Promise<{ allowed: boolean; reason?: string }>
->(async () => ({ allowed: true }));
-vi.mock("@/services/mcpBridge/bridgePathGuard", () => ({
-  checkBridgePath: (p: string) => checkBridgePathMock(p),
 }));
 
 import { respond } from "@/services/mcpBridge/utils";
@@ -371,167 +347,6 @@ describe("vmark.document.write — STALE concurrency", () => {
     const stored =
       useDocumentStore.getState().documents["t-yaml-write"].content;
     expect(stored).toBe(yaml);
-  });
-});
-
-// Regression: AI agents bypassed MCP and wrote files directly when they
-// noticed the on-disk content was stale after a `document.write` —
-// losing checkpoint history and racing with VMark's auto-save. The fix:
-// `document.write` saves to disk by default. The buffer-vs-disk
-// distinction is a VMark internal concern that has no business in the
-// AI's reasoning loop.
-describe("vmark.document.write — save-on-write (UX fix for buffered writes)", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    resetStores();
-    writeTextFileMock.mockReset().mockResolvedValue(undefined);
-    registerPendingSaveMock.mockReset().mockReturnValue(1);
-    clearPendingSaveMock.mockReset();
-  });
-
-  it("persists to disk by default and reports saved=true", async () => {
-    seedTab("t-save", "before", "/tmp/notes.md");
-    await handleDocumentWrite("req-save", {
-      tabId: "t-save",
-      content: "after",
-    });
-
-    expect(writeTextFileMock).toHaveBeenCalledWith("/tmp/notes.md", "after");
-    const r = lastRespond();
-    expect(r.success).toBe(true);
-    const data = r.data as { saved: boolean; revision: string };
-    expect(data.saved).toBe(true);
-    // Buffer's dirty flag is cleared by markSaved.
-    expect(useDocumentStore.getState().documents["t-save"].isDirty).toBe(false);
-  });
-
-  it("skips disk write when save:false is passed (save_skipped='opt_out')", async () => {
-    seedTab("t-nosave", "before", "/tmp/notes.md");
-    await handleDocumentWrite("req-nosave", {
-      tabId: "t-nosave",
-      content: "after",
-      save: false,
-    });
-
-    expect(writeTextFileMock).not.toHaveBeenCalled();
-    const r = lastRespond();
-    expect(r.success).toBe(true);
-    const data = r.data as { saved: boolean; save_skipped?: string; save_error?: string };
-    expect(data.saved).toBe(false);
-    // Structured: explicit opt-out, NOT a free-form string.
-    expect(data.save_skipped).toBe("opt_out");
-    expect(data.save_error).toBeUndefined();
-    // Buffer was updated but stays dirty since we didn't save.
-    const doc = useDocumentStore.getState().documents["t-nosave"];
-    expect(doc.content).toBe("after");
-    expect(doc.isDirty).toBe(true);
-  });
-
-  it("untitled tabs get save_skipped='untitled' (machine-readable, not a prose hint)", async () => {
-    seedTab("t-untitled", "", null);
-    await handleDocumentWrite("req-untitled", {
-      tabId: "t-untitled",
-      content: "draft",
-    });
-
-    expect(writeTextFileMock).not.toHaveBeenCalled();
-    const r = lastRespond();
-    expect(r.success).toBe(true);
-    const data = r.data as { saved: boolean; save_skipped?: string; save_error?: string };
-    expect(data.saved).toBe(false);
-    // Structured field — AI clients shouldn't have to parse English.
-    expect(data.save_skipped).toBe("untitled");
-    // Mutually exclusive with save_error.
-    expect(data.save_error).toBeUndefined();
-    // Buffer still updated.
-    expect(useDocumentStore.getState().documents["t-untitled"].content).toBe(
-      "draft",
-    );
-  });
-
-  it("registers and clears pending save around writeTextFile to suppress the external-change dialog", async () => {
-    vi.useFakeTimers();
-    seedTab("t-pending", "before", "/tmp/notes.md");
-    await handleDocumentWrite("req-pending", {
-      tabId: "t-pending",
-      content: "after",
-    });
-
-    expect(registerPendingSaveMock).toHaveBeenCalledWith("/tmp/notes.md", "after");
-    // Audit T9: the clear is DELAYED (same 1000ms window as saveToPath)
-    // so late FSEvents still match this save.
-    expect(clearPendingSaveMock).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1100);
-    vi.useRealTimers();
-    expect(clearPendingSaveMock).toHaveBeenCalledWith("/tmp/notes.md", 1);
-    const registerOrder = registerPendingSaveMock.mock.invocationCallOrder[0];
-    const writeOrder = writeTextFileMock.mock.invocationCallOrder[0];
-    expect(registerOrder).toBeLessThan(writeOrder);
-  });
-
-  it("clears pending save even when writeTextFile rejects", async () => {
-    vi.useFakeTimers();
-    seedTab("t-pending-fail", "before", "/readonly/notes.md");
-    writeTextFileMock.mockRejectedValueOnce(new Error("EACCES"));
-
-    await handleDocumentWrite("req-pending-fail", {
-      tabId: "t-pending-fail",
-      content: "after",
-    });
-
-    expect(registerPendingSaveMock).toHaveBeenCalledWith("/readonly/notes.md", "after");
-    await vi.advanceTimersByTimeAsync(1100);
-    vi.useRealTimers();
-    expect(clearPendingSaveMock).toHaveBeenCalledWith("/readonly/notes.md", 1);
-  });
-
-  it("FS write failure surfaces save_error (NOT save_skipped) without failing the write", async () => {
-    seedTab("t-fail", "before", "/readonly/notes.md");
-    writeTextFileMock.mockRejectedValueOnce(new Error("EACCES"));
-
-    await handleDocumentWrite("req-fail", {
-      tabId: "t-fail",
-      content: "after",
-    });
-
-    const r = lastRespond();
-    // Important: success: true. The buffer was updated; re-writing on a
-    // transient FS error would lose intent. The caller surfaces the hint.
-    expect(r.success).toBe(true);
-    const data = r.data as { saved: boolean; save_skipped?: string; save_error?: string };
-    expect(data.saved).toBe(false);
-    expect(data.save_error).toContain("EACCES");
-    // We DID attempt the write — save_skipped must NOT be set.
-    expect(data.save_skipped).toBeUndefined();
-    // Buffer reflects the new content even though disk save failed.
-    expect(useDocumentStore.getState().documents["t-fail"].content).toBe(
-      "after",
-    );
-  });
-
-  it("defense in depth: a denied path guard skips the disk write and surfaces save_error", async () => {
-    seedTab("t-guard", "before", "/tmp/notes.md");
-    checkBridgePathMock.mockResolvedValueOnce({
-      allowed: false,
-      reason: "Path is outside the workspace and open documents",
-    });
-
-    await handleDocumentWrite("req-guard", {
-      tabId: "t-guard",
-      content: "after",
-    });
-
-    const r = lastRespond();
-    expect(r.success).toBe(true);
-    const data = r.data as { saved: boolean; save_error?: string };
-    expect(data.saved).toBe(false);
-    expect(data.save_error).toBeTruthy();
-    // The disk write must NOT have been attempted.
-    expect(writeTextFileMock).not.toHaveBeenCalled();
-    // Buffer still updated — consistent with the save-failure contract.
-    expect(useDocumentStore.getState().documents["t-guard"].content).toBe(
-      "after",
-    );
   });
 });
 

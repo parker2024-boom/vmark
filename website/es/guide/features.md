@@ -1,6 +1,6 @@
 # Características
 
-VMark es un editor Markdown con muchas funciones diseñado para flujos de trabajo de escritura modernos. Aquí tienes lo que incluye.
+VMark es el espacio de trabajo de texto plano en el que personas e IA colaboran. Markdown es la pieza central (con los modos WYSIWYG, Vista Previa de Fuente y Fuente), pero el espacio de trabajo también abre YAML, JSON, TOML, Mermaid, SVG, HTML y 9 formatos de visor de código — consulta [Formatos compatibles](/es/guide/formats) para ver la lista completa.
 
 [[toc]]
 
@@ -23,11 +23,55 @@ Cambia a la edición de Markdown sin procesar con resaltado de sintaxis completo
 - Resaltado de sintaxis completo
 - Popups interactivos para matemáticas, enlaces, imágenes, wiki links y medios — la misma experiencia de edición que en WYSIWYG
 - Pegado inteligente — el HTML de páginas web y documentos de Word se convierte automáticamente a Markdown limpio
-- Pegado de imágenes del portapapeles — las capturas de pantalla e imágenes copiadas se guardan en la carpeta de recursos y se insertan como `![](ruta)`
+- Pegado de imágenes del portapapeles — las capturas de pantalla e imágenes copiadas se guardan en la carpeta de recursos y se insertan como `![](path)`
 - Multicursor compatible con bloques de código y soporte de límites de palabras CJK
 - Perfecto para usuarios avanzados
 
 Alterna entre modos con `F6`.
+
+### Vista Dividida (Fuente + Vista Previa)
+
+Edita el código fuente Markdown a la izquierda mientras una **vista previa WYSIWYG en vivo y de solo
+lectura** se actualiza a la derecha — la vista previa *es* el renderizador WYSIWYG, así que
+nunca se aparta de lo que verías en el Modo de Texto Enriquecido. Los comandos de formato y la
+barra de herramientas actúan sobre el panel de fuente; arrastra el divisor (o usa las teclas de flecha sobre él) para
+cambiar el tamaño.
+
+- Actívala por sesión con `Shift + F6`, **Vista → Vista dividida de Markdown** o la
+  paleta de comandos («Alternar vista dividida de Markdown»)
+- Hazla la opción predeterminada para los archivos Markdown en **Configuración → Markdown → Diseño →
+  Dividir fuente/vista previa por defecto**
+
+WYSIWYG sigue siendo el predeterminado; la división es opcional. Las tres vistas son mutuamente
+excluyentes — `F6` alterna Fuente y `Shift + F6` alterna Dividida, y cada una vuelve
+a WYSIWYG —, así que cambiar entre ellas siempre es una sola pulsación.
+
+El menú **Vista** muestra los tres modos — **Modo WYSIWYG**, **Modo código
+fuente**, **Vista dividida de Markdown** — como un grupo con marcas de verificación, de modo que el modo activo
+siempre es visible y la exclusión mutua es explícita. **Ajuste de línea** y
+**Números de línea** se aplican solo al editor de fuente, así que aparecen atenuados mientras
+estás en el modo WYSIWYG.
+
+### Posición de Lectura
+
+Tu lugar en un documento sobrevive a salir de él. Cambiar a otra pestaña y volver,
+alternar el modo Fuente o la Vista Dividida, o que el archivo se vuelva a cargar desde el disco te
+devuelven a donde estabas leyendo — no al principio.
+
+Cada superficie recuerda su propia posición, así que Texto Enriquecido y Fuente guardan lugares
+separados en el mismo archivo. Si has puesto un cursor en el documento, el cursor
+sigue mandando: al volver llegas al cursor, que es también lo que mantiene
+el mismo párrafo a la vista cuando cambias entre Texto Enriquecido y Fuente.
+
+Las posiciones son por documento y por sesión — cerrar una pestaña la olvida.
+
+### Deshacer Entre Modos
+
+Deshacer y rehacer cruzan la frontera WYSIWYG ⇄ Fuente. Cada cambio de modo registra un punto de control y, una vez agotado el historial propio del editor actual, `Mod + Z` sigue avanzando por esos puntos de control — restaurando el contenido anterior sin cambiar la vista en la que estás. Rehacer recorre la misma cadena hacia delante; un rehacer cuya rama abandonaste al hacer una edición nueva se rechaza en lugar de aplicarse sobre tu trabajo. La cadena se guarda por pestaña y se borra al cerrar la pestaña.
+
+### Archivos Grandes
+
+VMark abre automáticamente en modo Fuente los archivos de más de 1 MB para que se abran en menos de un segundo, avisa antes de tocar archivos de más de 5 MB y rechaza los de más de 50 MB. Consulta la guía de [Archivos grandes](./large-files.md) para ver los umbrales y la configuración.
 
 ### Vista Previa de Fuente
 
@@ -127,6 +171,8 @@ Cambia rápidamente el estilo de texto a través de Formato → Transformar:
 - Bloques de código con resaltado de sintaxis
 - Listas ordenadas, desordenadas y de tareas
 - Ciclar tipo de lista: convierte un párrafo a lista con viñetas, numerada o de tareas en secuencia
+- Desactivar una lista: hacer clic de nuevo en el tipo de lista activo quita el formato de lista
+- Convertir en código: la acción Bloque de código convierte toda la lista en el cursor — o cualquier selección de varios bloques (párrafos, encabezados, listas) — en un único bloque de código, con una línea por bloque o elemento de lista
 - Reglas horizontales
 - Tablas con soporte de edición completo
 
@@ -160,7 +206,8 @@ Edición de tablas con todas las funciones:
 - Insertar tablas a través del menú o atajo
 - Añadir/eliminar filas y columnas
 - Alineación de celdas (izquierda, centro, derecha)
-- Redimensionar columnas arrastrando
+- Las columnas se ajustan automáticamente al contenido; las tablas anchas se desplazan horizontalmente
+- Ajustar al ancho — fija una tabla al ancho del editor con columnas proporcionales al contenido (Configuración → Markdown, o por tabla con clic derecho)
 - Barra de herramientas contextual para acciones rápidas
 - Navegación por teclado — `Tab` / `Shift + Tab` pasan de una celda a otra, las flechas salen de la tabla por sus bordes y `Mod + Enter` / `Mod + Shift + Enter` añaden una fila debajo / encima
 
@@ -172,8 +219,8 @@ Soporte integral de imágenes:
 - Arrastrar y soltar desde el sistema de archivos
 - Pegar desde el portapapeles
 - Copia automática a la carpeta de recursos del proyecto
-- Redimensionar a través del menú contextual
-- Doble clic para editar la ruta de origen, texto alternativo y dimensiones
+- Doble clic para editar la ruta de origen y el texto alternativo — las dimensiones de la imagen se muestran en solo lectura
+- Clic derecho para Cambiar imagen, Eliminar imagen, Copiar ruta de imagen y Mostrar en Finder (Mostrar en Explorador en Windows, Mostrar en gestor de archivos en Linux)
 - Alternar entre visualización en línea y en bloque
 
 ## Vídeo y Audio
@@ -222,7 +269,14 @@ Crea bloques de contenido expandibles usando el elemento HTML `<details>`.
 Renderizado de LaTeX potenciado por KaTeX:
 
 - Matemáticas en línea: `$E = mc^2$`
-- Matemáticas en bloque: `$$...$$`
+- Matemáticas en bloque: bloques `$$...$$`
+- Los delimitadores al estilo de ChatGPT se reconocen al abrir/pegar y se normalizan a la
+  forma con `$`: `\( ... \)` pasa a ser matemáticas en línea, y un `\[ ... \]` aislado
+  pasa a ser un bloque
+- Un bloque `$$` debe cerrarse antes de una línea en blanco (la regla de pandoc) — un `$$`
+  sin cerrar se muestra como texto literal en lugar de tragarse los párrafos que lo siguen.
+  Las líneas en blanco finales justo antes del cierre no son problema (un bloque
+  `$$` … `$$` vacío sigue siendo un bloque matemático)
 - Soporte completo de sintaxis LaTeX
 - Mensajes de error útiles con sugerencias de sintaxis
 
@@ -328,11 +382,27 @@ Los resultados del lint no se actualizan mientras escribes. En el modo Fuente, c
 
 Una barra de herramientas de formato anclada en la parte inferior del editor, que proporciona acceso rápido a todas las acciones de formato tanto en modo WYSIWYG como de Fuente.
 
-- **Alternar:** `Mod + Shift + P` abre la barra de herramientas y le da el foco. Pulsa de nuevo para devolver el foco al editor manteniendo la barra visible.
+- **Alternar:** `Mod + Shift + B` abre la barra de herramientas y le da el foco. Pulsa de nuevo para devolver el foco al editor manteniendo la barra visible.
 - **Navegación por teclado:** Usa las flechas `Izquierda`/`Derecha` para moverte entre grupos. `Enter` o `Espacio` abre un menú desplegable. Las flechas navegan dentro de los menús.
 - **Escape en dos pasos:** Si un menú desplegable está abierto, `Escape` cierra primero el menú. Pulsa `Escape` de nuevo para cerrar toda la barra de herramientas.
 - **Memoria de sesión:** La barra de herramientas recuerda qué botón fue el último enfocado durante la sesión actual, así que al re-enfocar continúas donde lo dejaste.
 - **Atajo de Genios de IA:** La barra de herramientas incluye un botón de Genios de IA que abre el selector de genios (`Mod + Y`).
+
+## Menú Contextual del Editor
+
+Haz clic derecho en cualquier lugar del editor (modo WYSIWYG o Fuente) para abrir un menú contextual con acciones comunes.
+
+- **Portapapeles:** Cortar, Copiar, Pegar y Seleccionar todo. En macOS usan el canal nativo del portapapeles, así que pegar contenido enriquecido (p. ej., HTML copiado de un navegador) conserva su formato — igual que `Mod + V`.
+- **Formato en línea:** Negrita, Cursiva, Tachado y Código en línea, con marcas de verificación que muestran las marcas activas en el cursor.
+- **Operaciones de bloque:** Submenús de nivel de encabezado y de tipo de lista, Cita y Bloque de código — las marcas de verificación reflejan el bloque actual.
+- **Enlaces:** Insertar enlace sobre texto normal; sobre un enlace existente la sección cambia a Editar enlace, Copiar enlace y Quitar enlace.
+- **Sensible al contexto:** Dentro de las tablas aparece en su lugar el menú de tabla específico; hacer clic derecho en una imagen abre el menú de imagen; dentro de los bloques de código solo se ofrecen las acciones del portapapeles. Los archivos que no son Markdown (JSON, YAML, …) reciben un menú reducido solo con el portapapeles.
+- **Gestión de la selección:** Hacer clic derecho dentro de una selección la conserva; hacer clic derecho en otro lugar mueve primero el cursor allí (convención de macOS).
+- **Teclado:** Las flechas navegan (los elementos deshabilitados se omiten), `Derecha`/`Izquierda` entran y salen de los submenús, `Escape` cierra primero el submenú y luego el menú. Las indicaciones de atajos reflejan tus asignaciones de teclas personalizadas.
+
+## Paleta de Comandos
+
+Pulsa `Mod + Shift + P` para abrir la paleta de comandos. Con la consulta vacía enumera todos los comandos disponibles agrupados por categoría — archivo, espacio de trabajo, vista, exportación, formato, encabezados, listas, tablas, líneas, selección, transformación, CJK, lint, historial, IA y más; escribe para filtrar y ordenar por coincidencia. `↑`/`↓` se mueven, `Enter` ejecuta el comando, `Escape` (o un clic en el fondo) la cierra. Solo se muestran los comandos que se aplican en ese momento — un comando del editor desaparece cuando no hay ningún documento abierto, y uno del espacio de trabajo cuando no hay espacio de trabajo — y el comando se ejecuta en la ventana desde la que abriste la paleta. Las páginas de esta guía nombran sus comandos de la paleta entre comillas («Alternar vista dividida de Markdown», «Breakdown View», «Estado de ventanas»). La paleta no tiene elemento de menú; su atajo se puede personalizar en **Configuración → Atajos**.
 
 ## Opciones de Exportación
 
@@ -340,10 +410,7 @@ VMark ofrece opciones de exportación flexibles para compartir tus documentos.
 
 ### Exportación HTML
 
-Exporta a HTML independiente con dos modos de empaquetado:
-
-- **Modo carpeta** (predeterminado): Crea `Documento/index.html` con recursos en una subcarpeta
-- **Modo archivo único**: Crea un archivo `.html` autocontenido con imágenes embebidas
+**Archivo → Exportar → HTML** escribe una carpeta que contiene tanto `index.html` (con una carpeta `assets/` enlazada) como `standalone.html` (todo incrustado) — no hay modo que elegir; usa el archivo que más te convenga.
 
 El HTML exportado incluye el [**VMark Reader**](/es/guide/export#vmark-reader) — controles interactivos para configuración, tabla de contenidos, lightbox de imágenes y más.
 
@@ -351,7 +418,7 @@ El HTML exportado incluye el [**VMark Reader**](/es/guide/export#vmark-reader) �
 
 ### Exportación PDF
 
-Imprime a PDF con el diálogo nativo del sistema (`Cmd/Ctrl + P`).
+**Archivo → Exportar → PDF** abre el propio diálogo de exportación de VMark — tamaño de página (A4, Letter, A3, Legal) y orientación, márgenes predefinidos o un cuadro de márgenes personalizado que se puede arrastrar, tamaño de fuente, interlineado, fuentes latinas y CJK, estilos predefinidos y números de página — y después escribe el PDF en macOS, Windows y Linux, con un esquema de encabezados en el que se puede hacer clic en la barra lateral del visor. **Imprimir** (`Cmd/Ctrl + P`) es la vía aparte a través del diálogo de impresión del sistema. [Más información →](/es/guide/export#imprimir-exportar-pdf)
 
 ### Copiar como HTML
 
@@ -405,9 +472,36 @@ Cuando VMark se reinicia para instalar una actualización, o se cierra inesperad
 - Al reiniciar, las pestañas se restauran exactamente como las dejaste, con documentos modificados (no guardados) marcados correspondientemente
 - Los cambios no guardados también se escriben en instantáneas de recuperación cada 10 segundos. Tras un cierre inesperado, VMark los restaura en el siguiente inicio como pestañas no guardadas
 - Las instantáneas de recuperación con más de 7 días se limpian automáticamente
-- Un cierre normal no captura la sesión: VMark te pide primero que guardes los documentos no guardados. Aun así, las pestañas abiertas de un espacio de trabajo vuelven la próxima vez que lo abras (consulta [Restauración de Sesión](/es/guide/workspace-management#restauracion-de-sesion))
+- Un cierre normal no captura la sesión: VMark te pide primero que guardes los documentos no guardados (consulta [Cerrar pestañas y ventanas](/es/guide/tab-navigation#cerrar-pestanas-y-ventanas)). Aun así, las pestañas abiertas de un espacio de trabajo vuelven la próxima vez que lo abras (consulta [Restauración de Sesión](/es/guide/workspace-management#restauracion-de-sesion))
 
 No se necesita configuración. La recuperación de sesión está siempre activa.
+
+## Barra de Estado
+
+La barra de estado recorre la parte inferior de la ventana (`F7` la oculta). El lado izquierdo contiene la tira de pestañas — consulta [Cambiar entre pestañas abiertas](/es/guide/tab-navigation#cambiar-entre-pestanas-abiertas) — y avisos breves como *«Abierto en modo Fuente (archivo grande).»* El lado derecho, de izquierda a derecha:
+
+| Indicador | Qué muestra | Clic |
+|---|---|---|
+| Guardado automático | Un icono de guardar y cuánto hace que se guardó automáticamente el documento; se desvanece tras unos segundos | — |
+| Recuentos | Palabras y caracteres (sin contar espacios); con una selección, *seleccionado / total* | Abre un panel emergente de **Recuento de palabras**: palabras, caracteres, caracteres sin espacios, caracteres CJK, caracteres sin puntuación |
+| Lint | ⊗ errores o ⚠ advertencias encontrados por la última ejecución de [lint](#lint-de-markdown); oculto cuando no hay ninguno | Salta al siguiente problema |
+| IA | Mientras se ejecuta un genio, *Pensando...* con los segundos transcurridos y una × para cancelar; después *Listo*, o el error con **Reintentar**, que vuelve a ejecutar la solicitud fallida, y **Descartar**; Reintentar no aparece si no hay nada que repetir, por ejemplo sin proveedor | — |
+| MCP | Un icono de satélite, coloreado cuando hay un cliente de IA conectado; la palabra *off*, *…* o *error* cuando no funciona con normalidad. La información emergente nombra los clientes conectados | Abre **Configuración → Integraciones** |
+| Historial MCP | Las escrituras de la IA en esta pestaña, de la más reciente a la más antigua, cada una con **Restaurar al estado anterior a esta escritura**; un botón de papelera borra el historial de la pestaña sin preguntar | Abre la lista |
+| Terminal | — | Muestra u oculta el terminal |
+| Modo | El modo actual — Fuente o WYSIWYG (oculto en los archivos de flujo de trabajo de GitHub Actions) | Cambia de modo |
+| Candado | Si el documento es de solo lectura | Alterna solo lectura |
+
+El lado derecho está oculto mientras hay una pestaña del navegador activa. Una barra de estado oculta vuelve a aparecer por sí sola mientras un genio de IA informa de su progreso o hay una pestaña del navegador activa.
+
+## Detalles de Edición
+
+Algunos comportamientos que funcionan sin ningún ajuste:
+
+- **La selección sigue visible cuando el editor pierde el foco.** Haz clic en el terminal, la barra lateral o un popup y el texto seleccionado conserva un resaltado más tenue, para que veas sobre qué actuará un comando o una herramienta de IA. El modo Fuente muestra todos los rangos de una selección multicursor.
+- **Escribir en el borde izquierdo de un código en línea escribe dentro de él.** Con el cursor justo antes de un fragmento de código en línea en el modo WYSIWYG — llegues como llegues —, el siguiente carácter se une al código en lugar de quedar fuera.
+- **Los métodos de entrada (IME) son seguros.** Mientras compones con un método de entrada chino, japonés o coreano, y durante 50 ms después de terminar la composición, los atajos del editor y las conversiones automáticas no se activan, así que pulsar Enter para aceptar un candidato no divide también el párrafo. Deshacer y rehacer siguen funcionando. Una sílaba coreana confirmada con Enter también inicia la línea nueva. Se elimina la romanización sobrante delante del texto confirmado, y un carácter confirmado en una celda de tabla vacía se queda tal como se escribió. Las notificaciones informativas esperan a que termine la composición; los errores y advertencias se muestran de inmediato. Una edición de un cliente de IA por MCP se rechaza (el cliente vuelve a intentarlo) o se retiene hasta que termina la composición, y un cambio del archivo en disco también espera, así que ninguno sobrescribe el texto que aún estás componiendo.
+- **Se respeta el movimiento reducido.** Cuando el ajuste de accesibilidad *reducir movimiento* de tu sistema operativo está activado, VMark desactiva sus animaciones y transiciones y se desplaza al instante en lugar de suavemente (incluido el modo máquina de escribir). No hay un ajuste aparte en VMark. El ajuste del sistema *reducir transparencia* desactiva igualmente el desenfoque de fondo.
 
 ## Vista y Enfoque
 
@@ -439,6 +533,8 @@ El panel de Esquema muestra la estructura de encabezados de tu documento como un
 - Colapsa y expande grupos de encabezados para enfocarte en partes específicas de tu documento
 - El encabezado actualmente activo se resalta mientras te desplazas o escribes
 - Se actualiza en tiempo real al agregar, eliminar o renombrar encabezados
+- Los títulos largos se ajustan a dos líneas y se muestran completos al pasar el puntero
+- Un campo de filtro en la parte superior del panel reduce el árbol a los encabezados cuyo texto coincide con tu consulta (sin distinguir mayúsculas y minúsculas; se conservan los ancestros para que la ruta siga visible). Pulsa `Esc` para borrarlo.
 
 ### Zoom
 
@@ -488,6 +584,7 @@ VMark verifica automáticamente las actualizaciones y puede descargarlas e insta
 - Cambio rápido de archivos
 - Seguimiento de archivos recientes
 - Tamaño y posición de ventana recordados entre sesiones
+- Panel Estado de ventanas — consulta el estado en vivo de Claude Code / IA de cada ventana abierta y salta directamente a la que te necesita; fíjalo en esta ventana o en todas (incluidas las que abras después) para mantenerlo abierto mientras saltas entre ventanas
 
 [Más información →](/es/guide/workspace-management)
 
@@ -500,13 +597,14 @@ VMark verifica automáticamente las actualizaciones y puede descargarlas e insta
 
 ### Temas
 
-Cinco temas de color integrados:
+Seis temas de color integrados:
 
 - Blanco (limpio, minimalista)
 - Papel (blanco cálido)
 - Menta (tinte verde suave)
 - Sepia (aspecto vintage)
 - Noche (modo oscuro)
+- Solarized (oscuro, paleta Solarized)
 
 ### Fuentes
 
@@ -517,6 +615,8 @@ Configura fuentes separadas para:
 - Monoespaciado (código)
 
 Cada selector ofrece una lista corta de fuentes recomendadas, las fuentes instaladas en tu ordenador y una entrada **Personalizada…** donde puedes escribir cualquier nombre de familia tipográfica. [Detalles →](/es/guide/settings#tipografia)
+
+La fuente monoespaciada se comprueba antes de usarla, en el modo Fuente, en el código y en el terminal: si la fuente que elegiste no está instalada, o resulta no ser monoespaciada, VMark recurre a la siguiente de la lista que sí lo sea. Esto importa sobre todo en Linux con una configuración regional CJK, donde un nombre de fuente que falta podría resolverse en una fuente CJK proporcional y romper la cuadrícula del terminal.
 
 ### Diseño
 

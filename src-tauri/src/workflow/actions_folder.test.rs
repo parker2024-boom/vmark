@@ -68,3 +68,31 @@ fn the_skipped_section_names_every_entry_and_its_reason() {
         "{rendered}"
     );
 }
+
+/// WI-RA7C.2 — a file name is the workspace's text, not VMark's. Unix allows a
+/// newline in one, and the skip log used to print it raw, so a file could
+/// write a log line of its own. (macOS and Linux only: Windows has no such
+/// name to create.)
+#[cfg(unix)]
+#[test]
+fn a_skipped_file_name_cannot_forge_a_log_line() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let hostile = "a\n[Tauri] window \"main\" destroy result: Ok(()).md";
+    // Not valid UTF-8, so the entry is skipped and the skip is logged.
+    std::fs::write(dir.path().join(hostile), [0xff, 0xfe, 0xfd]).expect("write");
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .expect("runtime");
+    let mut read = None;
+    let logged = crate::peer_text::log_capture::captured_logs(|| {
+        read = Some(runtime.block_on(read_folder(".", dir.path(), &HashMap::new(), dir.path())));
+    });
+    assert!(read.expect("ran").is_ok());
+    assert_eq!(logged.len(), 1, "{logged:?}");
+    assert!(
+        logged[0].starts_with("Skipping unreadable file "),
+        "{}",
+        logged[0]
+    );
+    assert!(!logged[0].contains('\n'), "{}", logged[0]);
+}

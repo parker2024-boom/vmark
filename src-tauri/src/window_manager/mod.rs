@@ -11,12 +11,19 @@
 //! | Module | Owns |
 //! |---|---|
 //! | `file_open_state` | Finder/CLI open decisions, pending queue, workspace grouping |
+//! | `file_open_store` | That state as per-app managed state, behind one lock |
 //! | `finder_open_delivery` | Hot-open focus, targeted emit, and retry fallback |
 //! | `document_windows` | Document/main window construction, URLs, labels, dock-reopen pick |
 //! | `path_validation` | Security gates for frontend-supplied paths / workspace roots |
-//! | `commands` | `open_*_in_new_window`, `close_window`, quit commands |
+//! | `window_url` | The query string a document window opens on (the URL contract with the frontend router) |
+//! | `commands` | `open_*_in_new_window`, `close_window` (quitting is `crate::quit`) |
 //! | `settings_window` | Settings window singleton (create / focus / navigate) |
+//! | `pdf_export_window` | The Export-PDF window, built in Rust so it can carry an empty menu |
+//! | `window_creation` | Check-and-build as one step for the fixed labels (`settings`, `main`, `pdf-export`) |
+//! | `window_events` | What happens when the OS acts on a window: the close the frontend confirms, the native resources that die with it |
 //! | `native_theme` | Keeps OS-drawn chrome (title bar, Windows menu bar) on the in-app theme |
+//! | `traffic_lights` | Keeps the macOS window controls where the app places them (macOS only) |
+//! | `navigation_guard` | Which URLs an app webview may navigate to (a plugin hook, so `main` is covered) |
 //!
 //! Everything is re-exported here so call sites keep using
 //! `crate::window_manager::...` (and `lib.rs`'s `generate_handler!` paths
@@ -41,6 +48,10 @@
 //! (`scripts/check-window-creation-thread.mjs`) holds the property so the next
 //! window command cannot be added synchronously.
 //!
+//! **A window with a fixed label is created through `ensure_window`, never by
+//! checking `get_webview_window` and then building.** Off the main thread that
+//! pair is a race Tauri does not close — see `window_creation.rs`.
+//!
 //! Known limitations:
 //!   - Window counter is process-global (AtomicU32); labels are not recycled.
 
@@ -51,20 +62,24 @@
 mod commands;
 mod document_windows;
 mod file_open_state;
+mod file_open_store;
 mod finder_open_delivery;
 mod native_theme;
+pub(crate) mod navigation_guard;
 mod path_validation;
 mod pdf_export_window;
 mod settings_window;
 #[cfg(target_os = "macos")]
 mod traffic_lights;
+mod window_creation;
 mod window_events;
 mod window_url;
 
 pub use commands::*;
 pub use document_windows::*;
 pub use file_open_state::*;
-// Not macOS-gated: `file_open::route_file_opens` is the shared destination for
+pub(crate) use file_open_store::*;
+// Not macOS-gated: `files::open::route_file_opens` is the shared destination for
 // BOTH macOS `RunEvent::Opened` and the Windows/Linux single-instance callback
 // (#1330), and this is where it delivers.
 pub(crate) use finder_open_delivery::*;
@@ -73,6 +88,7 @@ pub use pdf_export_window::*;
 pub use settings_window::*;
 #[cfg(target_os = "macos")]
 pub(crate) use traffic_lights::*;
+pub(crate) use window_creation::*;
 pub(crate) use window_events::*;
 
 #[cfg(test)]

@@ -48,7 +48,13 @@ export function __resetQuotaWarnedKeys(): void {
 /** Base key prefix for workspace storage */
 const STORAGE_KEY_PREFIX = "vmark-workspace";
 
-/** Legacy storage key used before window-scoped persistence */
+/**
+ * Legacy storage key used before window-scoped persistence.
+ *
+ * Sunset: only builds at package version 0.1.0 wrote this key; window-scoped
+ * keys arrived before 0.2. Remove it together with `migrateWorkspaceStorage`
+ * once no supported upgrade path starts below 0.2.0.
+ */
 export const LEGACY_STORAGE_KEY = "vmark-workspace";
 
 /**
@@ -78,6 +84,9 @@ export function getWorkspaceStorageKey(windowLabel: string): string {
  * copies the data to the main window's key and removes the legacy key.
  *
  * This should be called once at app startup (in the main window).
+ *
+ * Sunset: see `LEGACY_STORAGE_KEY` — remove once no supported upgrade path
+ * starts below 0.2.0.
  *
  * @example
  * // Call on app initialization

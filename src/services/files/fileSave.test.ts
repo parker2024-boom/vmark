@@ -1,6 +1,7 @@
 /**
  * fileSave CHOREOGRAPHY tests (mocks saveToPath/dialogs) — handler branches only. WI-17 moved
  * the Tier-0 "bytes reach the file" claim to src/test/tier0/saveFlow.test.ts; protocol: ledger D6.
+ * Save All and Quit is covered over the real stores in saveAllQuit.test.ts.
  * @module services/files/fileSave.test
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -9,7 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const {
   mockInvoke, mockSaveDialog, mockRemove, mockClose,
   mockSaveToPath, mockFlush, mockCloseTab,
-  mockOpenWorkspaceWithConfig, mockSaveAllDocuments,
+  mockOpenWorkspaceWithConfig,
 } = vi.hoisted(() => ({
   mockInvoke: vi.fn(() => Promise.resolve()),
   mockSaveDialog: vi.fn(() => Promise.resolve(null as string | null)),
@@ -19,7 +20,6 @@ const {
   mockFlush: vi.fn(),
   mockCloseTab: vi.fn(),
   mockOpenWorkspaceWithConfig: vi.fn(() => Promise.resolve(null)),
-  mockSaveAllDocuments: vi.fn(() => Promise.resolve({ action: "saved-all" })),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -107,10 +107,6 @@ vi.mock("@/utils/paths", async (importOriginal) => ({
   }),
 }));
 
-vi.mock("@/services/windowClose/closeSaveBatch", () => ({
-  saveAllDocuments: mockSaveAllDocuments,
-}));
-
 vi.mock("@/utils/debug", () => ({
   fileOpsLog: vi.fn(),
   fileOpsWarn: vi.fn(),
@@ -122,7 +118,6 @@ import {
   handleSave,
   handleSaveAs,
   handleMoveTo,
-  handleSaveAllQuit,
 } from "./fileSave";
 import { saveDialogWithFallback } from "@/services/windowClose/saveDialog";
 import { useDocumentStore } from "@/stores/documentStore";
@@ -593,6 +588,22 @@ describe("handleSaveAs", () => {
 // ---------------------------------------------------------------------------
 // handleMoveTo
 // ---------------------------------------------------------------------------
+/**
+ * A document the mocked save RE-POINTS, as the real pipeline does. Move To keeps
+ * an old file the document still claims, so a save mock that leaves the path
+ * alone would describe a move that never took.
+ */
+function mockMovableDoc(filePath: string | null): void {
+  const moving = { content: "# Content", filePath, isDirty: false, isMissing: false };
+  vi.mocked(useDocumentStore.getState).mockReturnValue({
+    getDocument: vi.fn(() => moving),
+  } as unknown as ReturnType<typeof useDocumentStore.getState>);
+  mockSaveToPath.mockImplementation((...args: unknown[]) => {
+    moving.filePath = args[1] as string;
+    return Promise.resolve(true);
+  });
+}
+
 describe("handleMoveTo", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -602,14 +613,7 @@ describe("handleMoveTo", () => {
       tabs: { main: [{ id: "tab-1", title: "Test" }] },
     } as unknown as ReturnType<typeof useTabStore.getState>);
 
-    vi.mocked(useDocumentStore.getState).mockReturnValue({
-      getDocument: vi.fn(() => ({
-        content: "# Content",
-        filePath: "/workspace/old.md",
-        isDirty: false,
-        isMissing: false,
-      })),
-    } as unknown as ReturnType<typeof useDocumentStore.getState>);
+    mockMovableDoc("/workspace/old.md");
 
     vi.mocked(useWorkspaceStore.getState).mockReturnValue({
       rootPath: "/workspace",
@@ -618,7 +622,6 @@ describe("handleMoveTo", () => {
 
   it("saves to new path and deletes old file", async () => {
     mockSaveDialog.mockResolvedValueOnce("/new/location.md");
-    mockSaveToPath.mockResolvedValue(true);
 
     await handleMoveTo("main");
 
@@ -641,17 +644,8 @@ describe("handleMoveTo", () => {
   });
 
   it("does not delete old file for untitled documents", async () => {
-    vi.mocked(useDocumentStore.getState).mockReturnValue({
-      getDocument: vi.fn(() => ({
-        content: "# Content",
-        filePath: null,
-        isDirty: false,
-        isMissing: false,
-      })),
-    } as unknown as ReturnType<typeof useDocumentStore.getState>);
-
+    mockMovableDoc(null);
     mockSaveDialog.mockResolvedValueOnce("/new/location.md");
-    mockSaveToPath.mockResolvedValue(true);
 
     await handleMoveTo("main");
 
@@ -661,11 +655,12 @@ describe("handleMoveTo", () => {
 
   it("shows warning toast when old file deletion fails", async () => {
     mockSaveDialog.mockResolvedValueOnce("/new/location.md");
-    mockSaveToPath.mockResolvedValue(true);
     mockRemove.mockRejectedValueOnce(new Error("Permission denied"));
 
     await handleMoveTo("main");
 
+    // The removal was attempted and failed — not skipped.
+    expect(mockRemove).toHaveBeenCalledWith("/workspace/old.md");
     expect(toast.warning).toHaveBeenCalledWith(
       expect.stringContaining("couldn't delete original"),
     );
@@ -695,17 +690,6 @@ describe("handleMoveTo — equivalent destination paths", () => {
     Object.defineProperty(navigator, "platform", { value, configurable: true });
   }
 
-  function mockDoc(filePath: string): void {
-    vi.mocked(useDocumentStore.getState).mockReturnValue({
-      getDocument: vi.fn(() => ({
-        content: "# Content",
-        filePath,
-        isDirty: false,
-        isMissing: false,
-      })),
-    } as unknown as ReturnType<typeof useDocumentStore.getState>);
-  }
-
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useTabStore.getState).mockReturnValue({
@@ -715,7 +699,6 @@ describe("handleMoveTo — equivalent destination paths", () => {
     vi.mocked(useWorkspaceStore.getState).mockReturnValue({
       rootPath: "/workspace",
     } as unknown as ReturnType<typeof useWorkspaceStore.getState>);
-    mockSaveToPath.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -727,7 +710,7 @@ describe("handleMoveTo — equivalent destination paths", () => {
 
   it("treats a case-variant destination as the same file on macOS", async () => {
     setPlatform("MacIntel");
-    mockDoc("/workspace/Notes.md");
+    mockMovableDoc("/workspace/Notes.md");
     mockSaveDialog.mockResolvedValueOnce("/workspace/notes.md");
 
     await handleMoveTo("main");
@@ -738,7 +721,7 @@ describe("handleMoveTo — equivalent destination paths", () => {
 
   it("treats a backslash/case variant as the same file on Windows", async () => {
     setPlatform("Win32");
-    mockDoc("C:/workspace/notes.md");
+    mockMovableDoc("C:/workspace/notes.md");
     mockSaveDialog.mockResolvedValueOnce("C:\\Workspace\\Notes.md");
 
     await handleMoveTo("main");
@@ -749,7 +732,7 @@ describe("handleMoveTo — equivalent destination paths", () => {
 
   it("treats a case-variant destination as a distinct file on Linux", async () => {
     setPlatform("Linux x86_64");
-    mockDoc("/workspace/notes.md");
+    mockMovableDoc("/workspace/notes.md");
     mockSaveDialog.mockResolvedValueOnce("/workspace/Notes.md");
 
     await handleMoveTo("main");
@@ -766,7 +749,7 @@ describe("handleMoveTo — equivalent destination paths", () => {
 
   it("still moves to a genuinely different path on macOS", async () => {
     setPlatform("MacIntel");
-    mockDoc("/workspace/old.md");
+    mockMovableDoc("/workspace/old.md");
     mockSaveDialog.mockResolvedValueOnce("/workspace/new.md");
 
     await handleMoveTo("main");
@@ -775,140 +758,6 @@ describe("handleMoveTo — equivalent destination paths", () => {
     expect(mockRemove).toHaveBeenCalledWith("/workspace/old.md");
   });
 });
-
-// ---------------------------------------------------------------------------
-// handleSaveAllQuit
-// ---------------------------------------------------------------------------
-describe("handleSaveAllQuit", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-
-    vi.mocked(useDocumentStore.getState).mockReturnValue({
-      getAllDirtyDocuments: vi.fn(() => []),
-      getDocument: vi.fn(() => null),
-    } as unknown as ReturnType<typeof useDocumentStore.getState>);
-
-    vi.mocked(useTabStore.getState).mockReturnValue({
-      tabs: {},
-    } as unknown as ReturnType<typeof useTabStore.getState>);
-  });
-
-  it("quits immediately when no dirty documents", async () => {
-    await handleSaveAllQuit("main");
-
-    expect(mockInvoke).toHaveBeenCalledWith("force_quit");
-  });
-
-  it("saves all dirty documents then quits", async () => {
-    vi.mocked(useDocumentStore.getState).mockReturnValue({
-      getAllDirtyDocuments: vi.fn(() => ["tab-1"]),
-      getDocument: vi.fn(() => ({
-        content: "# Dirty",
-        filePath: "/workspace/dirty.md",
-        isDirty: true,
-      })),
-    } as unknown as ReturnType<typeof useDocumentStore.getState>);
-
-    vi.mocked(useTabStore.getState).mockReturnValue({
-      tabs: { main: [{ id: "tab-1", title: "Dirty" }] },
-    } as unknown as ReturnType<typeof useTabStore.getState>);
-
-    mockSaveAllDocuments.mockResolvedValueOnce({ action: "saved-all" });
-
-    await handleSaveAllQuit("main");
-
-    expect(mockSaveAllDocuments).toHaveBeenCalled();
-    expect(mockInvoke).toHaveBeenCalledWith("force_quit");
-  });
-
-  it("does not quit when save is cancelled", async () => {
-    vi.mocked(useDocumentStore.getState).mockReturnValue({
-      getAllDirtyDocuments: vi.fn(() => ["tab-1"]),
-      getDocument: vi.fn(() => ({
-        content: "# Dirty",
-        filePath: null,
-        isDirty: true,
-      })),
-    } as unknown as ReturnType<typeof useDocumentStore.getState>);
-
-    vi.mocked(useTabStore.getState).mockReturnValue({
-      tabs: { main: [{ id: "tab-1", title: "Untitled" }] },
-    } as unknown as ReturnType<typeof useTabStore.getState>);
-
-    mockSaveAllDocuments.mockResolvedValueOnce({ action: "cancelled" });
-
-    await handleSaveAllQuit("main");
-
-    expect(mockInvoke).not.toHaveBeenCalledWith("force_quit");
-  });
-
-  it("shows toast error when save throws", async () => {
-    vi.mocked(useDocumentStore.getState).mockReturnValue({
-      getAllDirtyDocuments: vi.fn(() => { throw new Error("Store error"); }),
-    } as unknown as ReturnType<typeof useDocumentStore.getState>);
-
-    await handleSaveAllQuit("main");
-
-    expect(toast.error).toHaveBeenCalledWith("Failed to save documents");
-  });
-
-  it("handles re-entry guard blocking", async () => {
-    vi.mocked(withReentryGuard).mockResolvedValueOnce(undefined);
-
-    await handleSaveAllQuit("main");
-
-    // Should not throw, just silently skip
-  });
-
-  it("quits when dirty tabs produce empty contexts (doc not dirty)", async () => {
-    vi.mocked(useDocumentStore.getState).mockReturnValue({
-      getAllDirtyDocuments: vi.fn(() => ["tab-1"]),
-      getDocument: vi.fn(() => ({
-        content: "# Content",
-        filePath: "/workspace/file.md",
-        isDirty: false, // not actually dirty
-      })),
-    } as unknown as ReturnType<typeof useDocumentStore.getState>);
-
-    vi.mocked(useTabStore.getState).mockReturnValue({
-      tabs: { main: [{ id: "tab-1", title: "File" }] },
-    } as unknown as ReturnType<typeof useTabStore.getState>);
-
-    await handleSaveAllQuit("main");
-
-    expect(mockInvoke).toHaveBeenCalledWith("force_quit");
-  });
-
-  it("uses fallback windowLabel when tab not found in any window", async () => {
-    vi.mocked(useDocumentStore.getState).mockReturnValue({
-      getAllDirtyDocuments: vi.fn(() => ["orphan-tab"]),
-      getDocument: vi.fn(() => ({
-        content: "# Orphan",
-        filePath: null,
-        isDirty: true,
-      })),
-    } as unknown as ReturnType<typeof useDocumentStore.getState>);
-
-    vi.mocked(useTabStore.getState).mockReturnValue({
-      tabs: {}, // no windows at all
-    } as unknown as ReturnType<typeof useTabStore.getState>);
-
-    mockSaveAllDocuments.mockResolvedValueOnce({ action: "saved-all" });
-
-    await handleSaveAllQuit("main");
-
-    expect(mockSaveAllDocuments).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({
-          windowLabel: "main", // fallback
-          title: "Untitled",
-        }),
-      ]),
-    );
-    expect(mockInvoke).toHaveBeenCalledWith("force_quit");
-  });
-});
-
 
 // ---------------------------------------------------------------------------
 // moveTabToNewWorkspaceWindow — window with no tabs array

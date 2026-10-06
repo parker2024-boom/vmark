@@ -7,12 +7,22 @@
  * command; split out of closeSave.ts along that existing seam when the file
  * hit its size baseline.
  *
+ * Key decisions:
+ *   - A context is a capture, and the dialogs here stay open for as long as
+ *     the user takes. With a `revalidate` hook every write uses the document
+ *     as it is at that moment, and a document that no longer needs saving is
+ *     skipped. Without one the captured context is written — the close flow
+ *     revalidates after the batch instead.
+ *   - A destination reserved for a document that is then skipped is removed
+ *     again: a reservation is an empty file, and nothing would ever fill it.
+ *
  * @coordinates-with closeSave.ts — prompts that feed this batch
- * @coordinates-with services/files/fileSave.ts — Save All command caller
+ * @coordinates-with services/files/saveAllQuit.ts — Save All and Quit caller
  * @module services/windowClose/closeSaveBatch
  */
 
 import { save, open } from "@tauri-apps/plugin-dialog";
+import { remove } from "@tauri-apps/plugin-fs";
 import i18n from "@/i18n";
 import { getDefaultSaveFolderWithFallback } from "@/services/files/defaultSaveFolder";
 import { saveToPath } from "@/services/persistence/saveToPath";
@@ -27,102 +37,105 @@ import {
   type MultiSaveResult,
 } from "./closeSaveShared";
 
+type Revalidate = NonNullable<MultiSaveOptions["revalidate"]>;
+
+/** No hook supplied: the captured context is what gets written. */
+const asCaptured: Revalidate = (context) => context;
+
+const CANCELLED: MultiSaveResult = { action: "cancelled" };
+
+/** The filename an untitled document is offered or reserved under. */
+function untitledFilename(doc: CloseSaveContext): string {
+  return ensureFormatExtension(toSafeFilename(doc.title), doc.filePath ?? null);
+}
+
 /**
  * Persist a batch of documents: save every doc that already has a path, then
  * handle untitled docs — a single Save-As dialog for one, or one folder picker
  * for several. Returns a cancellation result to bubble up, or `null` on success.
+ *
+ * `revalidate` is consulted immediately before every write and after every
+ * dialog; see {@link MultiSaveOptions.revalidate}.
  */
 export async function persistDocumentBatch(
   savedDocs: CloseSaveContext[],
   untitledDocs: CloseSaveContext[],
   total: number,
   onProgress: MultiSaveOptions["onProgress"],
+  revalidate: Revalidate = asCaptured,
 ): Promise<MultiSaveResult | null> {
   let current = 0;
 
   for (const context of savedDocs) {
     current++;
-    onProgress?.(current, total, context.title);
+    const live = revalidate(context);
+    if (!live) continue;
+    onProgress?.(current, total, live.title);
 
     const saved = await saveToPath(
-      context.tabId,
-      context.filePath!,
-      context.content,
+      live.tabId,
+      live.filePath ?? context.filePath!,
+      live.content,
       "manual"
     );
-    if (!saved) {
-      return { action: "cancelled" };
-    }
+    if (!saved) return CANCELLED;
   }
 
-  // Untitled docs: choose the folder once.
-  if (untitledDocs.length > 0) {
-    const defaultFolder = await getDefaultSaveFolderWithFallback(
-      untitledDocs[0].windowLabel
-    );
+  // Untitled docs that still need a file once the pathed ones are written.
+  const pending = untitledDocs.filter((doc) => revalidate(doc) !== null);
+  if (pending.length === 0) return null;
 
-    if (untitledDocs.length === 1) {
-      // Single untitled: standard Save As dialog
-      const doc = untitledDocs[0];
-      current++;
-      onProgress?.(current, total, doc.title);
+  // Choose the folder once.
+  const defaultFolder = await getDefaultSaveFolderWithFallback(pending[0].windowLabel);
 
-      const filename = ensureFormatExtension(
-        toSafeFilename(doc.title),
-        doc.filePath ?? null,
-      );
-      const defaultPath = joinPath(defaultFolder, filename);
-      const newPath = await save({
-        defaultPath,
-        filters: saveFiltersForFilePath(doc.filePath ?? null),
-      });
-      if (!newPath) {
-        return { action: "cancelled" };
-      }
+  if (pending.length === 1) {
+    // Single untitled: standard Save As dialog
+    const doc = pending[0];
+    current++;
+    onProgress?.(current, total, doc.title);
 
-      const saved = await saveToPath(doc.tabId, newPath, doc.content, "manual");
-      if (!saved) {
-        return { action: "cancelled" };
-      }
-    } else {
-      // Multiple untitled: batch folder picker
-      const folderPath = await open({
-        directory: true,
-        multiple: false,
-        defaultPath: defaultFolder,
-        title: i18n.t("dialog:chooseFolderForDocs", { count: untitledDocs.length }),
-      });
+    const newPath = await save({
+      defaultPath: joinPath(defaultFolder, untitledFilename(doc)),
+      filters: saveFiltersForFilePath(doc.filePath ?? null),
+    });
+    if (!newPath) return CANCELLED;
 
-      if (!folderPath || typeof folderPath !== "string") {
-        return { action: "cancelled" };
-      }
+    const live = revalidate(doc);
+    if (!live) return null;
+    const saved = await saveToPath(live.tabId, newPath, live.content, "manual");
+    return saved ? null : CANCELLED;
+  }
 
-      // Reserve every destination BEFORE writing any of them. Building
-      // `folder/title.md` and handing it to the overwrite writer replaced
-      // whatever already sat at that name — a closed document the user never
-      // opened — and gave two same-titled tabs the same path (audit 20260906,
-      // F1). Reservation is one `O_EXCL` create per name, so it settles both
-      // collisions and cannot race a concurrent creator.
-      const filenames = untitledDocs.map((doc) =>
-        ensureFormatExtension(toSafeFilename(doc.title), doc.filePath ?? null),
-      );
-      const destinations = await reserveBatchDestinations(folderPath, filenames);
+  // Multiple untitled: batch folder picker
+  const folderPath = await open({
+    directory: true,
+    multiple: false,
+    defaultPath: defaultFolder,
+    title: i18n.t("dialog:chooseFolderForDocs", { count: pending.length }),
+  });
+  if (!folderPath || typeof folderPath !== "string") return CANCELLED;
 
-      for (const [index, doc] of untitledDocs.entries()) {
-        current++;
-        onProgress?.(current, total, doc.title);
+  // Reserve every destination BEFORE writing any of them. Building
+  // `folder/title.md` and handing it to the overwrite writer replaced
+  // whatever already sat at that name — a closed document the user never
+  // opened — and gave two same-titled tabs the same path.
+  // Reservation is one `O_EXCL` create per name, so it settles both
+  // collisions and cannot race a concurrent creator. Only documents that
+  // still need a file once the picker has closed get one reserved.
+  const reserving = pending.filter((doc) => revalidate(doc) !== null);
+  const destinations = await reserveBatchDestinations(folderPath, reserving.map(untitledFilename));
 
-        const saved = await saveToPath(
-          doc.tabId,
-          destinations[index],
-          doc.content,
-          "manual",
-        );
-        if (!saved) {
-          return { action: "cancelled" };
-        }
-      }
+  for (const [index, doc] of reserving.entries()) {
+    current++;
+    onProgress?.(current, total, doc.title);
+
+    const live = revalidate(doc);
+    if (!live) {
+      await remove(destinations[index]);
+      continue;
     }
+    const saved = await saveToPath(live.tabId, destinations[index], live.content, "manual");
+    if (!saved) return CANCELLED;
   }
 
   return null;
@@ -142,12 +155,18 @@ export async function saveAllDocuments(
     return { action: "saved-all" };
   }
 
-  const { onProgress } = options;
+  const { onProgress, revalidate } = options;
 
   const savedDocs = contexts.filter((c) => c.filePath);
   const untitledDocs = contexts.filter((c) => !c.filePath);
 
-  const cancelled = await persistDocumentBatch(savedDocs, untitledDocs, contexts.length, onProgress);
+  const cancelled = await persistDocumentBatch(
+    savedDocs,
+    untitledDocs,
+    contexts.length,
+    onProgress,
+    revalidate,
+  );
   if (cancelled) return cancelled;
 
   return { action: "saved-all" };

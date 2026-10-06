@@ -19,7 +19,7 @@
 //! @coordinates-with src/stores/selectSourceEditing.ts — `selectEditorMode`
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use tauri::menu::MenuItemKind;
 use tauri::{AppHandle, Wry};
@@ -74,9 +74,15 @@ pub(crate) fn view_menu_targets(state: &ViewMenuState) -> Vec<(&'static str, boo
 /// the menu is rebuilt — the fresh menu carries localized.rs defaults
 /// (WYSIWYG checked), so a cache hit would otherwise leave a stale checkmark.
 pub(crate) fn invalidate_cache() {
-    if let Ok(mut guard) = MENU_STATE_CACHE.lock() {
-        *guard = None;
-    }
+    *menu_state_cache() = None;
+}
+
+/// The one-state cache. A poisoned lock is recovered: the value is replaced
+/// whole, and the worst a panic can leave is a state that gets applied again.
+fn menu_state_cache() -> MutexGuard<'static, Option<ViewMenuState>> {
+    MENU_STATE_CACHE
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
 }
 
 fn apply_view_menu_state(app: &AppHandle, state: &ViewMenuState) -> Result<(), String> {
@@ -122,7 +128,7 @@ pub fn sync_view_menu_state(
         line_numbers_applies,
     };
 
-    let mut guard = MENU_STATE_CACHE.lock().map_err(|e| e.to_string())?;
+    let mut guard = menu_state_cache();
     if guard.as_ref() == Some(&next) {
         return Ok(());
     }
@@ -151,6 +157,26 @@ mod tests {
             .copied()
             .unwrap()
             .2
+    }
+
+    /// WI-RA7C.1 — invalidation must survive a poisoned cache: skipping it
+    /// left the stale checkmark the invalidation exists to clear.
+    #[test]
+    fn a_poisoned_cache_is_still_invalidated() {
+        use std::sync::PoisonError;
+        *MENU_STATE_CACHE
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(state("source", true, true, true));
+        crate::lock_policy::tests::poison(&MENU_STATE_CACHE);
+
+        invalidate_cache();
+
+        let cached = MENU_STATE_CACHE
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        MENU_STATE_CACHE.clear_poison();
+        assert_eq!(cached, None);
     }
 
     #[test]

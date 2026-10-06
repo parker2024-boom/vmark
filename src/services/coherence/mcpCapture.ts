@@ -1,5 +1,5 @@
 /**
- * MCP write capture (WI-1.6, split from captureFunnel.ts)
+ * MCP write capture (split from captureFunnel.ts)
  *
  * Purpose: documents an external MCP client read since its last write become
  * the (inferred) input set of that write (spec §7 example 2). `recordMcpRead`
@@ -19,7 +19,7 @@
  *     coalesces) and at most 256 overall — beyond that a read stays unpinned.
  *   - Each read remembers the workspace root it was served under; a write
  *     under a different root drops it (its revision belongs to another ledger).
- *   - A pin is PROVEN by content (audit #133, `head_pin.rs`): it sends the
+ *   - A pin is PROVEN by content (`head_pin.rs`): it sends the
  *     content served, plus the tab's saved content when the buffer was dirty,
  *     and the kernel pins the latest revision on the head's history matching
  *     either. A read matching neither is left OUT of the inputs — leaving it
@@ -27,7 +27,7 @@
  *     revision the client never saw.
  *   - A write takes its place in the capture queue synchronously and awaits
  *     its pins INSIDE that slot (`pendingInputs`), so a later write or in-app
- *     save can never be recorded ahead of it (#135).
+ *     save can never be recorded ahead of it.
  *
  * @coordinates-with captureFunnel.ts — `captureWrite`, the one IPC seam
  * @coordinates-with src-tauri/src/coherence/head_pin.rs — how coherence_head proves a pin
@@ -44,10 +44,10 @@ import {
   type CoherenceCaptureReceipt,
 } from "./captureFunnel";
 
-// ── MCP session-read tracking (WI-1.6, spec §7 example 2) ───────────────
+// ── MCP session-read tracking (spec §7 example 2) ───────────────
 // Documents an external MCP client read since its last write become the
 // (inferred) input set of that write. Module-level state is correct here:
-// one webview = one bridge session. Bounded (audit T7): a read-only
+// one webview = one bridge session. Bounded: a read-only
 // client cannot grow this without limit.
 const MAX_SESSION_READS = 256;
 /** Hard cap on `coherence_head` calls in flight across all paths. */
@@ -70,7 +70,7 @@ interface SessionRead {
   revision: string | undefined;
   /** The kernel knows the object but no revision matches what was served (or
    *  its saved base): the read is left out rather than resolved to a head the
-   *  client never saw (#133). */
+   *  client never saw. */
   unprovable: boolean;
   /** The content the client was served by the latest read, if known. */
   content: string | undefined;
@@ -110,7 +110,7 @@ function startPin(entry: SessionRead): void {
 }
 
 /** Record a document read served to the MCP client (absolute path).
- *  Pins the coherence revision served at READ time (audit T5) so a later
+ *  Pins the coherence revision served at READ time so a later
  *  upstream edit is never misattributed as this write's input. `content` is
  *  what was served and `tabId` the tab it came from, whose saved content is
  *  the base of an unsaved buffer. A read made outside the open workspace is
@@ -161,7 +161,7 @@ function detachReads(): SessionRead[] {
 }
 
 /** Wait (bounded) for this batch's pins — including a re-pin a superseded
- *  answer triggered — audit B5. */
+ *  answer triggered. */
 async function awaitBatchPins(batch: SessionRead[]): Promise<void> {
   const deadline = Date.now() + PIN_WAIT_MS;
   for (;;) {
@@ -211,7 +211,7 @@ export async function captureMcpWrite(args: {
     );
     // Called with no await before it, so the capture takes its queue slot NOW:
     // a later write (or an in-app save) cannot be recorded ahead of this one
-    // while it waits for its pins (#135, round 2).
+    // while it waits for its pins.
     return await captureWrite({
       absolutePath: args.absolutePath,
       content: args.content,

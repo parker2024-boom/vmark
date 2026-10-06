@@ -12,17 +12,17 @@
 //! Key decisions:
 //!   - `reserve_ai_tab` answers the retry question under ONE registry guard: mode,
 //!     epoch, capacity, and the full request identity the registry recorded for
-//!     the tab (#3). A retry is honoured only as the request that reserved the id.
+//!     the tab. A retry is honoured only as the request that reserved the id.
 //!   - `begin_ai_navigation` snapshots and begins under ONE guard, so a rollback
 //!     restores exactly what this navigation replaced — never a page a concurrent
-//!     navigation had already left (#4).
+//!     navigation had already left.
 //!   - Every native call goes through `create_native` / `navigate_native`, which
 //!     own the compensation: forget the tab, or restore the snapshot.
 //!
 //! The native calls (`create_native_with`, `navigate_native_with`) run the
 //! resolved-address pre-flight (`ai_transactions_preflight.rs`) before issuing the
 //! load, with the resolver injected; a refusal takes the same compensation as a
-//! failed native call (round 4, #7/#8).
+//! failed native call.
 //!
 //! @coordinates-with browser/ai_commands.rs — the composition, the only caller
 //! @coordinates-with browser/registry_ai.rs — the reservation decision
@@ -53,7 +53,7 @@ fn provenance_mismatch() -> CommandError {
     )
 }
 
-/// The tab exists, but this create is not the request that reserved it (#3):
+/// The tab exists, but this create is not the request that reserved it:
 /// another window, another url or profile, or a navigation that has since moved
 /// on. A conflict — no approval lifts it; the client opens a fresh tab.
 ///
@@ -105,7 +105,7 @@ pub(super) fn reserve_ai_tab(
         })
 }
 
-/// Begin `url` on an AI tab under ONE registry guard (#4), returning the ticket
+/// Begin `url` on an AI tab under ONE registry guard, returning the ticket
 /// and the state it replaced. Shared posture records the destination approval
 /// alongside, so the delegate does not ask for a second one at commit.
 pub(super) fn begin_ai_navigation(
@@ -156,7 +156,7 @@ pub(super) fn profile_for_mode(
 }
 
 /// Consume the per-use profile-open grant for `(profile, url)` and pin the tab's
-/// read confinement to that origin (WI-P6.1 H1). `profile` is what
+/// read confinement to that origin. `profile` is what
 /// `profile_for_mode` resolved, so the posture question is already settled and
 /// asked in exactly one place. No grant → the reservation is forgotten and the
 /// profile is NEVER applied, so a guessed profile cannot silently open

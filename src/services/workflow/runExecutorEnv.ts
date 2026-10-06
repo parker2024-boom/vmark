@@ -1,5 +1,5 @@
 /**
- * runExecutorEnv — the executor's shared environment (round 3, #106): the
+ * runExecutorEnv — the executor's shared environment: the
  * authorization adapter, tab resolution, read-class evals, the snapshot read and
  * the single authorized act. `runExecutor.ts` composes steps from these;
  * `runExecutorHeal.ts` heals with them. Pure functions first (outcome mapping,
@@ -88,7 +88,7 @@ function actResultIsWellFormed(result: Record<string, unknown>, flag: "clicked" 
   if (typeof result.found !== "boolean" || typeof result[flag] !== "boolean") return false;
   // A miss always reports how many candidates it matched and how many were visible
   // (the act script emits both on every `found:false`); a count-less miss is not the
-  // script's verdict and must not become a healable not-found (round 5, #193).
+  // script's verdict and must not become a healable not-found.
   if (result.found === false && (result.matchedTotal === undefined || result.matchedVisible === undefined)) return false;
   for (const key of Object.keys(result)) {
     // Own-property lookup (round 12): a page-shaped key such as "constructor" would
@@ -99,7 +99,7 @@ function actResultIsWellFormed(result: Record<string, unknown>, flag: "clicked" 
   return result[other] === undefined;
 }
 
-/** Does the result fit one of the producer's THREE shapes (round 7, #193)?
+/** Does the result fit one of the producer's THREE shapes?
  *  A miss is `found:false`, the verb false, counts 0/0 and nothing else; a refusal
  *  is `found:true`, the verb false and a KNOWN reason (candidates only with
  *  `ambiguous`, `by` only with `obscured`); a success carries no reason, `by` or
@@ -178,7 +178,7 @@ const TYPED_ONLY_REASONS: ReadonlySet<string> = new Set(["readonly", "not-editab
 /** Map an act script's result object onto a `StepOutcome`. */
 function toOutcome(result: Record<string, unknown>, flag: "clicked" | "typed"): StepOutcome {
   // The act script's result is page-adjacent data and is validated against its
-  // COMPLETE schema, not trusted (round 4, #193): a key the script never emits, a
+  // COMPLETE schema, not trusted: a key the script never emits, a
   // wrong type, or the other operation's flag is malformed; a success that also
   // carries a failure (a reason, an occluder, candidates, found:false) or counts
   // that disagree is contradictory. Both are UNKNOWN — the engine asks a human
@@ -193,7 +193,7 @@ function toOutcome(result: Record<string, unknown>, flag: "clicked" | "typed"): 
   if (total !== undefined && visible !== undefined && visible > total) return { outcome: "unknown", reason: "contradictory-act-result" };
   // The producer reports `found:false` only when NOTHING matched (counts 0/0); a
   // hidden, disabled or ambiguous match is `found:true` with a reason. A miss that
-  // reports matches is therefore not the script's verdict (round 6, #193).
+  // reports matches is therefore not the script's verdict.
   if (result.found === false && ((total ?? 0) > 0 || (visible ?? 0) > 0)) return { outcome: "unknown", reason: "contradictory-act-result" };
   if (succeeded && (result.found === false || result.reason !== undefined || result.by !== undefined || result.candidates !== undefined)) {
     return { outcome: "unknown", reason: "contradictory-act-result" };
@@ -221,7 +221,7 @@ export interface ExecutorEnv {
   evalRead: <T>(script: string, generation: number, parse: (raw: string) => T) => Promise<T>;
   readSnapshot: (generation: number) => Promise<SnapshotRead>;
   /** One click/type against a role+name, authorizing per attempt (P-1); `healed`
-   *  asks for fresh approval (#162). */
+   *  asks for fresh approval. */
   actOnce: (op: ActOp, role: string, name: string, text: string | undefined, url: string, healed?: boolean) => Promise<StepOutcome & { raw: Record<string, unknown> }>;
 }
 
@@ -264,7 +264,7 @@ export function makeExecutorEnv(ctx: RunExecutorContext): ExecutorEnv {
       operation: op,
       target: { role, name },
       // A healed locator is not the one the author wrote: a standing grant does
-      // not cover it — the human sees the new target and approves it (#162).
+      // not cover it — the human sees the new target and approves it.
       ...(healed ? { requireFreshApproval: true } : {}),
       // A type binds the text it will enter by binding the built script (A-05).
       ...(op === "type" ? { script, payloadSummary: `Text: ${JSON.stringify(clip(text ?? ""))}` } : {}),

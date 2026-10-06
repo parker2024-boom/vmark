@@ -4,6 +4,8 @@
  * Adds `.editing` class to inline nodes (math, images, footnotes) when
  * the cursor is inside them. This provides visual feedback for nodes
  * that can't show a text cursor.
+ *
+ * @module plugins/inlineNodeEditing/tiptap
  */
 
 import { Extension } from "@tiptap/core";

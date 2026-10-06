@@ -49,8 +49,7 @@ export class SlidevManager {
    * the route returned 500 — but the derived chain rejected too, with nobody
    * observing it. Node's default action for an unhandled rejection is to
    * terminate the process, so an ordinary bad deck took down the whole
-   * knowledge-base server and every preview sharing it (audit 20260906,
-   * MCP-C01).
+   * knowledge-base server and every preview sharing it.
    *
    * Owning the bookkeeping inside the awaited promise means there is no second
    * chain to go unobserved. Retry after a failure still works — the entry is
@@ -67,7 +66,7 @@ export class SlidevManager {
       // A stop() or stopAll() that ran while this was starting OWNS the
       // outcome. Registering the server now would resurrect a deck the caller
       // has already shut down, leaving an unproxied server running past
-      // shutdown (audit 20260906, MCP-C04). Both cancellers remove the entry
+      // shutdown. Both cancellers remove the entry
       // from `starting`, so its absence is the cancellation signal.
       if (this.closing || !this.starting.has(deck)) {
         await server.close();

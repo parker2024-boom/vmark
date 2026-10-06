@@ -30,11 +30,11 @@
  * events, guarded twice. Here, one stamped with an older generation than the
  * tab's is ignored whole, before any side effect — history, prompts, the tab
  * record. And every page-state write into `browserUiStore` is STAMPED with the
- * event's generation, so the store itself refuses a late one (round 3, #154)
+ * event's generation, so the store itself refuses a late one
  * rather than relying on this handler alone.
  *
  * A failure is judged by the ORDER of the navigation ids this service has itself
- * seen (`NavigationOrder`, #87 rounds 3–4). The driver mints `nav-<tabId>-<n>` from
+ * seen (`NavigationOrder`). The driver mints `nav-<tabId>-<n>` from
  * one monotonic counter per tab, so a failure whose sequence is below the highest
  * this tab has shown — from a commit, a finish, or an earlier failure — is about a
  * page nobody is looking at, and is dropped; a provisional failure (DNS, TLS,
@@ -104,7 +104,7 @@ export function startBrowserTabEvents(): () => void {
         ui.setDialog(tabId, null, generation);
         browserOcclusion.removeOccluder(tabId, OCCLUDER.dialog);
       }
-      // Record where the user went, and how they set off (WI-S2.2). A redirect is
+      // Record where the user went, and how they set off. A redirect is
       // something the SITE did — it folds into the entry rather than becoming its own.
       useBrowserHistoryStore.getState().record(windowLabel, {
         tabId,
@@ -141,7 +141,7 @@ export function startBrowserTabEvents(): () => void {
       useTabStore.getState().updateBrowserTab(tabId, { url, generation, title: title || hostLabel(url) });
     },
     // The webview owns the back/forward list; mirror it so the omnibox can disable
-    // its history controls instead of offering no-op buttons (WI-S1.6).
+    // its history controls instead of offering no-op buttons.
     onHistoryChanged: (tabId, canGoBack, canGoForward, generation) => {
       if (owned(tabId) && current(tabId, generation)) {
         useBrowserUiStore.getState().setHistory(tabId, canGoBack, canGoForward, generation);
@@ -149,7 +149,7 @@ export function startBrowserTabEvents(): () => void {
     },
     onFailed: (tabId, message, navigationId) => {
       // Offline, DNS failure, TLS rejection, a refused connection: the native side knows
-      // exactly what went wrong and used to tell nobody (WI-S0.9). A failure that names
+      // exactly what went wrong and used to tell nobody. A failure that names
       // a navigation the tab has already moved past is about a page nobody is looking
       // at — it must not paint an error over the newer page that loaded fine. One that
       // is the newest thing the tab did is shown AND joins the order, so a later report
@@ -172,7 +172,7 @@ export function startBrowserTabEvents(): () => void {
         browserOcclusion.removeOccluder(tabId, OCCLUDER.dialog);
       }
       // The native view still paints over the DOM after a crash; freeze it so the
-      // recovery overlay is visible in its place (WI-1.4 occlusion / WI-1.8).
+      // recovery overlay is visible in its place.
       ui.setCrash(tabId, { action });
       browserOcclusion.addOccluder(tabId, OCCLUDER.crash);
     },

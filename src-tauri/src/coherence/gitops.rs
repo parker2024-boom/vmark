@@ -143,7 +143,7 @@ fn observe_present_repo(root: &Path) -> Option<GitObservation> {
     let head_sha = git_output(root, &["rev-parse", "HEAD"]);
     // Include HEAD explicitly: a detached HEAD on an unreachable commit
     // (checked out from a dropped branch) is not in `--all`, and omitting
-    // it makes git navigation look like an external revision (audit C7).
+    // it makes git navigation look like an external revision.
     let known_shas: HashSet<String> = git_output(root, &["rev-list", "--all", "HEAD"])
         .map(|s| s.lines().map(str::to_string).collect())
         .unwrap_or_default();
@@ -177,7 +177,7 @@ pub fn classify_outcome(before: Option<&GitObservation>, after: &GitOutcome) -> 
 pub fn classify(before: Option<&GitObservation>, after: Option<&GitObservation>) -> GitClass {
     // A merge in progress must defer regardless of whether we have a
     // prior observation — the FIRST scan of a workspace already mid-merge
-    // must not reconcile conflict-state files (audit C5).
+    // must not reconcile conflict-state files.
     if after.is_some_and(|a| a.merge_in_progress) {
         return GitClass::MergeInProgress;
     }

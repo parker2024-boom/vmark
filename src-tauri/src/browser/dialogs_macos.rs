@@ -1,4 +1,4 @@
-//! Interactive JS-dialog completion registry for the embedded browser (WI-1.7).
+//! Interactive JS-dialog completion registry for the embedded browser.
 //!
 //! A WKUIDelegate `confirm()` panel hands us an ObjC completion block that must
 //! be called with the user's answer — but the answer only arrives after a VMark

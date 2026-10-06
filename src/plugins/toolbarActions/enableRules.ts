@@ -5,7 +5,7 @@
  * the current editor context (cursor position, selection, block type). This is the
  * single source of truth for "should this button be clickable right now?"
  *
- * Pipeline: cursor context (from toolbarContext) → computeButtonState per button →
+ * Pipeline: cursor context (shared/toolbarContextTypes) → computeButtonState per button →
  *           disabled/active flags → toolbar renders accordingly
  *
  * Key decisions:
@@ -14,14 +14,14 @@
  *   - Multi-selection has per-action policies (allow/deny/conditional)
  *   - Source mode tracks its own unimplemented set (currently empty)
  *
- * @coordinates-with toolbarContext/types.ts — provides CursorContext used for decisions
+ * @coordinates-with shared/toolbarContextTypes.ts — provides CursorContext used for decisions
  * @coordinates-with multiSelectionPolicy.ts — per-action multi-selection rules
  * @coordinates-with UniversalToolbar.tsx — consumes computed button states
  * @module plugins/toolbarActions/enableRules
  */
 import type { EditorView as TiptapEditorView } from "@tiptap/pm/view";
 import { isSeparator, type ToolbarGroupButton, type ToolbarMenuItem, type ToolbarActionItem } from "@/components/Editor/UniversalToolbar/toolbarGroups";
-import type { CursorContext as WysiwygContext } from "@/plugins/toolbarContext/types";
+import type { CursorContext as WysiwygContext } from "@/plugins/shared/toolbarContextTypes";
 import type { CursorContext as SourceContext } from "@/types/cursorContext";
 import type { ToolbarContext } from "./types";
 import { canRunActionInMultiSelection } from "./multiSelectionPolicy";

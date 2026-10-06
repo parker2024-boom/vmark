@@ -1,5 +1,5 @@
 /**
- * Toolbar label translation (audit 20260612 H17).
+ * Toolbar label translation.
  *
  * Purpose: Resolve toolbar group/item labels through i18n at render time.
  *   The `toolbar.*` keys were translated in every locale but never consumed

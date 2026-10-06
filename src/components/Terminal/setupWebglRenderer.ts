@@ -36,7 +36,7 @@
  *     moves the terminal CORE off latest too, and the six sibling addons
  *     pinned here declare no peer range — they would silently run against a
  *     core they were not built against. That is seven packages on a master
- *     snapshot (304 beta builds since 2025-12-22, against a 20-month gap
+ *     snapshot (304 beta builds, against a 20-month gap
  *     between the last two core stables) to fix one bug that the ~30 lines
  *     below already fix on the released version.
  *

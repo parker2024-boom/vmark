@@ -4,22 +4,14 @@
  * Range-membership, next-occurrence lookup, and selection-building logic
  * used by both the occurrence commands (occurrenceCommands.ts) and the
  * cursor commands (cursorCommands.ts). Extracted from commands.ts.
+ *
+ * @module plugins/multiCursor/commandHelpers
  */
+
 import { SelectionRange } from "@tiptap/pm/state";
 import type { Node } from "@tiptap/pm/model";
-import { MultiSelection } from "./MultiSelection";
-import { normalizeRangesWithPrimary } from "./rangeUtils";
-
-/**
- * Check if a range is already in the MultiSelection.
- */
-function rangeExists(
-  ranges: readonly SelectionRange[],
-  from: number,
-  to: number
-): boolean {
-  return ranges.some((r) => r.$from.pos === from && r.$to.pos === to);
-}
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
+import { normalizeRangesWithPrimary } from "@/plugins/shared/rangeUtils";
 
 /**
  * Check if a position falls within any existing range (boundaries inclusive).
@@ -36,6 +28,10 @@ export function positionWithinRanges(
 /**
  * Find the next unused occurrence after a given position, wrapping around.
  * Returns the first occurrence not already in `existingRanges`.
+ *
+ * Membership is a set lookup: after wrapping, the search passes every
+ * occurrence already selected, so checking each against every range made
+ * one Cmd+D quadratic in the cursor count.
  */
 export function findNextUnusedOccurrence(
   occurrences: Array<{ from: number; to: number }>,
@@ -43,19 +39,14 @@ export function findNextUnusedOccurrence(
   beforePos: number,
   existingRanges: readonly SelectionRange[]
 ): { from: number; to: number } | null {
-  // Look after the given position
-  for (const occ of occurrences) {
-    if (occ.from >= afterPos && !rangeExists(existingRanges, occ.from, occ.to)) {
-      return occ;
-    }
-  }
-  // Wrap around: look before the given position
-  for (const occ of occurrences) {
-    if (occ.from < beforePos && !rangeExists(existingRanges, occ.from, occ.to)) {
-      return occ;
-    }
-  }
-  return null;
+  const used = new Set(existingRanges.map((r) => `${r.$from.pos}:${r.$to.pos}`));
+  const unused = (occ: { from: number; to: number }) => !used.has(`${occ.from}:${occ.to}`);
+  // Look after the given position; then wrap around and look before it.
+  return (
+    occurrences.find((occ) => occ.from >= afterPos && unused(occ)) ??
+    occurrences.find((occ) => occ.from < beforePos && unused(occ)) ??
+    null
+  );
 }
 
 /**

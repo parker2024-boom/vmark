@@ -31,7 +31,7 @@
 //!   - Platform differences (App menu, Print, Settings/Exit placement) are
 //!     cfg-gated tails appended to shared item lists, not duplicated menus.
 //!
-//! @coordinates-with `menu_events.rs` (dispatches click events to frontend)
+//! @coordinates-with `events.rs` (dispatches click events to frontend)
 //! @coordinates-with `macos_menu.rs` (applies SF Symbol icons and workarounds)
 //! @coordinates-with `lib.rs` (registers Tauri commands) / `app_setup.rs` (builds initial menu)
 //! @coordinates-with `locales/en.yml` (English locale strings)
@@ -39,10 +39,11 @@
 pub mod accelerators;
 mod commands;
 mod dynamic;
+pub(crate) mod events;
 pub mod localized;
 pub mod menu_state;
 
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 /// Menu ID for the Open Recent (files) submenu.
 pub const RECENT_FILES_SUBMENU_ID: &str = "recent-files-submenu";
@@ -66,29 +67,39 @@ pub(crate) static GENIES_SNAPSHOT: Mutex<Vec<String>> = Mutex::new(Vec::new());
 /// Get the path for a recent file by its menu index.
 /// Returns None if index is out of bounds.
 pub fn get_recent_file_path(index: usize) -> Option<String> {
-    RECENT_FILES_SNAPSHOT
-        .lock()
-        .ok()
-        .and_then(|files| files.get(index).cloned())
+    snapshot_entry(&RECENT_FILES_SNAPSHOT, index)
 }
 
 /// Get the path for a recent workspace by its menu index.
 /// Returns None if index is out of bounds.
 pub fn get_recent_workspace_path(index: usize) -> Option<String> {
-    RECENT_WORKSPACES_SNAPSHOT
-        .lock()
-        .ok()
-        .and_then(|workspaces| workspaces.get(index).cloned())
+    snapshot_entry(&RECENT_WORKSPACES_SNAPSHOT, index)
 }
 
 /// Get the file path for a genie by its menu index.
 /// Returns None if index is out of bounds.
 pub fn get_genie_path(index: usize) -> Option<String> {
-    GENIES_SNAPSHOT
-        .lock()
-        .ok()
-        .and_then(|paths| paths.get(index).cloned())
+    snapshot_entry(&GENIES_SNAPSHOT, index)
 }
+
+/// The entry a menu index names. A poisoned snapshot is read through: every
+/// write replaces it whole, so a panic while it was held cannot have torn it.
+fn snapshot_entry(slot: &Mutex<Vec<String>>, index: usize) -> Option<String> {
+    slot.lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(index)
+        .cloned()
+}
+
+/// Replace a menu snapshot wholesale — through a poisoned lock too, for the
+/// reason `snapshot_entry` gives.
+pub(crate) fn replace_snapshot(slot: &Mutex<Vec<String>>, value: Vec<String>) {
+    *slot.lock().unwrap_or_else(PoisonError::into_inner) = value;
+}
+
+#[cfg(test)]
+#[path = "snapshots.test.rs"]
+mod snapshot_tests;
 
 // Re-export public items so `menu::create_menu`, `menu::rebuild_menu`, etc. keep working.
 // Wildcard re-exports are required for `#[tauri::command]` functions because the macro

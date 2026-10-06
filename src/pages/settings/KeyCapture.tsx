@@ -2,6 +2,8 @@
  * Key Capture Modal
  *
  * Modal overlay that captures keyboard input for shortcut customization.
+ *
+ * @module pages/settings/KeyCapture
  */
 
 import { useEffect, useCallback, useState } from "react";
@@ -16,7 +18,7 @@ import { captureChord } from "@/pages/settings/captureChord";
 interface KeyCaptureProps {
   shortcut: ShortcutDefinition;
   /** The shortcut that already owns `key`, or null. Resolved for the CAPTURED
-   *  chord (audit #425): the parent used to pass the shortcut's existing
+   *  chord: the parent used to pass the shortcut's existing
    *  binding's conflict, so a freshly pressed chord another shortcut owned
    *  showed no warning, or a stale one. */
   getConflict: (key: string) => ShortcutDefinition | null;
@@ -52,8 +54,8 @@ export function KeyCapture({ shortcut, getConflict, onCapture, onCancel }: KeyCa
 
   // A captured chord that the runtime canonicalizer can't map (e.g. a shifted
   // symbol like `Mod-Shift->`, whose `>` has no physical code token) would be
-  // stored but silently never fire — the binding drops from the resolver index
-  // (WI-6.1). Validate against the SAME canonicalizer the router uses and refuse
+  // stored but silently never fire — the binding drops from the resolver index.
+  // Validate against the SAME canonicalizer the router uses and refuse
   // to assign an unmappable chord instead of accepting a dead one.
   const unsupported = capturedKey !== null && canonicalizeChordString(capturedKey) === null;
 

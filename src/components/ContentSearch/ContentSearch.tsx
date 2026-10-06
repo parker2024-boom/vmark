@@ -58,7 +58,7 @@ export function ContentSearch({ windowLabel }: ContentSearchProps) {
   const { t } = useTranslation("editor");
   const isOpen = useUIStore((s) => s.contentSearch.isOpen);
   // The native browser view paints over all React DOM in its rect, so freeze every
-  // mounted browser tab while this overlay is up (WI-SOC.1).
+  // mounted browser tab while this overlay is up.
   useBrowserOccluder(isOpen, "content-search");
   const query = useUIStore((s) => s.contentSearch.query);
   const results = useUIStore((s) => s.contentSearch.results);
@@ -215,7 +215,7 @@ export function ContentSearch({ windowLabel }: ContentSearchProps) {
                   ? t("contentSearch.placeholder", "Search in files...")
                   : t("contentSearch.noWorkspace", "Open a workspace first")
               }
-              // WI-2.4 (a11y) — explicit accessible name. Placeholder text
+              // Explicit accessible name (a11y). Placeholder text
               // is not a reliable label for screen readers and changes based
               // on workspace state. Key defined in editor locale namespace.
               aria-label={t("contentSearch.label")}

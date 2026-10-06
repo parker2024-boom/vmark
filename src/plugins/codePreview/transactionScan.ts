@@ -113,7 +113,7 @@ export function changesIntersectRanges(tr: Transaction, ranges: CodeBlockRange[]
 /**
  * Returns true if any step in the transaction could introduce or change a
  * code-block node at any depth — used to decide whether the prose-only fast
- * path may safely skip the full document scan (O1 / WI-2.1).
+ * path may safely skip the full document scan.
  *
  * Two cases, both cheap (no whole-document walk):
  *  - inserted/markup slices that contain a code-block node (insert, paste,

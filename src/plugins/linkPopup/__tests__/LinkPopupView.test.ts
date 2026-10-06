@@ -60,7 +60,6 @@ vi.mock("@/plugins/shared/popupHostDom", () => ({
 
 // Import after mocking
 import { LinkPopupView } from "../LinkPopupView";
-import { ASYNC_IMPORT_WAIT } from "@/test/waitBudget";
 
 // Helper functions
 const createMockRect = (overrides: Partial<DOMRect> = {}): DOMRect => ({
@@ -314,11 +313,11 @@ describe("LinkPopupView", () => {
       const openBtn = dom.container.querySelector(".link-popup-btn-open") as HTMLElement;
       openBtn.click();
 
-      // Flush microtask queue: dynamic import() + .then() + .catch()
-      // Use vi.waitFor to reliably wait for the async dynamic import chain
-      await vi.waitFor(() => {
-        expect(mockOpenUrl).toHaveBeenCalledWith("https://test.com");
-      }, ASYNC_IMPORT_WAIT);
+      // The open runs through dynamic imports (the settings store for the
+      // scheme allowlist, then the opener plugin). Await THEM, not a wall
+      // clock: a time budget only measures how busy the machine is.
+      await vi.dynamicImportSettled();
+      expect(mockOpenUrl).toHaveBeenCalledWith("https://test.com");
     });
 
     it("copy button copies URL to clipboard", async () => {

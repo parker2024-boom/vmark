@@ -1,4 +1,4 @@
-//! WI-14 — conversions from the crate's eight hand-rolled error enums.
+//! Conversions from the crate's eight hand-rolled error enums.
 //!
 //! Each of these types drew real distinctions that the old `Result<T, String>`
 //! boundary erased: `genie_step.rs` carried a literal
@@ -129,7 +129,7 @@ impl From<BrowserError> for CommandError {
 // ── 5. browser::ai_policy::AiUrlError ──────────────────────────────────────
 // A blocked destination is a policy REFUSAL, not a malformed argument: the
 // caller may not go there at all, and no re-formatting of the URL will help.
-// An unusable URL is the opposite (audit 20260803 §6) — fixing the argument is
+// An unusable URL is the opposite — fixing the argument is
 // exactly what the caller should do — so it must not arrive as a security
 // refusal, and its `detail.kind` must not collide with the refusal's.
 impl From<AiUrlError> for CommandError {
@@ -182,8 +182,8 @@ impl From<TemplateError> for CommandError {
 // variants spanning three different classes — a bad step definition, a missing
 // genie, and a provider blowing up — all became one opaque sentence.
 //
-// `Provider` and `InvalidOutput` are `Network`, not `Internal` (audit 20260803
-// §8). `ErrorCode::Network` documents its class as "Remote call failed:
+// `Provider` and `InvalidOutput` are `Network`, not `Internal`.
+// `ErrorCode::Network` documents its class as "Remote call failed:
 // provider request, …" and marks it RETRYABLE; `Internal` documents itself as
 // "A bug: poisoned lock, task join failure, closed channel" and does not. A CLI
 // provider exiting non-zero, or a model answering with a truncated JSON object,

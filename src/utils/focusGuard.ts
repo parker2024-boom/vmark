@@ -4,6 +4,8 @@
  * Determines when menu actions should be blocked based on current focus state.
  * Used by the unified menu dispatcher to prevent actions when focus is in
  * non-editor UI elements.
+ *
+ * @module utils/focusGuard
  */
 
 /**

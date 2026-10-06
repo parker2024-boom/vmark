@@ -1,4 +1,4 @@
-//! Page-world recorder-capture shim injection (WI-NB7.1, native half).
+//! Page-world recorder-capture shim injection (native half).
 //!
 //! Registers a **dormant page-world** `WKUserScript` that captures user actions
 //! (`click`/`change` LOCATORS — never typed values) into a capped ring buffer on a
@@ -32,11 +32,8 @@
 //! `__vmark_recorder_armed`.
 
 use crate::browser::registry::AutomationMode;
-use objc2::{MainThreadMarker, MainThreadOnly};
-use objc2_foundation::NSString;
-use objc2_web_kit::{
-    WKContentWorld, WKUserScript, WKUserScriptInjectionTime, WKWebViewConfiguration,
-};
+use objc2::MainThreadMarker;
+use objc2_web_kit::WKWebViewConfiguration;
 
 /// The page-world recorder shim: the shared core helpers (three files), the shim's
 /// sensitivity helpers, then the shim body, in one IIFE — the SAME five assets in
@@ -76,19 +73,9 @@ pub(super) fn configure(
     if !installs_for(mode) {
         return;
     }
-    let source = NSString::from_str(RECORDER_SHIM_SRC);
-    let page_world = unsafe { WKContentWorld::pageWorld(mtm) };
-    let script = unsafe {
-        WKUserScript::initWithSource_injectionTime_forMainFrameOnly_inContentWorld(
-            WKUserScript::alloc(mtm),
-            &source,
-            WKUserScriptInjectionTime::AtDocumentStart,
-            false, // inject into all frames, not just the main frame
-            &page_world,
-        )
-    };
-    let controller = unsafe { config.userContentController() };
-    unsafe { controller.addUserScript(&script) };
+    // Every frame, not just the main one: a user action in a subframe is still
+    // an action to record.
+    super::webkit_calls::add_page_world_script(config, mtm, RECORDER_SHIM_SRC, false);
 }
 
 #[cfg(test)]

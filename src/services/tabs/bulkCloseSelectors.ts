@@ -1,5 +1,5 @@
 /**
- * Which tabs each bulk-close action targets (WI-DSPL1.5 extraction).
+ * Which tabs each bulk-close action targets.
  *
  * The four callbacks in `useTabContextMenuActions` repeated one lifecycle —
  * select ids, close with the dirty check, dismiss the menu — and differed only

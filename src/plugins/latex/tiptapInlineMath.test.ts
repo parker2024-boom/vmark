@@ -3,32 +3,44 @@
  * Tests for tiptapInlineMath — inline math extension structure, schema, and rendering.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 
 // Mock CSS import
 vi.mock("./latex.css", () => ({}));
 
-// Mock the MathInlineNodeView
-vi.mock("./MathInlineNodeView", () => ({
-  MathInlineNodeView: vi.fn().mockImplementation(() => ({
-    dom: document.createElement("span"),
-    update: vi.fn(),
-    destroy: vi.fn(),
-  })),
-}));
-
-const { scheduleKatexFontPreload } = vi.hoisted(() => ({ scheduleKatexFontPreload: vi.fn() }));
-vi.mock("./katexFontPreload", () => ({ scheduleKatexFontPreload }));
-
 import { mathInlineExtension } from "./tiptapInlineMath";
+import { resetKatexFontPreloadForTest } from "./katexFontPreload";
 import { getSchema } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 
 describe("mathInlineExtension lifecycle", () => {
-  it("schedules KaTeX's font preload when an editor is created", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    resetKatexFontPreloadForTest();
+  });
+
+  it("loads KaTeX's declared, unloaded font faces once the editor is created and idle", () => {
+    vi.useFakeTimers();
+    resetKatexFontPreloadForTest();
+    const face = (family: string, status: string) => ({ family, status, load: vi.fn(() => Promise.resolve()) });
+    const katex = face("KaTeX_Main", "unloaded");
+    const loaded = face("KaTeX_AMS", "loaded");
+    const other = face("Inter", "unloaded");
+    // This file runs without a DOM; the preload only iterates the FontFaceSet.
+    vi.stubGlobal("document", {
+      fonts: { forEach: (visit: (f: unknown) => void) => [katex, loaded, other].forEach(visit) },
+    });
+
     const onCreate = mathInlineExtension.config.onCreate as (() => void) | undefined;
     onCreate?.call({});
-    expect(scheduleKatexFontPreload).toHaveBeenCalledTimes(1);
+    // Idle-scheduled: nothing loads during the editor's own creation.
+    expect(katex.load).not.toHaveBeenCalled();
+
+    vi.runAllTimers();
+    expect(katex.load).toHaveBeenCalledTimes(1);
+    expect(loaded.load).not.toHaveBeenCalled();
+    expect(other.load).not.toHaveBeenCalled();
   });
 });
 

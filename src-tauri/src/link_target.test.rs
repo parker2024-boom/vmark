@@ -160,7 +160,7 @@ fn not_yet_existing_file_resolves_to_itself() {
 /// — it is the caller's "the folder is gone" case, which routes the user into
 /// Save As. Resolution must classify `ENOTDIR` like `NotFound`, or the error
 /// arrives as a generic write failure instead (caught by
-/// `file_write::tests::parent_that_is_a_file_reports_the_same_not_found_class`).
+/// `files::write::tests::parent_that_is_a_file_reports_the_same_not_found_class`).
 #[test]
 fn a_parent_that_is_a_file_is_reported_as_a_missing_referent_parent() {
     let dir = tempdir().unwrap();

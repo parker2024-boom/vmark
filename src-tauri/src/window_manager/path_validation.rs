@@ -17,7 +17,7 @@ use crate::canonical_path::canonical_string;
 /// isn't a registered VMark format).
 ///
 /// Returns the CANONICAL path — the target this function judged — and that is
-/// the ONLY value the caller passes on (#250): it is what gets granted, and it
+/// the ONLY value the caller passes on: it is what gets granted, and it
 /// is what goes in the window URL. The raw string is a NAME, and a name can be
 /// re-pointed: granting it put whatever the link meant at grant time into the
 /// scope with this check's blessing, and handing it to the window left every
@@ -28,7 +28,7 @@ pub(super) fn validate_openable_path(raw: &str) -> Result<String, String> {
     let canonical = Path::new(raw)
         .canonicalize()
         .map_err(|e| format!("invalid path '{raw}': {e}"))?;
-    // WI-1B.5 — security gate now accepts every registered format's
+    // The security gate now accepts every registered format's
     // extension (markdown + txt + json + yaml + toml + html + svg +
     // mmd + code-viewer set). Symlink rejection still works because
     // canonicalize() resolves the link first; we then re-check the
@@ -47,7 +47,7 @@ pub(super) fn validate_openable_path(raw: &str) -> Result<String, String> {
 /// anything that doesn't resolve to a real directory on disk.
 ///
 /// Returns the canonical root, for the same reason `validate_openable_path`
-/// does (#250): the window is scoped to the directory this judged, not to a
+/// does: the window is scoped to the directory this judged, not to a
 /// name that can mean something else by the time the window mounts.
 pub(super) fn validate_workspace_root(raw: &str) -> Result<String, String> {
     require_absolute(raw, "workspace root")?;
@@ -61,7 +61,7 @@ pub(super) fn validate_workspace_root(raw: &str) -> Result<String, String> {
 }
 
 /// A gate over frontend-supplied paths must not resolve them against the
-/// PROCESS's working directory (audit #491/#493).
+/// PROCESS's working directory.
 ///
 /// `Path::canonicalize` happily accepts a relative name and resolves it
 /// against the cwd — which for a GUI launch is `/`, for a CLI launch is

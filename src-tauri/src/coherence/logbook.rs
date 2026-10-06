@@ -1,4 +1,4 @@
-//! Coherence logbook (dogfood-driven, 2026-07-20) — the record that makes M2
+//! Coherence logbook (dogfood-driven) — the record that makes M2
 //! (staleness relevance) and M4 (resolution burden) judgeable.
 //!
 //! Almost entirely a PROJECTION over the append-only ledger. Flags, check

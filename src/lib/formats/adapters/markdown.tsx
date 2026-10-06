@@ -1,21 +1,25 @@
-// WI-1A.3 — Markdown format adapter.
-//
-// Registers .md/.markdown/.mdown/.mkd/.mdx as kind="wysiwyg" pointing at
-// the markdown rendering surface (Tiptap WYSIWYG + CodeMirror source mode +
-// workflow side panels + heading picker).
-//
-// WI-13 — this module is METADATA ONLY. `bootstrapFormats()` evaluates it in
-// every window (Settings, PDF export) before `import("./App")`, so anything it
-// imports statically is cold-start cost for windows that never open an editor.
-// The surface lives in ./markdownSurface and the CodeMirror pack behind the
-// `language` thunk; both load at first mount via lib/formats/lazySurfaces.ts.
-// What stays static here is what the REGISTRY answers synchronously —
-// extensions, dispatch keys, menu policy — plus the light text helpers
-// (`lint`, `outline`, `toPlainText`) the stores call per keystroke.
+/**
+ * Markdown format adapter — the registry entry for markdown files.
+ *
+ * Registers .md/.markdown/.mdown/.mkd/.mdx as kind="wysiwyg" pointing at
+ * the markdown rendering surface (Tiptap WYSIWYG + CodeMirror source mode +
+ * workflow side panels + heading picker).
+ *
+ * This module is METADATA ONLY. `bootstrapFormats()` evaluates it in
+ * every window (Settings, PDF export) before `import("./App")`, so anything it
+ * imports statically is cold-start cost for windows that never open an editor.
+ * The surface lives in ./markdownSurface and the CodeMirror pack behind the
+ * `language` thunk; both load at first mount via lib/formats/lazySurfaces.ts.
+ * What stays static here is what the REGISTRY answers synchronously —
+ * extensions, dispatch keys, menu policy — plus the light text helpers
+ * (`lint`, `outline`, `toPlainText`) the stores call per keystroke.
+ *
+ * @module lib/formats/adapters/markdown
+ */
 
 import { lintMarkdown } from "@/lib/lintEngine";
-import { extractHeadings } from "@/components/Sidebar/outlineUtils";
-import { stripMarkdown } from "@/components/StatusBar/statusTextMetrics";
+import { extractHeadings } from "@/utils/markdownOutline";
+import { stripMarkdown } from "@/utils/markdownTextMetrics";
 import { registerFormat } from "../registry";
 import type { FormatConfig } from "../types";
 

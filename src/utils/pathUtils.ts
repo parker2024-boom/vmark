@@ -6,7 +6,7 @@
  *
  * Note: For workspace boundary checks, prefer paths/paths.ts which normalizes
  * to forward slashes. This file is for display-oriented utilities (filenames,
- * file manager labels).
+ * the translation key of the file manager label — utils/ cannot translate).
  *
  * @coordinates-with paths/paths.ts — more comprehensive path utilities with normalization
  * @coordinates-with exportNaming.ts — uses getFileNameWithoutExtension for export filenames
@@ -57,16 +57,20 @@ export function joinPath(directory: string, filename: string): string {
   return `${cleanDir}${separator}${filename}`;
 }
 
+/** Translation key of a "reveal in file manager" label, namespace included. */
+export type RevealInFileManagerKey =
+  | "sidebar:contextMenu.revealInFinder"
+  | "sidebar:contextMenu.showInExplorer"
+  | "sidebar:contextMenu.showInFileManager";
+
 /**
- * Get platform-appropriate label for "reveal in file manager" action.
- * - macOS: "Reveal in Finder"
- * - Windows: "Show in Explorer"
- * - Linux/other: "Show in File Manager"
+ * Platform-appropriate translation key for the "reveal in file manager"
+ * action — Finder on macOS, Explorer on Windows, the file manager elsewhere.
+ * Callers translate it; every menu that offers the action uses this one rule.
  */
-export function getRevealInFileManagerLabel(): string {
-  if (typeof navigator === "undefined") return "Show in File Manager";
-  const platform = navigator.platform.toLowerCase();
-  if (platform.includes("mac")) return "Reveal in Finder";
-  if (platform.includes("win")) return "Show in Explorer";
-  return "Show in File Manager";
+export function revealInFileManagerKey(): RevealInFileManagerKey {
+  const platform = typeof navigator === "undefined" ? "" : navigator.platform.toLowerCase();
+  if (platform.includes("mac")) return "sidebar:contextMenu.revealInFinder";
+  if (platform.includes("win")) return "sidebar:contextMenu.showInExplorer";
+  return "sidebar:contextMenu.showInFileManager";
 }

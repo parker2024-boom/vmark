@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -14,8 +14,8 @@ const mocks = vi.hoisted(() => ({
   isOpen: true,
   position: { x: 100, y: 100 } as { x: number; y: number } | null,
   closeMenu: vi.fn(),
-  isImeKeyEvent: vi.fn(() => false),
-  getRevealInFileManagerLabel: vi.fn(() => "Reveal in Finder"),
+  isImeKeyEvent: vi.fn((..._args: unknown[]) => false),
+  revealInFileManagerKey: vi.fn((): string => "sidebar:contextMenu.revealInFinder"),
 }));
 
 vi.mock("@/stores/imageContextMenuStore", () => {
@@ -43,7 +43,7 @@ vi.mock("@/utils/imeGuard", () => ({
 }));
 
 vi.mock("@/utils/pathUtils", () => ({
-  getRevealInFileManagerLabel: () => mocks.getRevealInFileManagerLabel(),
+  revealInFileManagerKey: () => mocks.revealInFileManagerKey(),
 }));
 
 vi.mock("@/components/Sidebar/FileExplorer/ContextMenu.css", () => ({}));
@@ -53,14 +53,14 @@ import { ImageContextMenu } from "./ImageContextMenu";
 // ── Tests ────────────────────────────────────────────────────────────
 
 describe("ImageContextMenu", () => {
-  let onAction: ReturnType<typeof vi.fn>;
+  let onAction: Mock<(action: string) => void>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    onAction = vi.fn();
+    onAction = vi.fn<(action: string) => void>();
     mocks.isOpen = true;
     mocks.position = { x: 100, y: 100 };
-    mocks.getRevealInFileManagerLabel.mockReturnValue("Reveal in Finder");
+    mocks.revealInFileManagerKey.mockReturnValue("sidebar:contextMenu.revealInFinder");
     mocks.isImeKeyEvent.mockReturnValue(false);
   });
 
@@ -107,12 +107,10 @@ describe("ImageContextMenu", () => {
 
   // ── Platform-specific label ──────────────────────────────────────
 
-  it("uses platform-appropriate reveal label", () => {
-    mocks.getRevealInFileManagerLabel.mockReturnValue("Show in Explorer");
-    const { rerender } = render(<ImageContextMenu onAction={onAction} />);
-    // The label is memoized on first render, so we need a fresh mount
-    rerender(<ImageContextMenu onAction={onAction} />);
-    // On macOS test env it will use whatever the mock returns
+  // WI-RA19.4 — the label is the platform's translation key, translated.
+  it("uses the translated platform-appropriate reveal label", () => {
+    mocks.revealInFileManagerKey.mockReturnValue("sidebar:contextMenu.showInExplorer");
+    render(<ImageContextMenu onAction={onAction} />);
     expect(screen.getByText("Show in Explorer")).toBeInTheDocument();
   });
 
@@ -141,8 +139,7 @@ describe("ImageContextMenu", () => {
 
   it("calls onAction with 'revealInFinder' on Reveal click", () => {
     render(<ImageContextMenu onAction={onAction} />);
-    // The label comes from the mock — match whatever it returns
-    const revealItem = screen.getByText(mocks.getRevealInFileManagerLabel());
+    const revealItem = screen.getByText("Reveal in Finder");
     fireEvent.click(revealItem);
     expect(onAction).toHaveBeenCalledWith("revealInFinder");
     expect(mocks.closeMenu).toHaveBeenCalled();
@@ -232,6 +229,28 @@ describe("ImageContextMenu", () => {
     const { container } = render(<ImageContextMenu onAction={onAction} />);
     const menu = container.querySelector(".context-menu") as HTMLElement;
     expect(menu).toBeInTheDocument();
+  });
+
+  // WI-RA9B.4 — a window smaller than the menu must not park it off screen.
+  it("never positions the menu at a negative coordinate on a tiny window", () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 180, height: 160, x: 0, y: 0, top: 0, left: 0, right: 180, bottom: 160,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const { innerWidth, innerHeight } = window;
+    window.innerWidth = 120;
+    window.innerHeight = 90;
+    try {
+      mocks.position = { x: 60, y: 40 };
+      const { container } = render(<ImageContextMenu onAction={onAction} />);
+      const menu = container.querySelector(".context-menu") as HTMLElement;
+      expect(menu.style.left).toBe("10px");
+      expect(menu.style.top).toBe("10px");
+    } finally {
+      rectSpy.mockRestore();
+      window.innerWidth = innerWidth;
+      window.innerHeight = innerHeight;
+    }
   });
 
   // ── Accessibility: ARIA roles ────────────────────────────────────

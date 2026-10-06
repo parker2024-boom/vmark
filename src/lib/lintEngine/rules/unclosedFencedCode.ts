@@ -6,7 +6,7 @@
  * the same character and have at least as many characters as the opening.
  * Lines with 4+ leading spaces are not fences (indented code blocks).
  *
- * Two CommonMark details the first implementation missed (audit R3 #861/#862):
+ * Two CommonMark details the first implementation missed:
  * a backtick opener may not carry a backtick in its info string, and the text
  * after a CLOSING fence may only be spaces and tabs — `trim()` also consumed
  * NBSP and every other Unicode space, so a line that does not close a fence
@@ -14,6 +14,8 @@
  * the shared line index splits on "\n", so every line of a CRLF document
  * retains it, and rejecting it would report an unclosed fence on every
  * correctly-closed CRLF file.
+ *
+ * @module lib/lintEngine/rules/unclosedFencedCode
  */
 
 import type { LintRule } from "../types";

@@ -5,9 +5,10 @@
  *   watches the workspace root or active document's directory for external changes.
  *
  * Pipeline: This hook determines watchPath (via pickWatchRoot) →
- *   invoke("start_watching") → Rust debounced watcher emits `fs:changed` →
- *   useWorkspaceEventBus normalizes → consumers (useFileTree,
- *   useExternalFileChanges) react
+ *   invoke("start_watching") → the Rust watcher batches changes and emits
+ *   `fs:changed` to THIS window only (the watchId is the window label, which is
+ *   also the event target) → services/workspaceEvents normalizes → consumers
+ *   (useFileTree, useExternalFileChanges) react
  *
  * Key decisions:
  *   - Workspace mode: watches workspace root
@@ -22,7 +23,7 @@
  *     regardless of individual invoke resolution timing.
  *
  * @coordinates-with useExternalFileChanges.ts — reacts to the change events
- * @coordinates-with utils/watchRoot.ts — pickWatchRoot (shared with useWorkspaceEventBus) picks the watched dir
+ * @coordinates-with utils/watchRoot.ts — pickWatchRoot (shared with services/workspaceEvents/subscribeWorkspaceEvents) picks the watched dir
  * @module hooks/useWindowFileWatcher
  */
 

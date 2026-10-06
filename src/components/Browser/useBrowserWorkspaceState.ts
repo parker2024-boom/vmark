@@ -1,3 +1,11 @@
+/**
+ * useBrowserWorkspaceState — React hooks that expose the window's
+ * browser-workspace projection and a cheap is-the-browser-workspace-active
+ * flag.
+ *
+ * @module components/Browser/useBrowserWorkspaceState
+ */
+
 import { useIsDocumentWindow, useWindowLabel } from "@/contexts/WindowContext";
 import { useTabStore } from "@/stores/tabStore";
 import { useVisibleWindowTabs } from "@/hooks/useVisibleWindowTabs";
@@ -10,7 +18,7 @@ const EMPTY_TABS: never[] = [];
 export function useBrowserWorkspaceState() {
   const isDocumentWindow = useIsDocumentWindow();
   const windowLabel = useWindowLabel();
-  // WI-8.1/4R: render surfaces see the VISIBLE projection — active-instance
+  // Render surfaces see the VISIBLE projection — active-instance
   // documents + ALL browser tabs (window-global, plan D1). Rail off = raw list.
   const visibleTabs = useVisibleWindowTabs(windowLabel);
   const tabs = isDocumentWindow ? visibleTabs : EMPTY_TABS;

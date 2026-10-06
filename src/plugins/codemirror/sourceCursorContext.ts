@@ -1,3 +1,10 @@
+/**
+ * Source cursor context — a CodeMirror update listener that publishes the
+ * cursor's formatting context from the active source view to the host.
+ *
+ * @module plugins/codemirror/sourceCursorContext
+ */
+
 import { EditorView } from "@codemirror/view";
 import { hostEditors } from "@/plugins/shared/hostEditors";
 import { computeSourceCursorContext } from "@/plugins/sourceContextDetection/cursorContext";
@@ -6,7 +13,7 @@ import { computeSourceCursorContext } from "@/plugins/sourceContextDetection/cur
  * Creates a CodeMirror plugin that publishes the source cursor context on
  * selection and document changes.
  *
- * Only the ACTIVE source view publishes (audit 20260928 #99). In a split, a
+ * Only the ACTIVE source view publishes. In a split, a
  * non-markdown pane taking focus drops the markdown pane's context so the
  * toolbar and context menu — which act on `source.editorView` — cannot format
  * a document the user left; an unfocused view re-publishing on its next update

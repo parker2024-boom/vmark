@@ -260,62 +260,61 @@ describe("parseInlineMarkdown", () => {
     });
   });
 
-  describe("error handling (catch block, lines 73-74)", () => {
-    it("returns plain text fallback when unified processor throws", async () => {
-      // The processor now comes from the dialect (WI-3.1), so that is the
-      // boundary to mock — `unified` is no longer imported here.
-      vi.doMock("./dialect", () => ({
-        buildProcessorForMode: () => ({
-          parse: () => { throw new Error("Mock parse failure"); },
-        }),
-      }));
-      try {
-        const { parseInlineMarkdown: parseFresh } = await import("./inlineParser?err=1");
-        const result = parseFresh("**bold**");
-        expect(result).toHaveLength(1);
-        expect(result[0].type).toBe("text");
-        expect((result[0] as Text).value).toBe("**bold**");
-      } finally {
-        vi.doUnmock("./dialect");
+  // Faults are injected at the third-party remark plugins the inline-summary
+  // dialect is built from, so VMark's dialect assembly and the parse run for
+  // real. A fresh module graph makes the dialect pick up the replacement.
+  // The gate reads mock targets statically, so each fault names its package
+  // with a literal and this helper only runs the fresh parse.
+  async function parseFresh(text: string) {
+    try {
+      const { parseInlineMarkdown: parse } = await import("./inlineParser");
+      return parse(text);
+    } finally {
+      vi.doUnmock("remark-parse");
+      vi.doUnmock("remark-gfm");
+      vi.resetModules();
+    }
+  }
+
+  describe("error handling", () => {
+    it("returns plain text fallback when the parser throws", async () => {
+      function throwingParse(this: { parser?: unknown }) {
+        this.parser = () => {
+          throw new Error("parse failure");
+        };
       }
+      vi.resetModules();
+      vi.doMock("remark-parse", () => ({ default: throwingParse }));
+      const result = await parseFresh("**bold**");
+      expect(result).toEqual([{ type: "text", value: "**bold**" }]);
     });
 
-    it("returns plain text fallback when runSync throws", async () => {
-      vi.doMock("./dialect", () => ({
-        buildProcessorForMode: () => ({
-          parse: () => ({ type: "root", children: [] }),
-          runSync: () => { throw new Error("Mock runSync failure"); },
-        }),
-      }));
-      try {
-        const { parseInlineMarkdown: parseFresh } = await import("./inlineParser?err=2");
-        const result = parseFresh("*italic*");
-        expect(result).toHaveLength(1);
-        expect(result[0].type).toBe("text");
-        expect((result[0] as Text).value).toBe("*italic*");
-      } finally {
-        vi.doUnmock("./dialect");
+    it("returns plain text fallback when a transform throws in runSync", async () => {
+      function throwingTransform() {
+        return () => {
+          throw new Error("runSync failure");
+        };
       }
+      vi.resetModules();
+      vi.doMock("remark-gfm", () => ({ default: throwingTransform }));
+      const result = await parseFresh("*italic*");
+      expect(result).toEqual([{ type: "text", value: "*italic*" }]);
     });
   });
 
-  describe("empty children from processor (line 60)", () => {
-    it("returns text fallback when processor yields empty children", async () => {
-      vi.doMock("./dialect", () => ({
-        buildProcessorForMode: () => ({
-          parse: () => ({ type: "root", children: [] }),
-          runSync: () => ({ type: "root", children: [] }),
-        }),
-      }));
-      try {
-        const { parseInlineMarkdown: parseFresh } = await import("./inlineParser?empty=1");
-        const result = parseFresh("*text*");
-        expect(result).toHaveLength(1);
-        expect(result[0].type).toBe("text");
-        expect((result[0] as Text).value).toBe("*text*");
-      } finally {
-        vi.doUnmock("./dialect");
+  describe("empty children from processor", () => {
+    it("returns text fallback when the parser yields an empty root", async () => {
+      function emptyParse(this: { parser?: unknown }) {
+        this.parser = () => ({ type: "root", children: [] });
       }
+      vi.resetModules();
+      vi.doMock("remark-parse", () => ({ default: emptyParse }));
+      const result = await parseFresh("*text*");
+      expect(result).toEqual([{ type: "text", value: "*text*" }]);
+    });
+
+    it("parses the same input normally once the fault is gone", () => {
+      expect(parseInlineMarkdown("*text*")[0]?.type).toBe("emphasis");
     });
   });
 });

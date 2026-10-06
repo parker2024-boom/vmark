@@ -22,7 +22,7 @@ import {
   type CursorContext as SourceCursorContext,
   createEmptyCursorContext,
 } from "@/types/cursorContext";
-import type { CursorContext as TiptapCursorContext } from "@/plugins/toolbarContext/types";
+import type { CursorContext as TiptapCursorContext } from "@/plugins/shared/toolbarContextTypes";
 import { structuralEqual } from "@/utils/structuralEqual";
 import { publishDebugHandle } from "@/utils/devDebugHandle";
 

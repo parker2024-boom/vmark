@@ -1,5 +1,5 @@
 /**
- * Purpose: WI-B.2 — go-to-def for `uses:` lines. Cmd-Click (Mac) or
+ * Purpose: go-to-def for `uses:` lines. Cmd-Click (Mac) or
  *   Ctrl-Click (Linux/Win) on a `uses:` line that points at a
  *   workspace-local action or reusable workflow opens that target
  *   in a new tab. Remote refs (`actions/checkout@v4`, `docker://`)
@@ -79,7 +79,7 @@ export interface GotoExtensionContext {
 
 /**
  * Build the goto-def extension scoped to a specific editor's file
- * + window. Codex audit HIGH-5 fix — previously read from global
+ * + window. It used to read from global
  * tab state, which resolved local refs against the wrong repo in
  * multi-window sessions.
  */

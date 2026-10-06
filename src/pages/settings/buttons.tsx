@@ -3,6 +3,8 @@
  *
  * Part of the shared Settings UI primitives; see `components.tsx` (the
  * barrel) for the naming/decision rules that govern this family.
+ *
+ * @module pages/settings/buttons
  */
 
 import React, { useEffect, useRef, useState } from "react";
@@ -26,7 +28,7 @@ interface ButtonProps {
   "aria-describedby"?: string;
 }
 
-// WI-UI2.4: Button is a THIN WRAPPER over `.vm-btn` (button-shared.css).
+// Button is a THIN WRAPPER over `.vm-btn` (button-shared.css).
 // primary maps to the solid CTA, danger to the outlined danger; warning and
 // success have no canonical variant, so they keep a tint layered on the
 // canonical SHAPE (the shape is the thing that drifted).
@@ -128,7 +130,7 @@ export function CopyButton({ text, className = "" }: CopyButtonProps) {
       {copied ? (
         // Glyph size comes from the unlayered `.vm-icon-btn svg` rule (14px);
         // a layered Tailwind w-*/h-* utility here can never win and only
-        // misleads (audit round 2, finding 29).
+        // misleads.
         <svg className="text-[var(--success-color)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <polyline points="20 6 9 17 4 12" />
         </svg>

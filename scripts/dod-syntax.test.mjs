@@ -133,6 +133,28 @@ describe("rust-mod-include", () => {
     expect(rustModIncludes(src, "commands.test.rs")).toBe(false);
   });
 
+  // WI-RA28.1 — a test gated to a platform is compiled by `cargo test` on that
+  // platform; the crate gates tauri::test items off Windows exactly this way.
+  it.each([
+    ["all(test, unix)", "#[cfg(all(test, unix))]"],
+    ["all(test, not(target_os = …))", '#[cfg(all(test, not(target_os = "windows")))]'],
+    ["all(test, target_os = …)", '#[cfg(all(test, target_os = "macos"))]'],
+    ["all(test, any(of platforms))", '#[cfg(all(test, any(target_os = "macos", target_os = "linux")))]'],
+    ["a bare platform gate", "#[cfg(unix)]"],
+  ])("accepts an include gated by %s", (_label, gate) => {
+    expect(rustModIncludes(`${gate}\n#[path = "commands.test.rs"]\nmod tests;\n`, "commands.test.rs")).toBe(true);
+  });
+
+  it.each([
+    ["all(test, feature)", '#[cfg(all(test, feature = "slow"))]'],
+    ["not(test)", "#[cfg(not(test))]"],
+    ["all(test, any())", "#[cfg(all(test, any()))]"],
+    ["not(of something unevaluated)", '#[cfg(all(test, not(feature = "x")))]'],
+    ["cfg_attr", '#[cfg_attr(unix, cfg(test))]'],
+  ])("rejects an include gated by %s", (_label, gate) => {
+    expect(rustModIncludes(`${gate}\n#[path = "commands.test.rs"]\nmod tests;\n`, "commands.test.rs")).toBe(false);
+  });
+
   it("accepts a non-cfg attribute on the item — only a cfg gate makes the include conditional", () => {
     expect(rustModIncludes('#[allow(dead_code)]\n#[cfg(test)]\n#[path = "commands.test.rs"]\nmod tests;\n', "commands.test.rs")).toBe(true);
     expect(rustModIncludes('#[path = "commands.test.rs"]\n#[rustfmt::skip]\nmod tests;\n', "commands.test.rs")).toBe(true);

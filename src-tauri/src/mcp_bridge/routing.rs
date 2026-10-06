@@ -23,19 +23,19 @@ use tokio::sync::mpsc::Sender;
 pub(super) async fn wake_webview<R: Runtime>(app: &AppHandle<R>, target_label: &str) {
     if let Some(window) = app.get_webview_window(target_label) {
         log::debug!(
-            "[MCP Bridge] Attempting to wake webview '{}' via Tauri eval API",
+            "[MCP Bridge] Attempting to wake webview {:?} via Tauri eval API",
             target_label
         );
         if let Err(e) = window.eval("void(0)") {
             log::debug!(
-                "[MCP Bridge] Failed to wake webview '{}': {} (continuing anyway)",
+                "[MCP Bridge] Failed to wake webview {:?}: {} (continuing anyway)",
                 target_label,
                 e
             );
         }
     } else {
         log::warn!(
-            "[MCP Bridge] Cannot wake webview — window '{}' not found",
+            "[MCP Bridge] Cannot wake webview — window {:?} not found",
             target_label
         );
     }
@@ -59,7 +59,9 @@ pub(super) async fn emit_to_window_or_reply<R: Runtime>(
     let outcome = match app.get_webview_window(target_label) {
         Some(window) => {
             log::debug!(
-                "[MCP Bridge] Emitting mcp-bridge:request to '{target_label}' for {request_type} (id: {request_id})"
+                "[MCP Bridge] Emitting mcp-bridge:request to {target_label:?} for {} (id: {})",
+                crate::peer_text::peer_text(request_type),
+                crate::peer_text::peer_text(request_id)
             );
             window
                 .emit("mcp-bridge:request", event)
@@ -74,7 +76,7 @@ pub(super) async fn emit_to_window_or_reply<R: Runtime>(
     true
 }
 
-/// F5 (WI-3.5): resolve the target window for a frontend-routed request,
+/// F5: resolve the target window for a frontend-routed request,
 /// snapshotting the window→workspace map. On a routing refusal (ambiguity,
 /// conflict, missing pinned window) it removes the pending entry, replies
 /// to the client with the error, and returns `None` — the caller returns.
@@ -101,7 +103,7 @@ pub(super) async fn route_target_or_reply<R: Runtime>(
 /// Routing reads exactly ONE thing off the payload: its scoping path
 /// (`workspace_root`, else `filePath`). It used to also read `args.windowId`
 /// as an explicit pin — a field no shipped tool sends and the wire contract
-/// never declared, so the pin was unreachable (WI-15). See
+/// never declared, so the pin was unreachable. See
 /// `window_routing.rs` for why it was deleted rather than renamed.
 pub(super) fn resolve_target_window<R: Runtime>(
     args: &serde_json::Value,
@@ -180,8 +182,8 @@ pub(super) fn handle_rust_side<R: Runtime>(
                 error: None,
             })
         }
-        // Coherence layer: read-only views (WI-1.10/2b.8) plus the one
-        // delegated mutating action (WI-3.5 `resolve`), answered entirely
+        // Coherence layer: read-only views plus the one
+        // delegated mutating action (`resolve`), answered entirely
         // in Rust from the managed kernel — no webview hop, so they work
         // even when the webview is suspended and need no per-window routing.
         "vmark.coherence.status"
@@ -197,7 +199,7 @@ pub(super) fn handle_rust_side<R: Runtime>(
                 });
             };
             // External agents may not point the kernel at arbitrary
-            // filesystem roots (audit C1): only workspaces this
+            // filesystem roots: only workspaces this
             // installation has actually opened are queryable.
             if let Some(root) = request.args.get("workspace_root").and_then(|v| v.as_str()) {
                 if !super::coherence_answers::is_known_workspace(app, root) {
@@ -238,7 +240,7 @@ pub(super) async fn answer_rust_side<R: Runtime>(
     handle_rust_side(request, app, &principal)
 }
 
-/// Async dispatch for coherence requests (audit C2/C3/C5).
+/// Async dispatch for coherence requests.
 ///
 /// The two that WRITE take the bridge write lock, serializing them with
 /// document writes: `edges` (its scan reconciliation appends provenance to

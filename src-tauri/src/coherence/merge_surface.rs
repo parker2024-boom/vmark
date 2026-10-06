@@ -1,9 +1,10 @@
-//! Completed-merge surface (WI-3.7; design-3.md D3.3). The scan appends
+//! Completed-merge surface (design-3.md D3.3). The scan appends
 //! a `merge-completed` diagnostic per merge SHA (deduped); this reads the
 //! latest one for the breakdown's dismissible, pull-only banner. Nothing
 //! runs on its own — the read happens only when the UI pulls.
 
-use super::command_errors::{kernel_poisoned, ledger_unavailable, workspace_unavailable};
+use super::blocking::with_kernel;
+use super::command_errors::ledger_unavailable;
 use crate::command_error::CommandError;
 use serde::Serialize;
 
@@ -69,17 +70,15 @@ pub fn perform_recent_merge(kernel: &mut WorkspaceKernel) -> Result<Option<Merge
 }
 
 #[tauri::command]
-pub async fn coherence_recent_merge(
-    state: tauri::State<'_, super::commands::CoherenceState>,
+pub async fn coherence_recent_merge<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     workspace_root: String,
 ) -> Result<Option<MergeNotice>, CommandError> {
-    let kernel = state
-        .registry
-        .kernel_for(std::path::Path::new(&workspace_root), state.writer)
-        .map_err(workspace_unavailable)?;
-    let mut kernel = kernel.lock().map_err(|_| kernel_poisoned())?;
-    // Read-only: reports the most recent git merge the ledger reflects.
-    perform_recent_merge(&mut kernel).map_err(ledger_unavailable)
+    with_kernel(app, workspace_root, move |_state, kernel| {
+        // Read-only: reports the most recent git merge the ledger reflects.
+        perform_recent_merge(kernel).map_err(ledger_unavailable)
+    })
+    .await
 }
 
 #[cfg(test)]

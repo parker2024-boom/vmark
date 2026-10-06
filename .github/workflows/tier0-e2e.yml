@@ -8,8 +8,21 @@ name: Tier-0 E2E Journeys
 #
 # WI-17 pairs this with a fast per-PR tier — src/test/tier0/*, jsdom, real
 # stores and services over a stateful fs fake — which is what `pnpm check:all`
-# runs on every change. This workflow is the SLOW half: a real WebKitGTK app,
-# a real filesystem, real timers.
+# runs on every change. This workflow is the SLOW half: a real webview, a real
+# filesystem, real timers.
+#
+# It runs the WHOLE journey suite, on Linux and on macOS. It began as the nine
+# Tier-0 journeys named in a shell loop on one Linux runner, and the name of the
+# workflow is from then. That left most of the suite running nowhere: journeys
+# missing from the list never ran, and the embedded-browser journeys declare
+# `platforms: ["darwin"]`, which the runner reports as not applicable on Linux
+# and exits 0. So there is no list any more — `e2e/run-journeys.mjs` runs every
+# journey file and each leg skips only what its platform cannot host — and
+# scripts/check-e2e-schedule.test.mjs fails if a journey can run on no leg.
+#
+# The macOS leg is the only place the embedded browser (WKWebView) is exercised
+# end to end. It is weekly, like the rest of this workflow; nothing here runs
+# per pull request.
 #
 # Why weekly and not nightly: a debug Tauri build plus the journey suite is
 # ~20-30 runner-minutes, the fast tier already guards every PR, and the two
@@ -20,9 +33,10 @@ name: Tier-0 E2E Journeys
 # fails the run and reports into a single rolling tracking issue, the pattern
 # WI-4 established in mutation.yml after eight silent failures.
 #
-# Headed-runner caveat (e2e/README.md "CI"): GitHub-hosted runners are
-# headless, so the app runs under Xvfb. That is the one part of this workflow
-# no local check can prove.
+# Headed-runner caveat (e2e/README.md "CI"): GitHub-hosted Linux runners are
+# headless, so that leg runs the app under Xvfb; the macOS runner has a window
+# server and launches it directly. Neither can be proved by a local check —
+# only a run of this workflow shows that a journey passes on its runner.
 #
 # First green run: 31303955024 @ f339798ba549e06c8f00ffc2951e23517218aa50
 # (2026-08-09, workflow_dispatch, job `journeys`: success, 8/8 journeys).
@@ -78,7 +92,13 @@ concurrency:
 
 jobs:
   journeys:
-    runs-on: ubuntu-latest
+    name: Journeys (${{ matrix.os }})
+    strategy:
+      # One leg's failure says nothing about the other's journeys.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
@@ -86,6 +106,7 @@ jobs:
       - uses: ./.github/actions/setup-tauri-deps
 
       - name: Install Xvfb
+        if: runner.os == 'Linux'
         shell: bash
         # Job-local rather than in the shared composite action: three other
         # workflows use that action and none of them needs a display.
@@ -140,16 +161,23 @@ jobs:
         # cache it will hit rather than a parallel one.
         run: cargo build --manifest-path src-tauri/Cargo.toml
 
-      - name: Launch the debug app under Xvfb
+      - name: Launch the debug app
         shell: bash
         env:
           # The 9323 automation bridge is compiled only under
           # `#[cfg(debug_assertions)]` — a release build has no bridge to talk to.
           RUST_BACKTRACE: "1"
+        # Linux has no display, so the app gets a virtual one. The macOS runner
+        # has a window server and a logged-in session; the app opens a real
+        # window there.
         run: |
           mkdir -p e2e/artifacts
-          xvfb-run -a --server-args="-screen 0 1600x1200x24" \
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            xvfb-run -a --server-args="-screen 0 1600x1200x24" \
+              pnpm tauri:dev > e2e/artifacts/app.log 2>&1 &
+          else
             pnpm tauri:dev > e2e/artifacts/app.log 2>&1 &
+          fi
           echo "APP_PID=$!" >> "$GITHUB_ENV"
 
       - name: Wait for the app to become drivable
@@ -170,34 +198,15 @@ jobs:
             exit 1
           fi
 
-      - name: Run the Tier-0 journey subset
+      - name: Run every journey this platform can host
         shell: bash
-        # The runner takes ONE `--only` substring, so each Tier-0 journey gets
-        # its own invocation and every failure is collected before exiting —
-        # a `set -e` loop would hide every journey after the first red one.
-        run: |
-          failed=()
-          for journey in \
-            multi-doc-save-integrity \
-            dirty-file-close-guard \
-            autosave-persists-to-disk \
-            line-ending-preservation \
-            failed-save-preserves-document \
-            external-change-reloads-clean-doc \
-            terminal-workspace-cwd \
-            terminal-workspace-cd-sync \
-            terminal-rail-scoping
-          do
-            echo "::group::$journey"
-            if ! node e2e/run-journeys.mjs --only "$journey"; then
-              failed+=("$journey")
-            fi
-            echo "::endgroup::"
-          done
-          if [ ${#failed[@]} -gt 0 ]; then
-            echo "::error::Tier-0 journeys failed: ${failed[*]}"
-            exit 1
-          fi
+        # No journey is named here, on purpose. A filtered run executes what
+        # the list says, and the list is the thing that went stale. The
+        # unfiltered runner loads every file in e2e/journeys, keeps going after
+        # a failure, prints one PASS/FAIL/SKIP/N-A line per journey, checks that
+        # the tab bar ends as it began, and exits non-zero if any journey failed
+        # or a `coverageRequired` one was skipped.
+        run: node e2e/run-journeys.mjs
 
       - name: Stop the app
         if: always()
@@ -208,7 +217,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: tier0-e2e-artifacts
+          # Per leg: two jobs uploading under one name is an upload conflict.
+          name: tier0-e2e-artifacts-${{ matrix.os }}
           path: e2e/artifacts/
           if-no-files-found: ignore
 

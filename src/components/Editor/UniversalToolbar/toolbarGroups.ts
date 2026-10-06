@@ -40,7 +40,7 @@ export interface ToolbarActionItem {
    * string here drifted from the registry and ignored user rebinding. */
   shortcutId?: string;
   /** Action identifier for adapters — typed so a renamed or misspelled id
-   * is a compile error here, not a silent fall-through (WI-4). */
+   * is a compile error here, not a silent fall-through. */
   action: AdapterAction;
   enabledIn: EnableContext[];
 }

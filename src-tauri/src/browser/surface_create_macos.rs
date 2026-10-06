@@ -1,10 +1,10 @@
-//! Native webview creation for the browser surface (WI-1.2 / WI-P6.1, macOS).
+//! Native webview creation for the browser surface (macOS).
 //!
 //! Split out of surface_macos.rs (which stays under the file-size limit). Included
 //! via `#[path]` as a CHILD of that module, so `super::` reaches its private
 //! helpers (`on_main`, `WEBVIEWS`/`DELEGATES`, the view/store/lifecycle submodules).
 //!
-//! Failures are typed `NativeSurfaceError` end to end (round 4, #31). The view and
+//! Failures are typed `NativeSurfaceError` end to end. The view and
 //! store helpers (`content_view`, `ns_url`, `browser_store::configure`) fail typed.
 //! here spells a `fail::` token.
 
@@ -39,7 +39,7 @@ pub fn create(
 /// Create a browser webview with an explicit data-store posture. The store is
 /// selected before WKWebView construction, the only safe WebKit seam. A named
 /// `profile` (AiSandbox, per-use user-approved) selects an isolated store so a login
-/// persists for later reuse (WI-P6.1). Authorization for the profile is enforced by
+/// persists for later reuse. Authorization for the profile is enforced by
 /// the caller (`browser_ai_create`) BEFORE this runs.
 ///
 /// `allow_loopback` is the AI destination posture the caller validated the URL
@@ -47,7 +47,7 @@ pub fn create(
 /// posture (audit 20260903 P-01), so subframes and subresources are held to the
 /// policy the main frame was.
 ///
-/// Typed end to end (round 4, #31): `ai_transactions::create_native` takes this
+/// Typed end to end: `ai_transactions::create_native` takes this
 /// error as is, so `create_webview`'s failure reaches the classifier unrendered.
 pub fn create_with_mode(
     app: &AppHandle,
@@ -87,22 +87,25 @@ fn create_webview(
         let req = NSURLRequest::requestWithURL(&url_obj);
 
         // Start at zero size; the frontend supplies the measured browser rect immediately.
+        // SAFETY: `new` on a main-thread-only class; `mtm` proves the main thread.
         let config = unsafe { WKWebViewConfiguration::new(mtm) };
         // Fails closed if the named-store cap is exceeded (never shares the sandbox
-        // store) — WI-P6.1 H2. Checked before any native object is registered.
+        // store). Checked before any native object is registered.
         super::browser_store::configure(&config, mtm, mode, profile.as_deref())?;
         // The AI destination policy for every load the nav delegate cannot see —
         // subframes and subresources (audit 20260903 P-01). Fails closed: an AI
         // webview is never created without its rules.
         super::content_rules::configure(&config, mtm, mode, allow_loopback)?;
-        // Page-world console-capture shim (WI-P7.1) — AI-owned tabs only; no message handler.
+        // Page-world console-capture shim — AI-owned tabs only; no message handler.
         super::console_shim::configure(&config, mtm, mode);
-        // Dormant page-world recorder-capture shim (WI-NB7.1) — AI-owned tabs only; armed
+        // Dormant page-world recorder-capture shim — AI-owned tabs only; armed
         // at runtime by the isolated-world driver, no message handler.
         super::recorder_shim::configure(&config, mtm, mode);
-        // Native takeover signal (WI-NB5.2): installed once, at the first browser
+        // Native takeover signal: installed once, at the first browser
         // surface creation — before that no browser view exists to click into.
         super::user_input_monitor::ensure_installed(&app_handle, mtm);
+        // SAFETY: initializes the webview allocated on this line exactly once, with
+        // a live configuration that WebKit copies; `mtm` proves the main thread.
         let webview = unsafe {
             WKWebView::initWithFrame_configuration(WKWebView::alloc(mtm), CGRect::ZERO, &config)
         };
@@ -113,6 +116,10 @@ fn create_webview(
         // events (commit/finish/fail) fire for that load too. Held in DELEGATES
         // because WKWebView's navigationDelegate reference is weak.
         let delegate = super::NavDelegate::new(mtm, tab_id.clone(), app_handle);
+        // SAFETY: `delegate` implements both protocols (`define_class!` in
+        // nav_delegate_macos.rs). The webview holds its delegates weakly, so it
+        // never keeps a dangling pointer; `DELEGATES`, filled just below, is what
+        // keeps the delegate alive while the webview can still call it.
         unsafe {
             webview.setNavigationDelegate(Some(delegate.as_protocol()));
             webview.setUIDelegate(Some(delegate.as_ui_protocol()));
@@ -128,14 +135,14 @@ fn create_webview(
         // paint with a bounded run-loop pump (nav_api_navigation.rs).
         delegate.api_navigation(
             &webview,
-            || unsafe { webview.loadRequest(&req) }.is_some(),
+            || super::webkit_calls::load_request(&webview, &req),
             |wv| super::drive_load(wv, &NSRunLoop::mainRunLoop()),
         );
         Ok(())
     })
 }
 
-/// Forget a named profile's on-disk data (WI-P6.5) — the native half of the
+/// Forget a named profile's on-disk data — the native half of the
 /// management UI's "Remove profile". Main-thread; no-op for an unknown profile.
 pub fn forget_profile(app: &AppHandle, profile: String) -> Result<(), NativeSurfaceError> {
     super::on_main(app, move |mtm| {

@@ -200,7 +200,7 @@ export function useTheme() {
     // Existing applyCoreColors/applyModeColors layer settings-specific
     // values (theme palette, font sizing) on top of this baseline.
     //
-    // Audit fix (H1, 2026-05-25): pass the user's actual theme, not the
+    // Audit fix: pass the user's actual theme, not the
     // hardcoded paper/night pair. Without this, App.tsx's typed `cssVars`
     // consumers (drop overlay, etc.) rendered with paper's accent on
     // white/mint/sepia and night's accent on night-only.

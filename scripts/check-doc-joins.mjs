@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Doc-join gate (WI-FL0.3–0.6) — the website's factual claims are joined to the
+ * Doc-join gate — the website's factual claims are joined to the
  * code that makes them true, in the GATES tier so a docs-only PR still runs it.
  *
  * Why here and not an app-tier test: ci.yml skips fe-test on docs-only PRs
@@ -8,7 +8,7 @@
  * a guide page would be skipped on exactly the PR that edits the page.
  * check:static always runs, and this script lives there.
  *
- * Four joins, one module each under scripts/lib/docJoins/ — every module has the
+ * Six joins, one module each under scripts/lib/docJoins/ — every module has the
  * same contract, `{ id, DEFAULT_PATHS, run({ root, paths }) → { findings, info } }`,
  * and its own fixture-driven self-test:
  *
@@ -25,6 +25,12 @@
  *                      platform-qualified theme claim)
  *   journey-inventory  e2e/README.md ↔ e2e/journeys discovered exactly the way
  *                      e2e/run-journeys.mjs discovers them (default { name, run })
+ *   guide-claims       guide sentences and tables that state a constant, a
+ *                      default chord, an env-var name or a list ↔ the code
+ *                      that defines it (the claim table is guideClaimsTable.mjs)
+ *   locale-structure   every website/<locale>/guide page ↔ its English page:
+ *                      heading levels in order and the table, fence, Mermaid
+ *                      and container counts; a missing page or an orphan fails
  *
  * A join that throws is a FINDING, not a crash: a page that fails to parse is
  * drift too. Exit 0 clean, 1 findings, 64 usage. Self-tested by
@@ -34,6 +40,8 @@
  * @coordinates-with scripts/lib/docJoins/settingsDefaults.mjs
  * @coordinates-with scripts/lib/docJoins/readmeClaims.mjs
  * @coordinates-with scripts/lib/docJoins/journeyInventory.mjs
+ * @coordinates-with scripts/lib/docJoins/guideClaims.mjs
+ * @coordinates-with scripts/lib/docJoins/localeStructure.mjs
  * @coordinates-with .github/workflows/ci.yml — the docs-only filter this gate sidesteps
  */
 import { resolve } from "node:path";
@@ -42,6 +50,8 @@ import * as lintTable from "./lib/docJoins/lintTable.mjs";
 import * as settingsDefaults from "./lib/docJoins/settingsDefaults.mjs";
 import * as readmeClaims from "./lib/docJoins/readmeClaims.mjs";
 import * as journeyInventory from "./lib/docJoins/journeyInventory.mjs";
+import * as guideClaims from "./lib/docJoins/guideClaims.mjs";
+import * as localeStructure from "./lib/docJoins/localeStructure.mjs";
 import { isMainModule } from "./lib/isMainModule.mjs";
 
 export const ROOT = resolve(import.meta.dirname, "..");
@@ -59,6 +69,8 @@ export const JOIN_REGISTRY = [
   ["scripts/lib/docJoins/settingsDefaults.mjs", settingsDefaults],
   ["scripts/lib/docJoins/readmeClaims.mjs", readmeClaims],
   ["scripts/lib/docJoins/journeyInventory.mjs", journeyInventory],
+  ["scripts/lib/docJoins/guideClaims.mjs", guideClaims],
+  ["scripts/lib/docJoins/localeStructure.mjs", localeStructure],
 ];
 export const JOIN_MODULES = JOIN_REGISTRY.map(([rel]) => rel);
 

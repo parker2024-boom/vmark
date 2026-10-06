@@ -90,7 +90,7 @@ jobs:
             - WebSocket reconnection handling in `bridge/websocket.ts` (648 LoC)
             - Unhandled promise rejections in tool handlers
             - Message protocol type mismatches between `protocol-types.ts` and Rust bridge
-            - Sidecar process lifecycle gaps in `src-tauri/src/mcp_server.rs`
+            - Sidecar process lifecycle gaps in `src-tauri/src/mcp_bridge/control.rs`
 
             ### 6. Plugin CSS isolation
             70+ plugins in `src/plugins/`. Check that:

@@ -4,7 +4,7 @@ VMark expose **neuf outils MCP composites** aux assistants IA&nbsp;: `session`, 
 
 Trois des neuf — `session`, `browser_read` et `coherence` — déclarent `readOnlyHint: true`, de sorte qu'un client MCP peut les approuver automatiquement. C'est précisément pour cela que `browser`/`browser_read` et `coherence`/`coherence_resolve` sont des outils distincts&nbsp;: les annotations sont **par outil**, pas par action&nbsp;; un outil qui regroupe un instantané ARIA avec `execute_js` doit donc annoncer le danger d'`execute_js`. Répartir selon «&nbsp;est-ce que ceci modifie quelque chose&nbsp;?&nbsp;» permet à chaque moitié de dire la vérité, et garde les actions véritablement destructrices de la surface bien visibles dans la liste des outils.
 
-La précédente surface de 12 outils / 76 actions a été élaguée parce que les outils de mise en forme intra-document (gras, titres, tableaux, etc.) dupliquent un travail que les agents IA effectuent déjà trivialement via un aller-retour Markdown. `selection` a été conservé (conformément à l'ADR-7 du plan d'élagage) parce que l'aller-retour sur le document complet n'est pas économique sur les gros fichiers — chaque modification paie le document entier en jetons d'entrée, le document entier en jetons de sortie (~5× le prix de l'entrée), et une fenêtre d'écriture plus longue qui élargit la boucle de réessai sur révision obsolète. Voir [le plan d'élagage MCP](https://github.com/xiaolai/vmark/blob/main/dev-docs/plans/20260504-mcp-pruning.md) pour la justification complète.
+La précédente surface de 12 outils / 76 actions a été élaguée parce que les outils de mise en forme intra-document (gras, titres, tableaux, etc.) dupliquent un travail que les agents IA effectuent déjà trivialement via un aller-retour Markdown. `selection` a été conservé (conformément à l'ADR-7 du plan d'élagage) parce que l'aller-retour sur le document complet n'est pas économique sur les gros fichiers — chaque modification paie le document entier en jetons d'entrée, le document entier en jetons de sortie (~5× le prix de l'entrée), et une fenêtre d'écriture plus longue qui élargit la boucle de réessai sur révision obsolète. Voir [le plan d'élagage MCP](https://github.com/xiaolai/vmark/blob/main/.claude/adr/plans/20260504-mcp-pruning.md) pour la justification complète.
 
 ::: tip Flux de travail recommandé
 1. Appelez `session.get_state` une fois pour voir les fenêtres ouvertes, les onglets et `{filePath, dirty, revision, kind}` par onglet.
@@ -173,21 +173,29 @@ Enregistrer un onglet vers un nouveau chemin.
 Retourne `{revision}`.
 
 Enregistrer vers un chemin autre que le fichier courant de l'onglet est traité comme une
-nouvelle écriture. Lorsque **Approuver automatiquement les modifications** (Paramètres →
+nouvelle écriture. Lorsque **Approuver automatiquement les enregistrements vers un nouvel emplacement et les résultats des génies** (Paramètres →
 Intégrations) est désactivé (par défaut), une telle requête est refusée avec
 `APPROVAL_REQUIRED` et une notification vous indique ce qui a été bloqué. Enregistrer de
 nouveau vers le chemin propre de l'onglet est toujours autorisé.
 
 ### `close`
 
-Fermer un onglet. Refuse de jeter du travail non enregistré sans `force`.
+Fermer un onglet de document. Refuse de jeter du travail non enregistré sans `force`, et ne ferme jamais un onglet épinglé.
 
 | Paramètre | Type | Requis |
 |-----------|------|--------|
 | `tabId` | string | Oui |
 | `force` | boolean | Non |
 
-Retourne `{closed: true}` en cas de succès, `{closed: false, reason: "DIRTY"}` si l'onglet est modifié et `force` n'a pas été fourni.
+Retourne `{closed: true}` en cas de succès. Sinon `{closed: false, reason}`&nbsp;:
+
+| `reason` | Signification |
+|----------|---------------|
+| `DIRTY` | L'onglet a des modifications non enregistrées et `force` n'a pas été fourni |
+| `DIVERGENT` | Le fichier a changé sur le disque et l'utilisateur a conservé la version de l'onglet&nbsp;; sans `force`, la fermeture la perdrait |
+| `PINNED` | L'onglet est épinglé — refusé même avec `force`&nbsp;; l'utilisateur doit le désépingler |
+
+Les frappes que l'éditeur n'a pas encore transmises sont comptées comme non enregistrées avant la vérification. Un onglet de navigateur est refusé avec une erreur `INVALID_TAB` — fermez-le avec l'action `close` de l'outil `browser`.
 
 ### `switch_tab`
 
@@ -233,16 +241,23 @@ Remplacer le contenu complet du document.
 | `tabId` | string | Non | Onglet cible (par défaut, focalisé) |
 | `content` | string | Oui | Nouveau contenu complet |
 | `expected_revision` | string | Non | Jeton de révision de la lecture la plus récente |
+| `save` | boolean | Non | Enregistrer aussi sur le disque (par défaut `true`)&nbsp;; `false` ne modifie que l'onglet |
+
+Par défaut, l'écriture est enregistrée&nbsp;: la réponse porte `saved: true`, ou `saved: false` avec `save_skipped` (`"untitled"` — l'onglet n'a pas encore de fichier, utilisez `save_as`&nbsp;; `"opt_out"` — vous avez passé `save: false`) ou `save_error` (l'écriture sur le disque a échoué). Lorsque la cible est l'onglet WYSIWYG actif d'un document Markdown, le texte est chargé dans l'éditeur en direct (en une seule étape annulable), et ce qui est enregistré est la sérialisation qu'en fait l'éditeur — le même Markdown, éventuellement normalisé, pas nécessairement les caractères exacts envoyés. Les autres onglets enregistrent le texte tel qu'envoyé, fins de ligne normalisées.
+
+Chaque enregistrement effectué par un client IA — via `write`, `workspace.save` ou `workspace.save_as` — est classé dans l'historique du document comme un instantané `mcp` (marqué *(mcp)* dans la barre latérale Historique), afin que les versions écrites par une IA se distinguent des vôtres. Comme un enregistrement manuel, il n'est jamais fusionné avec un enregistrement automatique voisin ni ignoré en raison de sa taille.
 
 Si `expected_revision` est fourni et que le document a changé depuis cette lecture, la réponse est une enveloppe d'erreur structurée `STALE` avec la révision actuelle&nbsp;; relire et réessayer.
 
 ```json
 // success
-{ "revision": "rev-newAfterWrite" }
+{ "revision": "rev-newAfterWrite", "saved": true }
 
 // stale
 { "error": "STALE", "message": "Document has changed since the last read", "current_revision": "rev-currentNow" }
 ```
+
+Pendant que l'utilisateur compose du texte avec une méthode de saisie (IME) dans l'éditeur WYSIWYG qui affiche l'onglet, l'écriture est refusée avec `BUSY` et rien ne change&nbsp;: le texte en cours de composition appartient à la méthode de saisie jusqu'à sa validation. Réessayez peu après. En mode Source, l'écriture est acceptée, et l'éditeur l'affiche dès que la composition se termine.
 
 ### `transform`
 
@@ -256,7 +271,7 @@ Appliquer une réécriture déterministe. Prend actuellement en charge les trans
 
 `cjk-format` applique de bout en bout les paramètres de mise en forme CJK de l'utilisateur. `cjk-spacing` insère des espaces simples entre les caractères CJK et les caractères latins/chiffres adjacents. `cjk-punctuation` convertit la ponctuation ASCII qui se trouve à côté des caractères CJK vers sa forme pleine largeur.
 
-Retourne `{revision}`.
+Retourne `{revision}`. Comme `write`, il est refusé avec `BUSY`, sans rien modifier, pendant que l'utilisateur compose avec une méthode de saisie dans l'éditeur WYSIWYG qui affiche l'onglet.
 
 ---
 
@@ -350,6 +365,8 @@ Retourne `{revision, replaced_chars}` en cas de succès. `replaced_chars` est la
 
 `STALE` retourne `{error: "STALE", message, current_revision}`, exactement comme `document.write`. La révision au niveau du document capte les frappes entre `get` et `set`. Le simple déplacement du curseur (sans frappe) n'est pas arbitré par le serveur — si l'utilisateur a déplacé le curseur entre `get` et `set`, la modification se produit à la nouvelle position.
 
+`set` renvoie `BUSY`, sans rien modifier, pendant que l'utilisateur compose du texte avec une méthode de saisie dans l'éditeur actif, en mode WYSIWYG comme en mode Source&nbsp;; réessayez peu après. `get` n'est jamais refusé pour cette raison.
+
 ---
 
 ## `browser`
@@ -366,6 +383,16 @@ celle utilisée par l'état de session du navigateur de l'application.
 
 Annoté `readOnlyHint: false, destructiveHint: true` — exact plutôt que simplement prudent,
 car chaque action ici modifie quelque chose.
+
+**Les erreurs sont typées.** Un refus arrive sous la forme `TOKEN: message` (`STALE_COMMAND`,
+`NOT_GRANTED`, `EVAL_TIMEOUT`, `TAB_LIMIT`, …) avec le même jeton — et toute donnée structurée
+que l'application a jointe (un ticket de navigation, la `reason` d'une action, le verbe à
+réessayer) — dans `structuredContent`. Fiez-vous au jeton, pas au texte.
+
+Un `EVAL_TIMEOUT` est **indéterminé**, pas un échec net&nbsp;: le script soumis a pu
+s'exécuter jusqu'au bout après que le pilote a cessé d'attendre&nbsp;; il porte donc
+`data.detail.indeterminate: true` et ne doit pas être réessayé comme si rien ne s'était passé —
+lisez la page (`browser_read`) pour connaître son état avant d'agir à nouveau.
 
 ### `act`
 
@@ -387,16 +414,31 @@ DOM **synthétiques**&nbsp;; un site qui se fie à `event.isTrusted` peut donc l
 Les opérations mutantes nécessitent une autorisation à la portée de l'origine&nbsp;; les
 téléversements choisis par l'IA ne sont jamais permis.
 
-**Un clic vérifie son effet avant de signaler un succès.** La cible est amenée dans la vue,
-doit être rendue visiblement (les styles calculés et les ancêtres repliés sont vérifiés, de
-sorte qu'un bouton en double à l'intérieur d'une étape d'accordéon fermée est ignoré, pas
-cliqué), et le point de clic est testé par collision — une cible recouverte par une
-surcouche est refusée en nommant l'élément qui la masque (`covered by div.cmp-overlay`)
-plutôt que cliquée au travers. Les résultats par rôle + nom portent des décomptes
-`matchedTotal` / `matchedVisible` afin que toute ambiguïté soit visible, et chaque réponse
-d'action inclut l'`url` et la `generation` actuelles de l'onglet. `type` gère les champs de
+**Un clic vérifie son effet avant de signaler un succès, et refuse plutôt que de
+deviner.** La cible est amenée dans la vue, doit être rendue visiblement (les styles
+calculés et les ancêtres repliés ou transparents sont vérifiés, de sorte qu'un bouton en
+double à l'intérieur d'une étape d'accordéon fermée est ignoré, pas cliqué), et le point de
+clic est testé par collision — une cible recouverte par une surcouche est refusée en nommant
+l'élément qui la masque (`covered by div.cmp-overlay`, données de la page) plutôt que cliquée
+au travers. Lorsque plusieurs éléments visibles partagent le rôle et le nom, l'action est
+refusée comme `ambiguous` et `candidates` liste leurs `ref` — elle n'en choisit jamais un
+selon l'ordre du document. Autres motifs de refus&nbsp;: `hidden`, `offscreen` (ne peut pas
+être amené dans la zone visible), `disabled` (y compris `pointer-events: none` et les
+sous-arbres inertes), `upload` (les champs de fichier ne sont jamais automatisés) et
+`rejected-value` (le champ a assaini le texte). Les shadow roots ouvertes sont parcourues&nbsp;;
+la réponse inclut les décomptes `matchedTotal` / `matchedVisible`, l'`url` et la
+`generation` actuelles de l'onglet en cas de succès **comme** d'échec, et `popup: {url}`
+lorsque la page a tenté d'ouvrir une fenêtre pendant l'action (VMark bloque les fenêtres
+surgissantes&nbsp;; l'URL est celle que la page voulait ouvrir). `type` gère les champs de
 texte, les contrôles `<select>` (passez le libellé ou la valeur de l'option&nbsp;; une
 option absente est refusée comme `no-such-option`), et les régions `contenteditable`.
+`key` émule les actions par défaut qui manquent aux événements synthétiques — Entrée dans un
+formulaire le soumet, Tab déplace le focus — et rapporte `defaultAction`.
+
+**Ce qu'une autorisation engage.** Une autorisation `click` engage l'élément (rôle + nom).
+Une autorisation `type`, `key` ou `scroll` engage aussi le texte, la touche (avec ses
+modificateurs) ou le delta exacts que vous avez demandés — l'invite les affiche — de sorte
+qu'un nouvel essai avec un contenu différent redemande l'autorisation.
 
 ### `workflow_run` / `workflow_cancel`
 
@@ -404,28 +446,38 @@ option absente est refusée comme `no-such-option`), et les régions `contentedi
 onglet appartenant à l'IA. Arguments&nbsp;: `tabId?`, `source` (le texte du workflow — une
 petite grammaire orientée lignes&nbsp;; c'est vous qui l'écrivez, l'IA qui le fait, ou
 [`workflow_record`](#workflow-record) qui le capture à partir de vos propres actions),
-`inputs?` (une table `{name: value}` substituée dans les références
-`{name}`), `allowRepeat?`. Il retourne `{runId, steps}` **immédiatement** — l'exécution se
-déroule de manière **asynchrone**, car une exécution à plusieurs étapes peut survivre à une
-seule requête. Interrogez le `workflow_status` de [`browser_read`](#browser-read) pour
-suivre la progression.
+`inputs?` (une table `{name: value}` substituée dans les références `{name}`&nbsp;; chaque
+entrée déclarée doit être fournie et celles qui ne sont pas déclarées sont refusées),
+`allowRepeat?` et `resumeRunId?` (voir ci-dessous). Il retourne `{runId, steps, firstStep}`
+**immédiatement** — l'exécution se déroule de manière **asynchrone**, car une exécution à
+plusieurs étapes peut survivre à une seule requête. Interrogez le `workflow_status` de
+[`browser_read`](#browser-read) pour suivre la progression&nbsp;; tant que l'exécution vous
+attend, il rapporte `pendingApproval`.
 
 Les étapes déterministes — `click` / `type` / `navigate` dans cette grammaire, ainsi
 qu'`extract` — s'exécutent à l'intérieur de VMark et sont **soumises individuellement à
 autorisation**, exactement comme un `act` émis à la main&nbsp;: l'exécution autorise
 chacune d'elles séparément, un workflow n'est donc pas un moyen de contourner les invites
 d'autorisation. `goal`, `confirm`, `api` et toute étape en prose libre **mettent
-l'exécution en pause** pour que l'IA les traite à la main. Une réexécution **ignore les
-étapes d'écriture qui ont déjà réussi** durant cette session (le registre des écritures
-terminées), sauf si `allowRepeat` est défini — ainsi, une réexécution après une pause ne
-resoumet pas deux fois.
+l'exécution en pause** pour que l'IA les traite à la main. **Reprendre après une
+pause&nbsp;:** effectuez l'étape en pause (ou faites-vous aider par l'IA), puis lancez une
+nouvelle exécution avec `resumeRunId` défini sur l'exécution en pause — elle hérite des
+étapes terminées et considère l'étape en pause comme faite, de sorte que rien n'est soumis
+deux fois. Une réexécution de la **même source avec les mêmes entrées** ignore aussi les
+étapes d'écriture qui ont déjà réussi durant cette session (le registre des écritures
+terminées&nbsp;; les étapes ignorées sont signalées comme `skipped`), sauf si `allowRepeat`
+est défini. Des entrées différentes constituent une autre tâche et s'exécutent en entier.
 
 `workflow_cancel {tabId?, runId}` arrête une exécution. Elle n'est **jamais soumise à
 autorisation** — arrêter est toujours autorisé — et elle retire les invites en attente de
-l'exécution et vous rend l'onglet. L'exécution s'arrête également dès que vous reprenez le
-contrôle du navigateur (toute interaction avec la page ou son interface reprend la main).
+l'exécution, interrompt une étape qui attend votre autorisation et vous rend l'onglet. Une
+exécution terminée rapporte `already-terminal` et reste en l'état&nbsp;; un `runId` inconnu
+donne `RUN_NOT_FOUND`. L'exécution s'arrête également dès que vous reprenez le contrôle du
+navigateur (toute interaction avec la page ou son interface reprend la main) — y compris
+pendant qu'elle attend une invite.
 
-Les exécutions sont bornées (≤ 25 étapes, ≤ 120 s, source ≤ 64 Kio) et une à la fois par
+Les exécutions sont bornées (≤ 25 étapes, source ≤ 64 Kio, et 120 s de temps
+**d'exécution** — le temps passé à vous attendre ne compte pas) et une à la fois par
 onglet.
 
 ### `workflow_record`
@@ -456,16 +508,34 @@ navigations de page et est borné (200 événements par page, 1 000 par session)
 
 ### `open`
 
-Arguments&nbsp;: `url` et un `timeoutMs` optionnel (1–12 000 ms). Crée un onglet appartenant
-à l'IA en utilisant la posture Sandbox ou Partagée actuelle et retourne ses `tabId`,
-`navigationId`, URL, titre et génération une fois le chargement terminé.
+Arguments&nbsp;: `url`, un `timeoutMs` optionnel (1–9 000 ms) et un `profile` optionnel
+(`[A-Za-z0-9._-]`, macOS 14+, posture sandbox)&nbsp;: un **contexte persistant nommé** pour
+qu'une connexion puisse être réutilisée par son nom — en ouvrir un nécessite une nouvelle
+autorisation à chaque utilisation, et l'IA ne voit jamais les identifiants. Crée un onglet
+appartenant à l'IA en utilisant la posture Sandbox ou Partagée actuelle, l'amène au premier
+plan et retourne ses `tabId`, `navigationId`, URL, titre et génération une fois le chargement
+terminé. Au plus **8 onglets appartenant à l'IA** peuvent être ouverts (`TAB_LIMIT`)&nbsp;;
+l'IA ferme ceux dont elle n'a plus besoin. En posture Partagée, un `open` qui nécessite votre
+autorisation de destination conserve son onglet et demande à l'IA de réessayer avec
+`navigate` sur ce `tabId` (`data.retry`) — un nouvel `open` créerait un onglet que
+l'autorisation ne peut pas couvrir.
 
 ### `navigate`
 
 Arguments&nbsp;: `tabId?`, `url`, et un `timeoutMs` optionnel. Navigue avec un onglet
-appartenant à l'IA et retourne le résultat du ticket de navigation. Un délai dépassé
-retourne tout de même le ticket, afin qu'un `wait` ultérieur puisse récupérer le résultat
-final.
+appartenant à l'IA (en l'amenant au premier plan) et retourne le résultat du ticket de
+navigation. Un `TIMEOUT` porte tout de même le ticket, afin qu'un `wait` ultérieur puisse
+récupérer le résultat final.
+
+### `close`
+
+Arguments&nbsp;: `tabId`. Ferme un onglet appartenant à l'IA que l'IA a ouvert. **Jamais
+soumis à autorisation** — arrêter est toujours autorisé. Un onglet humain est refusé
+(`TAB_NOT_AI_OWNED`). Le résultat est `{tabId, closed: true, destroyed: true}` une fois la
+disparition de la vue native confirmée&nbsp;; un démontage que le pilote n'a pas pu confirmer
+après ses nouvelles tentatives est signalé comme `TAB_TEARDOWN_FAILED` avec
+`data.destroyed: false` — l'enregistrement de l'onglet a déjà disparu, ne réessayez donc pas
+la fermeture&nbsp;; indiquez à l'utilisateur qu'une vue native est peut-être encore active.
 
 **Détection de barrière.** Un résultat `open` / `navigate` / `wait` chargé peut porter
 `gate: {kind, hint}` lorsque la page atteinte se lit comme un **mur de connexion**, une
@@ -487,14 +557,16 @@ bloquante, mettre une cible en évidence, etc. **Classe Action** (soumise à aut
 
 ### `execute_js`
 
-Arguments&nbsp;: `tabId?`, `script` (doit `return` une valeur sérialisable en JSON). La
-trappe de secours pour ce que les verbes structurés ne peuvent pas exprimer. Il s'exécute
-dans le **monde de contenu isolé** — il partage le DOM (donc `querySelector`,
-`element.style` fonctionnent) mais **ne peut pas** voir le tas/les variables globales JS
-propres à la page. Il est approuvé **par appel uniquement** (jamais une autorisation
-permanente, imposé dans le pilote Rust), l'approbation montre le script, et la valeur de
-retour est marquée **non fiable** et n'est jamais réinjectée automatiquement dans un `act`
-ultérieur. Préférez d'abord `query`/`style`.
+Arguments&nbsp;: `tabId?`, `script` — un corps de fonction asynchrone qui `return` (ou
+attend) une valeur sérialisable en JSON. La trappe de secours pour ce que les verbes
+structurés ne peuvent pas exprimer. Il s'exécute dans le **monde de contenu isolé** — il
+partage le DOM (donc `querySelector`, `element.style` fonctionnent) mais **ne peut pas** voir
+le tas/les variables globales JS propres à la page. La valeur revient sous forme de `result`
+(`undefined` devient `null`)&nbsp;; une exception, ou une valeur que JSON ne peut pas encoder,
+est un **échec qui nomme l'erreur**, jamais un résultat. Il est approuvé **par appel
+uniquement** (jamais une autorisation permanente, imposé dans le pilote Rust), l'approbation
+montre le script, et la valeur de retour est marquée **non fiable** et n'est jamais
+réinjectée automatiquement dans un `act` ultérieur. Préférez d'abord `query`/`style`.
 
 ### `session_save` / `session_load`
 
@@ -507,8 +579,9 @@ origine** que celle où la session a été enregistrée. Il s'agit d'un identifi
 référence** (ADR-A7)&nbsp;: l'IA nomme une session enregistrée et ne reçoit jamais les
 valeurs de cookies/jetons, qui ne sont jamais journalisées. Toutes deux relèvent de la
 permission `session` — **jamais une autorisation permanente** (approuvée par appel), et une
-autorisation pour un handle ne peut pas être dépensée sur un autre. *Aujourd'hui, cela
-couvre `localStorage`&nbsp;; la capture des cookies est un suivi en cours de test réel.*
+autorisation pour un handle ne peut pas être dépensée sur un autre. Une session enregistrée
+couvre `localStorage` **et les cookies**, tous deux limités à l'origine à laquelle la page
+était engagée au moment de l'enregistrement.
 
 ### `console_clear`
 
@@ -540,10 +613,14 @@ les octets sont dignes de confiance. Tout ce qui est retourné est contrôlé pa
 
 ### `read`
 
-Retourne `{url, snapshot}` pour l'onglet de navigateur focalisé, ou pour l'onglet désigné
-par `tabId`. `snapshot` est une liste orientée ARIA de `{role, name, ref}` — chaque `ref`
-(par ex. `"e5"`) est un identifiant stable pour cet élément, valable le temps de la vue
-actuelle.
+Retourne `{url, snapshot, truncated?, unreachable?}` pour l'onglet de navigateur focalisé, ou
+pour l'onglet désigné par `tabId`. `snapshot` est une liste orientée ARIA de nœuds
+`{role, name, ref}` — plus `level` pour les titres, `checked`, `disabled`, et `upload: true`
+pour un champ de fichier que l'IA ne peut jamais manipuler — chaque `ref` (par ex. `"e5"`)
+étant un identifiant stable pour cet élément, valable le temps de la vue actuelle. Le
+parcours entre dans les shadow roots ouvertes&nbsp;; `unreachable` compte les shadow roots
+fermées et les cadres dans lesquels il n'a pas pu entrer, et `truncated: true` signifie que
+la limite de nœuds (2 000) ou la limite de nom (200 caractères) a été atteinte.
 
 ### `screenshot`
 
@@ -553,13 +630,16 @@ visuel sur la mise en page et l'état rendu que l'instantané ARIA ne peut pas d
 capturé nativement (`takeSnapshot`) et ne lit aucun DOM ni JavaScript de la page. Classe
 Lecture&nbsp;: autorisé exactement comme `read` (permis sur un onglet appartenant à
 l'IA&nbsp;; un onglet humain nécessite un attachement, consommé lors de la capture).
+Un onglet qui n'est pas la page visible peut s'afficher vide — `open` et `navigate` amènent
+un onglet au premier plan.
 
 ### `query`
 
 Arguments&nbsp;: `tabId?`, `selector` (CSS), et un `fields: {attributes, box, styles:[...]}`
-optionnel. Retourne `{count, elements: [{ref, tag, text, …}]}` — des données DOM
-structurées que l'instantané ARIA ne peut pas nommer (tableaux, valeurs calculées).
-**Classe Lecture.** S'exécute dans le monde de contenu isolé.
+optionnel. Retourne `{count, elements: [{ref, tag, text, …}], truncated?}` — des données DOM
+structurées que l'instantané ARIA ne peut pas nommer (tableaux, valeurs calculées) —
+plafonnées à 50 éléments et 500 caractères de texte chacun (`truncated: true` lorsque le
+sélecteur en a trouvé davantage). **Classe Lecture.** S'exécute dans le monde de contenu isolé.
 
 ### `extract`
 
@@ -576,11 +656,13 @@ fiable.
 
 ### `workflow_status`
 
-Arguments&nbsp;: `tabId?`, `runId` (issu de `workflow_run`). Retourne
-`{status, completedSteps, stepCount, pausedAt?, reasonCode?, reason?, stepResults}` où
-`status` vaut l'un de `running` / `paused` / `completed` / `failed` / `cancelled`. Un statut
-`paused` nomme dans `pausedAt` l'étape qui a besoin de vous. **Classe Lecture** —
-interrogez-le librement.
+Arguments&nbsp;: `tabId?`, `runId` (issu de `workflow_run`). Retourne `{status, completedSteps,
+skippedSteps, stepCount, firstStep, pausedAt?, pendingApproval?, reasonCode?, reason?,
+resumedFrom?, stepResults}` où `status` vaut l'un de `running` / `paused` / `completed` /
+`failed` / `cancelled` / `superseded`, `stepResults` contient une entrée par étape
+(`{index, status, attempts, reason?, data?}`), et `pendingApproval` est présent tant que
+l'exécution attend votre décision. Un statut `paused` nomme dans `pausedAt` l'étape qui a
+besoin de vous. **Classe Lecture** — interrogez-le librement.
 
 ### `console`
 
@@ -588,7 +670,7 @@ Arguments&nbsp;: `tabId?`. Retourne `{entries: [{level, text}], url}` — la sor
 capturée de la page, plus les **erreurs non interceptées et les rejets de promesses non
 gérés** (enregistrés comme des entrées `level: "error"` préfixées `Uncaught` /
 `Unhandled rejection:` — le signal que l'interception de `console.*` seule ne voit jamais).
-Onglets Sandbox uniquement. La capture fonctionne via un shim du monde de la page qui écrit
+Onglets appartenant à l'IA uniquement (en posture Sandbox comme Partagée&nbsp;; un onglet humain ne porte pas de shim de capture), cadre principal uniquement. La capture fonctionne via un shim du monde de la page qui écrit
 dans un tampon DOM masqué que le pilote lit depuis le monde isolé — ainsi **aucun canal de
 messagerie** n'est ouvert en retour vers VMark (la garantie sans pont tient). La sortie est
 contrôlée par la page et **non fiable** — traitez-la comme un `read`, jamais comme une cible
@@ -601,8 +683,11 @@ donc pas relever de `readOnlyHint: true`.
 
 ### `wait`
 
-Arguments&nbsp;: `tabId?`, un `navigationId` optionnel, et un `timeoutMs` optionnel. Elle ne
-démarre jamais de navigation. Elle retourne un résultat de chargement/échec mis en tampon,
+Arguments&nbsp;: `tabId?`, un `navigationId` optionnel (omettez-le pour le dernier ticket de
+l'onglet), et un `timeoutMs` optionnel (1–9 000 ms). Elle ne démarre jamais de navigation, ne
+change jamais le focus ni l'onglet actif, et ne crée jamais de vue — elle se contente
+d'observer, ce qui lui permet de résider dans l'outil en lecture seule. Onglets appartenant à
+l'IA uniquement. Elle retourne un résultat de chargement/échec mis en tampon,
 `NAVIGATION_SUPERSEDED`, ou `TIMEOUT` lorsque le ticket ne se termine pas dans la limite.
 
 ### `wait_for`
@@ -611,11 +696,19 @@ Arguments&nbsp;: `tabId?`, exactement l'un de `ref` (issu d'une lecture), `role`
 optionnel), `text` (une sous-chaîne du texte visible), ou `urlContains` (une sous-chaîne que
 l'URL de l'onglet doit contenir — confirme qu'une navigation déclenchée par un clic a
 abouti, répondu à partir de l'état de l'onglet sans aller-retour vers la page), et un
-`timeoutMs` optionnel (1–12 000 ms). Interroge de façon répétée jusqu'à ce que la condition
+`timeoutMs` optionnel (1–9 000 ms). Interroge de façon répétée jusqu'à ce que la condition
 soit remplie ou que le délai s'écoule, et retourne `{matched: true|false}` (plus le `ref` de
 l'élément correspondant pour une condition ref/role) — vous pouvez ainsi distinguer
 «&nbsp;trouvé&nbsp;» de «&nbsp;délai dépassé&nbsp;». Classe Lecture. Utilisez-la pour rendre
 un flux déterministe&nbsp;: agir, `wait_for` le résultat, puis lire.
+
+Deux règles découlent de ce qu'elle a le droit de voir. `urlContains` porte sur l'URL
+**expurgée** — la chaîne de requête et le fragment sont retirés, car un jeton qu'une
+redirection y aurait placé ne doit pas pouvoir être sondé — de sorte qu'une recherche
+contenant `?` ou `#` est refusée d'emblée. Et sur un onglet humain attaché avec **Autoriser
+une fois**, elle est refusée (`ATTACHMENT_ONCE_INSUFFICIENT`)&nbsp;: l'interrogation répétée
+représente de nombreuses lectures, et un attachement pour une seule lecture ne peut pas la
+couvrir — demandez **Autoriser jusqu'à la navigation**.
 
 ---
 
@@ -743,7 +836,7 @@ Deux formes d'erreurs apparaissent&nbsp;:
 | `INVALID_TAB` | enveloppe | `tabId` n'a pas pu être résolu |
 | `INVALID_PATH` | enveloppe | Un `filePath` n'a pas pu être lu, ou se trouve hors de la portée de l'espace de travail ouvert / des documents |
 | `APPROVAL_REQUIRED` | enveloppe | `save_as` vers un nouvel emplacement alors que **Approuver automatiquement les enregistrements vers un nouvel emplacement et les résultats des génies** est désactivé ; ou `open_workspace` attend l'approbation de l'utilisateur, ou qu'il choisisse le dossier dans le sélecteur de dossiers de VMark |
-| `BUSY` | enveloppe | `open_workspace` n'a pas pu continuer : une autre boîte de dialogue de dossier est ouverte, ou un changement d'espace de travail est en cours dans cette fenêtre ; l'approbation est conservée — réessayez |
+| `BUSY` | enveloppe | `open_workspace` n'a pas pu continuer : une autre boîte de dialogue de dossier est ouverte, ou un changement d'espace de travail est en cours dans cette fenêtre ; l'approbation est conservée — réessayez. Ou bien `document.write`, `document.transform` ou `selection.set` est arrivé pendant que l'utilisateur composait du texte avec une méthode de saisie ; rien n'a été modifié — réessayez peu après |
 | `NOT_WORKFLOW` | enveloppe | `workflow.*` a été appelé sur un onglet non-YAML-workflow |
 | `READ_ONLY` | enveloppe | Une mutation a été tentée sur un document en lecture seule |
 | `NO_EDITOR` | enveloppe | `selection.*` a été appelé mais l'onglet focalisé n'a pas d'éditeur actif |

@@ -1,3 +1,10 @@
+/**
+ * Inline math node — the Tiptap extension that defines the `math_inline` atom
+ * node, preloads KaTeX fonts, and mounts `MathInlineNodeView` for it.
+ *
+ * @module plugins/latex/tiptapInlineMath
+ */
+
 import { Node } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { MathInlineNodeView } from "./MathInlineNodeView";

@@ -16,7 +16,7 @@
  * @module services/terminal/terminalCdFollow
  */
 import { isWorkspaceRailEnabled } from "@/services/featureFlags/workspaceRailFeatureFlag";
-import { useUIStore } from "@/stores/uiStore";
+import { useTerminalStore } from "@/stores/terminalStore";
 
 /**
  * Should a workspace-root change write a `cd` into this session?
@@ -24,9 +24,9 @@ import { useUIStore } from "@/stores/uiStore";
  * adopted after a pendingRoot was recorded is correctly refused at flush.
  */
 export function shouldFollowWorkspaceCd(sessionId: string): boolean {
-  const session = useUIStore
+  const session = useTerminalStore
     .getState()
-    .terminal.sessions.find((s) => s.id === sessionId);
+    .sessions.find((s) => s.id === sessionId);
   // Unknown id ⇒ the session is mid-teardown; never write into a dying shell
   // in EITHER rail mode (audit 20260831 #16 — the rail-off early return used
   // to treat an unknown session as followable, contradicting this guard).

@@ -25,7 +25,7 @@ Beim ersten Start nach dem Upgrade auf die Mehrformat-Unterstützung zeigt VMark
 |---|---|---|---|---|
 | Markdown | `.md`, `.markdown`, `.mdown`, `.mkd`, `.mdx` | immer aktiv | WYSIWYG + Quellmodus | gerenderter Text |
 | Klartext | `.txt` | immer aktiv | Quelle | — |
-| Daten — YAML | `.yaml`, `.yml` | immer aktiv | Quelle + Baum | navigierbarer Baum, schemagestützt (GitHub Actions) |
+| Daten — YAML | `.yaml`, `.yml` | immer aktiv | Quelle + Baum | navigierbarer Baum, schemagestützt (GitHub Actions, VMark-Workflows) |
 | Daten — JSON | `.json`, `.jsonl` | erfordert **Datenformate**-Umschalter | Quelle + Baum | navigierbarer JSON-Baum, schemagestützt (`package.json`) |
 | Daten — TOML | `.toml` | erfordert **Datenformate**-Umschalter | Quelle + Baum | navigierbarer Baum, schemagestützt (`Cargo.toml`, `pyproject.toml`) |
 | Diagramme | `.mmd` | erfordert **Diagramme & SVG**-Umschalter | Quelle + Rendering | Live-Mermaid-Diagramm |
@@ -81,7 +81,8 @@ So funktioniert es und das können Sie erwarten:
   dekodieren kann. Auf macOS ist das umfangreich — HEIC, TIFF, `.mov`/H.264 und FLAC
   werden alle wiedergegeben. Formate, die die Webview nicht dekodieren kann (z. B.
   `.mkv`, `.avi`, `.wmv`), öffnen sich trotzdem und zeigen ein Ersatzfeld mit
-  **Mit Standard-App öffnen** und **Im Finder anzeigen**.
+  **Mit Standard-App öffnen** und **Im Finder anzeigen** (**Im Explorer anzeigen**
+  unter Windows, **Im Dateimanager anzeigen** unter Linux).
 - **Schreibgeschützt.** Medien-Tabs werden nie als geändert markiert und schließen
   ohne Speichern-Abfrage.
 
@@ -95,6 +96,14 @@ Wenn Pfad oder Inhalt einem bekannten Schema entsprechen, ersetzt VMark die gene
 
 - Pfad-Erkennung: Eine `.yml`- / `.yaml`-Datei unter `.github/workflows/` wird an den Workflow-Renderer weitergeleitet — auch bei fehlerhaftem YAML, sodass Sie die degradierte Ansicht mit Diagnose statt eines leeren Baums sehen. (Die Datei muss zuerst den YAML-Adapter erreichen; dafür ist die Erweiterung `.yml`/`.yaml` erforderlich.)
 - Inhalts-Erkennung: Schlüssel `on:` und `jobs:` auf der obersten Ebene.
+
+### VMark-Workflow (`steps:` auf oberster Ebene)
+
+Öffnet mit dem Workflow-Ausführungsbereich: einer Symbolleiste mit **Ausführen** / **Abbrechen** und einer Statuszeile, dem Live-Schrittgraphen (oder dem Parse-Fehler) und **Dateien wiederherstellen** nach einem Lauf, der Dateien geschrieben hat. Siehe den [Leitfaden zu Workflows](/de/guide/workflows).
+
+- Pfad-Erkennung: niemals unter `.github/workflows/` — dieser Ordner gehört GitHub.
+- Inhalts-Erkennung: Das YAML lässt sich parsen, hat kein `jobs:` auf oberster Ebene und eine `steps:`-Liste auf oberster Ebene, in der das `uses:` mindestens eines Schritts mit `genie/`, `action/` oder `webhook/` beginnt. Fehlerhaftes YAML ist nie ein VMark-Workflow.
+- Der Bereich benötigt **Einstellungen → Erweitert → Workflow-Engine**. Ist die Engine aus, zeigt die Datei den einfachen YAML-Baum (es sei denn, ein aus diesem Tab gestarteter Lauf ist noch aktiv, damit sein Abbrechen erreichbar bleibt).
 
 ### `Cargo.toml`
 
@@ -125,6 +134,12 @@ Wenn Pfad oder Inhalt einem bekannten Schema entsprechen, ersetzt VMark die gene
 - **Visuelle Formate** (Mermaid, SVG, HTML) werden im Quellbereich angezeigt, mit der gerenderten Ansicht im rechten Bereich. Die Vorschau wird mit niedrigerer Priorität als Ihre Eingabe gerendert, sodass sie bei einem großen Dokument einen Moment hinter dem Cursor nachzieht, statt bei jedem Tastendruck neu zu rendern.
 - **Code-Formate** öffnen sich als syntaxhervorgehobene Betrachter; schalten Sie zum Bearbeiten an Ort und Stelle um oder öffnen Sie die Datei in Ihrem externen Editor (siehe unten).
 
+## Markdown-Dialekt
+
+VMark liest und schreibt Markdown mit remark (darunter micromark): CommonMark, dazu GitHub Flavored Markdown (Tabellen, Aufgabenlisten, Durchstreichen mit `~~`, Autolinks, Fußnoten), YAML-Front-Matter, Mathematik mit `$…$` / `$$…$$`, Wiki-Links (`[[target]]`), GitHub-Hinweise (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`), `<details>`-Blöcke, `[TOC]` und vier Inline-Auszeichnungen: `==highlight==`, `~subscript~`, `^superscript^` und `++underline++`. Eine einzelne Tilde bedeutet Tiefstellung, nie Durchstreichen.
+
+**Verschachtelungsgrenze.** WYSIWYG unterstützt Zitatblöcke und Listen mit bis zu 1000 Verschachtelungsebenen. Ein tiefer verschachteltes Dokument öffnet sich im **Quelltextmodus** mit einer Meldung, wie tief es ist, und die Statusleiste zeigt *„Im Quelltextmodus geöffnet (in WYSIWYG nicht darstellbar).“* Solange dieser Zustand besteht, ist die Datei davor geschützt, vom Rich-Editor überschrieben zu werden. Verringern Sie die Verschachtelung und verwenden Sie dann **Zu WYSIWYG wechseln**. Eingezäunter Code, thematische Umbrüche und Inline-Hervorhebungen zählen nicht zur Grenze. Siehe auch [Große Dateien](/de/guide/large-files).
+
 ## Wie VMark den Dateityp bestimmt
 
 VMark behandelt **Markdown als Positivliste, nicht als Standard**. Die Regel, der Reihe nach:
@@ -136,6 +151,25 @@ VMark behandelt **Markdown als Positivliste, nicht als Standard**. Die Regel, de
 Eine Konfigurationsdatei wird also nie stillschweigend als Markdown gerendert. Eine `.env.local` öffnet sich als Klartext, mit ihren `KEY=value`-Zeilen, `#`-Kommentaren und Unterstrichen genau so, wie sie eingegeben wurden.
 
 Punktdatei-Familien werden als Gruppe erkannt: Eine Überschreibung für `.env` gilt auch für `.env.local`, `.env.production` und so weiter.
+
+### Dateien aus Ihrem System öffnen
+
+Das Installationsprogramm registriert VMark bei Ihrem Betriebssystem als Editor für diese Dateitypen, sodass sie unter **Öffnen mit** erscheinen und per Doppelklick in VMark geöffnet werden können:
+
+| Erweiterungen | Registriert als |
+|---|---|
+| `.md`, `.markdown`, `.mdown`, `.mkd`, `.mdx` | Markdown-Dokument |
+| `.txt` | Klartextdokument |
+| `.json`, `.jsonl` | JSON-Dokument |
+| `.yaml`, `.yml` | YAML-Dokument |
+| `.toml` | TOML-Dokument |
+| `.mmd` | Mermaid-Diagramm |
+| `.svg` | SVG-Bild |
+| `.html`, `.htm` | HTML-Dokument |
+
+Unter **Windows** übernimmt das Installationsprogramm keinen Dateityp, den bereits etwas anderes verarbeitet: Für jede Erweiterung, die schon ein Standardprogramm hat, fügt sich VMark zu **Öffnen mit** hinzu und lässt diesen Standard bestehen. Standard wird es nur dort, wo nichts registriert war — in der Praxis bei den Markdown-Erweiterungen, nicht bei `.txt`, `.html`, `.htm` oder `.svg`. Ein Standard, den Sie selbst in den Windows-Einstellungen wählen, hat immer Vorrang. Die Deinstallation stellt den Windows-Menüeintrag **Neu → Textdokument** und das vorherige Programm wieder her.
+
+Eine registrierte Datei öffnet sich nur dann in VMark, wenn ihr Format aktiviert ist (siehe [Formate aktivieren](#formate-aktivieren)); andernfalls öffnet sie sich als Klartext.
 
 ### Syntaxhervorhebung für Klartextdateien
 
@@ -156,7 +190,7 @@ Die Erkennung ist der Standard, kein Käfig. Öffnen Sie die Befehlspalette und 
 - **Datei → Datei öffnen…** bietet zwei Filter: **Alle unterstützten Formate** (jedes registrierte Format) und **Markdown**. Der Eintrag hat kein Standard-Tastenkürzel — `Mod + O` ist **Schnell öffnen** —, Sie können ihm aber unter **Einstellungen → Tastenkürzel** eines zuweisen. Speichern-unter-Filter und die Standard-Speichererweiterung werden vom Format-Adapter des aktiven Tabs abgeleitet, sodass beim Speichern einer `.toml`-Datei `.toml` als Erweiterung vorgeschlagen wird.
 - **Drag & Drop** akzeptiert jede registrierte Erweiterung.
 - **Speichern unter** Filter und die Standard-Erweiterung beim Speichern werden vom Format-Adapter des aktiven Tabs abgeleitet.
-- **Cmd+Shift+H** Inhaltssuche („In Dateien suchen") indiziert jedes textbasierte Format (Markdown, txt, json, yaml, toml, html, svg, Mermaid). Code-Dateien sind standardmäßig ausgeschlossen — sie befinden sich im Code-Betrachter-Modus.
+- **Cmd+Shift+H** Inhaltssuche („In Dateien suchen“) indiziert jedes textbasierte Format (Markdown, txt, json, yaml, toml, html, svg, Mermaid). Code-Dateien sind standardmäßig ausgeschlossen — sie befinden sich im Code-Betrachter-Modus.
 
 ## Sicherheitsmodell für HTML {#sicherheitsmodell-fur-html}
 
@@ -166,7 +200,7 @@ Gemäß ADR-4 im Mehrformat-Plan basiert die HTML-Vorschau auf drei unabhängige
 2. **DOMPurify-Bereinigung** läuft zuerst — entfernt `<script>`, `javascript:`-URLs, Inline-Ereignishandler und base-href-Tricks.
 3. **CSP `<meta>`-Injektion** — `default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; base-uri 'none';` — schränkt das Laden von Ressourcen innerhalb des iframes ein.
 
-Der Validator zeigt Script-Tags, `javascript:`-URLs und Inline-Ereignishandler als Warnungen an, damit Sie sehen können, was blockiert wird.
+Der Validator zeigt Script-Tags, `javascript:`-URLs und Inline-Ereignishandler als Warnungen an, damit Sie sehen können, was blockiert wird. Sobald Sie [der Datei vertrauen](#vertrauenswurdige-html-vorschau-opt-in), werden sie stattdessen als Information angezeigt, damit nichts dem Vertrauens-Banner widerspricht. Zwei Meldungen nennen, was die Vorschau nie erlaubt, ob vertrauenswürdig oder nicht: Ein externes Skript (`<script src="…">`) wird nie geladen, da kein Skript aus einer Datei oder URL stammt, und ein `javascript:`-Link, der auf ein anderes Fenster oder die oberste Seite zielt (`target="_top"`, `_blank` oder ein `<base target>`), navigiert nie, da die Vorschau sich selbst nicht verlassen kann. Die Erkennung liest die Tags der Seite nur näherungsweise; sie kennzeichnet Befunde und entscheidet nie, was ausgeführt wird — das tut die Sandbox.
 
 Die formale Sicherheitsfreigabe für diese Vorschau steht noch aus, und die Vorschau weist in einem Hinweis über der gerenderten Seite darauf hin: **Die HTML-Vorschau ist isoliert, die OWASP-Freigabe steht jedoch noch aus.** Die drei oben genannten Schichten sind vorhanden; der noch offene Schritt ist, sie in der Webview der laufenden App gegen die OWASP-XSS-Payloads zu bestätigen.
 
@@ -232,7 +266,7 @@ iframe-Attribut allein ein Inline-Skript zum Laufen bringen.
 
 Für Code-Dateien startet die Schaltfläche **In externem Editor öffnen** im schreibgeschützten Banner Ihren bevorzugten Editor. Auflösungsreihenfolge:
 
-1. **Einstellungen → Formate → Externer Editor** (das GUI-Feld — siehe [Einstellungen](/de/guide/settings#formate)). Wählen Sie ein `.app`-Bundle auf macOS, eine ausführbare Datei auf Linux/Windows oder alles, was Ihre Shell auflösen würde.
+1. **Einstellungen → Formate → Externer Editor** (das GUI-Feld — siehe [Einstellungen](/de/guide/settings#formate)). Geben Sie entweder den **Namen eines bekannten Editors** (`code`, `cursor`, `zed`, `subl`, `bbedit`, `idea`, `vim`, `nvim`, `emacs`, `notepad++`, …) oder den **vollständigen Pfad** eines Editors ein — ein `.app`-Bundle auf macOS, eine ausführbare Datei auf Linux/Windows. Das Feld enthält genau ein Programm, nie Argumente; um Argumente zu übergeben, verwenden Sie `$VMARK_EXTERNAL_EDITOR`.
 2. `$VMARK_EXTERNAL_EDITOR` (projektweite Umgebungsvariable als Überschreibung)
 3. `$VISUAL`
 4. `$EDITOR`
@@ -244,7 +278,16 @@ VMark leitet über einen Login-Shell-PATH weiter, sodass VS Code / Cursor / JetB
 
 ### Sicherheitsüberprüfung
 
-Der Tauri-Befehl `open_in_external_editor` lehnt ab:
+Die Einstellung **Externer Editor** selbst wird geprüft, bevor irgendetwas gestartet wird. VMark lehnt ab:
+
+- Shell-Zeichen (`;`, `|`, `&`, `` ` ``, `$`, `<`, `>`, Anführungszeichen, Zeilenumbrüche) und ein führendes `-`
+- einen bloßen Namen, der kein VMark bekannter Editor ist — *„X“ ist kein Editor, den VMark dem Namen nach kennt – geben Sie stattdessen den vollständigen Pfad zum Editor an*
+- einen relativen Pfad, einen Pfad mit einem `..`-Segment oder einem abschließenden Schrägstrich oder einen Pfad, der nicht existiert
+- ein Programm, das die übergebenen Dateien ausführt, statt sie zu öffnen — eine Shell (`sh`, `bash`, `zsh`, `pwsh`, `cmd`, …), einen Interpreter (`python`, `node`, `ruby`, `perl`, `osascript`, …), einen Starter (`env`, `sudo`, `open`, `xdg-open`, …) oder einen Terminal-Emulator — geprüft sowohl unter dem eingegebenen Namen als auch unter dem Namen, auf den ein Link verweist
+
+Die Umgebungsvariablen der Fallback-Kette sind nicht eingeschränkt: Sie werden außerhalb von VMark gesetzt, von Ihnen.
+
+Der Tauri-Befehl `open_in_external_editor` lehnt außerdem ab:
 
 - nicht existierende Pfade
 - Verzeichnisse und andere Nicht-Regulär-Dateien (Sockets, Geräte)
@@ -258,10 +301,10 @@ Ein kompromittiertes Webview kann die Schaltfläche nicht verwenden, um den exte
 Gemäß den Nicht-Zielen des Plans:
 
 - **Kein Code-Editor.** Kein LSP, keine Autovervollständigung, kein Refactoring, kein Debugger, keine Git-Gutter.
-- **Nicht „jedes Klartextformat".** Begrenzter Umfang — siehe die Tabelle oben.
+- **Nicht „jedes Klartextformat“.** Begrenzter Umfang — siehe die Tabelle oben.
 - **Standardmäßig keine HTML-Skriptausführung.** Nur sandboxed Rendering, es sei denn,
   Sie erlauben ausdrücklich eine einzelne Datei über die [vertrauenswürdige HTML-Vorschau](#vertrauenswurdige-html-vorschau-opt-in).
 - **Kein Drucken / Export / Kopieren als HTML für Nicht-Markdown-Formate** in v1.
-- **Noch nicht als Code-Betrachter unterstützt**: Zig, Swift, Kotlin, Java, Elixir, OCaml und andere Sprachen außerhalb des 12-Erweiterungen-Sets. Die Entscheidungsregel lautet „Sprachen, die wir selbst verwenden" — öffnen Sie ein Issue, wenn Sie eine hinzufügen möchten.
+- **Noch nicht als Code-Betrachter unterstützt**: Zig, Swift, Kotlin, Java, Elixir, OCaml und andere Sprachen außerhalb des 12-Erweiterungen-Sets. Die Entscheidungsregel lautet „Sprachen, die wir selbst verwenden“ — öffnen Sie ein Issue, wenn Sie eine hinzufügen möchten.
 
 Wenn ein gewünschtes Format nicht aufgeführt ist und nicht bewusst ausgeschlossen wurde, öffnen Sie ein Issue.

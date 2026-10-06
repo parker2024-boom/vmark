@@ -7,7 +7,7 @@
 // vitest.config.ts only includes src/** and scripts/** test globs — e2e/ is
 // intentionally outside the unit-test tree (it drives a live app).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment -- the imported .mjs module ships no type declarations
 // @ts-ignore — plain .mjs module without type declarations
 import { BridgeClient, expectSuccess, evalJs } from "../e2e/lib/bridge.mjs";
 

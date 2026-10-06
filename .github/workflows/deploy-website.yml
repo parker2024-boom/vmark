@@ -6,6 +6,11 @@ on:
     branches: [main]
     paths:
       - 'website/**'
+      # The CJK demo imports the app's formatter, so a formatter change must
+      # redeploy the page that demonstrates it. Every path the site imports
+      # from outside website/ belongs here; scripts/check-deploy-website-paths.test.mjs
+      # derives that set from the imports and fails when one is missing.
+      - 'src/lib/cjkFormatter/**'
       - 'pnpm-lock.yaml'
       - '.github/workflows/deploy-website.yml'
       # Version bumps need a redeploy too — the website bakes pkg.version

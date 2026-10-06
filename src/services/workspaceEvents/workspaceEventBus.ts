@@ -1,8 +1,9 @@
 /**
  * Workspace event bus — coalescing pub/sub over normalized fs events.
  *
- * Purpose: The single subscription point for the workspace event layer. One
- *   Rust `fs:changed` stream in ({@link attachFsSource}); coalesced, batched
+ * Purpose: The single subscription point for the workspace event layer. The
+ *   Rust watcher's `fs:changed` batches addressed to THIS window, plus its
+ *   rescan signal, come in ({@link attachFsSource}); coalesced, batched
  *   {@link SemanticWorkspaceEvent} arrays out to any number of subscribers.
  *   Publishes are batched on a fixed window (flushed `coalesceMs` after the
  *   first buffered event, repeatedly while a storm keeps arriving), so a git
@@ -20,8 +21,8 @@
 
 import { workspaceEventsWarn } from "@/utils/debug";
 
-import { normalizeFsEvents } from "./normalizeFsEvents";
-import type { RawFsChangeEvent, SemanticWorkspaceEvent } from "./types";
+import { normalizeFsBatch } from "./normalizeFsEvents";
+import type { RawFsChangeBatch, SemanticWorkspaceEvent } from "./types";
 
 /** A subscriber receiving one coalesced batch of workspace events. */
 export type WorkspaceEventListener = (events: SemanticWorkspaceEvent[]) => void;
@@ -93,7 +94,11 @@ export function createWorkspaceEventBus(
 
 /** Injected collaborators for wiring the bus to the Rust `fs:changed` stream. */
 export interface FsSourceDeps {
-  /** Tauri event subscription (or a fake in tests). */
+  /**
+   * Tauri event subscription (or a fake in tests). In production it must be
+   * scoped to the window: the watcher addresses its batches to the owning
+   * window, and an unscoped listener is woken by every window's watcher.
+   */
   listen: <T>(event: string, handler: (e: { payload: T }) => void) => Promise<() => void>;
   /** Read the active workspace root live, per event (`null` outside workspace mode). */
   getRootPath: () => string | null;
@@ -111,21 +116,22 @@ export interface FsSourceDeps {
 }
 
 /**
- * Wire a bus to the Rust `fs:changed` stream: every raw emission is normalized
- * (scoped to this window + workspace, deduped, self-write-flagged) and published.
- * With `deps.suppress`, content no-ops are filtered out first. Returns the Tauri
- * unlisten fn.
+ * Wire a bus to the Rust `fs:changed` stream: every raw batch is normalized
+ * (scoped to this window + workspace, deduped per change, self-write-flagged,
+ * with a lost-track report carried as a `rescan` event) and published as one
+ * publish. With `deps.suppress`, content no-ops are filtered out first. Returns
+ * the Tauri unlisten fn.
  */
 export function attachFsSource(
   bus: WorkspaceEventBus,
   windowLabel: string,
   deps: FsSourceDeps,
 ): Promise<() => void> {
-  // Serializes the async suppression path so concurrent per-event reads can't
+  // Serializes the async suppression path so concurrent per-batch reads can't
   // reorder delivery or race the shared content-hash cache.
   let queue: Promise<void> = Promise.resolve();
-  return deps.listen<RawFsChangeEvent>("fs:changed", (e) => {
-    const events = normalizeFsEvents(e.payload, {
+  return deps.listen<RawFsChangeBatch>("fs:changed", (e) => {
+    const events = normalizeFsBatch(e.payload, {
       windowLabel,
       rootPath: deps.getRootPath(),
       normalizePath: deps.normalizePath,

@@ -102,23 +102,23 @@ phase_1() {
   echo "Phase 1 — Store model (no wiring yet)"
 
   # WI-TS1.1 — owner field + stamping helper + union cap/ordinals
-  assert_grep "workspaceInstanceId" "src/stores/uiStore/types.ts" "WI-TS1.1 owner field on TerminalSession"
+  assert_grep "workspaceInstanceId" "src/stores/terminalStore/types.ts" "WI-TS1.1 owner field on TerminalSession"
   assert_file "src/services/terminal/resolveTerminalOwnerInstanceId.ts" "WI-TS1.1 stamping helper"
   assert_file "src/services/terminal/resolveTerminalOwnerInstanceId.test.ts" "WI-TS1.1 stamping helper tests"
-  assert_file "src/stores/uiStore/terminalSlice.scope.test.ts" "WI-TS1.1 slice scope tests"
+  assert_file "src/stores/terminalStore/sessionActions.scope.test.ts" "WI-TS1.1 slice scope tests"
 
   # WI-TS1.2 — scope-transition actions
-  assert_file "src/stores/uiStore/terminalScopeActions.ts" "WI-TS1.2 scope actions module"
+  assert_file "src/stores/terminalStore/scopeActions.ts" "WI-TS1.2 scope actions module"
   for action in terminalAdoptUnscopedSessions terminalSwitchScope terminalHydrateScope \
                 terminalRemoveScopeSessions terminalRekeyScope; do
-    assert_grep "$action" "src/stores/uiStore/terminalScopeActions.ts" "WI-TS1.2 action $action"
+    assert_grep "$action" "src/stores/terminalStore/scopeActions.ts" "WI-TS1.2 action $action"
   done
-  assert_grep "lastActiveByScope" "src/stores/uiStore/types.ts" "WI-TS1.2 per-scope active memory"
+  assert_grep "lastActiveByScope" "src/stores/terminalStore/types.ts" "WI-TS1.2 per-scope active memory"
 
   # WI-TS1.3 — scoped selectors
-  assert_file "src/stores/uiStore/terminalScopeSelectors.ts" "WI-TS1.3 selectors module"
-  assert_grep "selectVisibleTerminalSessions" "src/stores/uiStore/terminalScopeSelectors.ts" "WI-TS1.3 visible selector"
-  assert_grep "selectVisibleSessionCount" "src/stores/uiStore/terminalScopeSelectors.ts" "WI-TS1.3 count selector"
+  assert_file "src/stores/terminalStore/scopeSelectors.ts" "WI-TS1.3 selectors module"
+  assert_grep "selectVisibleTerminalSessions" "src/stores/terminalStore/scopeSelectors.ts" "WI-TS1.3 visible selector"
+  assert_grep "selectVisibleSessionCount" "src/stores/terminalStore/scopeSelectors.ts" "WI-TS1.3 count selector"
 
   assert_linkage 1
 }

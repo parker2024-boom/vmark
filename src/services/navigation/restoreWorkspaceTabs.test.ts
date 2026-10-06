@@ -1,15 +1,18 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fileBytes } from "@/test/fileBytes";
 
 const mockReadTextFile = vi.fn();
 const mockFindExistingTabForPath = vi.fn();
 const mockCreateTab = vi.fn();
+const mockInitDocument = vi.fn();
 const mockIngestExternalContent = vi.fn();
 const mockSetLineMetadata = vi.fn();
 const mockCloseTab = vi.fn();
+const mockDetachTab = vi.fn();
 const mockGetReplaceableTab = vi.fn();
 
-vi.mock("@tauri-apps/plugin-fs", () => ({ readTextFile: (...a: unknown[]) => mockReadTextFile(...a) }));
+vi.mock("@tauri-apps/plugin-fs", () => ({ readFile: (...a: unknown[]) => fileBytes(mockReadTextFile(...a)) }));
 vi.mock("@/services/tabs/findExistingTabForPath", () => ({
   findExistingTabForPath: (...a: unknown[]) => mockFindExistingTabForPath(...a),
 }));
@@ -23,16 +26,14 @@ vi.mock("@/stores/tabStore", () => ({
     getState: () => ({
       createTab: mockCreateTab,
       closeTab: mockCloseTab,
+      detachTab: mockDetachTab,
       tabs: { main: mockTabs },
+      // The media opener's dedup check reads the window's tabs this way.
+      getTabsByWindow: (windowLabel: string) => (windowLabel === "main" ? mockTabs : []),
       activeTabId: {},
     }),
   },
   tabFilePath: (t: { filePath: string | null }) => t.filePath,
-}));
-const mockTryOpenMediaFile = vi.fn<(windowLabel: string, path: string) => boolean>(() => false);
-vi.mock("@/services/navigation/openMediaFile", () => ({
-  tryOpenMediaFile: (windowLabel: string, path: string) =>
-    mockTryOpenMediaFile(windowLabel, path),
 }));
 vi.mock("@/services/tabs/replaceableTab", () => ({
   getReplaceableTab: (...a: unknown[]) => mockGetReplaceableTab(...a),
@@ -50,6 +51,7 @@ vi.mock("@/services/workspaces/fileOwnership", () => ({
 vi.mock("@/stores/documentStore", () => ({
   useDocumentStore: {
     getState: () => ({
+      initDocument: mockInitDocument,
       ingestExternalContent: mockIngestExternalContent,
       setLineMetadata: mockSetLineMetadata,
       documents: mockDocs,
@@ -61,18 +63,21 @@ import { restoreWorkspaceTabs } from "./restoreWorkspaceTabs";
 import { useClosedTabScopesStore } from "@/stores/tabStoreClosedScopes";
 
 beforeEach(() => {
-  [mockReadTextFile, mockFindExistingTabForPath, mockCreateTab, mockIngestExternalContent,
-   mockSetLineMetadata, mockCloseTab, mockGetReplaceableTab, mockTryOpenMediaFile,
+  [mockReadTextFile, mockFindExistingTabForPath, mockCreateTab, mockInitDocument,
+   mockIngestExternalContent, mockSetLineMetadata, mockCloseTab, mockDetachTab, mockGetReplaceableTab,
    mockApplyFileOwnershipAfterOpen, workspaceWarn]
     .forEach((m) => m.mockReset());
   useClosedTabScopesStore.getState().resetClosedScopes();
-  mockTryOpenMediaFile.mockReturnValue(false);
   mockGetReplaceableTab.mockReturnValue(null);
   mockTabs = [{ id: "blank-1", kind: "document", filePath: null }];
   mockDocs = { "blank-1": { isDirty: false } };
   mockFindExistingTabForPath.mockReturnValue(null);
   mockReadTextFile.mockResolvedValue("content");
-  mockCreateTab.mockImplementation((_w: string, p: string) => `tab-${p}`);
+  // Like the real store, a created tab joins the window's tab list.
+  mockCreateTab.mockImplementation((_w: string, p: string) => {
+    mockTabs.push({ id: `tab-${p}`, kind: "document", filePath: p });
+    return `tab-${p}`;
+  });
 });
 
 afterEach(() => vi.restoreAllMocks());
@@ -278,7 +283,9 @@ describe("#1313 audit — read failure and post-create failure are different", (
     });
     const created = await restoreWorkspaceTabs("main", ["/w/a.md"]);
     expect(created).toBe(0);
-    expect(mockCloseTab).toHaveBeenCalledWith("main", "tab-/w/a.md");
+    expect(mockDetachTab).toHaveBeenCalledWith("main", "tab-/w/a.md");
+    // WI-RA26.3 — a rollback is not the user's close: no reopen-history entry.
+    expect(mockCloseTab).not.toHaveBeenCalled();
   });
 
   it("creates nothing to roll back when the file is unreadable", async () => {
@@ -286,6 +293,7 @@ describe("#1313 audit — read failure and post-create failure are different", (
     expect(await restoreWorkspaceTabs("main", ["/w/gone.md"])).toBe(0);
     expect(mockCreateTab).not.toHaveBeenCalled();
     expect(mockCloseTab).not.toHaveBeenCalled();
+    expect(mockDetachTab).not.toHaveBeenCalled();
   });
 });
 
@@ -298,17 +306,20 @@ describe("#1313 audit — read failure and post-create failure are different", (
  */
 describe("#1313 audit — media files are not read as text on restore", () => {
   it("routes a binary media path to the media opener instead of readTextFile", async () => {
-    mockTryOpenMediaFile.mockReturnValue(true);
     const created = await restoreWorkspaceTabs("main", ["/w/clip.mp4"]);
-    expect(mockTryOpenMediaFile).toHaveBeenCalledWith("main", "/w/clip.mp4");
+    // The media opener's path-only tab: created, given an EMPTY document, claimed.
+    expect(mockCreateTab).toHaveBeenCalledWith("main", "/w/clip.mp4");
+    expect(mockInitDocument).toHaveBeenCalledWith("tab-/w/clip.mp4", "", "/w/clip.mp4");
+    expect(mockApplyFileOwnershipAfterOpen).toHaveBeenCalledWith("tab-/w/clip.mp4", "/w/clip.mp4");
     expect(mockReadTextFile).not.toHaveBeenCalled();
+    expect(mockIngestExternalContent).not.toHaveBeenCalled();
     expect(created).toBe(1);
   });
 
   it("leaves text files on the text path", async () => {
-    mockTryOpenMediaFile.mockReturnValue(false);
     await restoreWorkspaceTabs("main", ["/w/a.md"]);
     expect(mockReadTextFile).toHaveBeenCalledWith("/w/a.md");
+    expect(mockInitDocument).not.toHaveBeenCalled();
   });
 });
 
@@ -338,7 +349,8 @@ describe("#480 — restored text tabs get file ownership like every other open",
     });
     const created = await restoreWorkspaceTabs("main", ["/a.md"]);
     expect(created).toBe(0);
-    expect(mockCloseTab).toHaveBeenCalledWith("main", "tab-/a.md");
+    expect(mockDetachTab).toHaveBeenCalledWith("main", "tab-/a.md");
+    expect(mockCloseTab).not.toHaveBeenCalled();
   });
 });
 
@@ -374,6 +386,7 @@ describe("restoreWorkspaceTabs — createTab deduplication (audit #979/#980)", (
     await restoreWorkspaceTabs("main", ["/a.md"]);
 
     expect(mockCloseTab).not.toHaveBeenCalled();
+    expect(mockDetachTab).not.toHaveBeenCalled();
   });
 
   it("still rolls back a tab it really did create", async () => {
@@ -386,7 +399,7 @@ describe("restoreWorkspaceTabs — createTab deduplication (audit #979/#980)", (
     const created = await restoreWorkspaceTabs("main", ["/a.md"]);
 
     expect(created).toBe(0);
-    expect(mockCloseTab).toHaveBeenCalledWith("main", "mine");
+    expect(mockDetachTab).toHaveBeenCalledWith("main", "mine");
   });
 });
 
@@ -395,26 +408,83 @@ describe("restoreWorkspaceTabs — createTab deduplication (audit #979/#980)", (
 // after the bad one was abandoned.
 describe("a media file that cannot be opened costs one tab, not the session", () => {
   it("restores the siblings after a throwing media open", async () => {
-    mockTryOpenMediaFile.mockImplementation((_windowLabel, path) => {
+    // The media opener's ownership claim is the step that throws.
+    mockApplyFileOwnershipAfterOpen.mockImplementation((_tabId: string, path: string) => {
       if (path === "/broken.png") throw new Error("media surface unavailable");
-      return false;
     });
 
     const created = await restoreWorkspaceTabs("main", ["/broken.png", "/a.md", "/b.md"]);
 
     expect(created).toBe(2);
-    expect(mockCreateTab).toHaveBeenCalledTimes(2);
+    expect(mockIngestExternalContent).toHaveBeenCalledTimes(2);
+    for (const filePath of ["/a.md", "/b.md"]) {
+      expect(mockIngestExternalContent).toHaveBeenCalledWith(`tab-${filePath}`, "content", "disk-open", { filePath });
+    }
   });
 
   it("reports the cause instead of failing silently", async () => {
     const cause = new Error("media surface unavailable");
-    mockTryOpenMediaFile.mockImplementation(() => {
+    mockApplyFileOwnershipAfterOpen.mockImplementation(() => {
       throw cause;
     });
 
     await restoreWorkspaceTabs("main", ["/broken.png"]);
 
     expect(workspaceWarn).toHaveBeenCalledWith(expect.stringContaining("/broken.png"), cause);
+  });
+});
+
+// WI-RA26.3 — the media branch created its tab and then ran the ownership
+// claim; when the claim threw, the tab was left open with no claim, where the
+// text branch rolls its tab back. Both now roll back the same way, and only a
+// tab this loop really created.
+describe("a media tab whose open fails is rolled back like a text tab", () => {
+  it("removes the media tab when the ownership claim throws", async () => {
+    mockApplyFileOwnershipAfterOpen.mockImplementation(() => {
+      throw new Error("claim failed");
+    });
+
+    const created = await restoreWorkspaceTabs("main", ["/w/clip.mp4"]);
+
+    expect(created).toBe(0);
+    expect(mockDetachTab).toHaveBeenCalledWith("main", "tab-/w/clip.mp4");
+    expect(mockCloseTab).not.toHaveBeenCalled();
+  });
+
+  it("removes a CJK-named media tab the same way", async () => {
+    mockApplyFileOwnershipAfterOpen.mockImplementation(() => {
+      throw new Error("claim failed");
+    });
+
+    await restoreWorkspaceTabs("main", ["/w/图片 写真.png"]);
+
+    expect(mockDetachTab).toHaveBeenCalledWith("main", "tab-/w/图片 写真.png");
+  });
+
+  it("never removes a media tab createTab deduplicated onto, and does not count it", async () => {
+    mockTabs = [{ id: "theirs", kind: "document", filePath: "/w/clip.mp4" }];
+    mockCreateTab.mockReturnValue("theirs");
+    mockApplyFileOwnershipAfterOpen.mockImplementation(() => {
+      throw new Error("claim failed");
+    });
+
+    const created = await restoreWorkspaceTabs("main", ["/w/clip.mp4"]);
+
+    expect(created).toBe(0);
+    expect(mockInitDocument).not.toHaveBeenCalled();
+    expect(mockDetachTab).not.toHaveBeenCalled();
+    expect(mockCloseTab).not.toHaveBeenCalled();
+  });
+
+  it("keeps restoring the siblings after the rollback", async () => {
+    mockApplyFileOwnershipAfterOpen.mockImplementation((_tabId: string, path: string) => {
+      if (path === "/w/clip.mp4") throw new Error("claim failed");
+    });
+
+    const created = await restoreWorkspaceTabs("main", ["/w/clip.mp4", "/w/a.md"]);
+
+    expect(created).toBe(1);
+    expect(mockDetachTab).toHaveBeenCalledTimes(1);
   });
 });
 

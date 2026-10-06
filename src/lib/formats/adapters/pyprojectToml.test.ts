@@ -4,11 +4,20 @@
 // Covers PEP 621 [project] (optional-dependencies → groups) and Poetry
 // [tool.poetry] (dependencies + dev-dependencies).
 
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   pyprojectTomlSchemaDetector,
   collectPyprojectDependencies,
 } from "./pyprojectToml";
+import { loadTomlParser, type TomlParse } from "./tomlParser";
+
+// The parser loads on first use (tomlParser.ts); these call the adapter
+// synchronously, so load it first.
+let parseToml: TomlParse;
+beforeAll(async () => {
+  parseToml = await loadTomlParser();
+});
+const collectPyprojectDependenciesWith = (content: string) => collectPyprojectDependencies(content, parseToml);
 
 describe("pyprojectTomlSchemaDetector", () => {
   it("matches files named pyproject.toml (POSIX path)", () => {
@@ -81,7 +90,7 @@ name = "x"
 
 describe("collectPyprojectDependencies", () => {
   it("returns empty results for empty document", () => {
-    const result = collectPyprojectDependencies("");
+    const result = collectPyprojectDependenciesWith("");
     expect(result.runtime).toEqual([]);
     expect(result.optionalGroups).toEqual({});
     expect(result.poetryRuntime).toEqual([]);
@@ -98,7 +107,7 @@ dependencies = [
   "click>=8.0.0",
 ]
     `.trim();
-    const result = collectPyprojectDependencies(content);
+    const result = collectPyprojectDependenciesWith(content);
     expect(result.runtime).toEqual([
       { name: "requests", spec: ">=2.31.0" },
       { name: "click", spec: ">=8.0.0" },
@@ -113,7 +122,7 @@ name = "x"
 test = ["pytest>=7", "coverage"]
 docs = ["sphinx"]
     `.trim();
-    const result = collectPyprojectDependencies(content);
+    const result = collectPyprojectDependenciesWith(content);
     expect(result.optionalGroups.test).toEqual([
       { name: "pytest", spec: ">=7" },
       { name: "coverage", spec: "" },
@@ -131,7 +140,7 @@ name = "x"
 python = "^3.11"
 requests = "^2.31"
     `.trim();
-    const result = collectPyprojectDependencies(content);
+    const result = collectPyprojectDependenciesWith(content);
     expect(result.poetryRuntime).toEqual([
       { name: "python", spec: "^3.11" },
       { name: "requests", spec: "^2.31" },
@@ -146,13 +155,13 @@ black = "^23"
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.4"
     `.trim();
-    const result = collectPyprojectDependencies(content);
+    const result = collectPyprojectDependenciesWith(content);
     const names = result.poetryDev.map((d) => d.name).sort();
     expect(names).toEqual(["black", "ruff"]);
   });
 
   it("returns empty result + parseError on syntax error", () => {
-    const result = collectPyprojectDependencies("[unclosed");
+    const result = collectPyprojectDependenciesWith("[unclosed");
     expect(result.runtime).toEqual([]);
     expect(result.poetryRuntime).toEqual([]);
     expect(result.parseError).toBeDefined();
@@ -163,7 +172,7 @@ ruff = "^0.4"
 [tool.poetry.dependencies]
 django = { version = "^4.2", extras = ["argon2"] }
     `.trim();
-    const result = collectPyprojectDependencies(content);
+    const result = collectPyprojectDependenciesWith(content);
     expect(result.poetryRuntime).toEqual([
       { name: "django", spec: "^4.2" },
     ]);

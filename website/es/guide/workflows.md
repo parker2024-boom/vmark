@@ -198,19 +198,26 @@ La validación del esquema es mínima a propósito — confirma que las claves r
 
 ## Condiciones
 
-Un paso puede llevar una condición `if:`. Si se evalúa como falsa, el paso se omite (no falla); si se evalúa como verdadera o no existe, el paso se ejecuta. Hay tres funciones de estado disponibles:
+Un paso puede llevar una condición `if:`. Si se evalúa como falsa, el paso se omite (no falla). Hay tres funciones de estado disponibles, y siguen las reglas de GitHub Actions:
 
-| Condición | Significado |
-|-----------|-------------|
-| `success()` | Verdadera cuando ningún paso anterior ha fallado. |
-| `failure()` | Verdadera cuando un paso anterior ha fallado. |
-| `always()` | Siempre verdadera. |
+| Condición | Verdadera cuando |
+|-----------|------------------|
+| `success()` | Ningún paso ha fallado hasta ahora **y** todos los pasos que este `needs` se completaron. |
+| `failure()` | Cualquier paso anterior de la ejecución ha fallado — no solo un paso que este `needs`. |
+| `always()` | Siempre. |
+
+`success()` es el valor predeterminado. Un paso sin `if:` solo se ejecuta cuando se cumple `success()`, y lo mismo ocurre con un paso cuyo `if:` no nombra ninguna de las tres funciones — `if: X` significa `success() && (X)`. Eso es lo que impide que un paso normal se ejecute después de un fallo.
+
+| Lo que ocurrió antes | Paso normal o con `success()` | Paso con `failure()` | Paso con `always()` |
+|---|---|---|---|
+| Todo lo que necesita tuvo éxito | se ejecuta | se omite | se ejecuta |
+| Un paso que necesita **falló** (o agotó el tiempo, o se denegó su aprobación) | se omite | se ejecuta | se ejecuta |
+| Un paso que necesita se **omitió** por su propio `if:` | se omite | se omite — nada falló | se ejecuta |
+| La ejecución se **canceló** | se omite | se omite | se omite |
+
+Una condición no puede ver una cancelación: se comprueba antes del `if:`, y todos los pasos restantes se omiten con *Workflow cancelled*, incluidos los pasos con `always()`. Una ejecución en la que falló un paso termina igualmente como **fallida** y nombra el primer paso que falló, aunque después se ejecutaran pasos con `failure()` o `always()`.
 
 Puedes combinar referencias y comparaciones, p. ej. `${{ steps.classify.outputs.title == "Draft" }}`. Una condición mal formada o no admitida **hace fallar el paso de forma visible** en lugar de dejarlo pasar en silencio — no hay ninguna alternativa de «suponer verdadero si hay error».
-
-::: warning Limitación actual: failure() y always() aún no se activan
-El ejecutor omite todos los pasos restantes en cuanto falla cualquier paso — y esa omisión ocurre **antes** de evaluar la condición `if:`. Por eso `success()` funciona tal como está escrito, pero las condiciones `failure()` y `always()` están por ahora latentes: un paso protegido por ellas se omite junto con todo lo demás cuando se produce un fallo, así que nunca tiene la oportunidad de ejecutarse en la rama de fallo. De momento, trata `failure()` / `always()` como sintaxis reservada. Usa `success()` (o ninguna condición) para los pasos que esperas ejecutar en el camino feliz.
-:::
 
 ## Ajustes por paso
 
@@ -227,7 +234,7 @@ El ejecutor omite todos los pasos restantes en cuanto falla cualquier paso — y
 
 ### Tiempos de espera
 
-Cada paso se envuelve en su tiempo de espera efectivo. Al agotarse, el paso falla con `Timed out after Xs`: el proceso hijo de un proveedor CLI se termina; una solicitud REST en curso se descarta. Los pasos posteriores que dependen de un paso que agotó el tiempo se omiten. También hay un tope estricto de 5 MB para la salida acumulada de un solo paso — un proveedor descontrolado se cancela con `Provider output exceeded 5 MB cap`.
+Cada paso se envuelve en su tiempo de espera efectivo. Al agotarse, el paso falla con `Timed out after Xs`: el proceso hijo de un proveedor CLI se termina; una solicitud REST en curso se descarta. Un paso que agota el tiempo cuenta como fallido: los pasos que dependen de él se omiten a menos que su `if:` use `failure()` o `always()`. También hay un tope estricto de 5 MB para la salida acumulada de un solo paso — un proveedor descontrolado se cancela con `Provider output exceeded 5 MB cap`.
 
 ## Aprobaciones
 
@@ -251,7 +258,7 @@ Abre un archivo de flujo de trabajo `.yml` / `.yaml` en un espacio de trabajo (l
 
 A medida que avanza la ejecución, cada nodo se actualiza en vivo — en ejecución, correcto, omitido o con error —, de modo que puedes ver cómo avanza el pipeline y exactamente qué paso falló, si alguno falla. Al terminar, la barra de herramientas indica si se completó, falló o se canceló. Si el backend se niega a iniciar una ejecución — el motor está desactivado, el YAML no es válido, la instantánea falló — una notificación explica el motivo.
 
-Solo se ejecuta un flujo de trabajo a la vez en toda la aplicación, no por ventana: mientras uno se ejecuta, Ejecutar está deshabilitado en todos los demás archivos de flujo de trabajo, y un genio de flujo de trabajo iniciado entretanto se rechaza.
+Solo se ejecuta un flujo de trabajo a la vez en toda la aplicación, no por ventana. Mientras uno se ejecuta, Ejecutar está deshabilitado en todos los demás archivos de flujo de trabajo **de la misma ventana**, y la barra de herramientas indica *Otro flujo de trabajo está en ejecución*. Un archivo de flujo de trabajo en otra ventana sigue mostrando Ejecutar habilitado; al hacer clic se rechaza con *Ya se está ejecutando un flujo de trabajo. Espere a que termine o cancélelo.* Un genio de flujo de trabajo iniciado entretanto también se rechaza.
 
 ### Deshacer una ejecución
 
@@ -265,15 +272,18 @@ Cuando termina la ejecución, la barra de herramientas ofrece **Restaurar archiv
 flowchart TD
     A["Click Run on .yml file"] --> B["Topological sort of steps by needs:"]
     B --> C{"Next step"}
-    C --> D{"Dependency failed or workflow failed?"}
+    C --> D{"Run cancelled?"}
     D -->|Yes| E["Skip step"]
-    D -->|No| F{"if: condition present?"}
-    F -->|"Evaluates false"| E
-    F -->|"True or absent"| G{"approval resolves to ask?"}
+    D -->|No| F{"Evaluate if: against the run so far (success() when absent)"}
+    F -->|"False"| E
+    F -->|"Error"| I["Step fails"]
+    F -->|"True"| G{"approval resolves to ask?"}
     G -->|Yes| H["Pause: approval dialog"]
-    H -->|Denied| I["Step fails"]
+    H -->|"Denied or expired"| I
+    H -->|"Cancelled"| E
     H -->|Approved| J["Fill template, call provider"]
     G -->|No| J
+    J -->|"Error or timeout"| I
     J --> K["Store outputs.text and JSON fields"]
     K --> C
     E --> C

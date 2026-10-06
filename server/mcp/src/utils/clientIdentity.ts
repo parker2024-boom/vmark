@@ -11,7 +11,7 @@
  *   parent process name. VMark uses it as a display label only. It is a
  *   heuristic — a wrapper script or a renamed binary changes the answer — and
  *   it used to be what authorization was bound to, which meant a shell alias
- *   could put the wrong actor in an audit receipt (audit 20260728 §2.1).
+ *   could put the wrong actor in an audit receipt.
  *
  * Both take their inputs as parameters rather than reading globals, so the
  * detection rules are testable without mutating `process.env`.

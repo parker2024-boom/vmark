@@ -38,7 +38,6 @@ const mockCreateTransferredTab = vi.fn(() => "restored-tab-id");
 const mockInitDocument = vi.fn();
 const mockGetTabsByWindow = vi.fn();
 const mockDetachTab = vi.fn();
-const mockRemoveDocument = vi.fn();
 const mockGetDocument = vi.fn();
 
 vi.mock("@/stores/tabStore", () => ({
@@ -56,7 +55,6 @@ vi.mock("@/stores/documentStore", () => ({
     getState: () => ({
       initDocument: mockInitDocument,
       getDocument: mockGetDocument,
-      removeDocument: mockRemoveDocument,
     }),
   },
   useUnifiedHistoryStore: { getState: () => ({ documents: {}, clearDocument: vi.fn() }), subscribe: () => () => {} },
@@ -377,7 +375,6 @@ describe("transferTabFromDragOut", () => {
     await transferTabFromDragOut(defaultOptions);
 
     expect(mockInvoke).toHaveBeenCalledWith("find_drop_target_window", {
-      sourceWindowLabel: "main",
       screenX: 100,
       screenY: 200,
     });
@@ -389,7 +386,6 @@ describe("transferTabFromDragOut", () => {
       `dialog:toast.tabMovedAnnounce|${JSON.stringify({ title: "Doc 1" })}`
     );
     expect(mockDetachTab).toHaveBeenCalledWith("main", "tab-1");
-    expect(mockRemoveDocument).toHaveBeenCalledWith("tab-1");
   });
 
   it("detaches to new window when no drop target", async () => {
@@ -406,7 +402,6 @@ describe("transferTabFromDragOut", () => {
       `dialog:toast.tabDetachedAnnounce|${JSON.stringify({ title: "Doc 1" })}`
     );
     expect(mockDetachTab).toHaveBeenCalledWith("main", "tab-1");
-    expect(mockRemoveDocument).toHaveBeenCalledWith("tab-1");
   });
 
   it("triggers snapback on invoke error", async () => {
@@ -450,8 +445,8 @@ describe("transferTabFromDragOut", () => {
     const opts = { ...defaultOptions, windowLabel: "secondary" };
     await transferTabFromDragOut(opts);
 
-    // Should invoke close_window for the secondary window
-    expect(mockInvoke).toHaveBeenCalledWith("close_window", expect.objectContaining({ label: expect.any(String) }));
+    // Should close the secondary window — the one asking (Rust closes the caller)
+    expect(mockInvoke).toHaveBeenCalledWith("close_window");
   });
 
   it("does NOT auto-close main window even when no remaining tabs", async () => {

@@ -175,7 +175,7 @@ function DocumentTitleBar() {
   // half-typed name belongs to the file we just left, and confirming it would
   // rename the NEW one.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- abandons the in-progress rename when a different document takes over the title bar
     setIsEditing(false);
     editOpenedWith.current = null;
   }, [activeTabId, filePath]);
@@ -225,7 +225,7 @@ function DocumentTitleBar() {
             title={isMissing ? t("fileDeleted") : undefined}
           >
             {isDirty && (
-              // WI-UA9: a styled dot, not a text bullet — the bullet was below
+              // A styled dot, not a text bullet — the bullet was below
               // noticing threshold and read aloud as punctuation noise.
               <span className="dirty-indicator">
                 <span className="sr-only">{t("tab.unsavedChanges")}</span>

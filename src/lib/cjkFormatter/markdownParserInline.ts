@@ -16,77 +16,84 @@
  * references (or `[^1]:` splits into a reference plus a stray colon), and
  * character references after HTML tags (so `&amp;` inside an attribute is
  * already claimed and cannot be split out of its tag). Each detector guards
- * its match START with isInsideRegion, so a construct nested in an earlier
- * region is not double-protected.
+ * its match START against the regions claimed before it, so a construct nested
+ * in an earlier region is not double-protected.
+ *
+ * Cost is linear in the document. The bracketed constructs are found by the
+ * scanners in inlineSpanScanners.ts rather than by `opener [^closer]* closer`
+ * expressions, which reread the rest of the document from every opener once
+ * the last closer is behind them. The three that remain expressions cannot do
+ * that: a character reference is bounded in length, display math pairs each
+ * `$$` with the next one, and inline math stops at the end of its line.
  *
  * Appends to `regions` IN PLACE, like detectLineOrientedRegions, because the
  * detectors are order-dependent and each reads what the previous ones claimed.
  *
  * @coordinates-with markdownParser.ts — calls this between the fence and block passes
+ * @coordinates-with inlineSpanScanners.ts — the linear scanners for detectors 3-9
  * @coordinates-with characterReferences.ts — the shared reference pattern
+ * @coordinates-with protectedRegionSearch.ts — the "already claimed" test
  * @module lib/cjkFormatter/markdownParserInline
  */
 
 import type { ProtectedRegion } from "./types";
 import { characterReferenceMatcher } from "./characterReferences";
-import { isInsideRegion } from "./protectedRegionSearch";
+import {
+  scanFootnoteDefinitions,
+  scanFootnoteReferences,
+  scanHtmlTags,
+  scanImages,
+  scanInlineCode,
+  scanLinks,
+  scanWikiLinks,
+  type SpanMatch,
+} from "./inlineSpanScanners";
+import { createRegionLookup } from "./protectedRegionSearch";
+
+/**
+ * Add each match whose START is not already inside a region.
+ *
+ * `protect` narrows a match to the part that becomes the region; by default
+ * the whole match.
+ */
+function claim<M extends SpanMatch>(
+  regions: ProtectedRegion[],
+  type: ProtectedRegion["type"],
+  matches: Iterable<M>,
+  protect: (match: M) => SpanMatch = (match) => match
+): void {
+  const alreadyClaimed = createRegionLookup(regions);
+  for (const match of matches) {
+    if (alreadyClaimed(match.start)) continue;
+    const { start, end } = protect(match);
+    regions.push({ start, end, type });
+  }
+}
+
+/** Every match of a global expression, as ranges. */
+function* regexMatches(pattern: RegExp, text: string): Generator<SpanMatch> {
+  for (const match of text.matchAll(pattern)) {
+    yield { start: match.index, end: match.index + match[0].length };
+  }
+}
 
 /** Detectors 3-11. Appends to `regions` in place. */
 export function detectInlineSpanRegions(text: string, regions: ProtectedRegion[]): void {
-  let match: RegExpExecArray | null;
-
   // 3. Inline code (backticks, handling escaped and multiple backticks)
-  // Match `code` or ``code with ` inside`` etc.
-  const inlineCodeRegex = /(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/g;
-  while ((match = inlineCodeRegex.exec(text)) !== null) {
-    // Skip if inside a fenced code block
-    if (!isInsideRegion(match.index, regions)) {
-      regions.push({
-        start: match.index,
-        end: match.index + match[0].length,
-        type: "inline_code",
-      });
-    }
-  }
+  // Match `code` or ``code with ` inside`` etc. Skipped inside a fenced block.
+  claim(regions, "inline_code", scanInlineCode(text));
 
   // 4. Images: ![alt](url) or ![alt](url "title")
-  const imageRegex = /!\[[^\]]*\]\([^)]+\)/g;
-  while ((match = imageRegex.exec(text)) !== null) {
-    if (!isInsideRegion(match.index, regions)) {
-      regions.push({
-        start: match.index,
-        end: match.index + match[0].length,
-        type: "image",
-      });
-    }
-  }
+  claim(regions, "image", scanImages(text));
 
   // 5. Link URLs: [text](url) - protect only the URL part
-  const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
-  while ((match = linkRegex.exec(text)) !== null) {
-    if (!isInsideRegion(match.index, regions)) {
-      // Calculate the position of the URL part (after ](
-      const urlStart = match.index + match[1].length + 3; // [text](
-      const urlEnd = match.index + match[0].length - 1; // before )
-      regions.push({
-        start: urlStart,
-        end: urlEnd,
-        type: "link_url",
-      });
-    }
-  }
+  claim(regions, "link_url", scanLinks(text), ({ urlStart, urlEnd }) => ({
+    start: urlStart,
+    end: urlEnd,
+  }));
 
   // 6. HTML tags (including self-closing and with attributes)
-  const htmlTagRegex = /<[a-zA-Z][^>]*>|<\/[a-zA-Z][^>]*>/g;
-  while ((match = htmlTagRegex.exec(text)) !== null) {
-    if (!isInsideRegion(match.index, regions)) {
-      regions.push({
-        start: match.index,
-        end: match.index + match[0].length,
-        type: "html_tag",
-      });
-    }
-  }
+  claim(regions, "html_tag", scanHtmlTags(text));
 
   // 6b. HTML character references: &copy; &#20854; &#x5176; (issue #1382).
   //     A reference is punctuation wrapped around text, so every rule that
@@ -103,70 +110,25 @@ export function detectInlineSpanRegions(text: string, regions: ProtectedRegion[]
   //
   //     After the HTML-tag pass, so `&amp;` inside an attribute is already
   //     claimed and cannot be split out of its tag.
-  const characterReferenceRegex = characterReferenceMatcher();
-  while ((match = characterReferenceRegex.exec(text)) !== null) {
-    if (!isInsideRegion(match.index, regions)) {
-      regions.push({
-        start: match.index,
-        end: match.index + match[0].length,
-        type: "character_reference",
-      });
-    }
-  }
+  claim(regions, "character_reference", regexMatches(characterReferenceMatcher(), text));
 
   // 7. Wiki links: [[target]] or [[target|display]]
-  const wikiLinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
-  while ((match = wikiLinkRegex.exec(text)) !== null) {
-    if (!isInsideRegion(match.index, regions)) {
-      regions.push({
-        start: match.index,
-        end: match.index + match[0].length,
-        type: "wiki_link",
-      });
-    }
-  }
+  claim(regions, "wiki_link", scanWikiLinks(text));
 
   // 8. Footnote definitions: [^1]: content (protect the marker, not content)
   // Must be detected BEFORE references so [^1]: doesn't get split
-  const footnoteDefRegex = /^\[\^[^\]]+\]:/gm;
-  while ((match = footnoteDefRegex.exec(text)) !== null) {
-    if (!isInsideRegion(match.index, regions)) {
-      regions.push({
-        start: match.index,
-        end: match.index + match[0].length,
-        type: "footnote_def",
-      });
-    }
-  }
+  claim(regions, "footnote_def", scanFootnoteDefinitions(text));
 
   // 9. Footnote references: [^1], [^note], etc.
-  const footnoteRefRegex = /\[\^[^\]]+\]/g;
-  while ((match = footnoteRefRegex.exec(text)) !== null) {
-    if (!isInsideRegion(match.index, regions)) {
-      regions.push({
-        start: match.index,
-        end: match.index + match[0].length,
-        type: "footnote_ref",
-      });
-    }
-  }
+  claim(regions, "footnote_ref", scanFootnoteReferences(text));
 
   // 10. Math blocks: $$...$$  (display math)
-  const mathBlockRegex = /\$\$[\s\S]*?\$\$/g;
-  while ((match = mathBlockRegex.exec(text)) !== null) {
-    if (!isInsideRegion(match.index, regions)) {
-      regions.push({
-        start: match.index,
-        end: match.index + match[0].length,
-        type: "math_block",
-      });
-    }
-  }
+  claim(regions, "math_block", regexMatches(/\$\$[\s\S]*?\$\$/g, text));
 
   // 11. Inline math: $...$ (but not $$, and not escaped \$).
   //
   //     The padding rule is micromark's, and it is the whole reason this is
-  //     not a naive `\$[^$\n]+\$` (WI-CJKF4.1): content may be padded with one
+  //     not a naive `\$[^$\n]+\$`: content may be padded with one
   //     space on BOTH sides, but one-sided padding is not math at all. Without
   //     it, `价格是 $100 和 $200 元` and `cost $5, tax $1` were "protected" —
   //     which skipped the CJK rules inside them AND made the space in front of
@@ -174,9 +136,12 @@ export function detectInlineSpanRegions(text: string, regions: ProtectedRegion[]
   //
   //     `mathRegionParity.test.ts` checks a corpus against `parseMarkdown`
   //     itself, so this cannot drift away from what VMark renders.
-  const mathInlineRegex = /(?<![\\$])\$(?!\$)([^$\n]+)\$(?!\$)/g;
-  while ((match = mathInlineRegex.exec(text)) !== null) {
-    if (isInsideRegion(match.index, regions)) continue;
+  claim(regions, "math_inline", inlineMathMatches(text));
+}
+
+/** Inline-math candidates that satisfy the padding rule. */
+function* inlineMathMatches(text: string): Generator<SpanMatch> {
+  for (const match of text.matchAll(/(?<![\\$])\$(?!\$)([^$\n]+)\$(?!\$)/g)) {
     const content = match[1];
     const paddedLeft = /^[ \t]/.test(content);
     const paddedRight = /[ \t]$/.test(content);
@@ -185,10 +150,6 @@ export function detectInlineSpanRegions(text: string, regions: ProtectedRegion[]
     if (paddedLeft && content.trim() === "") continue;
     // A trailing backslash would escape the closing delimiter.
     if (content.endsWith("\\")) continue;
-    regions.push({
-      start: match.index,
-      end: match.index + match[0].length,
-      type: "math_inline",
-    });
+    yield { start: match.index, end: match.index + match[0].length };
   }
 }

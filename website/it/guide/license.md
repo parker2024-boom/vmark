@@ -48,6 +48,14 @@ La Licenza ISC è funzionalmente equivalente alla Licenza MIT ma con un linguagg
 - **Permissività** — nessuna restrizione su come usi il software
 - **Compatibilità** — funziona con praticamente tutte le altre licenze open source
 
+## Software di Terze Parti
+
+VMark si basa su software open source di molti autori: crate Rust, pacchetti npm e componenti compilati al loro interno, come Graphviz e il runtime Node.js del server MCP. Le loro licenze (MIT, Apache-2.0, BSD, ISC, MPL-2.0, EPL-2.0 e altre) richiedono che le relative note accompagnino ogni copia di VMark.
+
+Ogni build di VMark include il testo completo di queste note. Per leggerle, apri **Impostazioni → Informazioni** e fai clic su **Note di terze parti** — il file si apre nel visualizzatore di testo predefinito.
+
+Le note vengono generate dalle dipendenze esatte di ogni versione, quindi corrispondono alla versione che hai installato.
+
 ## Per Saperne di Più
 
 - [Licenza ISC su OSI](https://opensource.org/licenses/ISC)

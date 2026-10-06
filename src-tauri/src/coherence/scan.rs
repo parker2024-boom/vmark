@@ -1,4 +1,4 @@
-//! Scan reconciliation (WI-1.6, ADR-C4 services tier). Spec §9.4: compare
+//! Scan reconciliation (ADR-C4 services tier). Spec §9.4: compare
 //! disk state against the index for known objects, synthesize honest
 //! history for what happened outside VMark (R9), classify git operations
 //! first (R18 — navigation NEVER mints revisions), surface duplicates as
@@ -9,9 +9,7 @@
 use std::collections::{HashMap, HashSet};
 
 use super::adopt::register_if_needed_with;
-use super::canonical::text_content_hash;
 use super::capture::{adopt_from_disk, observed_external_entry};
-use super::frontmatter::read_identity;
 use super::gitops::{observe_outcome, GitClass};
 use super::scan_git::{run_git_phase, GitObserver, GitPhase};
 pub use super::scan_report::ScanReport;
@@ -87,7 +85,7 @@ fn scan_workspace_locked(
         ..Default::default()
     };
 
-    // Multi-writer sync (audit R11): segments written by other writers
+    // Multi-writer sync: segments written by other writers
     // (git pull, second installation) land mid-session; fold any
     // un-applied entries into the index before reconciling. Cheap count
     // guard; apply_entry is idempotent by entry id.
@@ -108,10 +106,10 @@ fn scan_workspace_locked(
     let registry = kernel.index().registry_state()?;
     let mut existing_diagnostics = existing_diagnostic_keys(&ledger_read.entries);
 
-    // D3.3 (WI-3.7): record a completed-merge diagnostic (deduped, pull-only).
+    // D3.3: record a completed-merge diagnostic (deduped, pull-only).
     super::merge_surface::record_completed_merge(kernel, &mut existing_diagnostics, &mut report)?;
 
-    // Durable quarantine diagnostics (spec §5.6, audit R10), deduped by
+    // Durable quarantine diagnostics (spec §5.6), deduped by
     // segment:line so repeated scans never spam history.
     for q in &ledger_read.quarantined {
         let key_path = format!("{}:{}", q.segment, q.line);
@@ -137,9 +135,9 @@ fn scan_workspace_locked(
 
     // Path -> present-on-disk map for absence checks: a registered path
     // that still exists is never absent, even when its identity block is
-    // missing, unreadable, oversized, or non-UTF-8 (audit R2/A14 — a
+    // missing, unreadable, oversized, or non-UTF-8 (a
     // diagnosed skip is still PRESENT).
-    let mut present_paths: HashSet<&str> = files.iter().map(|(rel, _)| rel.as_str()).collect();
+    let mut present_paths: HashSet<&str> = files.iter().map(|file| file.rel.as_str()).collect();
     present_paths.extend(skipped_md.iter().map(String::as_str));
 
     // ONCE for the whole walk — never `index().heads()` per file, which reloads
@@ -150,12 +148,13 @@ fn scan_workspace_locked(
     let dag = kernel.index().load_dag()?;
     let mut seen_at: HashMap<ObjectId, String> = HashMap::new();
     let mut duplicates: HashSet<ObjectId> = HashSet::new();
-    for (rel_path, text) in &files {
+    for file in &files {
+        let rel_path = &file.rel;
         // Identity: from frontmatter, else fall back to the registry by
         // path (a known file whose frontmatter went missing/malformed is
-        // still that object — audit A21).
-        let identity = match read_identity(text) {
-            Some(fi) => Some((fi.id, fi.schema)),
+        // still that object).
+        let identity = match &file.facts.identity {
+            Some(fi) => Some((fi.id, fi.schema.clone())),
             None => registry
                 .object_at
                 .get(rel_path)
@@ -164,7 +163,7 @@ fn scan_workspace_locked(
         let Some((object, schema)) = identity else {
             continue; // not yet an object (spec §9.4)
         };
-        if read_identity(text).is_none() && registry.contains(&object) {
+        if file.facts.identity.is_none() && registry.contains(&object) {
             emit_diagnostic(
                 kernel,
                 &mut existing_diagnostics,
@@ -205,7 +204,15 @@ fn scan_workspace_locked(
             register_if_needed_with(kernel, &registry, object, rel_path, schema.as_deref())?;
         }
 
-        let disk_hash = text_content_hash(text);
+        let Some(content) = file_content(&root, file) else {
+            // No longer readable as text since the walk; the scan its change
+            // triggers reconciles it. Unverified, so never complete.
+            kernel.scan_cache.forget(rel_path);
+            report.complete = false;
+            continue;
+        };
+        let disk_hash = content.hash().clone();
+        kernel.scan_cache.record_hash(rel_path, &disk_hash);
         let heads = dag.heads(&object);
         let at_head = {
             let mut found = false;
@@ -229,7 +236,7 @@ fn scan_workspace_locked(
         // Git navigation restores KNOWN revisions without minting (R18);
         // everything else — including content matching an OLD revision
         // (A → B → A) — mints a new revision with the current heads as
-        // parents (spec §2.3; audit R5).
+        // parents (spec §2.3).
         if matches!(class, GitClass::Navigation { .. })
             && kernel
                 .index()
@@ -238,9 +245,13 @@ fn scan_workspace_locked(
         {
             continue;
         }
+        let Some(masked) = content.into_masked(&root, rel_path) else {
+            kernel.scan_cache.forget(rel_path);
+            continue; // changed after the walk: its own scan records it
+        };
         kernel.index_mut().clear_disk_lag(&object)?;
         let revision = RevisionId::compute(&disk_hash, &heads);
-        kernel.snapshots().put_text(text)?;
+        kernel.snapshots().put_masked(&masked)?;
         let env = if matches!(class, GitClass::Mutation { .. }) {
             report.git_mutations += 1;
             super::adopt::git_mutation_entry(kernel, object, &revision, &disk_hash, heads)
@@ -261,32 +272,15 @@ fn scan_workspace_locked(
             kernel.index_mut().set_held(object, false)?;
         }
     }
-
-    // Deletions: registered objects whose paths are gone — only when the
-    // walk saw everything (audit R9). A path under an ignored directory
-    // (node_modules, .Trash, …) is never walked, so its absence from
-    // `present_paths` is not evidence of deletion — skip it (audit C8).
-    if report.complete {
-        for (object, path) in registry.path_of.iter() {
-            if path_under_ignored_dir(path) {
-                continue;
-            }
-            if !present_paths.contains(path.as_str()) && !seen_at.contains_key(object) {
-                kernel.index_mut().set_absent(object, true)?;
-                report.absent_marked += 1;
-            }
-        }
-    }
-
+    mark_absent(kernel, &registry, &present_paths, &seen_at, &mut report)?;
     kernel.last_git = current_git;
     Ok(report)
 }
 
 pub(super) use super::scan_diagnostics::{
-    emit_diagnostic, existing_diagnostic_keys, path_at_or_under_ignored_prefix,
-    path_under_ignored_dir,
+    emit_diagnostic, existing_diagnostic_keys, mark_absent, path_at_or_under_ignored_prefix,
 };
-pub(super) use super::scan_walk::walk_markdown;
+pub(super) use super::scan_walk::{file_content, walk_markdown};
 
 #[cfg(test)]
 #[path = "scan.test.rs"]

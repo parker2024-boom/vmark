@@ -1,5 +1,5 @@
 /**
- * The ONE decoder for the embedded browser's native events (audit round 3, #80).
+ * The ONE decoder for the embedded browser's native events.
  *
  * Purpose: `browser/nav_delegate_macos.rs` emits six events — `browser://navigated`
  * (committed), `browser://loaded` (finished, with title), `browser://load-failed`,
@@ -7,7 +7,7 @@
  * them: the UI handlers behind `browserNavEvents` and the MCP navigation waiters in
  * `browserEventBroker`. Each used to decode the raw payload on its own, and the two
  * had drifted — the broker defaulted a missing `generation` to 0 and a missing `url`
- * to "", the very values the round-2 validation (#81) refuses because they bypass
+ * to "", the very values the round-2 validation refuses because they bypass
  * every stale-generation check downstream. This module is the single place a raw
  * payload becomes a typed `BrowserNativeEvent`; `browserNativeEvents` fans the result
  * out to every subscriber, so no consumer can decode differently again.
@@ -15,7 +15,7 @@
  * Validation, per kind:
  *  - every payload: `tabId` must be a string — the event is otherwise unattributable.
  *  - navigated / loaded: `url` must parse and `generation` must be a non-negative
- *    integer (#81); a `title` that is not a string is "", the redirect and
+ *    integer; a `title` that is not a string is "", the redirect and
  *    back/forward flags coerce to `false`, and `navigationId` is carried only when
  *    it is a string. Dropped with a warning otherwise.
  *  - failed: `message` must be a string. A message is never invented here — a
@@ -49,7 +49,7 @@ export const BROWSER_NATIVE_EVENTS = [
 
 export type BrowserNativeEventName = (typeof BROWSER_NATIVE_EVENTS)[number];
 
-/** Back/forward-list state, carried by every event that can change it (WI-S1.6). */
+/** Back/forward-list state, carried by every event that can change it. */
 interface HistoryState {
   canGoBack: boolean;
   canGoForward: boolean;
@@ -63,7 +63,7 @@ export type BrowserNativeEvent =
       tabId: string;
       url: string;
       generation: number;
-      /** This navigation followed a server redirect (WI-S2.2). */
+      /** This navigation followed a server redirect. */
       redirected: boolean;
       navigationId?: string;
     } & HistoryState)
@@ -89,7 +89,7 @@ function drop(event: BrowserNativeEventName, payload: unknown): null {
   return null;
 }
 
-/** The fields every navigation consumer relies on (#81). A malformed one is
+/** The fields every navigation consumer relies on. A malformed one is
  *  refused rather than handed downstream as an `undefined` generation and URL,
  *  which would bypass the stores' stale-generation rejection. */
 function navigationFields(p: Raw): { url: string; generation: number } | null {

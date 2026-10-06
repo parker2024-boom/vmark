@@ -1,5 +1,5 @@
 /**
- * Native WKNavigationDelegate events for browser tabs (WI-1.7) — the handler adapter.
+ * Native WKNavigationDelegate events for browser tabs — the handler adapter.
  *
  * Purpose: the VMark-owned WKWebView drives its own navigation (redirects,
  * AI-driven clicks, `reload`), so the React chrome cannot know the current URL
@@ -14,8 +14,8 @@
  * or not its surface is mounted. A background tab's `confirm()` used to park the
  * page forever because only the mounted surface listened.
  *
- * It no longer decodes or subscribes on its own (round 3, #80). Decoding — the
- * round-2 validation (#81: a `url` must parse, a `generation` must be a
+ * It no longer decodes or subscribes on its own. Decoding — the
+ * round-2 validation (a `url` must parse, a `generation` must be a
  * non-negative integer, else the event is dropped with a warning) — lives once in
  * `browserNativeEventDecoder`, and the Tauri subscription (registered once,
  * retried with backoff, every failure logged) in `browserNativeEvents`, which fans
@@ -23,7 +23,7 @@
  * decoders had drifted; now there is one.
  *
  * The commit and finish events also carry the webview's back/forward-list state,
- * surfaced as `onHistoryChanged` with the event's generation (WI-S1.6). Missing
+ * surfaced as `onHistoryChanged` with the event's generation. Missing
  * flags are already `false` by the time they reach here.
  *
  * @coordinates-with services/browser/browserNativeEvents — the shared subscription hub

@@ -20,7 +20,7 @@ export const REGISTRY = [
   {
     kind: "path",
     path: "scripts/check-selection-styles.mjs",
-    deletedBy: "WI-UI0.3 (dev-docs/plans/20260829-ui-consistency.md)",
+    deletedBy: "WI-UI0.3 (UI-consistency plan)",
     reason:
       "Enforced the selection vocabulary only on selectors containing " +
       "menu|popup|picker|dropdown, and only against hard colour literals — a " +
@@ -133,7 +133,7 @@ export const REGISTRY = [
     kind: "symbol",
     name: "formatSelection",
     glob: "src",
-    deletedBy: "WI-CJKF1.1 (dev-docs/plans/20260821-cjk-formatter-correctness.md)",
+    deletedBy: "WI-CJKF1.1 (CJK-formatter correctness plan)",
     reason:
       "An unprotected CJK format pass — applyRules with no findProtectedRegions " +
       "and no verifyIntegrity, documented as 'assumes no markdown structure to " +
@@ -144,7 +144,7 @@ export const REGISTRY = [
       "takes exactly the same input safely. A 'plain text' variant must not come " +
       "back — the safety difference is invisible at the call site.",
   },
-  // ── Feature-ledger plan, Phase 3 (dev-docs/plans/20260907-feature-ledger-fixes.md) ──
+  // ── Feature-ledger plan, Phase 3 ──
   // Modules only their own tests imported (finding F1). scripts/check-test-only-modules.mjs
   // measures the class; these pins keep each named deletion from returning under its name.
   { kind: "path", path: "src/plugins/imageView/operations.ts", deletedBy: "WI-FL3.1 (feature-ledger plan)", reason: "ADR-010 helper trio with zero production importers; the image popup never called it." },
@@ -166,14 +166,14 @@ export const REGISTRY = [
   { kind: "symbol", name: "resolveToolbarIntent", glob: "src", deletedBy: "WI-FL3.12 (feature-ledger plan)", reason: "The resolver itself — see the path entry above." },
   { kind: "path", path: "src/plugins/editorPlugins/bookmarkLinkCommand.ts", deletedBy: "feature-ledger plan Phase 3 (WI-FL0.1 baseline)", reason: "Duplicate of wysiwygAdapterLinks.insertBookmarkLink; the keymap binds bookmarkLink via runEditorAction(\"bookmark\")." },
   { kind: "path", path: "src/plugins/editorPlugins/textTransformCommands.ts", deletedBy: "feature-ledger plan Phase 3 (WI-FL0.1 baseline)", reason: "Duplicate WYSIWYG case transforms; the shipped path is wysiwygAdapterFormatting via the command bus." },
-  { kind: "path", path: "src/services/persistence/resilience/machine.ts", deletedBy: "feature-ledger plan Phase 3 (WI-FL0.1 baseline)", reason: "Advisory state machine nothing instantiated; the sequence lives in dev-docs/error-recovery.md and the coordinator's tests." },
+  { kind: "path", path: "src/services/persistence/resilience/machine.ts", deletedBy: "feature-ledger plan Phase 3 (WI-FL0.1 baseline)", reason: "Advisory state machine nothing instantiated; the coordinator's tests pin the sequence." },
   { kind: "symbol", name: "getGoogleFontUrl", glob: "src/export", deletedBy: "WI-FL3.9 (feature-ledger plan)", reason: "Exported GOOGLE_FONTS lookup with only test callers; getUserFontFile is the production path." },
   { kind: "symbol", name: "waitForAllImages", glob: "src/export", deletedBy: "WI-FL3.9 (feature-ledger plan)", reason: "Listener-based image waiter only its test called; waitForAssets polls isImageSettled for export and print." },
   { kind: "symbol", name: "SplitOrientation", glob: "src/stores", deletedBy: "WI-FL3.10 (feature-ledger plan)", reason: "The stacked document split had no writer; splits are side-by-side only and a persisted orientation is dropped on load." },
   {
     kind: "path",
     path: "src-tauri/src/content_server/slidev.rs",
-    deletedBy: "WI-FL3.6 (dev-docs/plans/20260907-feature-ledger-fixes.md)",
+    deletedBy: "WI-FL3.6 (feature-ledger plan)",
     reason:
       "A #[allow(dead_code)] Rust builder for the `slidev export` argument vector, " +
       "with no caller: the export runs through the Node content server, which " +
@@ -185,30 +185,51 @@ export const REGISTRY = [
     kind: "symbol",
     name: "build_export_args",
     glob: "src-tauri/src",
-    deletedBy: "WI-FL3.6 (dev-docs/plans/20260907-feature-ledger-fixes.md)",
+    deletedBy: "WI-FL3.6 (feature-ledger plan)",
     reason: "The unwired slidev argument builder itself — see the path entry above.",
   },
   {
     kind: "symbol",
     name: "list_directory_entries",
     glob: "src-tauri/src",
-    deletedBy: "WI-FL3.2 (dev-docs/plans/20260907-feature-ledger-fixes.md)",
+    deletedBy: "WI-FL3.2 (feature-ledger plan)",
     reason:
       "A registered Tauri command with zero callers since #1357 replaced the " +
       "per-directory listing with the one-call list_directory_tree. Registered " +
       "IPC surface with no caller is attack surface that nothing tests; the " +
-      "hidden-detection rule it carried lives on as file_tree::compute_is_hidden.",
+      "hidden-detection rule it carried lives on as files::tree::compute_is_hidden.",
   },
   {
     kind: "symbol",
     name: "request_quit",
     glob: "src-tauri/src/window_manager",
-    deletedBy: "WI-FL3.2 (dev-docs/plans/20260907-feature-ledger-fixes.md)",
+    deletedBy: "WI-FL3.2 (feature-ledger plan)",
     reason:
       "window_manager::request_quit was a registered command with no frontend " +
       "caller that emitted app:quit-requested directly, bypassing the confirm-quit " +
       "gate. Quit is requested from the Rust menu dispatcher through " +
       "quit::request_quit(app) — which stays, outside this glob — so a second entry " +
       "point would reopen the bypass.",
+  },
+  {
+    kind: "symbol",
+    name: "force_quit",
+    glob: "src-tauri/src",
+    deletedBy: "WI-RA24.13 (.claude/tdd-guardian/plan-20261002-full-repo-audit-fixes.md)",
+    reason:
+      "A registered command that called app.exit(0) directly. Its one caller was " +
+      "Save All and Quit, which now runs as a mode of the coordinated quit " +
+      "(quit::save_all_and_quit). An exit that skips the coordinator skips the " +
+      "save-on-close flow and finalize_quit's child-process cleanup.",
+  },
+  {
+    kind: "symbol",
+    name: "sanitizeMediaHtml",
+    glob: "src",
+    deletedBy: "WI-RA24.13 (.claude/tdd-guardian/plan-20261002-full-repo-audit-fixes.md)",
+    reason:
+      "An iframe-admitting sanitizer with only test callers; video embeds are built " +
+      "by the video provider registry and never pass through it. A sanitizer nothing " +
+      "runs reads as a maintained security boundary while protecting nothing.",
   },
 ];

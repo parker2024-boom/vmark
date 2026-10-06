@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { Schema } from "@tiptap/pm/model";
 import { EditorState, SelectionRange } from "@tiptap/pm/state";
 import { EditorView } from "@tiptap/pm/view";
-import { MultiSelection } from "@/plugins/multiCursor/MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 import { multiCursorPlugin } from "@/plugins/multiCursor/multiCursorPlugin";
 
 // Mock the syntaxReveal marks module — we test multi-cursor branch with

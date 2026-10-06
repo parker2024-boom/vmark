@@ -7,6 +7,8 @@
  * - Captured before restart
  * - Deleted ONLY after restore-complete event (not before!)
  * - Kept on failure for retry on next launch
+ *
+ * @module services/persistence/hotExit/restartWithHotExit
  */
 
 import { invoke } from '@tauri-apps/api/core';
@@ -88,7 +90,7 @@ async function clearSessionFile(context: string): Promise<void> {
  * Capture session, write to disk, then restart app.
  * Session will be automatically restored on next startup via useHotExitRestore.
  *
- * A FAILED CAPTURE ABORTS THE RESTART (audit 20260906, F2). What the user
+ * A FAILED CAPTURE ABORTS THE RESTART. What the user
  * agreed to is "restart and restore my unsaved documents"; if the snapshot
  * could not be written, the second half is not on offer and the restart is a
  * different, worse deal than the one they accepted. This used to log the
@@ -158,7 +160,7 @@ export async function checkAndRestoreSession(
     : DEFAULT_RESTORE_TIMEOUT_MS;
 
   try {
-    // WI-3: the persisted payload is untrusted at this boundary — salvage it
+    // The persisted payload is untrusted at this boundary — salvage it
     // through the Zod schemas before migration/dispatch. Failures are
     // quarantined (preserved on disk), and an unusable payload leaves the
     // session file in place instead of clearing it.
@@ -246,7 +248,7 @@ export async function checkAndRestoreSession(
     const restoreResult = await resultPromise;
 
     if (restoreResult.success) {
-      // Audit 20260804-F10: DELETING is the irreversible half of this
+      // DELETING is the irreversible half of this
       // function, so it is refused whenever the payload was not wholly
       // readable. Two triggers:
       //   - salvage rejected material: something in that file failed schema
@@ -255,8 +257,8 @@ export async function checkAndRestoreSession(
       //     deleting it costs the only pristine evidence of the corruption.
       //   - Rust served the backup: the corrupt main file was never seen by
       //     the salvage boundary at all, so clearing would erase it unread.
-      //     See the TODO(WI-3-followup) above — this arm is unreachable until
-      //     the Rust half reports the substitution.
+      //     Rust reports the substitution; see `wasRecoveredFromBackup`
+      //     above.
       if (salvage.quarantined.length > 0 || recoveredFromBackup) {
         hotExitLog(
           'Restore succeeded, but the payload was not wholly readable — session file preserved',

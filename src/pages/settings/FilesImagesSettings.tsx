@@ -11,6 +11,8 @@
  * whole panel — and with it DocumentToolsSettings' `detect_pandoc` probe.
  * Settled with Codex (thread 019fdb16) rather than deferred on line count:
  * 300 lines is a tripwire, not a design target.
+ *
+ * @module pages/settings/FilesImagesSettings
  */
 
 import { useTranslation } from "react-i18next";

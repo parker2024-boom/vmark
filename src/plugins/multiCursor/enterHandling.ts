@@ -2,14 +2,35 @@
  * Multi-cursor Enter handling for ProseMirror
  *
  * Splits the parent node at each cursor position. Operates in
- * reverse document order to preserve position validity. Ranges
- * where canSplit returns false are skipped to avoid data loss.
+ * reverse document order to preserve position validity (rangeEdits.ts).
+ * Ranges where canSplit returns false are skipped to avoid data loss.
+ *
+ * @module plugins/multiCursor/enterHandling
  */
+
 import { SelectionRange } from "@tiptap/pm/state";
 import type { EditorState, Transaction } from "@tiptap/pm/state";
 import { canSplit } from "@tiptap/pm/transform";
-import { MultiSelection } from "./MultiSelection";
-import { sortRangesDescending, normalizeRangesWithPrimary } from "./rangeUtils";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
+import { normalizeRangesWithPrimary } from "@/plugins/shared/rangeUtils";
+import { editRangesFromEnd } from "./rangeEdits";
+
+/**
+ * Whether `pos` lies within one of `ranges`, ends included. The ranges are
+ * merged ones — sorted by start, each ending at or before the next begins —
+ * so only the last range starting at or before `pos` can contain it: an
+ * earlier one could only end exactly at `pos`, where that last one starts.
+ */
+function withinMergedRanges(ranges: readonly SelectionRange[], pos: number): boolean {
+  let lo = 0;
+  let hi = ranges.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (ranges[mid].$from.pos <= pos) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo > 0 && pos <= ranges[lo - 1].$to.pos;
+}
 
 /**
  * Handle Enter at all cursor positions.
@@ -51,13 +72,9 @@ export function handleMultiCursorEnter(
   const nonEmptyRanges = preMerged.ranges.filter(
     (r) => r.$from.pos !== r.$to.pos
   );
-  const effectiveRanges = preMerged.ranges.filter((r) => {
-    if (r.$from.pos !== r.$to.pos) return true;
-    const pos = r.$from.pos;
-    return !nonEmptyRanges.some(
-      (n) => pos >= n.$from.pos && pos <= n.$to.pos
-    );
-  });
+  const effectiveRanges = preMerged.ranges.filter(
+    (r) => r.$from.pos !== r.$to.pos || !withinMergedRanges(nonEmptyRanges, r.$from.pos)
+  );
 
   // Route the primary index through the absorption: if the original
   // primary range was absorbed, point it at the range that swallowed it.
@@ -73,29 +90,27 @@ export function handleMultiCursorEnter(
     if (effectivePrimaryIndex < 0) effectivePrimaryIndex = 0;
   }
 
-  const sortedRanges = sortRangesDescending(effectiveRanges);
-  let tr = state.tr;
-
   // Track ranges skipped by canSplit to preserve their selection span
   const skippedFromPositions = new Set<number>();
 
   // Apply splits from end to start (preserves earlier positions)
-  for (const range of sortedRanges) {
+  const edits = editRangesFromEnd(state, effectiveRanges, (tr, range) => {
     const from = range.$from.pos;
     const to = range.$to.pos;
 
     // Guard: skip range entirely if position can't be split (avoids data loss)
     if (!canSplit(tr.doc, from)) {
       skippedFromPositions.add(from);
-      continue;
+      return tr;
     }
 
     if (from !== to) {
       // Selection — delete first, then split at that position
       tr = tr.delete(from, to);
     }
-    tr = tr.split(from);
-  }
+    return tr.split(from);
+  });
+  let { tr } = edits;
 
   // If no splits were applied, let the default Enter handler run
   if (!tr.docChanged) {
@@ -103,18 +118,18 @@ export function handleMultiCursorEnter(
   }
 
   // Remap cursors through the changes
-  const newRanges = effectiveRanges.map((range) => {
+  const newRanges = effectiveRanges.map((range, index) => {
     if (skippedFromPositions.has(range.$from.pos)) {
       // Preserve original range span for skipped ranges
-      const newFrom = tr.mapping.map(range.$from.pos);
-      const newTo = tr.mapping.map(range.$to.pos);
+      const newFrom = edits.map(index, range.$from.pos);
+      const newTo = edits.map(index, range.$to.pos);
       return new SelectionRange(
         tr.doc.resolve(newFrom),
         tr.doc.resolve(newTo)
       );
     }
     // Split was applied — cursor at start of new paragraph (bias 1 = forward)
-    const newPos = tr.mapping.map(range.$from.pos, 1);
+    const newPos = edits.map(index, range.$from.pos);
     const $pos = tr.doc.resolve(newPos);
     return new SelectionRange($pos, $pos);
   });

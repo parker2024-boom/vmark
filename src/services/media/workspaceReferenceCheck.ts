@@ -1,5 +1,5 @@
 /**
- * Workspace Reference Check (WI-11)
+ * Workspace Reference Check
  *
  * Purpose: the last line of defence before an image is trashed — ask the
  * workspace content search whether ANY document, anywhere in the workspace,

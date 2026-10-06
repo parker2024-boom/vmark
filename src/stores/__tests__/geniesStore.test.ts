@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, type InvokeArgs } from "@tauri-apps/api/core";
 import { useGeniesStore } from "../aiStore";
 import type { GenieDefinition } from "@/types/aiGenies";
 
@@ -16,6 +16,30 @@ function makeGenie(overrides: Partial<GenieDefinition> & { name: string }): Geni
     filePath: overrides.filePath ?? `/genies/${overrides.name}.md`,
     source: "global",
   };
+}
+
+type Backend = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
+
+/**
+ * Most tests here describe the backend by its listing (`list_genies`) and its
+ * per-file read (`read_genie`). The store asks for both at once with
+ * `load_genies`; this answers it the way the Rust command does — every listed
+ * entry with its content, or with the error its read raised.
+ */
+function mockBackend(backend: Backend): void {
+  vi.mocked(invoke).mockImplementation(async (cmd: string, args?: InvokeArgs) => {
+    if (cmd !== "load_genies") return backend(cmd, args as Record<string, unknown> | undefined);
+    const entries = (await backend("list_genies")) as Array<{ path: string }>;
+    const loaded: unknown[] = [];
+    for (const entry of entries) {
+      try {
+        loaded.push({ ...entry, content: await backend("read_genie", { path: entry.path }) });
+      } catch (error) {
+        loaded.push({ ...entry, error: { code: "io", message: String(error) } });
+      }
+    }
+    return loaded;
+  });
 }
 
 describe("geniesStore", () => {
@@ -211,7 +235,7 @@ describe("geniesStore", () => {
 
   describe("loadGenies", () => {
     it("loads genies from Rust backend", async () => {
-      vi.mocked(invoke).mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      mockBackend(async (cmd: string, args?: Record<string, unknown>) => {
         if (cmd === "list_genies") {
           return [
             { name: "Translate", path: "/genies/Translate.md", source: "global", category: "Language" },
@@ -254,7 +278,7 @@ describe("geniesStore", () => {
         favoriteGenieNames: ["Translate", "AlsoDeleted"],
       });
 
-      vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      mockBackend(async (cmd: string) => {
         if (cmd === "list_genies") {
           return [{ name: "Translate", path: "/genies/Translate.md", source: "global", category: null }];
         }
@@ -275,7 +299,7 @@ describe("geniesStore", () => {
     });
 
     it("handles list_genies error gracefully", async () => {
-      vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      mockBackend(async (cmd: string) => {
         if (cmd === "list_genies") throw new Error("list failed");
         return undefined;
       });
@@ -285,7 +309,7 @@ describe("geniesStore", () => {
     });
 
     it("skips individual genie read failures", async () => {
-      vi.mocked(invoke).mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      mockBackend(async (cmd: string, args?: Record<string, unknown>) => {
         if (cmd === "list_genies") {
           return [
             { name: "Good", path: "/genies/Good.md", source: "global", category: null },
@@ -309,7 +333,7 @@ describe("geniesStore", () => {
     });
 
     it("falls back to entry category when metadata has none", async () => {
-      vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      mockBackend(async (cmd: string) => {
         if (cmd === "list_genies") {
           return [{ name: "X", path: "/genies/X.md", source: "global", category: "FolderCat" }];
         }
@@ -327,7 +351,7 @@ describe("geniesStore", () => {
     });
 
     it("handles empty genie list", async () => {
-      vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      mockBackend(async (cmd: string) => {
         if (cmd === "list_genies") return [];
         return undefined;
       });
@@ -413,9 +437,8 @@ describe("geniesStore", () => {
 
   describe("loadGenies", () => {
     it("loads genies and prunes stale recents/favorites (lines 113-129)", async () => {
-      const mockInvoke = vi.mocked(invoke);
       // list_genies returns two entries
-      mockInvoke.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      mockBackend(async (cmd: string, args?: Record<string, unknown>) => {
         if (cmd === "list_genies") {
           return [
             { path: "/genies/Alpha.md", category: "cat-a" },
@@ -459,9 +482,8 @@ describe("geniesStore", () => {
     });
 
     it("skips individual genie read failures (line 107-109)", async () => {
-      const mockInvoke = vi.mocked(invoke);
       let callCount = 0;
-      mockInvoke.mockImplementation(async (cmd: string) => {
+      mockBackend(async (cmd: string) => {
         if (cmd === "list_genies") {
           return [
             { path: "/genies/Good.md", category: "cat" },
@@ -490,7 +512,6 @@ describe("geniesStore", () => {
 
   describe("loadGenies race guard", () => {
     it("discards stale first load result when a second load starts before list_genies returns (line 89)", async () => {
-      const mockInvoke = vi.mocked(invoke);
 
       // Use a promise to control when the first list_genies resolves
       let resolveFirstListGenies!: (value: unknown) => void;
@@ -499,7 +520,7 @@ describe("geniesStore", () => {
       });
 
       let callCount = 0;
-      mockInvoke.mockImplementation(async (cmd: string) => {
+      mockBackend(async (cmd: string) => {
         if (cmd === "list_genies") {
           callCount++;
           if (callCount === 1) {
@@ -533,7 +554,6 @@ describe("geniesStore", () => {
     });
 
     it("discards stale load result when a second load starts after read_genie calls complete (line 113)", async () => {
-      const mockInvoke = vi.mocked(invoke);
 
       // Control resolution of read_genie for the first load
       let resolveFirstReadGenie!: (value: unknown) => void;
@@ -543,7 +563,7 @@ describe("geniesStore", () => {
 
       let listCallCount = 0;
       let readCallCount = 0;
-      mockInvoke.mockImplementation(async (cmd: string) => {
+      mockBackend(async (cmd: string) => {
         if (cmd === "list_genies") {
           listCallCount++;
           if (listCallCount === 1) {
@@ -618,7 +638,7 @@ describe("geniesStore", () => {
       });
       otherWindowSets("recentGenieNames", (list) => ["Alpha", "Ghost", ...list]);
       otherWindowSets("favoriteGenieNames", (list) => ["Alpha", ...list]);
-      vi.mocked(invoke).mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      mockBackend(async (cmd: string, args?: Record<string, unknown>) => {
         if (cmd === "list_genies") {
           return [
             { path: "/genies/Alpha.md", category: null },
@@ -650,7 +670,7 @@ describe("geniesStore", () => {
         favoriteGenieNames: [],
       });
       otherWindowSets("recentGenieNames", (list) => [...list, "Alpha"]);
-      vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      mockBackend(async (cmd: string) => {
         if (cmd === "list_genies") return [{ path: "/genies/Alpha.md", category: null }];
         if (cmd === "read_genie") {
           return { metadata: { name: "Alpha", description: "d", scope: "selection" }, template: "t" };
@@ -715,7 +735,7 @@ describe("geniesStore", () => {
       otherWindowSets("recentGenieNames", () => ["X"]);
       otherWindowSets("favoriteGenieNames", () => ["F"]);
 
-      vi.mocked(invoke).mockImplementation(async (cmd: string) =>
+      mockBackend(async (cmd: string) =>
         cmd === "list_genies" ? [] : null,
       );
       await useGeniesStore.getState().loadGenies();

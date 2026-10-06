@@ -4,8 +4,8 @@
  * Purpose: Flag `(text)[url]` which is a common mistake when the author
  * accidentally reverses the correct Markdown link syntax `[text](url)`.
  *
- * Code regions come from the MDAST, not from a second parser (audit R3
- * #825/#826/#829). This rule used to carry its own `isInsideInlineCode`, which
+ * Code regions come from the MDAST, not from a second parser.
+ * This rule used to carry its own `isInsideInlineCode`, which
  * toggled a boolean on EVERY backtick — so one literal backtick anywhere on a
  * line silently swallowed the rest of it, a multi-backtick span did not close
  * where CommonMark says it closes, and a span crossing a line ending was not a
@@ -16,9 +16,11 @@
  * has already run: `code` and `inlineCode` node ranges mask the source, and a
  * match intersecting one is not reported.
  *
- * The scan itself is escape- and nesting-aware (#827): `\(text)[url]` is a
+ * The scan itself is escape- and nesting-aware: `\(text)[url]` is a
  * literal parenthesis, and `(a (b))[url]` is a reversed link the old flat
  * `\(([^)]+)\)\[([^\]]+)\]` could not see.
+ *
+ * @module lib/lintEngine/rules/noReversedLink
  */
 
 import { visit } from "unist-util-visit";

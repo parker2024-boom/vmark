@@ -5,8 +5,8 @@
  *   does the disk write) and `onDiscard` handler (which reloads
  *   from source).
  *
- * Origin: GitHub Actions workflow viewer plan (2026-05-04, retired) §6
- *   Phase 7 / WI-7.2.
+ * Origin: GitHub Actions workflow viewer plan (retired) §6
+ *   Phase 7.
  *
  * Key decisions:
  *   - Both onSave and onDiscard are caller-owned. The control bar is

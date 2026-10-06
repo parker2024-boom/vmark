@@ -43,10 +43,6 @@ vi.mock("@/utils/markdownPipeline", () => ({
   parseMarkdown: vi.fn(() => ({ forEach: vi.fn() })),
 }));
 
-vi.mock("./tiptapDomUtils", () => ({
-  scrollToPosition: vi.fn(),
-}));
-
 vi.mock("@/utils/debug", () => ({
   footnotePopupWarn: vi.fn(),
   footnotePopupError: vi.fn(),

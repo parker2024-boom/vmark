@@ -70,7 +70,7 @@ export async function reviseEdge(
 }
 
 /**
- * Run a pull-only semantic check on one edge (WI-2b.4/2b.5, D5.1) with
+ * Run a pull-only semantic check on one edge (D5.1) with
  * the active AI provider, then refresh so the axis-2 badge appears.
  * No active provider is a surfaced store error, not a throw.
  */

@@ -82,7 +82,7 @@ const VIEW_BINDINGS: Binding[] = [
   viewBinding("knowledgeBase", "view.toggleKnowledgeBase", { suppressInInput: true }),
   viewBinding("windowStatus", "view.toggleWindowStatus", { suppressInInput: true }),
   viewBinding("markdownSplit", "view.toggleMarkdownSplit", { suppressInInput: true }),
-  // WI-DSPL1.2 gave these native menu accelerators, so they must be
+  // These have native menu accelerators, so they must be
   // NATIVE-owned: AppKit dispatches a menu accelerator regardless of focus,
   // and a DOM binding alongside it double-fires. For an involution like the
   // split toggle that means opening and instantly closing again.
@@ -127,7 +127,7 @@ function globalBinding(shortcutId: string, commandId: string): Binding {
 }
 
 /**
- * Build a NATIVE-owned binding (WI-5.2). Identical to a global binding but with
+ * Build a NATIVE-owned binding. Identical to a global binding but with
  * `captureOwner: "native-menu"`, so the window DOM router (which resolves only
  * `captureOwner: "window"`) never executes it — the native menu accelerator is
  * the sole owner. Used for chords that MUST be native: while the embedded
@@ -151,9 +151,9 @@ export const KEYBINDINGS: readonly Binding[] = [
   globalBinding("quickOpen", "app.quickOpen"),
   // Tabs + status bar (migrated from useTabShortcuts). closeFile is the Mod+W
   // "Close" shortcut (the only Mod-w definition) — now a real rebindable binding
-  // driving tab.close (WI-3.3).
+  // driving tab.close.
   globalBinding("newTab", "tab.new"),
-  // newBrowserTab is NATIVE-owned (WI-5.2): the native menu accelerator is the sole
+  // newBrowserTab is NATIVE-owned: the native menu accelerator is the sole
   // owner so the chord isn't double-delivered (DOM + native) in a document window,
   // and still works while the WKWebView browser holds keyboard focus.
   nativeMenuBinding("newBrowserTab", "browser.newTab"),

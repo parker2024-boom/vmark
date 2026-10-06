@@ -4,13 +4,16 @@
 //! binary/extension/skip-dir filtering, and per-line matching with UTF-16
 //! offset conversion and long-line windowing. Split from `content_search.rs`
 //! along the mechanics/orchestration seam when the walker gained completeness
-//! tracking; the directory walk and the Tauri commands stay there.
+//! tracking. Nothing here touches the filesystem: the walk
+//! (`content_search_walk.rs`) and the per-file read (`content_search_file.rs`)
+//! do, and hand this module names and bytes.
 //!
-//! @coordinates-with content_search.rs — sole consumer (walker + commands)
+//! @coordinates-with content_search.rs — regex construction for the commands
+//! @coordinates-with content_search_walk.rs — extension and skip-dir rules
+//! @coordinates-with content_search_file.rs — the binary rule and line matching
 
 use regex::{Regex, RegexBuilder};
 use serde::Serialize;
-use std::fs;
 use std::path::Path;
 
 /// Maximum length of a single line snippet (chars).
@@ -87,17 +90,10 @@ pub(crate) fn build_regex(
         .map_err(|e| format!("Invalid regex: {}", e))
 }
 
-/// Check if a file appears to be binary by scanning first bytes for NUL.
-pub(crate) fn is_binary(path: &Path) -> bool {
-    let Ok(file) = fs::File::open(path) else {
-        return true;
-    };
-    use std::io::Read;
-    let mut buf = [0u8; BINARY_CHECK_LEN];
-    let Ok(n) = (&file).read(&mut buf) else {
-        return true;
-    };
-    buf[..n].contains(&0)
+/// True when `head` — the first bytes of a file, at most `BINARY_CHECK_LEN` of
+/// them — marks the file as binary: it contains a NUL.
+pub(crate) fn looks_binary(head: &[u8]) -> bool {
+    head.contains(&0)
 }
 
 /// Check if a directory name should be skipped.

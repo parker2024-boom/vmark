@@ -40,7 +40,11 @@
  * raised value.
  *
  * @coordinates-with scripts/check-baseline-ratchet.mjs — the CLI that applies this
+ * @coordinates-with scripts/lib/baselineRatchet/advisoryAcceptanceEntries.mjs — the advisory registries spread in below
+ * @coordinates-with scripts/lib/baselineRatchet/specTierEntries.mjs — the Markdown spec-tier entries spread in below
  */
+import { ADVISORY_ACCEPTANCE_ENTRIES } from "./lib/baselineRatchet/advisoryAcceptanceEntries.mjs";
+import { SPEC_TIER_ENTRIES } from "./lib/baselineRatchet/specTierEntries.mjs";
 
 /**
  * Every committed baseline, with how its loosening is defined. A file
@@ -59,7 +63,7 @@ export const MANIFEST = {
       ],
     },
     {
-      // WI-FL0.1: modules unreachable from every production root, measured by
+      // Modules unreachable from every production root, measured by
       // scripts/check-test-only-modules.mjs over knip's production graph. An
       // IDENTITY list that only shrinks: a module only its tests reach is a
       // defect, so an addition fails here as well as in the gate itself.
@@ -67,7 +71,7 @@ export const MANIFEST = {
       checks: [{ mode: "identity", at: "entries", shape: "strings", onAdd: "fail" }],
     },
     {
-      // WI-FL0.2: header references (@coordinates-with, @module, Plan:) that
+      // Header references (@coordinates-with, @module, Plan:) that
       // resolve to nothing, measured by scripts/check-header-references.mjs.
       // IDENTITY list, only shrinks: a new dangling reference is a comment
       // written against a file that does not exist, so additions fail.
@@ -156,23 +160,16 @@ export const MANIFEST = {
       ],
     },
     {
-      // WI-UI4.2 — casing/punctuation conventions (R14). Identity list of
+      // Casing/punctuation conventions (R14). Identity list of
       // "file:key:check" violations in the ENGLISH copy; ratchets down only.
       path: "scripts/i18n-copy-baseline.json",
       checks: [{ mode: "identity", at: "entries", shape: "strings", onAdd: "fail" }],
     },
     {
-      // WI-18's identity list; its header: entries only get REMOVED.
+      // The store-mock list; its header: entries only get REMOVED.
+      // Sibling logic mocks have no list — none are allowed.
       path: "scripts/mock-boundaries-baseline.json",
-      checks: [
-        {
-          mode: "identity",
-          at: "entries",
-          shape: "objects",
-          key: ["file", "api", "target"],
-          onAdd: "fail",
-        },
-      ],
+      checks: [{ mode: "identity", at: "entries", shape: "objects", key: ["file", "api", "target"], onAdd: "fail" }],
     },
     {
       // A new top-level surface legitimately needs an entry (check-shell-slots
@@ -184,14 +181,19 @@ export const MANIFEST = {
       path: "scripts/merge-drop-allowlist.json",
       checks: [{ mode: "identity", at: "", shape: "object-keys", onAdd: "report" }],
     },
+    // Reviewed npm and RustSec advisory acceptances (additions report).
+    ...ADVISORY_ACCEPTANCE_ENTRIES,
     {
-      // Reviewed npm advisory acceptances (audit 20260906, C3). An addition
-      // REPORTS rather than fails: a genuinely new advisory in a dev-only
-      // dependency chain is an ordinary event, and the gate that matters —
-      // `check-npm-audit.mjs` — already refuses an entry with no stated reason
-      // and refuses one whose advisory has gone away.
-      path: "scripts/npm-audit-baseline.json",
-      checks: [{ mode: "identity", at: "accepted", shape: "object-keys", onAdd: "report" }],
+      // The Rust line-coverage floor, stored as the ceiling on UNCOVERED lines
+      // so that it reads the way a scalar check does: a raise loosens the gate
+      // and fails here. `maxSlackPercent` is how far coverage may rise above
+      // the floor before `check-rust-coverage.mjs` calls the floor stale, so
+      // raising it loosens that half and fails too.
+      path: "scripts/rust-coverage-baseline.json",
+      checks: [
+        { mode: "scalar", at: "maxUncoveredLinePercent" },
+        { mode: "scalar", at: "maxSlackPercent" },
+      ],
     },
     {
       // Growth here is separately capped by extension-budget's
@@ -208,7 +210,7 @@ export const MANIFEST = {
       ],
     },
     {
-      // WI-UI0.1 — the catalog contrast gate's identity baseline. Each theme's
+      // The catalog contrast gate's identity baseline. Each theme's
       // failing-pair list is a SEPARATE identity check (shape "strings",
       // onAdd: "fail") because `object-keys` at `failing` would only see theme
       // names — a pair added under an existing theme would pass silently, the
@@ -228,7 +230,7 @@ export const MANIFEST = {
       ],
     },
     {
-      // WI-UI0.3 — the ui-consistency gate's identity lists, one per check.
+      // The ui-consistency gate's identity lists, one per check.
       // Registered per-check (not root object-keys) for the same reason as the
       // theme-contrast baseline: a site added under an existing check must
       // fail. C4 alone reports additions — a NEW overlay surface legitimately
@@ -245,14 +247,14 @@ export const MANIFEST = {
       ],
     },
     {
-      // WI-UI0.4 (C12) — check:static gates with no sibling self-test. The
+      // C12 — check:static gates with no sibling self-test. The
       // parity test enforces exact equality with the census, so this ratchet's
       // job is only to stop the list growing back via history the PR wrote.
       path: "scripts/gate-tests-baseline.json",
       checks: [{ mode: "identity", at: "untested", shape: "strings", onAdd: "fail" }],
     },
     {
-      // WI-UI0.2 — identity lists for the two non-zero declaration-integrity
+      // Identity lists for the two non-zero declaration-integrity
       // checks (C2b rgba literals PER DECLARATION — file:selector:prop, so a
       // baselined selector cannot accumulate new colour literals invisibly;
       // renamed from the per-rule `rgbaLiterals` in the same change that
@@ -273,65 +275,13 @@ export const MANIFEST = {
       format: "text",
       checks: [{ mode: "custom", comparator: "tsIdenticalAllowlist", onAdd: "report" }],
     },
-    // ── Markdown spec tier (WI-0.3, plan ADR-5) ──────────────────────────
-    // Declared-divergence ledgers: one identity per record; additions report
-    // (visible in the diff), removals are tightening. Value drift is the spec
-    // gates' own staleness check, not the ratchet's.
-    {
-      path: "src/utils/markdownPipeline/__tests__/spec/specDeltas.json",
-      checks: [{ mode: "custom", comparator: "specConformanceRecords", onAdd: "report" }],
-    },
-    {
-      path: "src/utils/markdownPipeline/__tests__/spec/specRoundtripDeltas.json",
-      checks: [{ mode: "custom", comparator: "specRoundtripRecords", onAdd: "report" }],
-    },
-    // Vendored corpora: OPPOSITE polarity — content-addressed example
-    // identities that may only be added, so removing or editing an example
-    // fails even when the same commit updates the registry digest to match.
-    {
-      path: "src/utils/markdownPipeline/__tests__/spec/corpus/commonmark-0.31.2.json",
-      checks: [
-        { mode: "custom", comparator: "specCorpusExamples", direction: "no-remove", onAdd: "report" },
-      ],
-    },
-    {
-      path: "src/utils/markdownPipeline/__tests__/spec/corpus/gfm-extensions.json",
-      checks: [
-        { mode: "custom", comparator: "specCorpusExamples", direction: "no-remove", onAdd: "report" },
-      ],
-    },
-    // WI-2.3's external corpora — identical contract per file.
-    ...[
-      "cmark-regression.json",
-      "cmark-gfm-regression.json",
-      "cmark-gfm-extensions.json",
-      "pulldown-cjk-emphasis.json",
-      "pulldown-wikilinks.json",
-      "pulldown-math.json",
-      "markdown-it-extras.json",
-      "markdown-it-xss.json",
-      "tiptap-conversion.json",
-    ].map((file) => ({
-      path: `src/utils/markdownPipeline/__tests__/spec/corpus/${file}`,
-      checks: [
-        { mode: "custom", comparator: "specCorpusExamples", direction: "no-remove", onAdd: "report" },
-      ],
-    })),
-    // Pre-existing ledgers that predate the spec tier, previously
-    // unregistered (self-attesting): now pinned via source-text parsing.
-    {
-      path: "src/utils/markdownPipeline/__tests__/conformance/expectedDeltas.ts",
-      format: "text",
-      checks: [{ mode: "custom", comparator: "tsExpectedDeltas", onAdd: "report" }],
-    },
-    {
-      path: "src/utils/markdownPipeline/__tests__/fidelity/fidelityLedger.ts",
-      format: "text",
-      checks: [{ mode: "custom", comparator: "tsFidelityLedger", onAdd: "report" }],
-    },
+    // ── Markdown spec tier (plan ADR-5) ── declared-divergence
+    // ledgers, vendored corpora and the two pre-spec TS ledgers; the entries
+    // and their reasoning live in their own module.
+    ...SPEC_TIER_ENTRIES,
   ],
   // Empty by design. An entry here permits exactly ONE re-measurement and is
-  // deleted by the PR that follows the one carrying it — the 2026-09-07 entries
+  // deleted by the PR that follows the one carrying it — the entries
   // for the three `#[command]`-visibility files in command-error-baseline.json
   // expired when 76589b510 landed those counts, which is the gate reporting
   // them stale rather than anyone remembering.

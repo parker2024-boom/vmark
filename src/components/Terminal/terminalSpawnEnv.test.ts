@@ -170,6 +170,20 @@ describe("buildBaseTerminalEnv", () => {
     expect(env.TERM_PROGRAM).toBe("WezTerm");
   });
 
+  it("states a WezTerm version new enough to count as OSC 8 hyperlink-capable", () => {
+    // `supports-hyperlinks` (used by Claude Code, among others) accepts WezTerm
+    // only when TERM_PROGRAM_VERSION's leading number is >= 20200620. With the
+    // version absent the tool prints links as plain text, and a URL the tool
+    // hard-wraps over two rows is clickable only up to the end of the first.
+    const version = buildBaseTerminalEnv("/usr/bin", undefined).TERM_PROGRAM_VERSION;
+    // Real WezTerm's shape: YYYYMMDD-HHMMSS-<commit>.
+    expect(version).toMatch(/^\d{8}-\d{6}-[0-9a-f]{8}$/);
+    // The same read supports-hyperlinks' parseVersion makes: split on ".",
+    // then parseInt the first part. A WezTerm id has no dots, so that part is
+    // the whole id, and parseInt stops at the first dash — leaving YYYYMMDD.
+    expect(parseInt(version.split(".")[0], 10)).toBeGreaterThanOrEqual(20200620);
+  });
+
   it("advertises 24-bit colour on every platform (#1334)", () => {
     // xterm.js renders SGR 38;2;r;g;b, but with COLORTERM empty a CLI tool has
     // no way to know that and downgrades to the 256-colour palette.

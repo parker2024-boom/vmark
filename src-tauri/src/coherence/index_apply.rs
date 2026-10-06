@@ -18,7 +18,7 @@ pub(super) fn apply_entry_to(tx: &rusqlite::Connection, env: &Envelope) -> Resul
     let typed = env
         .typed()
         .map_err(|e| format!("index apply on malformed entry: {e}"))?;
-    // Keyed by IDEM, not entry id (audit A4): a crash-recovery replay
+    // Keyed by IDEM, not entry id: a crash-recovery replay
     // carries the same idem with a fresh id and must not re-apply.
     // Store the entry id alongside the idem (design v4.2): the FIRST entry
     // for an idem wins (INSERT OR IGNORE), so a later replay does not
@@ -115,7 +115,7 @@ pub(super) fn apply_entry_to(tx: &rusqlite::Connection, env: &Envelope) -> Resul
             .map_err(|e| e.to_string())?;
         }
         TypedBody::Preserved { ref kind, ref body } if kind == "check-result" => {
-            // WI-2b.3: validated at parse (envelope.rs); the D5.6
+            // Validated at parse (envelope.rs); the D5.6
             // context fields are nullable — results without them are
             // pre-revision-1 history and never satisfy liveness.
             tx.execute(

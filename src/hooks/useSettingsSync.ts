@@ -12,7 +12,10 @@
  *     custom-protocol origin), so this is a real transport, not an assumption.
  *   - Syncs every persisted section, derived from the store's own defaults
  *     rather than a hand-maintained allow-list (see SYNC_GROUPS).
- *   - processStorageEvent exported for testing
+ *   - An incoming group is reconciled against a copy of the defaults, not
+ *     this window's live values, so resets, nulls and removed map keys from
+ *     the other window arrive intact.
+ *   - handleSettingsStorageEvent exported for testing
  *
  * @coordinates-with settingsStore.ts — reads/writes persisted settings
  * @module hooks/useSettingsSync
@@ -70,7 +73,7 @@ export function handleSettingsStorageEvent(event: StorageEvent): void {
   // Application errors below (reconcile, setState, synchronous store
   // subscribers) are NOT parse errors and must not be silently swallowed as
   // if they were — that hid real failures behind a "corrupt JSON" catch and
-  // could leave partially applied state (audit Medium-11).
+  // could leave partially applied state.
   try {
     if (!parsed.state) return;
 
@@ -78,7 +81,7 @@ export function handleSettingsStorageEvent(event: StorageEvent): void {
     const incoming: Record<string, unknown> = {};
 
     // Collect the groups that actually differ. Validate each group's SHAPE
-    // first (WI-4.2, T3): a malformed cross-window write must not inject a
+    // first: a malformed cross-window write must not inject a
     // string/array/primitive where a settings group object is expected.
     // Settings groups are always plain objects.
     for (const group of SYNC_GROUPS) {
@@ -103,8 +106,17 @@ export function handleSettingsStorageEvent(event: StorageEvent): void {
     // rejected at startup was accepted live from another window — and replaced
     // each group wholesale, dropping keys the writer happened to omit instead
     // of defaulting them.
+    //
+    // The base is a fresh copy of the DEFAULTS, never this window's live
+    // state. The other window's group is the whole truth for that group; the
+    // base only supplies keys the writer omitted and the type each leaf must
+    // have. Against live state, a reset failed silently: a `null` arriving for
+    // `update.skipVersion` was a type mismatch against this window's string
+    // and was dropped, and a map key the other window removed from
+    // `formats.associations` survived the deep merge. The copy also keeps
+    // reconcile's in-place clamp/normalize away from the shared defaults.
     const reconciled = reconcileSettings(
-      currentState as unknown as Record<string, unknown>,
+      structuredClone(initialState) as unknown as Record<string, unknown>,
       incoming,
     );
     const updates: Record<string, unknown> = {};

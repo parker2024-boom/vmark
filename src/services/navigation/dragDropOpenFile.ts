@@ -1,3 +1,10 @@
+/**
+ * dragDropOpenFile — opens a drag-dropped file in a tab, activating an existing
+ * tab for the path or handing it to the shared open pipeline.
+ *
+ * @module services/navigation/dragDropOpenFile
+ */
+
 import { useTabStore } from "@/stores/tabStore";
 import { findExistingTabForPath } from "@/services/tabs/replaceableTab";
 import { openFileInNewTabCore } from "@/services/navigation/fileOpen";

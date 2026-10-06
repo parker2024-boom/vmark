@@ -37,8 +37,8 @@ import {
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
-import { resetTerminalSessionStore, useUIStore } from "@/stores/uiStore";
-import { selectVisibleTerminalSessions } from "@/stores/uiStore/terminalScopeSelectors";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
+import { selectVisibleTerminalSessions } from "@/stores/terminalStore/scopeSelectors";
 import {
   createWorkspaceInstance,
   createWorkspaceRootIdentity,
@@ -113,7 +113,7 @@ const visibleIds = () => {
   const activeId =
     useWorkspaceInstancesStore.getState().windows[W]?.activeWorkspaceInstanceId ?? null;
   return selectVisibleTerminalSessions(
-    useUIStore.getState().terminal,
+    useTerminalStore.getState(),
     activeId,
     useSettingsStore.getState().general?.workspaceRailMode ?? false,
   ).map((s) => s.id);
@@ -138,9 +138,9 @@ afterEach(() => {
 
 describe("rail switch × live terminal chain (WI-TS2.4)", () => {
   it("swaps the visible set and types NOTHING into scoped sessions (idle)", () => {
-    const sa = useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" })!;
-    const sb = useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-b" })!;
-    useUIStore.getState().terminalSetActiveSession(sa.id);
+    const sa = useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" })!;
+    const sb = useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-b" })!;
+    useTerminalStore.getState().terminalSetActiveSession(sa.id);
     const a = makeEntry({ cwd: "/repo-a" });
     const b = makeEntry({ cwd: "/repo-b" });
     const sessionsRef: RefObject<Map<string, SyncableSessionEntry>> = {
@@ -156,8 +156,8 @@ describe("rail switch × live terminal chain (WI-TS2.4)", () => {
 
     // Visible set swapped; membership untouched (invariant 1).
     expect(visibleIds()).toEqual([sb.id]);
-    expect(useUIStore.getState().terminal.activeSessionId).toBe(sb.id);
-    expect(useUIStore.getState().terminal.sessions).toHaveLength(2);
+    expect(useTerminalStore.getState().activeSessionId).toBe(sb.id);
+    expect(useTerminalStore.getState().sessions).toHaveLength(2);
     // NO cd typed into either shell; cwds untouched.
     expect(a.writes).toHaveLength(0);
     expect(b.writes).toHaveLength(0);
@@ -169,7 +169,7 @@ describe("rail switch × live terminal chain (WI-TS2.4)", () => {
     // code queued a pendingRoot and cd'd the shell (or typed into the
     // foreground program) when it went idle. Now the session is adopted by A
     // and left alone.
-    const su = useUIStore.getState().terminalCreateSession()!; // unscoped
+    const su = useTerminalStore.getState().terminalCreateSession()!; // unscoped
     const busy = makeEntry({ busy: true, cwd: "/repo-a" });
     const sessionsRef: RefObject<Map<string, SyncableSessionEntry>> = {
       current: new Map([[su.id, busy.entry]]),
@@ -179,9 +179,9 @@ describe("rail switch × live terminal chain (WI-TS2.4)", () => {
     switchWorkspaceInstance(W, "wsi-b");
 
     // Adopted by the outgoing instance, hidden, untouched.
-    const adopted = useUIStore
+    const adopted = useTerminalStore
       .getState()
-      .terminal.sessions.find((s) => s.id === su.id);
+      .sessions.find((s) => s.id === su.id);
     expect(adopted?.workspaceInstanceId).toBe("wsi-a");
     expect(visibleIds()).toEqual([]);
     expect(busy.entry.pendingRoot).toBeFalsy();
@@ -194,14 +194,14 @@ describe("rail switch × live terminal chain (WI-TS2.4)", () => {
     // Switching back reveals the same session, same cwd, no writes ever.
     switchWorkspaceInstance(W, "wsi-a");
     expect(visibleIds()).toEqual([su.id]);
-    expect(useUIStore.getState().terminal.activeSessionId).toBe(su.id);
+    expect(useTerminalStore.getState().activeSessionId).toBe(su.id);
     expect(busy.writes).toHaveLength(0);
     expect(busy.entry.spawnedCwd).toBe("/repo-a");
   });
 
   it("rail OFF: the legacy window-scoped population still cd-follows root changes verbatim", () => {
     setRail(false);
-    const su = useUIStore.getState().terminalCreateSession()!;
+    const su = useTerminalStore.getState().terminalCreateSession()!;
     const u = makeEntry({ cwd: "/repo-a" });
     const sessionsRef: RefObject<Map<string, SyncableSessionEntry>> = {
       current: new Map([[su.id, u.entry]]),

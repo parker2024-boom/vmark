@@ -13,13 +13,14 @@
  * reloadFromDisk and the disk-open ingest door.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { fileBytes } from "@/test/fileBytes";
 
 const { mockReadTextFile } = vi.hoisted(() => ({
   mockReadTextFile: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: (...args: unknown[]) => mockReadTextFile(...args),
+  readFile: (...args: unknown[]) => fileBytes(mockReadTextFile(...args)),
 }));
 
 import { reloadTabFromDisk } from "./reloadFromDisk";

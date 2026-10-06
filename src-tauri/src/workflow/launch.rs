@@ -1,4 +1,4 @@
-//! The spawn half of `run_workflow` (#262, #263): hand an admitted run to
+//! The spawn half of `run_workflow`: hand an admitted run to
 //! a background task that owns the `running` flag until it ends.
 //!
 //! Split from `commands.rs` at the file-size gate, and made generic over
@@ -15,7 +15,7 @@
 //!   - `spawn_logged` absorbs a panic in the run and logs it; the guard's
 //!     `Drop` runs during that unwind, which is what keeps a panicking
 //!     workflow from blocking every later start.
-//!   - **Exactly one terminal event, on every exit** (audit #548). The flag
+//!   - **Exactly one terminal event, on every exit**. The flag
 //!     was released on all four exits; the frontend was told about only two of
 //!     them. `run_workflow` returns an execution id the panel subscribes to
 //!     and then waits for `workflow:complete`, which the RUNNER emits — so a
@@ -88,7 +88,7 @@ impl<R: Runtime> Drop for TerminalEvent<R> {
             return;
         };
         log::error!(
-            "Workflow {execution_id} ended without a completion event — reporting it as failed"
+            "Workflow {execution_id:?} ended without a completion event — reporting it as failed"
         );
         let _ = self.app.emit(
             "workflow:complete",

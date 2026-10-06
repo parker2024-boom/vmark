@@ -4,7 +4,7 @@
  *
  * Purpose: `exportHtmlStaged` was one 196-line function that resolved
  * resources twice, downloaded fonts, assembled CSS, wrote every file,
- * published, rolled back and built two result objects (audit R3 #685/#689).
+ * published, rolled back and built two result objects.
  * The branching lived almost entirely in the two units below — a font whose
  * primary CDN fails and whose fallback may or may not exist, a download that
  * rejects rather than returning nothing, two settings naming one family, a
@@ -81,11 +81,11 @@ export interface PreparedFonts {
  * Resolve the document's images twice — once copied into the stage for
  * index.html, once embedded for standalone.html — and record the copies.
  *
- * The two reports are MERGED (#337): a resource can resolve as a file copy and
+ * The two reports are MERGED: a resource can resolve as a file copy and
  * still fail to embed, so a missing set taken from either pass alone
  * under-reports. Only files the folder pass actually copied under
  * `assets/images/` are tracked; a remote image was never written, and a
- * placeholder is a data URI rather than a path (#336).
+ * placeholder is a data URI rather than a path.
  */
 export async function resolveExportResources(
   sanitizedHtml: string,
@@ -127,9 +127,9 @@ export async function resolveExportResources(
  *
  * KaTeX's fonts ship only when the document HAS math — the templates default
  * to including KaTeX, which put a CDN stylesheet in index.html and the whole
- * payload in standalone.html for documents with none (#340). Each user family
+ * payload in standalone.html for documents with none. Each user family
  * contributes at most one file, and the document and monospace settings can
- * name the SAME family (#339), so the list is deduplicated by filename.
+ * name the SAME family, so the list is deduplicated by filename.
  */
 function fontsForExport(hasMath: boolean, fontSettings?: FontSettings): FontFile[] {
   const fonts: FontFile[] = hasMath ? [...getKaTeXFontFiles()] : [];

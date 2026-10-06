@@ -3,7 +3,7 @@
  * Row: target input + action buttons
  */
 
-/* Shell chrome comes from `.popup-container` (WI-UI3.2). */
+/* Shell chrome comes from `.popup-container`. */
 .source-wiki-link-popup {
   position: absolute;
   flex-direction: column;

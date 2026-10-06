@@ -1,8 +1,9 @@
 //! Tests for `cli.rs` — CLI provider execution.
 //!
 //! Unix-gated where a real child binary is required: the shims used
-//! (`sleep`, `echo`, `sh`) are POSIX utilities with no portable Windows
-//! equivalent (Windows `echo` is a cmd.exe builtin, there is no `sleep.exe`).
+//! (`sleep`, `echo`, `sh`, `cat`, `true`) are POSIX utilities with no portable
+//! Windows equivalent (Windows `echo` is a cmd.exe builtin, there is no
+//! `sleep.exe`).
 
 use super::stream::{next_bounded_chunk, utf8_floor, MAX_LINE_BYTES};
 // The following are only referenced by the Unix-gated tests below; on Windows
@@ -14,10 +15,22 @@ use super::*;
 #[cfg(unix)]
 use crate::ai_provider::sink::testing::{RecordingSink, SinkEvent};
 
+/// Resolve the login-shell PATH before a time-bounded test starts its clock.
+/// The first lookup in the process runs the user's login shell — seconds on a
+/// loaded machine — and is cached after; a bound meant for the behaviour under
+/// test must not be spent on it by whichever test happens to run first.
+#[cfg(unix)]
+async fn warm_login_path() {
+    tokio::task::spawn_blocking(super::login_shell_path)
+        .await
+        .expect("PATH lookup");
+}
+
 /// Cancellation kills a long-running shim within a deadline.
 #[cfg(unix)]
 #[tokio::test]
 async fn cancellation_kills_long_running_shim() {
+    warm_login_path().await;
     let typed = Arc::new(RecordingSink::new());
     let sink: Arc<dyn AiSink> = typed.clone();
 
@@ -93,6 +106,7 @@ async fn successful_exit_emits_done() {
 #[cfg(unix)]
 #[tokio::test]
 async fn chatty_stderr_child_does_not_deadlock() {
+    warm_login_path().await;
     let typed = Arc::new(RecordingSink::new());
     let sink: Arc<dyn AiSink> = typed.clone();
     let cancel = CancellationToken::new();
@@ -133,6 +147,188 @@ async fn chatty_stderr_child_does_not_deadlock() {
         err.len() <= MAX_STDERR_BYTES as usize + 256,
         "stderr retention must be capped, got {} bytes",
         err.len()
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Prompt delivery on stdin (WI-RA4.1)
+// ---------------------------------------------------------------------------
+
+/// A prompt well past any pipe buffer (64 KiB on macOS and Linux).
+#[cfg(unix)]
+fn big_prompt() -> String {
+    "0123456789abcdef 中文 line\n".repeat(48 * 1024)
+}
+
+#[cfg(unix)]
+fn error_event(events: &[SinkEvent]) -> Option<String> {
+    events.iter().find_map(|e| match e {
+        SinkEvent::Error(m) => Some(m.clone()),
+        _ => None,
+    })
+}
+
+/// The prompt reaches a real child byte for byte: quotes, `&`, `|`, `%PATH%`,
+/// CRLF and LF, and CJK all survive, because none of it is ever an argument.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_prompt_reaches_a_real_child_on_stdin_byte_for_byte() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let seen = dir.path().join("seen");
+    let prompt = "say \"hi\" & echo INJECTED | more %PATH% $HOME `id`\r\nline two\n中文——。";
+    let typed = Arc::new(RecordingSink::new());
+    let sink: Arc<dyn AiSink> = typed.clone();
+
+    let result = run_cli_blocking(
+        sink,
+        CancellationToken::new(),
+        "sh",
+        vec![
+            "-c".into(),
+            "cat > \"$1\"".into(),
+            "sh".into(),
+            seen.to_str().expect("utf-8 path").into(),
+        ],
+        Some(prompt.to_string()),
+        None,
+    )
+    .await;
+
+    assert!(result.is_ok(), "got {result:?}");
+    assert_eq!(
+        std::fs::read(&seen).expect("child wrote"),
+        prompt.as_bytes()
+    );
+    assert_eq!(typed.events().last(), Some(&SinkEvent::Done));
+}
+
+/// A child that answers while it is still reading (`cat` echoes as it goes)
+/// must not deadlock: the prompt is written on its own task while stdout is
+/// read. Written inline before the first read, the parent blocks on a full
+/// stdin pipe while the child blocks on a full stdout pipe.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_large_prompt_is_written_while_stdout_is_being_read() {
+    warm_login_path().await;
+    let prompt = big_prompt();
+    assert!(prompt.len() > 1024 * 1024);
+    let typed = Arc::new(RecordingSink::new());
+    let sink: Arc<dyn AiSink> = typed.clone();
+
+    let result = tokio::time::timeout(
+        Duration::from_secs(20),
+        run_cli_blocking(
+            sink,
+            CancellationToken::new(),
+            "cat",
+            vec![],
+            Some(prompt.clone()),
+            None,
+        ),
+    )
+    .await
+    .expect("a child that echoes while reading must not deadlock the prompt write");
+
+    assert!(result.is_ok(), "got {result:?}");
+    assert!(
+        typed.collected_text() == prompt,
+        "the echoed prompt must come back whole"
+    );
+    assert_eq!(typed.events().last(), Some(&SinkEvent::Done));
+}
+
+/// Cancellation is honoured even when the child never reads its stdin: the
+/// pending prompt write must not hold the cancel back.
+#[cfg(unix)]
+#[tokio::test]
+async fn cancellation_is_honoured_while_the_prompt_is_still_unread() {
+    warm_login_path().await;
+    let typed = Arc::new(RecordingSink::new());
+    let sink: Arc<dyn AiSink> = typed.clone();
+    let cancel = CancellationToken::new();
+    cancel.cancel();
+
+    let result = tokio::time::timeout(
+        Duration::from_secs(5),
+        run_cli_blocking(
+            sink,
+            cancel,
+            "sleep",
+            vec!["30".into()],
+            Some(big_prompt()),
+            None,
+        ),
+    )
+    .await
+    .expect("a cancelled run must return although `sleep` never reads its stdin");
+
+    assert!(result.is_ok(), "got {result:?}");
+    assert_eq!(error_event(&typed.events()).as_deref(), Some("Cancelled"));
+}
+
+/// A child that exits successfully without reading the whole prompt answered
+/// something other than what was asked: that is an error, never a Done.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_child_that_exits_without_reading_the_prompt_is_an_error() {
+    warm_login_path().await;
+    let typed = Arc::new(RecordingSink::new());
+    let sink: Arc<dyn AiSink> = typed.clone();
+
+    let _ = tokio::time::timeout(
+        Duration::from_secs(10),
+        run_cli_blocking(
+            sink,
+            CancellationToken::new(),
+            "true",
+            vec![],
+            Some(big_prompt()),
+            None,
+        ),
+    )
+    .await
+    .expect("must return once the child has exited");
+
+    let events = typed.events();
+    let error = error_event(&events).expect("an unread prompt must surface as an error");
+    assert!(
+        error.contains("true") && error.contains("prompt"),
+        "the error must name the provider and the prompt: {error}"
+    );
+    assert!(
+        !events.iter().any(|e| matches!(e, SinkEvent::Done)),
+        "no Done for a prompt the child never read: {events:?}"
+    );
+}
+
+/// A failing child is reported by its own exit status and stderr, not by the
+/// broken stdin pipe its early exit caused.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_failing_child_reports_its_exit_status_not_the_broken_stdin_pipe() {
+    warm_login_path().await;
+    let typed = Arc::new(RecordingSink::new());
+    let sink: Arc<dyn AiSink> = typed.clone();
+
+    let result = tokio::time::timeout(
+        Duration::from_secs(10),
+        run_cli_blocking(
+            sink,
+            CancellationToken::new(),
+            "sh",
+            vec!["-c".into(), "echo not-logged-in >&2; exit 7".into()],
+            Some(big_prompt()),
+            None,
+        ),
+    )
+    .await
+    .expect("must return once the child has exited");
+
+    assert!(result.is_ok(), "got {result:?}");
+    let error = error_event(&typed.events()).expect("an Error event");
+    assert!(
+        error.contains("exited with status") && error.contains("not-logged-in"),
+        "the child's own failure must be what is reported: {error}"
     );
 }
 

@@ -24,7 +24,7 @@ export function activeDeckPath(): string | null {
  * The save dialog's default output path for `deckPath`: its final segment with
  * the extension replaced by `.pdf`, or `.pdf` appended when it has none.
  *
- * Only the FINAL segment (audit #761). The obvious `replace(/\.[^.]+$/, ".pdf")`
+ * Only the FINAL segment. The obvious `replace(/\.[^.]+$/, ".pdf")`
  * lets `[^.]` match a separator, so a deck under a dotted directory —
  * `/ws.v1/deck` — matched `.v1/deck` and offered to save into `/ws.pdf`, a
  * different DIRECTORY from the one the user is working in. The same expression
@@ -36,7 +36,7 @@ export function deckExportDefaultPath(deckPath: string): string {
   return `${dot > separator + 1 ? deckPath.slice(0, dot) : deckPath}.pdf`;
 }
 
-/** Derive the Slidev export format from the chosen output extension (WI-7.2). */
+/** Derive the Slidev export format from the chosen output extension. */
 export function slidevFormatFromPath(outputPath: string): SlidevExportFormat {
   const ext = outputPath.slice(outputPath.lastIndexOf(".") + 1).toLowerCase();
   if (ext === "png") return "png";

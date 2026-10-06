@@ -1,4 +1,4 @@
-//! Resolve and spawn the content-server child process (Phase 1 WI-1.2, ADR-10).
+//! Resolve and spawn the content-server child process (Phase 1, ADR-10).
 //!
 //! Two responsibilities split out of `commands.rs` to keep that file thin:
 //!   1. `resolve_node` / `resolve_cli` — locate the Node runtime and the
@@ -6,12 +6,12 @@
 //!      provisioned app-data bundle). The order itself is `resolve_cli_from`,
 //!      pure over the three candidates so it is testable without an
 //!      `AppHandle`; the bundled candidate exists only when
-//!      `bundle_manifest::BUNDLED_CLI_RESOURCE` names one (WI-FL0.8).
+//!      `bundle_manifest::BUNDLED_CLI_RESOURCE` names one.
 //!   2. `spawn_server` — spawn Node with piped stdio and forward every child
 //!      line to `tauri-plugin-log` (so a packaged build's server output is
 //!      captured, not lost to a detached console). The wiring is
 //!      `spawn_supervised`, with the line sink injected, so it is pinned
-//!      with a shell in place of Node (#134).
+//!      with a shell in place of Node.
 //!
 //! The supervisor that watches the spawned child (`monitor_child`) lives in
 //! `supervisor.rs`.
@@ -39,7 +39,8 @@ pub enum CliSource {
     Env,
     /// A Tauri resource inside the app bundle (`BUNDLED_CLI_RESOURCE`).
     Bundled,
-    /// The app-data bundle written by the ADR-2 runtime updater.
+    /// A runtime placed in the app-data directory. Nothing in the app writes
+    /// one; it is there only when installed by hand.
     Provisioned,
 }
 
@@ -83,8 +84,8 @@ pub fn resolve_node() -> Result<String, String> {
 /// Fold what `which node` reported into a path or a reason. Pure over the two
 /// things the lookup produces, so every branch — a non-zero status, empty or
 /// whitespace-only output, several candidates, output that is not UTF-8 — is
-/// pinned by `spawn.test.rs` without a machine that happens to lack node
-/// (#311). `which` prints one candidate per line; the first is what a shell
+/// pinned by `spawn.test.rs` without a machine that happens to lack node.
+/// `which` prints one candidate per line; the first is what a shell
 /// would run.
 pub(super) fn node_from_lookup(success: bool, stdout: &[u8]) -> Result<String, String> {
     if !success {
@@ -106,7 +107,8 @@ pub(super) fn node_from_lookup(success: bool, stdout: &[u8]) -> Result<String, S
 ///   1. `VMARK_CONTENT_SERVER_CLI` env override (dev / E2E).
 ///   2. Bundled Tauri resource — only when `BUNDLED_CLI_RESOURCE` names one;
 ///      it is `None` today because no build step produces the artefact.
-///   3. Provisioned app-data bundle (ADR-2 runtime upgrades).
+///   3. Provisioned app-data bundle (`content-server/base-kb` under the app
+///      data directory). Nothing in the app installs one.
 pub fn resolve_cli(app: &AppHandle) -> Result<PathBuf, String> {
     resolve_cli_with_source(app).map(|(path, _)| path)
 }
@@ -118,7 +120,7 @@ pub fn resolve_cli_with_source(app: &AppHandle) -> Result<(PathBuf, CliSource), 
     // resolution FAILURE is kept, not `.ok()`-ed away: a configured resource
     // the path resolver cannot place is a packaging fault, and reporting it as
     // "not provisioned" would send the user to install a runtime that is
-    // supposed to be in the bundle (#133).
+    // supposed to be in the bundle.
     let bundled = BUNDLED_CLI_RESOURCE.map(|rel| {
         app.path()
             .resolve(rel, tauri::path::BaseDirectory::Resource)
@@ -126,7 +128,7 @@ pub fn resolve_cli_with_source(app: &AppHandle) -> Result<(PathBuf, CliSource), 
                 format!("bundled content-server resource {rel:?} could not be resolved: {e}")
             })
     });
-    // Provisioned bundle: written by the runtime updater (ADR-2). Resolved
+    // Provisioned bundle: a runtime installed by hand under app data. Resolved
     // lazily by `resolve_cli_from` so an unavailable app-data dir only matters
     // once the earlier candidates have failed.
     let provisioned = app_data_dir(app).map(|dir| {
@@ -192,18 +194,29 @@ pub fn spawn_server(node: &str, args: &[&str], root: &str) -> std::io::Result<Ch
     let mut cmd = build_command(node, args);
     cmd.env("PATH", login_shell_path());
     let root = root.to_string();
-    spawn_supervised(cmd, move |stream, line| match stream {
-        Stream::Stderr => log::warn!("[content-server {root}] {line}"),
-        Stream::Stdout => log::info!("[content-server {root}] {line}"),
-    })
+    spawn_supervised(cmd, move |stream, line| log_child_line(&root, stream, line))
+}
+
+/// One line of the child's output, into the log — stderr as a warning.
+fn log_child_line(root: &str, stream: Stream, line: &str) {
+    match stream {
+        Stream::Stderr => log::warn!(
+            "[content-server {root:?}] {line}",
+            line = crate::peer_text::peer_message(line)
+        ),
+        Stream::Stdout => log::info!(
+            "[content-server {root:?}] {line}",
+            line = crate::peer_text::peer_message(line)
+        ),
+    }
 }
 
 /// `spawn_server` with the line sink injected: spawn `cmd` with both pipes
 /// captured, and drain each on its own thread into `on_line` until the
 /// stream closes (the child exited). Pinned by `spawn.test.rs` with a shell
-/// in place of Node (#134); production hands in the `log` forwarder above.
+/// in place of Node; production hands in the `log` forwarder above.
 /// A drain thread that could not be created is a FAILED SPAWN, not a lost log
-/// line (#314). `thread::spawn` panics when the OS refuses a thread, and the
+/// line. `thread::spawn` panics when the OS refuses a thread, and the
 /// unwind then dropped `child` — and `std::process::Child` does not kill on
 /// drop, so the server it had just started ran on with nobody owning it.
 /// `thread::Builder` reports the refusal instead, and the child is killed and
@@ -238,7 +251,7 @@ pub(super) fn spawn_supervised(
 
 /// Drain one child stream on its own thread. The thread ends when the stream
 /// closes (child exit), and the shared sink is dropped once both have. A
-/// thread the OS refuses is reported, never a panic (#314).
+/// thread the OS refuses is reported, never a panic.
 fn drain_on_thread<R: Read + Send + 'static>(
     reader: R,
     stream: Stream,

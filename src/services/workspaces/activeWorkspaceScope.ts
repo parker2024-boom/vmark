@@ -1,3 +1,11 @@
+/**
+ * activeWorkspaceScope — resolves a window's active workspace scope (root,
+ * config, excluded folders) from its active workspace instance or from the
+ * legacy workspace store.
+ *
+ * @module services/workspaces/activeWorkspaceScope
+ */
+
 import { isWorkspaceRailEnabled } from "@/services/featureFlags/workspaceRailFeatureFlag";
 import {
   useWorkspaceInstancesStore,

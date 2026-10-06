@@ -8,7 +8,7 @@
  * 3. Large cursor counts (50+)
  */
 import { describe, it, expect } from "vitest";
-import { MultiSelection } from "../MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 import {
   handleMultiCursorInput,
   handleMultiCursorBackspace,

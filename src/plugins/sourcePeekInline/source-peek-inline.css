@@ -59,7 +59,7 @@
   gap: var(--space-1);
 }
 
-/* Header buttons are canonical `.vm-icon-btn--sm` (WI-UI2.3). Only the live
+/* Header buttons are canonical `.vm-icon-btn--sm`. Only the live
    toggle's eye-icon swap is local; its on-state accent comes from `.active`
    below (matching the canonical aria-pressed accent). */
 .source-peek-live-toggle .icon-eye {

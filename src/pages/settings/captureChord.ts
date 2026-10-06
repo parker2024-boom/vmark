@@ -1,6 +1,5 @@
 /**
- * Turn a physical key event into a ProseMirror-format chord string
- * (WI-TNAV2.3).
+ * Turn a physical key event into a ProseMirror-format chord string.
  *
  * Extracted from `KeyCapture.tsx` so the mapping is testable without mounting a
  * modal that listens on `window` — the test matrix specified it as its own unit
@@ -35,7 +34,7 @@ export interface ChordEventLike {
  * The chord for this event, or `null` for a lone modifier.
  *
  * **`Mod` is Cmd on macOS and Ctrl everywhere else.** Collapsing BOTH physical
- * keys into `Mod` — which this did until WI-TNAV2.3 — made a literal Ctrl chord
+ * keys into `Mod` — which this used to do — made a literal Ctrl chord
  * uncapturable on macOS: pressing Ctrl+Tab produced `Mod-Tab`, i.e. Cmd+Tab. So
  * every shipped `Ctrl-…` default (the sidebar panel family, the transform trio,
  * Last Used Tab) was impossible to re-enter once changed. Off macOS the

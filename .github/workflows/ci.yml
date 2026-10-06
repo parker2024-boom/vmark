@@ -449,7 +449,28 @@ jobs:
           filters: |
             rust:
               - 'src-tauri/**'
-              - 'Cargo.lock'
+              # The RustSec gate and its acceptance file decide rust-audit's
+              # verdict, so a change to either must run it.
+              - 'scripts/check-cargo-audit.mjs'
+              - 'scripts/cargo-audit-baseline.json'
+              # Files outside src-tauri that the crate reads. The first seven
+              # are compiled into the binary with include_str!; the last two
+              # are read by Rust tests that pin a frontend contract (the
+              # CommandError wire shape, the PDF export progress keys). A pull
+              # request that edits only one of them changes what `cargo test`
+              # does, so it must run. The list is derived from the Rust
+              # sources by scripts/check-rust-filter-inputs.test.mjs, which
+              # fails when one is missing here, and when a frontend file
+              # listed here is one the crate no longer reads.
+              - 'src/utils/mediaExtensions.json'
+              - 'src/lib/browser/agent/agentCore.src.js'
+              - 'src/lib/browser/agent/agentCoreRoles.src.js'
+              - 'src/lib/browser/agent/agentCoreWalk.src.js'
+              - 'src/lib/browser/agent/consoleShim.src.js'
+              - 'src/lib/browser/agent/recorderShim.src.js'
+              - 'src/lib/browser/agent/recorderShimSensitivity.src.js'
+              - 'src/test/fixtures/commandErrorWire.json'
+              - 'src/export/PdfExportDialog.tsx'
             # True when any changed file is NOT prose — i.e. false only for a
             # docs-only PR. The exclusions are an explicit allowlist, not
             # `!**/*.md`, and that distinction is the whole safety argument:
@@ -625,12 +646,17 @@ jobs:
   rust-audit:
     needs: [changes]
     # Path-filtered — see rust-test. cargo-audit reads Cargo.lock, which the
-    # `rust` filter already covers.
+    # `rust` filter already covers, along with the gate script and its
+    # acceptance file.
     if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
 
       - name: Install cargo-audit
         uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
@@ -638,11 +664,9 @@ jobs:
           tool: cargo-audit
 
       - name: Security audit (Rust)
-        # RUSTSEC-2026-0194/0195: DoS advisories in `quick-xml`, pulled in only
-        # transitively and unfixable from here — `plist 1.9.0` (via `tauri 2.11.3`)
-        # pins `quick-xml ^0.39.2` and `tauri-winrt-notification` pins `^0.37`,
-        # while the fix is >=0.41.0. Neither is reachable without an upstream
-        # Tauri/plist release. quick-xml is used only for plist parsing (macOS
-        # bundle metadata) and Windows notifications, never for untrusted external
-        # XML in VMark. Remove these ignores once a Tauri bump pulls quick-xml >=0.41.
-        run: cargo audit --file src-tauri/Cargo.lock --ignore RUSTSEC-2026-0194 --ignore RUSTSEC-2026-0195
+        # Not bare `cargo audit`: that exits 0 over unmaintained, unsound and
+        # yanked crates, and its `--ignore` flags are one-way — they outlive
+        # the advisory they were added for. The gate fails on any finding not
+        # listed in scripts/cargo-audit-baseline.json with its reason, and on a
+        # listed one that no longer applies.
+        run: node scripts/check-cargo-audit.mjs

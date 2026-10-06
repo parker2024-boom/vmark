@@ -1,10 +1,16 @@
+/**
+ * paper — design tokens for the Paper theme, the default light theme.
+ *
+ * @module theme/themes/paper
+ */
+
 import type { ThemeTokens } from "../tokens";
 import { sharedPrimitives, lightShadows, subtleLight, hoverLight } from "../tokens";
 
 /**
  * Paper theme — soft warm background, the default vmark theme.
  *
- * WI-UI1.2: semantic/alert/media are AUTHORED per theme (the shared light
+ * Semantic/alert/media are AUTHORED per theme (the shared light
  * fragments were tuned for #ffffff and lost 0.5–1.2 ratio points on this
  * warm paper). Every colour clears the check-theme-contrast floors on this
  * theme's own three backgrounds.

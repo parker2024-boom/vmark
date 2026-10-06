@@ -1,5 +1,5 @@
 /**
- * Gate classifier (WI-NB2.2) — turns a page-signals snapshot into an advisory
+ * Gate classifier — turns a page-signals snapshot into an advisory
  * verdict: is the page a login wall, a consent interstitial, a human-verification
  * challenge, or a rate-limit notice?
  *

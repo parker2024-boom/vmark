@@ -2,49 +2,29 @@
  * Viewport clamping for the workspace rail's context menu.
  *
  * Purpose: keep an anchored menu fully on screen, and KEEP it there. The
- * component recomputed the clamp only when the anchor point changed (audit R3
- * #654/#656), so a window resize under an open menu, or a menu that grew after
+ * component recomputed the clamp only when the anchor point changed,
+ * so a window resize under an open menu, or a menu that grew after
  * its translated labels laid out, left it hanging off the bottom or right edge
  * with no way to reach the items. Both inputs — the viewport and the menu's own
  * box — are now observed.
  *
- * The arithmetic is a pure function so the edge cases are pinned without a DOM:
- * a menu taller than the viewport clamps to the near margin rather than to a
- * negative coordinate, which would put it further off screen than the raw
- * pointer position did.
+ * The arithmetic is the shared `clampMenuPosition`, so a menu taller than the
+ * viewport clamps to the near margin rather than to a negative coordinate,
+ * exactly as every other context menu does. What stays here is the rail's own
+ * margin and its state-driven delivery: the component renders the clamped
+ * point as a style prop.
  *
  * @coordinates-with ./WorkspaceRailContextMenu.tsx — the only consumer
+ * @coordinates-with utils/menuPosition.ts — the pure clamp
  * @module components/WorkspaceRail/workspaceRailMenuLayout
  */
 import { useLayoutEffect, useState, type RefObject } from "react";
+import { clampMenuPosition, viewportMenuBounds, type MenuPoint } from "@/utils/menuPosition";
+
+export type { MenuPoint } from "@/utils/menuPosition";
 
 /** Keep the menu this far from the viewport edge when clamping. */
-export const VIEWPORT_MARGIN = 8;
-
-export interface MenuPoint {
-  x: number;
-  y: number;
-}
-
-interface Size {
-  width: number;
-  height: number;
-}
-
-/**
- * Where an `size`-sized menu anchored at `at` should actually be drawn.
- *
- * `Math.max(MARGIN, …)` is applied LAST on purpose: when the menu does not fit
- * at all, `maxX`/`maxY` go negative and the min alone would place it off the
- * top-left. The near margin is the least-bad position, and it is the one from
- * which the user can still scroll or resize to reach the rest.
- */
-export function clampToViewport(at: MenuPoint, size: Size, viewport: Size): MenuPoint {
-  return {
-    x: Math.max(VIEWPORT_MARGIN, Math.min(at.x, viewport.width - size.width - VIEWPORT_MARGIN)),
-    y: Math.max(VIEWPORT_MARGIN, Math.min(at.y, viewport.height - size.height - VIEWPORT_MARGIN)),
-  };
-}
+const VIEWPORT_MARGIN = 8;
 
 /**
  * The clamped position for the menu in `ref`, recomputed whenever the anchor,
@@ -67,10 +47,13 @@ export function useMenuViewportClamp(
     const measure = (): void => {
       const { width, height } = el.getBoundingClientRect();
       setClamped(
-        clampToViewport(
+        clampMenuPosition(
           at,
           { width, height },
-          { width: globalThis.innerWidth, height: globalThis.innerHeight },
+          viewportMenuBounds(
+            { width: globalThis.innerWidth, height: globalThis.innerHeight },
+            VIEWPORT_MARGIN,
+          ),
         ),
       );
     };

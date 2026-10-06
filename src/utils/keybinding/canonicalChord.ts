@@ -1,6 +1,6 @@
 /**
  * Canonical chord — the single key-identity primitive for the binding registry
- * (ADR-018, keybinding-unification WI-0.1 / WI-1.2).
+ * (ADR-018).
  *
  * A `CanonicalChord` is a stable string identity for a key combination, derived
  * IDENTICALLY from a definition string (ProseMirror `"Mod-Shift-n"` form) and
@@ -70,7 +70,7 @@ const TOKEN_TO_CODE: Record<string, string> = {
   // Already-normalized arrow names: the shortcut store and the ProseMirror key
   // layer (`toProseMirrorKey`) both accept `ArrowUp`/`arrowup`, so a chord that
   // uses that form must canonicalize too — otherwise the binding resolves to null
-  // and silently vanishes from the registry (audit-fix, round 3).
+  // and silently vanishes from the registry.
   arrowup: "ArrowUp",
   arrowdown: "ArrowDown",
   arrowleft: "ArrowLeft",

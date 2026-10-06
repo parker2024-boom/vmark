@@ -235,14 +235,14 @@ fn normalize_path(path: &str) -> String {
 /// Check whether `path` is within (or equal to) `root` using normalized,
 /// separator-aware boundary checks — not raw string prefixes. This keeps the
 /// Rust migration aligned with the frontend's comparison semantics
-/// (`normalizePathForCompare`, WI-17.1/17.3): on Windows the FULL path case
+/// (`normalizePathForCompare`): on Windows the FULL path case
 /// folds (NTFS is case-insensitive); macOS and Linux stay byte-exact.
 pub(super) fn is_within_root(root: &str, path: &str) -> bool {
     is_within_root_for_platform(root, path, cfg!(target_os = "windows"))
 }
 
 /// Platform-parameterized containment so the Windows branch is testable on
-/// every host OS (WI-17.3). `fold_case` mirrors "is the target platform
+/// every host OS. `fold_case` mirrors "is the target platform
 /// Windows": full lowercase after separator normalization.
 pub(super) fn is_within_root_for_platform(root: &str, path: &str, fold_case: bool) -> bool {
     let mut normalized_root = normalize_path(root);

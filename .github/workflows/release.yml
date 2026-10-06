@@ -49,9 +49,9 @@ jobs:
               echo "::error::workflow_dispatch.version must look like 'vX.Y.Z' (got '$INPUT_VERSION')"
               exit 1
             fi
-            echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
+            echo "version=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
           else
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           fi
 
       # A manual dispatch used to accept a version string with NO relationship to
@@ -97,6 +97,24 @@ jobs:
           check "server/mcp/package.json" "$(jq -r .version server/mcp/package.json)"
           check "server/mcp/src/cli.ts"   "$(grep -m1 'const VERSION' server/mcp/src/cli.ts | sed "s/.*['\"]\(.*\)['\"].*/\1/")"
           [ "$fail" -eq 0 ]
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # The release notes are the tag's CHANGELOG.md section, written at bump
+      # time (.claude/rules/40-version-bump.md). A tag without one fails here,
+      # before the draft or any build exists: the alternative is a release
+      # whose update card says "See release notes at <url>" instead of what
+      # changed.
+      - name: Extract release notes from CHANGELOG.md
+        env:
+          TAG: ${{ steps.get-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          node scripts/extract-changelog-section.mjs "$TAG" > release-notes.md
+          cat release-notes.md
 
       # No longer skipped on manual dispatch. Skipping it there was how a
       # dispatch could silently REPUBLISH an existing version and swap assets
@@ -144,6 +162,9 @@ jobs:
           name: VMark ${{ steps.get-version.outputs.version }}
           draft: true
           prerelease: false
+          # The CHANGELOG section leads; GitHub's list of merged pull requests
+          # follows it.
+          body_path: release-notes.md
           generate_release_notes: true
 
   build-tauri:
@@ -245,20 +266,60 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
-          echo $APPLE_CERTIFICATE | base64 --decode > certificate.p12
+          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
           security create-keychain -p actions build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p actions build.keychain
           security set-keychain-settings -t 3600 -u build.keychain
           security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions build.keychain
-          security list-keychains -d user -s build.keychain $(security list-keychains -d user | tr -d '"')
+          # Put build.keychain first on the user search list without dropping
+          # the keychains already on it. `list-keychains` prints one quoted
+          # path per line; each is read into the array as ONE argument, so a
+          # path with a space survives. A read loop, not mapfile: mapfile
+          # needs bash 4 and macOS's /bin/bash is 3.2.
+          EXISTING_KEYCHAINS=()
+          while IFS= read -r keychain; do
+            EXISTING_KEYCHAINS+=("$keychain")
+          done < <(security list-keychains -d user | sed -n 's/^[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p')
+          security list-keychains -d user -s build.keychain "${EXISTING_KEYCHAINS[@]}"
           rm certificate.p12
 
       - uses: ./.github/actions/setup-tauri-deps
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
+
+      # The third-party notices the app bundles (Settings → About). MIT, BSD,
+      # ISC and Apache require them in a binary distribution. Regenerated here
+      # so the shipped copy is exact for this tag's lockfiles even when the
+      # tracked copy is behind, and it fails the release when any bundled
+      # component has no license text. Every leg writes the same bytes:
+      # src-tauri/about.toml lists all four release targets.
+      - name: Install cargo-about
+        uses: taiki-e/install-action@7623a79cdfecb99d681017af368ca353d9f49bb5 # v2.87.19
+        with:
+          tool: cargo-about@0.8.2
+
+      # Decided from the checked-out tree, like the macOS layout above: a tree
+      # that bundles the notices must have the generator, and one that has
+      # neither predates them. Half of the pair fails.
+      - name: Generate third-party notices
+        id: notices
+        shell: bash
+        run: |
+          set -euo pipefail
+          GENERATOR=scripts/gen-third-party-licenses.mjs
+          if [ -f "$GENERATOR" ]; then
+            node "$GENERATOR"
+            echo "verify=true" >> "$GITHUB_OUTPUT"
+          elif ! grep -q THIRD_PARTY_LICENSES src-tauri/tauri.conf.json; then
+            echo "::notice::This tag predates the bundled third-party notices: building without them."
+            echo "verify=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::tauri.conf.json bundles THIRD_PARTY_LICENSES but $GENERATOR is missing."
+            exit 1
+          fi
 
       # Build MCP server sidecar for the target platform
       # NOTE: pkg binaries cannot be combined with lipo, so we build arch-specific binaries
@@ -270,7 +331,7 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm build
-          node scripts/build-sidecar.js --target $SIDECAR_TARGET
+          node scripts/build-sidecar.js --target "$SIDECAR_TARGET"
 
       - name: Health check MCP sidecar (macOS)
         if: matrix.platform == 'macos-latest'
@@ -428,6 +489,20 @@ jobs:
           TARGET="${MATRIX_ARGS##*--target }"
           scripts/verify-macos-bundle-entitlements.sh "src-tauri/target/$TARGET/release/bundle/macos/VMark.app"
 
+      # The notices the bundle carries must be the ones generated for this tag:
+      # a resource entry that bundled a stale or empty file would pass every
+      # earlier step.
+      - name: Verify bundled third-party notices (macOS)
+        if: matrix.platform == 'macos-latest' && steps.notices.outputs.verify == 'true'
+        env:
+          MATRIX_ARGS: ${{ matrix.args }}
+        run: |
+          set -euo pipefail
+          TARGET="${MATRIX_ARGS##*--target }"
+          BUNDLED="src-tauri/target/$TARGET/release/bundle/macos/VMark.app/Contents/Resources/resources/generated/THIRD_PARTY_LICENSES.txt"
+          test -s "$BUNDLED" || { echo "::error::$BUNDLED is missing or empty"; exit 1; }
+          cmp "$BUNDLED" src-tauri/resources/generated/THIRD_PARTY_LICENSES.txt
+
       # tauri-action signs, notarizes and staples the .app, and signs the .dmg —
       # but it never notarizes the disk image itself. A signed-but-unnotarized
       # dmg is refused by `spctl -t open` with "Unnotarized Developer ID", so
@@ -468,7 +543,18 @@ jobs:
           done
 
           TARGET="${MATRIX_ARGS##*--target }"
-          DMG=$(ls "src-tauri/target/$TARGET/release/bundle/dmg/"*.dmg | head -1)
+          # A leg builds exactly one dmg. The glob goes into an array instead
+          # of through `ls`: nullglob turns "none" into an empty array, and a
+          # second dmg would otherwise ship without notarization, so both fail.
+          DMG_DIR="src-tauri/target/$TARGET/release/bundle/dmg"
+          shopt -s nullglob
+          DMGS=("$DMG_DIR"/*.dmg)
+          shopt -u nullglob
+          if [ "${#DMGS[@]}" -ne 1 ]; then
+            echo "::error::expected exactly one .dmg in $DMG_DIR, found ${#DMGS[@]}: ${DMGS[*]-}"
+            exit 1
+          fi
+          DMG="${DMGS[0]}"
           echo "Notarizing $DMG"
 
           # notarytool has no internal retry and Apple's notary service drops
@@ -510,6 +596,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # The tagged tree, for its CHANGELOG.md and the extractor.
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ needs.create-release.outputs.version }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
       - name: Generate and upload latest.json
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -518,6 +615,15 @@ jobs:
           REPO="${{ github.repository }}"
 
           echo "Generating latest.json for $VERSION..."
+
+          # The update card's "what's new" text: the tag's CHANGELOG.md section
+          # in plain text (the card renders text, not markdown). create-release
+          # already refused a tag without one; this fails the same way if the
+          # section vanished in between.
+          if ! NOTES=$(node scripts/extract-changelog-section.mjs "$VERSION" --plain); then
+            echo "::error::no CHANGELOG.md section for $VERSION — latest.json would have no release notes."
+            exit 1
+          fi
 
           # Download all .sig files to get signatures.
           # Hard-fail on download failure: an empty `sigs/` directory used to
@@ -584,7 +690,7 @@ jobs:
           # it as a legal JSON string.
           MANIFEST=$(jq -n \
             --arg version "$VER" \
-            --arg notes "See release notes at https://github.com/$REPO/releases/tag/$VERSION" \
+            --arg notes "$NOTES" \
             --arg pub_date "$PUB_DATE" \
             '{version: $version, notes: $notes, pub_date: $pub_date, platforms: {}}')
 
@@ -592,8 +698,11 @@ jobs:
           for entry in "${TARGETS[@]}"; do
             key="${entry%%|*}"
             glob="${entry#*|}"
-            matches=( sigs/$glob.sig )
-            if [ ! -e "${matches[0]}" ]; then
+            # The table's glob is a pattern handed to find -name, the same
+            # matcher the reverse check below lists signatures with, so both
+            # directions agree on which files exist.
+            mapfile -t matches < <(find sigs -maxdepth 1 -type f -name "$glob.sig" | sort)
+            if [ "${#matches[@]}" -eq 0 ]; then
               echo "::error::no signature matched 'sigs/$glob.sig' for platform key '$key'."
               echo "::error::That bundle either was not built or was not signed; releasing without it would strand every install of that format."
               exit 1

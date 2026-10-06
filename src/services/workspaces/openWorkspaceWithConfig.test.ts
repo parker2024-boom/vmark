@@ -238,7 +238,7 @@ describe("isValidWorkspaceConfig (T1/ADR-2 boundary guard)", () => {
   });
 
   // WI-17.2 — a variant spelling of an already-railed Windows root must read
-  // the SAME config file (workspace.rs hashes the exact path string).
+  // the SAME config file (workspace/mod.rs hashes the exact path string).
   it("resolves a variant spelling to the stored root before reading config", async () => {
     useSettingsStore.setState({
       general: { ...useSettingsStore.getState().general, workspaceRailMode: true },

@@ -50,6 +50,12 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    # Matches `minimumReleaseAge` in pnpm-workspace.yaml (one week): pnpm
+    # refuses to resolve a younger version, so proposing one only produces a
+    # PR that cannot update the lockfile. Security updates ignore the
+    # cooldown; see the workspace file for what to do when one is too fresh.
+    cooldown:
+      default-days: 7
     groups:
       npm-minor-patch:
         update-types: ["minor", "patch"]
@@ -70,8 +76,15 @@ updates:
       cargo-minor-patch:
         update-types: ["minor", "patch"]
 
+  # `/` covers `.github/workflows` only. A composite action under
+  # `.github/actions/` carries SHA pins of its own and is updated only when its
+  # directory is listed here; scripts/check-supply-chain-pins.test.mjs fails
+  # when one is missing.
   - package-ecosystem: github-actions
-    directory: /
+    directories:
+      - /
+      - /.github/actions/setup-node-pnpm
+      - /.github/actions/setup-tauri-deps
     schedule:
       interval: weekly
     open-pull-requests-limit: 5

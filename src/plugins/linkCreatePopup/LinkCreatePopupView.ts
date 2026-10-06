@@ -8,6 +8,8 @@
  * controller (linkCreateController.ts) owns the content rebuild, input
  * wiring, validation, and save/cancel flow. This view only supplies the
  * WYSIWYG commit strategy: applying a link mark via a ProseMirror transaction.
+ *
+ * @module plugins/linkCreatePopup/LinkCreatePopupView
  */
 
 import { linkPopupError } from "@/utils/debug";

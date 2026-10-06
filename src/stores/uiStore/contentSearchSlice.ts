@@ -97,7 +97,7 @@ export function createContentSearchActions(
     contentSearchRun: async (rootPath, excludeFolders, windowLabel) => {
       const { query, caseSensitive, wholeWord, useRegex, markdownOnly } =
         get().contentSearch;
-      // WI-12.3: bind the request to the window's workspace-context
+      // Bind the request to the window's workspace-context
       // generation — a rail switch mid-flight supersedes this search, and a
       // stale completion from the OLD root must not repopulate results for
       // the new one. `contentSearchRequestId` still orders same-context runs.

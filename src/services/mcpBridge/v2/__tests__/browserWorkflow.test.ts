@@ -24,7 +24,7 @@ import {
 } from "@/services/mcpBridge/v2/browserWorkflow";
 import { useTabStore } from "@/stores/tabStore";
 import { useBrowserApprovalStore } from "@/stores/browserApprovalStore";
-import { useBrowserLeaseStore } from "@/services/browser/lease";
+import { useBrowserLeaseStore } from "@/stores/browserLeaseStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { browserEventBroker } from "@/services/browser/browserEventBroker";
 import { __resetRunRegistry } from "@/services/workflow/runRegistry";
@@ -89,6 +89,17 @@ describe("workflow_run", () => {
     expect(lastResponse()).toMatchObject({ success: false, error: 'undeclared input "constructor"' });
     await handleBrowserWorkflowRun("r-in3", { tabId: id, source: SOURCE, inputs: JSON.parse('{"__proto__":"x"}') });
     expect(lastResponse()).toMatchObject({ success: false, error: 'undeclared input "__proto__"' });
+  });
+
+  // WI-RA18.8 — `inputs` of the wrong shape is refused, never read as "no inputs".
+  it.each([
+    ["an array", ["a"]],
+    ["a string", "a=b"],
+    ["null", null],
+  ])("rejects inputs given as %s", async (_label, inputs) => {
+    const id = seed();
+    await handleBrowserWorkflowRun("r-shape", { tabId: id, source: SOURCE, inputs });
+    expect(lastResponse()).toMatchObject({ success: false, error: "`inputs` must be an object of string values" });
   });
 
   it("fails closed when the browser is disabled", async () => {

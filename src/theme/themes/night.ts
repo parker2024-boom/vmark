@@ -1,3 +1,9 @@
+/**
+ * night — design tokens for the Night theme, the dark theme.
+ *
+ * @module theme/themes/night
+ */
+
 import type { ThemeTokens } from "../tokens";
 import { sharedPrimitives, darkShadows, subtleDark, hoverDark } from "../tokens";
 
@@ -6,12 +12,12 @@ export const night: ThemeTokens = {
   isDark: true,
   color: {
     // secondary lifted #2a2e34 → #2e323a for the Q1 surface ramp (1.18:1);
-    // tertiary follows above it (WI-UI1.2).
+    // tertiary follows above it.
     bg: { primary: "#23262b", secondary: "#2e323a", tertiary: "#383d46" },
     text: { primary: "#d6d9de", secondary: "#a2a8ad", tertiary: "#777c83" },
     // accent.bg was rgba(88,166,255,…) while the emitted --accent-bg carried a
-    // legacy rgba(90,168,255,…) twin (ΔE 0.2, sub-JND). WI-UI1.1 collapsed the
-    // divergence into this one field.
+    // legacy rgba(90,168,255,…) twin (ΔE 0.2, sub-JND). That divergence is
+    // now collapsed into this one field.
     accent: { primary: "#61abff", bg: "rgba(90, 168, 255, 0.12)" },
     // bg.primary on the accent: 7.0:1 on #58a6ff — `white` measured 2.53:1.
     contrastText: "#23262b",
@@ -26,7 +32,7 @@ export const night: ThemeTokens = {
     semantic: {
       error: "#fa8580",
       errorBg: "rgba(248, 81, 73, 0.15)",
-      // WI-UI1.1: the hovers are the values night actually renders — the old
+      // The hovers are the values night actually renders — the old
       // #b91c1c/#15803d light values were dead fields shadowed by legacy
       // overrides (and would measure 2.35:1 here).
       errorHover: "#fca5a5",

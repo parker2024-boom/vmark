@@ -1,5 +1,5 @@
 /**
- * Context-aware closed-tab reopen (WI-11.2 / plan D4).
+ * Context-aware closed-tab reopen (plan D4).
  *
  * Purpose: the Cmd+Shift+T behavior for the workspace-rail world. Compares the
  * ACTIVE context's newest closed document with the window-global browser
@@ -10,11 +10,11 @@
  * A closed document whose path is already live in the window is SKIPPED
  * (dropped from history and the next candidate tried) rather than duplicated
  * or stolen from its current tab. Activation is pane-aware through
- * `setActiveTab` itself (WI-2 seam, ADR-1): under a split a reopened document
+ * `setActiveTab` itself (the activation seam, ADR-1): under a split a reopened document
  * lands in the focused pane; browser tabs activate in place.
  *
  * @coordinates-with stores/tabStoreClosedScopes.ts — scoped history
- * @coordinates-with stores/tabActivationBus.ts — setActiveTab is pane-aware (WI-2)
+ * @coordinates-with stores/tabActivationBus.ts — setActiveTab is pane-aware
  * @module services/workspaces/reopenClosedTab
  */
 import { useTabStore, type Tab } from "@/stores/tabStore";
@@ -65,7 +65,7 @@ export function reopenClosedTabForActiveContext(windowLabel: string): Tab | null
     }
 
     useTabStore.getState().restoreTab(windowLabel, tab);
-    useTabStore.getState().setActiveTab(windowLabel, tab.id); // pane-aware (WI-2)
+    useTabStore.getState().setActiveTab(windowLabel, tab.id); // pane-aware
     return tab;
   }
 }

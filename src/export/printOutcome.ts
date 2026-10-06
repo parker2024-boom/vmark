@@ -3,8 +3,7 @@
  *
  * Purpose: the one place the frontend reads the `PrintOutcome` wire shape
  * (`src-tauri/src/pdf_export/renderer/outcome.rs`), so the print flow can
- * branch on what the user did rather than treating every `Ok` as "printed"
- * (WI-FL6.3).
+ * branch on what the user did rather than treating every `Ok` as "printed".
  *
  * What each platform can say: macOS reports `completed` or `cancelled` from
  * the print sheet's delegate; Linux from the GTK dialog's response and the

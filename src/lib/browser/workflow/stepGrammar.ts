@@ -1,5 +1,5 @@
 /**
- * Executor step grammar (WI-NB6.1) — parse an `action:` step's text into a
+ * Executor step grammar — parse an `action:` step's text into a
  * structured, executable action, or explain why it cannot be executed
  * deterministically (so the run pauses for the model with a real reason).
  *

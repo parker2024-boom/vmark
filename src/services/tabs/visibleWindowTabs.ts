@@ -1,6 +1,6 @@
 /**
- * Imperative visible-tab projection (WI-8.1/4R/12.1; extracted from
- * hooks/useVisibleWindowTabs in the WI-10 hooks→services migration).
+ * Imperative visible-tab projection (extracted from
+ * hooks/useVisibleWindowTabs in the hooks→services migration).
  *
  * Purpose: THE projection every non-React tab listing consumes — the active
  * instance's document tabs plus ALL browser tabs (window-global, plan D1),

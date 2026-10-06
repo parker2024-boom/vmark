@@ -9,12 +9,12 @@
  *     rule the MCP selection handlers use (`services/mcpBridge/v2/selection.ts`).
  *     `sourceMode` names the display mode, not the pane: the markdown split
  *     mounts both editors with it false, so a stale WYSIWYG selection used to
- *     win over the source pane the user was typing in (audit #468).
+ *     win over the source pane the user was typing in.
  *   - The markdown split mounts BOTH editors, so when the chosen editor has no
  *     selection the other surface's selection is used — but only when both are
- *     registered for the SAME tab (#470): a stale view from another tab must
+ *     registered for the SAME tab: a stale view from another tab must
  *     never supply the text.
- *   - "No selection" means a COLLAPSED selection, not empty text (#469): a node
+ *   - "No selection" means a COLLAPSED selection, not empty text: a node
  *     selection (an image, a rule) is a real selection whose text is "", and it
  *     does not hand the answer to the other surface.
  *   - Plain text, not markdown: the consumer is the find bar, which matches the

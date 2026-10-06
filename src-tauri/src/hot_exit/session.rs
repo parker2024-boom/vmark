@@ -11,7 +11,7 @@ pub use super::loaded::LoadedSession;
 /// Schema version for hot exit sessions
 /// v1: Initial schema
 /// v2: Added undo_history and redo_history to DocumentState
-/// v3: Added format_id, editing_enabled, active_schema_id to TabState (WI-1A.13)
+/// v3: Added format_id, editing_enabled, active_schema_id to TabState
 /// v4: Added workspace rail instance containers to WindowState
 /// v5: Added explicit workspace instance kind and unavailable-root marker
 pub const SCHEMA_VERSION: u32 = 5;
@@ -51,15 +51,15 @@ pub struct WindowState {
     /// Workspace instances owned by this document window. Added in v4.
     #[serde(default)]
     pub workspace_instances: Vec<WorkspaceInstanceState>,
-    /// WI-9.4 (workspace rail): per-instance UI state, opaque to Rust —
+    /// Workspace rail: per-instance UI state, opaque to Rust —
     /// captured and interpreted by the frontend only. Optional + defaulted so
     /// pre-rail payloads round-trip unchanged.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui_state_by_instance: Option<serde_json::Value>,
-    /// WI-9.4: scoped closed-tab history (reopen metadata), opaque to Rust.
+    /// Scoped closed-tab history (reopen metadata), opaque to Rust.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub closed_tab_scopes: Option<serde_json::Value>,
-    /// WI-9.4/8.2: window-global human browser records, opaque to Rust.
+    /// Window-global human browser records, opaque to Rust.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub browser_session: Option<serde_json::Value>,
 }
@@ -91,14 +91,14 @@ pub struct TabState {
     pub title: String,
     pub is_pinned: bool,
     pub document: DocumentState,
-    /// Format registry id (e.g. "markdown", "json"). Added in v3 (WI-1A.13).
+    /// Format registry id (e.g. "markdown", "json"). Added in v3.
     /// Pre-v3 sessions backfill to "markdown" via the v2→v3 migration. Serde
     /// `default` keeps cross-version deserialization safe even if the
     /// migration is bypassed.
     #[serde(default = "default_format_id")]
     pub format_id: String,
     /// Whether the user has explicitly enabled editing on a viewer-mode
-    /// format. Added in v3 (WI-1A.13). Pre-v3 backfills to `true`.
+    /// format. Added in v3. Pre-v3 backfills to `true`.
     #[serde(default = "default_editing_enabled")]
     pub editing_enabled: bool,
     /// Active schemaRenderer id when the format supports multiple. Added in v3.
@@ -248,7 +248,7 @@ impl SessionData {
         let now = chrono::Utc::now().timestamp();
         // CHECKED: `self.timestamp` is untrusted — it comes straight off disk,
         // and `i64::MIN` deserializes happily. `now - i64::MIN` overflows, which
-        // panics in a debug build (audit 20260906, B7). The neighbouring
+        // panics in a debug build. The neighbouring
         // `checked_mul` below already guards the other arithmetic here for the
         // same reason.
         let Some(age_seconds) = now.checked_sub(self.timestamp) else {

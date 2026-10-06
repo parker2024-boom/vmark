@@ -44,7 +44,7 @@ import { awaitWorkspaceGrants } from '@/services/workspaces/workspaceAccess';
 import type { WindowState } from '../hotExit/types';
 
 /**
- * How long a window's restore waits for its workspaces' grants (audit F2 #38).
+ * How long a window's restore waits for its workspaces' grants.
  * Launch re-grants recorded roots within its own bounded wait; a root on a
  * slow mount is granted late, and this is how long the restore waits for it
  * before activating that workspace. A dead mount's check can hold for minutes,
@@ -83,10 +83,10 @@ async function pullAndRestore(windowLabel: string): Promise<boolean> {
   }
 
   hotExitLog(`Window '${windowLabel}' found pending state, restoring...`);
-  // #38: the workspaces are activated below and their trees read at once, so
+  // The workspaces are activated below and their trees read at once, so
   // their grants come first — waited for, within RESTORED_GRANT_WAIT_MS.
   await awaitWorkspaceGrants(restoredWorkspaceRoots(windowState), RESTORED_GRANT_WAIT_MS);
-  // WI-13.2 ordering: instances → tabs → reconcile ids → ONE final hydrate.
+  // Ordering: instances → tabs → reconcile ids → ONE final hydrate.
   // Rail clicks are declined while the context is half-built; the guard is
   // released in `finally` so a failed restore can never wedge switching.
   beginWindowContextRestore(windowLabel);
@@ -97,13 +97,13 @@ async function pullAndRestore(windowLabel: string): Promise<boolean> {
     restoreWindowWorkspaceInstances(windowLabel, windowState);
     const tabIdMap = await restoreWindowState(windowLabel, windowState);
     reconcileRestoredWindowWorkspaceInstances(windowLabel, windowState, tabIdMap);
-    // WI-9.4: per-instance UI state (outline ids remapped), reopen history,
+    // Per-instance UI state (outline ids remapped), reopen history,
     // and browser records — after reconcile, before the final hydrate.
     contextPreserved = await restoreInstanceContextState(windowLabel, windowState, tabIdMap);
   } finally {
     endWindowContextRestore(windowLabel);
   }
-  // Audit 20260804-F12: a failed quarantine write must NOT be followed by a
+  // A failed quarantine write must NOT be followed by a
   // successful restore, because success is what lets `checkAndRestoreSession`
   // clear the session file — and the rejected fragments would then exist
   // nowhere. Failing here keeps the file for the next launch, which is the
@@ -117,7 +117,8 @@ async function pullAndRestore(windowLabel: string): Promise<boolean> {
   await hydrateWorkspaceInstanceContext(windowLabel);
 
   // Signal completion for this window and check if all windows done
-  const allDone = await invoke<boolean>('hot_exit_window_restore_complete', { windowLabel });
+  // Marks the window that asks — this one — as restored.
+  const allDone = await invoke<boolean>('hot_exit_window_restore_complete');
   hotExitLog(`Window '${windowLabel}' restored successfully (allDone: ${allDone})`);
 
   if (allDone) {

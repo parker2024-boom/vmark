@@ -144,7 +144,7 @@ async function exportHtmlStaged(
   let totalSize = 0;
 
   // Everything below is written under the stage and published at the end;
-  // nothing at `outputPath` changes until every file exists (#334).
+  // nothing at `outputPath` changes until every file exists.
   let stage: ExportStage | null = null;
   const writeStaged = async (relative: string, text: string): Promise<void> => {
     await writeTextFile(stage!.path(relative), text);
@@ -161,7 +161,7 @@ async function exportHtmlStaged(
 
     // Images, resolved twice — copied for index.html, embedded for standalone.
     // The bytes the resolver measured belong in the total, which counted only
-    // what THIS module wrote — text and fonts (audit R2, #688).
+    // what THIS module wrote — text and fonts.
     const baseDir = await getDocumentBaseDir(sourceFilePath ?? null);
     // Relative paths resolve from the document's folder; the WORKSPACE bounds
     // how far they may reach, so a shared assets folder beside the notes
@@ -196,7 +196,7 @@ async function exportHtmlStaged(
     const useDarkTheme = !forceLightTheme && isDarkTheme();
 
     // Write the reader assets — the reader always ships; the opt-out no
-    // caller ever set was removed (WI-FL3.9).
+    // caller ever set was removed.
     await writeStaged("assets/vmark-reader.css", readerCSS);
     await writeStaged("assets/vmark-reader.js", readerJS);
 
@@ -236,7 +236,7 @@ async function exportHtmlStaged(
   } catch (error) {
     // The staging tree, the lock, and the destination folder if this export
     // created it. Whatever was at `outputPath` before is as it was: either
-    // nothing was published, or `publish` rolled itself back (#334/#335).
+    // nothing was published, or `publish` rolled itself back.
     await stage?.discard();
 
     return {

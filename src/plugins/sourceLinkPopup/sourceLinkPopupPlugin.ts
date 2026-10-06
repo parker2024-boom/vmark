@@ -4,13 +4,15 @@
  * CodeMirror 6 plugin for editing links in Source mode.
  * Click on a link opens the edit popup. Cmd+Click opens the link — a heading,
  * a file in a tab, or a URL in the browser — through the shared `openLinkTarget`.
+ *
+ * @module plugins/sourceLinkPopup/sourceLinkPopupPlugin
  */
 
 import { type Extension } from "@codemirror/state";
 import { EditorView, ViewPlugin } from "@codemirror/view";
-import { createSourcePopupPlugin } from "@/plugins/sourcePopup";
+import { createSourcePopupPlugin } from "@/plugins/shared/createSourcePopupPlugin";
 import { sourceLinkError } from "@/utils/debug";
-import type { StoreApi } from "@/plugins/sourcePopup";
+import type { StoreApi } from "@/plugins/shared/types";
 import type { LinkPopupState } from "@/plugins/shared/popupPorts";
 import { SourceLinkPopupView } from "./SourceLinkPopupView";
 import { findMarkdownLinkAtPosition } from "@/utils/markdownLinkPatterns";
@@ -149,7 +151,7 @@ function createCmdClickPlugin(): Extension {
 }
 
 /**
- * Stale-range sync (WI-1 / D1: remap-when-mappable, close-when-destroyed),
+ * Stale-range sync (D1: remap-when-mappable, close-when-destroyed),
  * plus close-when-the-caret-moves-to-another-link.
  *
  * While the popup is open, every doc change — the user typing in the markdown
@@ -200,7 +202,7 @@ export function createSourceLinkPopupPlugin(store: StoreApi<LinkPopupState>): Ex
   return [
     // Cmd+Click handler (capture phase, runs first)
     createCmdClickPlugin(),
-    // Doc-change guard: remap the tracked range or close (WI-1 / D1)
+    // Doc-change guard: remap the tracked range or close (D1)
     createLinkRangeSyncExtension(store),
     // Popup plugin: opens edit popup on regular click
     /* v8 ignore next -- @preserve reason: createSourcePopupPlugin factory not invoked in unit tests */

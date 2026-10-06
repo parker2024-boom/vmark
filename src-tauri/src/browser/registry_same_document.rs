@@ -75,7 +75,7 @@ impl BrowserRegistry {
     /// re-recording it. A counter that cannot advance cannot distinguish this view
     /// from the last one, so every stamp made for the view the SPA just replaced
     /// would stay fresh — the hazard R7a exists to close. `commit_navigation`
-    /// fails closed the same way (#28); the caller completes it by clearing the
+    /// fails closed the same way; the caller completes it by clearing the
     /// tab's one-shots and attachment, which live outside this lock.
     pub fn commit_same_document(
         &mut self,

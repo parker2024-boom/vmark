@@ -1,5 +1,4 @@
-//! The execution ids recent runs have carried, so a caller cannot reuse one
-//! (#264).
+//! The execution ids recent runs have carried, so a caller cannot reuse one.
 //!
 //! Frontends pre-generate an execution id per run (a UUID) and subscribe to
 //! its events before `run_workflow` resolves. An id is the key every event,
@@ -8,7 +7,7 @@
 //! snapshots in one directory. Validation at entry (`prepare::execution_id_for`)
 //! settles the shape; this settles the reuse: a bounded memory of the ids
 //! that were admitted, consulted when the next one is published. An id whose
-//! start was refused before it spawned is forgotten again (#91): no run
+//! start was refused before it spawned is forgotten again: no run
 //! carried it, and the caller's retry of the same start must not be refused.
 //!
 //! Bounded, because an id is a few dozen bytes and the process may run
@@ -48,7 +47,7 @@ pub(super) struct RecentExecutionIds {
     /// The last run that got past preparation and SPAWNED — the only kind
     /// that can have written files. A start refused before that (bad YAML, a
     /// failed snapshot) wrote nothing and does not move it. Read by a
-    /// snapshot restore to refuse undoing a later run's work (#108).
+    /// snapshot restore to refuse undoing a later run's work.
     last_spawned: Mutex<Option<String>>,
 }
 
@@ -67,7 +66,7 @@ impl RecentExecutionIds {
         true
     }
 
-    /// Forget `id` — its start was refused before it spawned (#91), so no
+    /// Forget `id` — its start was refused before it spawned, so no
     /// run's events, cancel or snapshot ever carried it.
     pub(super) fn forget(&self, id: &str) {
         self.seen

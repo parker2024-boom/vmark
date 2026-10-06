@@ -37,6 +37,40 @@ const EAGER_CODEMIRROR_CORE: ReadonlySet<string> = new Set([
   "@lezer/javascript",
 ]);
 
+/** The primitives every Settings panel shares: buttons, inputs, layout, search context, tag input. */
+const SETTINGS_PRIMITIVES =
+  /\/src\/pages\/settings\/(?:components|buttons|inputs|layout|TagInput|SettingsSearchContext)\.tsx?$/;
+
+/** What `chunkFileNames` reads of an emitted chunk. */
+export interface ChunkNaming {
+  name: string;
+  moduleIds: readonly string[];
+}
+
+/**
+ * The emitted FILE name of a chunk. Renaming here never changes what a chunk
+ * holds — pinning a module in `manualChunks` does, by pulling its importers'
+ * shared dependencies along (pinning the Settings primitives there made a
+ * 22 kB chunk the entry, App and vendor-react all imported from).
+ *
+ *   - The Settings page emits as `SettingsPage-*`: its own name differs from
+ *     the i18n `settings-*` locale chunks only by case, and size-limit globs
+ *     match case-insensitively, so its budget swept them in.
+ *   - The chunk of shared Settings primitives emits as `settingsPrimitives-*`.
+ *     Rolldown names it after one of its modules (`components-*`), too
+ *     generic for a budget glob. Matched by content: every app module in it
+ *     is a primitive; a chunk that also holds anything else keeps its name,
+ *     and the budget then fails loudly on finding no file.
+ */
+export function chunkFileNames(chunk: ChunkNaming): string {
+  if (chunk.name === "Settings") return "assets/SettingsPage-[hash].js";
+  const appModules = chunk.moduleIds.filter((id) => id.includes("/src/"));
+  if (appModules.length > 0 && appModules.every((id) => SETTINGS_PRIMITIVES.test(id))) {
+    return "assets/settingsPrimitives-[hash].js";
+  }
+  return "assets/[name]-[hash].js";
+}
+
 export function manualChunks(id: string): string | undefined {
   // Vite's preload helper is a tiny runtime module. Left to Rollup it
   // gets co-located into whichever vendor chunk is convenient
@@ -45,7 +79,7 @@ export function manualChunks(id: string): string | undefined {
   // modulepreload list. Pin it to vendor-react, which is always
   // eagerly loaded anyway.
   //
-  // MEASURED 2026-08-03 (WI-13): this pin no longer takes effect. The id
+  // MEASURED: this pin no longer takes effect. The id
   // reaching here IS "\0vite/preload-helper.js" and this branch DOES return
   // "vendor-react", but vite 8 / rolldown emits the helper into
   // `vendor-codemirror-languages-*` regardless, and `vendor-react-*` imports
@@ -65,7 +99,7 @@ export function manualChunks(id: string): string | undefined {
     id.includes("/src/export/exportOverrides") ||
     id.includes("/src/export/katexFontEmbed") ||
     // The ?raw CSS strings and ?inline KaTeX fonts ARE the blob; only
-    // export code imports .css?raw / .woff2?inline (checked 2026-07),
+    // export code imports .css?raw / .woff2?inline (checked),
     // so this can't drag app CSS or fonts in.
     id.includes(".css?raw") ||
     id.includes(".woff2?inline")
@@ -90,7 +124,7 @@ export function manualChunks(id: string): string | undefined {
   // sourceLanguage.ts's `await import()`. Pinning them here made ~1 MB of
   // grammars (legacy-modes alone is 448 kB) cold-start cost in every window:
   // +29 MB WebContent footprint to evaluate the chunk in WebKit, against
-  // +13 MB for the core alone (measured 2026-09-22). Left unassigned, each
+  // +13 MB for the core alone (measured). Left unassigned, each
   // chunks by its import site and imports the core one way, so no cycle can
   // form. An unknown future package lands here too — lazy is the safe default.
   if (pkgName.startsWith("@codemirror/") || pkgName.startsWith("@lezer/")) return undefined;
@@ -101,7 +135,12 @@ export function manualChunks(id: string): string | undefined {
   // ~630 KB vendor-graph it pulls) on cold start — just to reach a ~20 KB
   // sanitizer. Isolating it keeps mermaid genuinely lazy.
   if (pkgName === "dompurify") return "vendor-dompurify";
-  // `@dagrejs/dagre` (maintained fork; audit 20260612) is used only by workflow
+  // The TOML parser is imported on first use (lib/formats/adapters/
+  // tomlParser.ts). Naming it lets check-eager-chunks.mjs require that it
+  // stays off the cold-start path — it sat in the entry chunk of every window
+  // while the adapters imported it statically.
+  if (pkgName === "smol-toml") return "vendor-toml";
+  // `@dagrejs/dagre` (maintained fork) is used only by workflow
   // layout (lib/workflow/layout.ts) which
   // is reached lazily through WorkflowSidePanel. Mermaid uses its own bundled
   // fork (`dagre-d3-es`), so isolating plain `dagre` is safe and removes ~150 KB
@@ -137,7 +176,6 @@ export function manualChunks(id: string): string | undefined {
   // KaTeX stays in main bundle to preserve CSS cascade order.
   // Separate chunk would load before index.css, causing Tailwind's
   // preflight (border:0) to override KaTeX's border-style settings.
-  // See: dev-docs/css-dev-prod-differences.md
   if (
     pkgName === "html2pdf.js" ||
     pkgName === "html2canvas" ||

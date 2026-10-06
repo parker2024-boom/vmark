@@ -17,7 +17,7 @@ import {
   determineContextMode,
 } from "./tiptapContextHelpers";
 import { getProductionSchema } from "@/test/productionSchema";
-import type { CursorContext } from "@/plugins/toolbarContext/types";
+import type { CursorContext } from "@/plugins/shared/toolbarContextTypes";
 
 const schema = new Schema({
   nodes: {

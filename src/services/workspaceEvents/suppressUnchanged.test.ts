@@ -103,4 +103,17 @@ describe("suppressUnchanged", () => {
     const out = await suppressUnchanged([mod("/ws/a"), mod("/ws/b")], d);
     expect(out.map((e) => e.path)).toEqual(["/ws/a", "/ws/b"]);
   });
+
+  // WI-RA11.1 — a rescan is not a content change of the root: it is never
+  // fingerprinted, so a second one can never be mistaken for a no-op.
+  it("keeps every rescan and never reads the root", async () => {
+    const readText = vi.fn(async () => "a directory is not text");
+    const d = deps({ readText });
+    const rescan: SemanticWorkspaceEvent = { kind: "rescan", path: "/ws", rootPath: "/ws", selfWrite: false };
+
+    expect(await suppressUnchanged([rescan], d)).toEqual([rescan]);
+    expect(await suppressUnchanged([rescan], d)).toEqual([rescan]);
+    expect(readText).not.toHaveBeenCalled();
+    expect(d.cache.get("/ws")).toBeUndefined();
+  });
 });

@@ -302,7 +302,7 @@ describe("editing-op fuzz (production stack)", () => {
     for (const kind of ["text", "enter", "backspace", "cursor", "mark", "undo"]) {
       expect(applied.has(kind), `op kind never applied: ${kind}`).toBe(true);
     }
-  }, 120_000);
+  });
 
   it("PLANTED BUG self-test: a known-bad trace is found, shrunk, and reported with its seed", () => {
     // The fuzz harness's own contract: fast-check must catch a property

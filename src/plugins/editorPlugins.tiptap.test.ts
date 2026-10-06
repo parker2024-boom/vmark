@@ -17,6 +17,8 @@ vi.mock("@/services/editor/runEditorAction", async (importOriginal) => {
 });
 
 import { buildEditorKeymapBindings, editorKeymapExtension, expandedToggleMarkTiptap } from "./editorPlugins.tiptap";
+import { Schema } from "@tiptap/pm/model";
+import { EditorState } from "@tiptap/pm/state";
 
 function resetShortcuts() {
   useShortcutsStore.setState({ customBindings: {} });
@@ -497,10 +499,6 @@ describe("buildEditorKeymapBindings handler execution", () => {
     const key = shortcuts.getShortcut("blockquote");
     if (key && bindings[key]) {
       // Create a mock view that has dom.editor
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { Schema } = require("@tiptap/pm/model");
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { EditorState } = require("@tiptap/pm/state");
       const testSchema = new Schema({
         nodes: {
           doc: { content: "block+" },
@@ -536,10 +534,6 @@ describe("buildEditorKeymapBindings handler execution", () => {
     const shortcuts = useShortcutsStore.getState();
     const key = shortcuts.getShortcut("blockquote");
     if (key && bindings[key]) {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { Schema } = require("@tiptap/pm/model");
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { EditorState } = require("@tiptap/pm/state");
       const testSchema = new Schema({
         nodes: {
           doc: { content: "block+" },
@@ -621,10 +615,6 @@ describe("buildEditorKeymapBindings handler execution", () => {
     const { useSourcePeekStore } = await import("@/stores/sourcePeekStore");
     useSourcePeekStore.setState({ isOpen: true });
 
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Schema } = require("@tiptap/pm/model");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { EditorState } = require("@tiptap/pm/state");
     const testSchema = new Schema({
       nodes: {
         doc: { content: "paragraph+" },
@@ -650,10 +640,6 @@ describe("buildEditorKeymapBindings handler execution", () => {
     const { useSourcePeekStore } = await import("@/stores/sourcePeekStore");
     useSourcePeekStore.setState({ isOpen: true });
 
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Schema } = require("@tiptap/pm/model");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { EditorState } = require("@tiptap/pm/state");
     const testSchema = new Schema({
       nodes: {
         doc: { content: "paragraph+" },
@@ -696,10 +682,6 @@ describe("buildEditorKeymapBindings handler execution", () => {
     const shortcuts = useShortcutsStore.getState();
     const key = shortcuts.getShortcut("blockquote");
     if (key && bindings[key]) {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { Schema } = require("@tiptap/pm/model");
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { EditorState } = require("@tiptap/pm/state");
       const testSchema = new Schema({
         nodes: {
           doc: { content: "block+" },

@@ -28,7 +28,7 @@
 //!   - `find_drop_target_window` uses screen coordinates and prefers focused windows
 //!     to support spring-loaded drag targeting.
 //!   - Undoing a move is a round trip (`prepare` → `commit`), mirroring the
-//!     claim/ack protocol in `workspace_transfer.rs`. `prepare` asks the
+//!     claim/ack protocol in `workspace/transfer.rs`. `prepare` asks the
 //!     destination for the tab's CURRENT state and destroys nothing; the source
 //!     restores from that ack (never from its stale pre-transfer snapshot) and
 //!     only then sends `commit`, which removes the destination's copy. A
@@ -63,7 +63,7 @@ mod removal;
 pub use drop_target::*;
 pub use removal::TabRemovalAck;
 use removal::{
-    drop_pending_ack, register_pending_ack, route_ack, validate_phase, TabRemovalRequest,
+    drop_pending_ack, register_pending_ack, route_ack_payload, validate_phase, TabRemovalRequest,
     REMOVAL_ACK_TIMEOUT_MS, REMOVE_ACK_EVENT, REMOVE_EVENT,
 };
 
@@ -116,7 +116,7 @@ pub fn detach_tab_to_new_window(
     data: TabTransferData,
 ) -> Result<String, CommandError> {
     // Register the payload BEFORE creating the window — the ordering
-    // `workspace_transfer.rs` already documents, and the reason it gives holds
+    // `workspace/transfer.rs` already documents, and the reason it gives holds
     // here verbatim: the target invokes `claim_tab_transfer` on mount, and a
     // claim that arrives before the registry is populated silently opens an
     // EMPTY window with the user's tab nowhere.
@@ -187,12 +187,7 @@ pub async fn remove_tab_from_window(
     let rx = register_pending_ack(&request_id);
 
     // Listen before emitting so a fast destination cannot answer into the void.
-    let listener = app.listen(REMOVE_ACK_EVENT, |event| {
-        match serde_json::from_str::<TabRemovalAck>(event.payload()) {
-            Ok(ack) => route_ack(ack),
-            Err(e) => log::error!("[TabTransfer] Malformed tab-removal ack: {}", e),
-        }
-    });
+    let listener = app.listen(REMOVE_ACK_EVENT, |event| route_ack_payload(event.payload()));
 
     let emitted = window.emit(
         REMOVE_EVENT,
@@ -225,11 +220,20 @@ pub async fn remove_tab_from_window(
     }
 }
 
-/// Claim transfer data for a window. Returns the data and removes it from the registry.
+/// Claim the transfer registered for the CALLING window, removing it from the
+/// registry.
+///
+/// The window is the one Tauri says the call came from, never a label in the
+/// arguments: a label is a string any webview can spell, so taking it from the
+/// caller let one window empty another's pending transfer.
 #[tauri::command]
-pub fn claim_tab_transfer(window_label: String) -> Option<TabTransferData> {
-    let mut guard = registry();
-    guard.as_mut().and_then(|map| map.remove(&window_label))
+pub fn claim_tab_transfer<R: tauri::Runtime>(window: tauri::Window<R>) -> Option<TabTransferData> {
+    take_transfer(window.label())
+}
+
+/// Remove and return the transfer registered for `window_label`.
+fn take_transfer(window_label: &str) -> Option<TabTransferData> {
+    registry().as_mut().and_then(|map| map.remove(window_label))
 }
 
 /// Remove any unclaimed transfer data for a window that was destroyed.

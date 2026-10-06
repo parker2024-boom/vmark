@@ -12,4 +12,5 @@
  *
  * @module test/platformDefault
  */
+
 Object.defineProperty(navigator, "platform", { value: "MacIntel", configurable: true, writable: true });

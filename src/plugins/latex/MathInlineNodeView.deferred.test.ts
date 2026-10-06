@@ -23,7 +23,7 @@ const { render } = vi.hoisted(() => ({
  *  `gate` holds its chunk load open until the test releases it. */
 const katexState = vi.hoisted(() => ({ loaded: true, loads: 0, gate: null as Promise<void> | null }));
 
-vi.mock("./katexLoader", () => {
+vi.mock("@/plugins/shared/katexLoader", () => {
   const katex = { default: { render } };
   return {
     loadKatex: vi.fn(() => {

@@ -29,16 +29,11 @@ vi.mock("@/utils/debug", () => ({
   wysiwygAdapterError: vi.fn(),
 }));
 
-vi.mock("./wysiwygAdapterUtils", () => ({
-  isViewConnected: vi.fn(() => true),
-}));
-
 import { openLinkEditor } from "./wysiwygAdapterLinkEditor";
 import { hostPopups } from "@/plugins/shared/hostPopups";
 import { readClipboardUrl } from "@/services/editor/clipboardUrl";
 import { resolveLinkPopupPayload } from "@/plugins/formatToolbar/linkPopupUtils";
 import { expandedToggleMark as expandedToggleMarkTiptap } from "@/plugins/editorPlugins/expandedToggleMark";
-import { isViewConnected } from "./wysiwygAdapterUtils";
 import type { WysiwygToolbarContext } from "./types";
 
 function createMockView(opts?: {
@@ -107,6 +102,11 @@ function createContext(viewOpts?: Parameters<typeof createMockView>[0]): Wysiwyg
   };
 }
 
+/** Detach the fixture view's DOM, as when the editor unmounts mid-flow. */
+function disconnect(ctx: WysiwygToolbarContext): void {
+  (ctx.view!.dom as unknown as { isConnected: boolean }).isConnected = false;
+}
+
 describe("openLinkEditor", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -156,7 +156,6 @@ describe("openLinkEditor", () => {
 
   it("applies clipboard URL directly when selection exists", async () => {
     vi.mocked(readClipboardUrl).mockResolvedValue("https://example.com");
-    vi.mocked(isViewConnected).mockReturnValue(true);
 
     const ctx = createContext({ selectionFrom: 5, selectionTo: 15 });
     openLinkEditor(ctx);
@@ -169,7 +168,6 @@ describe("openLinkEditor", () => {
 
   it("falls back to popup when no clipboard URL", async () => {
     vi.mocked(readClipboardUrl).mockResolvedValue(null);
-    vi.mocked(isViewConnected).mockReturnValue(true);
     vi.mocked(resolveLinkPopupPayload).mockReturnValue({
       href: "https://test.com",
       linkFrom: 5,
@@ -189,7 +187,6 @@ describe("openLinkEditor", () => {
 
   it("falls back to expandedToggleMarkTiptap when resolveLinkPopupPayload returns null", async () => {
     vi.mocked(readClipboardUrl).mockResolvedValue(null);
-    vi.mocked(isViewConnected).mockReturnValue(true);
     vi.mocked(resolveLinkPopupPayload).mockReturnValue(null);
 
     const ctx = createContext();
@@ -202,9 +199,9 @@ describe("openLinkEditor", () => {
 
   it("skips link popup when view disconnects after async clipboard read", async () => {
     vi.mocked(readClipboardUrl).mockResolvedValue(null);
-    vi.mocked(isViewConnected).mockReturnValue(false);
 
     const ctx = createContext();
+    disconnect(ctx);
     openLinkEditor(ctx);
 
     // Give the async flow time to complete
@@ -217,7 +214,6 @@ describe("openLinkEditor", () => {
   it("applies clipboard URL with word expansion when no selection", async () => {
     const { findWordAtCursor } = await import("@/plugins/syntaxReveal/marks");
     vi.mocked(readClipboardUrl).mockResolvedValue("https://example.com");
-    vi.mocked(isViewConnected).mockReturnValue(true);
     vi.mocked(findWordAtCursor).mockReturnValue({ from: 5, to: 10 });
 
     const ctx = createContext({ selectionFrom: 7, selectionTo: 7 }); // collapsed cursor
@@ -233,7 +229,6 @@ describe("openLinkEditor", () => {
   it("inserts URL as linked text when no selection and no word at cursor", async () => {
     const { findWordAtCursor } = await import("@/plugins/syntaxReveal/marks");
     vi.mocked(readClipboardUrl).mockResolvedValue("https://example.com");
-    vi.mocked(isViewConnected).mockReturnValue(true);
     vi.mocked(findWordAtCursor).mockReturnValue(null);
 
     const ctx = createContext({ selectionFrom: 5, selectionTo: 5 }); // collapsed cursor
@@ -248,7 +243,6 @@ describe("openLinkEditor", () => {
 
   it("skips smart link when already in a link", async () => {
     vi.mocked(readClipboardUrl).mockResolvedValue("https://example.com");
-    vi.mocked(isViewConnected).mockReturnValue(true);
     vi.mocked(resolveLinkPopupPayload).mockReturnValue({
       href: "https://existing.com",
       linkFrom: 5,
@@ -270,10 +264,10 @@ describe("openLinkEditor", () => {
 
   it("skips smart link when view disconnects during clipboard read", async () => {
     vi.mocked(readClipboardUrl).mockResolvedValue("https://example.com");
-    // First call (from trySmartLinkInsertion) returns false
-    vi.mocked(isViewConnected).mockReturnValue(false);
 
     const ctx = createContext();
+    // The real connectivity check reads view.dom.isConnected.
+    disconnect(ctx);
     openLinkEditor(ctx);
 
     await new Promise((r) => setTimeout(r, 10));
@@ -283,7 +277,6 @@ describe("openLinkEditor", () => {
 
   it("falls back to expandedToggleMarkTiptap when coordsAtPos throws", async () => {
     vi.mocked(readClipboardUrl).mockResolvedValue(null);
-    vi.mocked(isViewConnected).mockReturnValue(true);
     vi.mocked(resolveLinkPopupPayload).mockReturnValue({
       href: "https://test.com",
       linkFrom: 5,

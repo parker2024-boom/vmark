@@ -47,7 +47,7 @@ export function performUnifiedUndo(windowLabel: string): boolean {
 
   // Peeked before pushing: the redo entry has to record WHERE this undo is
   // about to leave the document, which is the checkpoint's own content. That
-  // is the branch point the redo belongs to (audit 20260906, F4).
+  // is the branch point the redo belongs to.
   const checkpoint = historyStore.popUndo(tabId);
   if (!checkpoint) return false;
 
@@ -97,8 +97,8 @@ export function performUnifiedRedo(windowLabel: string): boolean {
   // still sitting where the undo left it.
   //
   // Without this, Redo replaced freshly typed content with the pre-undo text
-  // while the native editor correctly reported no redo at all (audit 20260906,
-  // F4). Discard rather than merely refuse: the branch is gone for good, and
+  // while the native editor correctly reported no redo at all.
+  // Discard rather than merely refuse: the branch is gone for good, and
   // leaving the entry would let a later coincidence resurrect it.
   if (!historyStore.isRedoOnCurrentBranch(tabId, doc.content)) {
     historyStore.clearRedo(tabId);

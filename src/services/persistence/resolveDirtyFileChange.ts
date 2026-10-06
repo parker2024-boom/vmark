@@ -26,7 +26,7 @@
  * @coordinates-with services/persistence/reloadFromDisk.ts — the Reload branch
  * @module services/persistence/resolveDirtyFileChange
  */
-import { readTextFile } from "@tauri-apps/plugin-fs";
+import { readDocumentText } from "@/services/files/readDocumentText";
 import { message, save } from "@tauri-apps/plugin-dialog";
 import i18n from "@/i18n";
 import { useDocumentStore } from "@/stores/documentStore";
@@ -54,7 +54,7 @@ async function keepLocalChanges(tabId: string, filePath: string): Promise<void> 
   // Best-effort: a read failure leaves lastDiskContent stale, whose worst case
   // is the prompt re-appearing — strictly better than failing the resolution.
   try {
-    const currentDisk = await readTextFile(filePath);
+    const currentDisk = await readDocumentText(filePath);
     // Re-check: the tab can close while the read is in flight.
     if (!useDocumentStore.getState().getDocument(tabId)) return;
     useDocumentStore.getState().updateLastDiskContent(tabId, currentDisk);

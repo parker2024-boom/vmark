@@ -5,6 +5,8 @@
  * (rule 00: ratchet down, never raise a baseline). Self-contained and pure —
  * no store or React imports — so the edge cases (CJK, emoji, dotfiles,
  * colliding initials) are unit-tested directly.
+ *
+ * @module utils/workspaceRailGlyphs
  */
 
 /** Shown when a name yields no usable character at all (e.g. "", "...", "   "). */

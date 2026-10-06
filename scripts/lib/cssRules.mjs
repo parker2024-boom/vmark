@@ -1,5 +1,5 @@
 /**
- * WI-UI0.2 — shared CSS parsing for the UI gates.
+ * Shared CSS parsing for the UI gates.
  *
  * Extracted from scripts/check-bespoke-buttons.mjs so the token gate, the
  * button gate and the ui-consistency gate cannot parse CSS differently: one

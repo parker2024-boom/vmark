@@ -6,7 +6,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ===========================================
-   Tailwind ↔ VMark token bridge (D1/D13, WI-UI2.2)
+   Tailwind ↔ VMark token bridge (D1/D13)
    Tailwind v4 utilities are variable-backed, so ONE `@theme inline` block
    retargets every `text-*`/`font-*`/`shadow-*` usage onto the VMark scale
    with zero TSX edits. `inline` is load-bearing: the utilities embed the
@@ -50,7 +50,7 @@
   /* One accent per theme: --primary-color is an alias of --accent-primary.
      The runtime already emits both from the same catalog value
      (legacyModeColors.ts); the static alias keeps the fallbacks from
-     drifting apart (audit 20260901, WI-UA7). */
+     drifting apart. */
   --primary-color: var(--accent-primary);
 
   /* Browser chrome stays light and neutral around native web content. */
@@ -85,7 +85,7 @@
   --sidebar-bg: var(--bg-secondary);
   --outline-width: 200px;
   /* One owner for the Settings nav column width — Settings.tsx's traffic-light
-     offset arithmetic and SettingsNav's card width both read it (WI-UI2.2). */
+     offset arithmetic and SettingsNav's card width both read it. */
   --settings-nav-width: 13rem;
   /* Static default; App.tsx overrides it on the shell root via shellChromeVars()
      from WORKSPACE_RAIL_WIDTH, which stays the source of truth because the
@@ -113,7 +113,7 @@
   --shell-card-inset: 8px;
   --shell-card-radius: 13px;
   --border-color: #d5d4d4;
-  /* D8 (WI-UI1.2): the >=3:1 boundary for CONTROLS; --border-color stays a
+  /* D8: the >=3:1 boundary for CONTROLS; --border-color stays a
      hairline divider. Written per theme by useTheme; static default = paper. */
   --control-border: #7e7d7d;
   --table-border-color: var(--border-color);
@@ -132,7 +132,7 @@
   --bg-primary: var(--bg-color); /* token-unused-ok: documented alias name — kept resolvable for consumers that reach for it */
   --text-primary: var(--text-color); /* token-unused-ok: documented alias name — kept resolvable for consumers that reach for it */
 
-  /* Border radius tokens — the φ curvature ladder (maintainer, 2026-09-02):
+  /* Border radius tokens — the φ curvature ladder (maintainer):
      window 21 → shell card 13 → lg 8 → md 5 → sm 3, each step ≈ ×0.62
      (Fibonacci: 3, 5, 8, 13, 21). Pick by TIER — floating surface / content
      block & page row / control — never by taste. Pills stay off-ladder.
@@ -164,7 +164,7 @@
   --popup-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   --popup-shadow-dark: 0 4px 12px rgba(0, 0, 0, 0.4);
 
-  /* Typography (R3, WI-UI2.1) — TWO font roles:
+  /* Typography (R3) — TWO font roles:
      --font-ui   the SYSTEM stack, for chrome. Never touched by settings, so
                  the UI cannot restyle when the reading font changes.
      --font-sans the READING font — the user's choice, overwritten at runtime
@@ -178,11 +178,11 @@
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-mono: ui-monospace, monospace;
 
-  /* Blockquote body ink (WI-UI1.3) — readable prose, not syntax decoration */
+  /* Blockquote body ink — readable prose, not syntax decoration */
   --quote-text: var(--text-secondary);
 
   /* Syntax palette — static fallback (paper values). The catalog owns these
-     per theme (ThemeTokens.syntax, D11/WI-UI1.5); applyTheme overrides at
+     per theme (ThemeTokens.syntax, D11); applyTheme overrides at
      runtime. src/theme/syntaxStaticFallback.test.ts pins this block to the
      paper/night catalog values, replacing the old styles/syntax-palette.css. */
   --syntax-keyword: #b3303d;
@@ -239,7 +239,7 @@
 
   /* Hover states (standardized). Light hover was 4% and read below
      perception on grey card surfaces (~1.02:1 on paper's #dedddd);
-     retuned to 6% by audit 20260901 (WI-UA5). Runtime values live in
+     retuned to 6%. Runtime values live in
      tokens.ts (hoverLight/hoverDark) — keep both in sync. */
   --hover-bg: rgba(0, 0, 0, 0.06);
   --hover-bg-strong: rgba(0, 0, 0, 0.08);
@@ -247,11 +247,11 @@
   /* Dark mode hover (use in .dark-theme selectors) */
   --hover-bg-dark: rgba(255, 255, 255, 0.08);
 
-  /* Subtle backgrounds (retuned 2%/3% → 3%/4%, WI-UA5 — same reasoning) */
+  /* Subtle backgrounds (retuned 2%/3% → 3%/4% — same reasoning) */
   --subtle-bg: rgba(0, 0, 0, 0.03);
   --subtle-bg-hover: rgba(0, 0, 0, 0.04);
 
-  /* Raised control surface: the elevated button face (WI-UA13). Mode-level,
+  /* Raised control surface: the elevated button face. Mode-level,
      not per-theme — white lifts off every light page; #383d46 lifts off both
      dark pages. */
   --surface-raised: #ffffff;
@@ -345,7 +345,7 @@
   --font-size-base: 13px;
   --font-size-md: 14px;
   --font-size-lg: 16px;
-  --font-size-xl: 22px; /* identity/display text (welcome title, WI-UA13) */
+  --font-size-xl: 22px; /* identity/display text (welcome title) */
 
   /* Component dimensions not covered by --icon-size-* */
   --size-icon-xs: 14px;     /* small inline icons (popup buttons, dropdown items) */
@@ -362,7 +362,7 @@
   /* Letter spacing (UI labels, uppercase headings) */
   --letter-spacing-tight: 0.3px;
   --letter-spacing-loose: 0.5px;
-  /* THE tracking for uppercase micro-labels (WI-UA6). Three values had grown
+  /* THE tracking for uppercase micro-labels. Three values had grown
      for one role (0.03em / 0.3px / 0.5px); every text-transform:uppercase
      label uses this one. tight/loose remain for non-caps uses. */
   --letter-spacing-caps: 0.5px;
@@ -402,10 +402,10 @@
 /* Dark theme token overrides */
 .dark-theme {
   /* A 10%-black shadow is invisible on a dark page — the active tab pill's
-     elevation vanished on night/solarized (WI-UI3.6). */
+     elevation vanished on night/solarized. */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
 
-  /* Elevated button face, lifted off both dark pages (WI-UA13). */
+  /* Elevated button face, lifted off both dark pages. */
   --surface-raised: #383d46;
 
   /* Browser chrome, dark neutral. The light values above are a pure-white
@@ -495,8 +495,8 @@ body {
 ::-webkit-scrollbar-thumb {
   /* color-mix keeps the resting thumb subtle; the padding-style transparent
    * border + background-clip inset the visible thumb so it reads as a slim
-   * pill rather than filling the full 10px gutter. Ink = --text-secondary
-   * (WI-UI1.4): --md-char-color is the SYNTAX marker colour and rendered the
+   * pill rather than filling the full 10px gutter. Ink = --text-secondary:
+   * --md-char-color is the SYNTAX marker colour and rendered the
    * thumb green on night; the terminal thumb derives from the same text ink. */
   background-color: color-mix(in srgb, var(--text-secondary) 45%, transparent);
   border: 2px solid transparent;
@@ -513,7 +513,7 @@ body {
 }
 
 /* Sonner toasts follow the theme tokens, not sonner's own palette
-   (WI-UI1.6). One rule: sonner reads these three custom properties. */
+   One rule: sonner reads these three custom properties. */
 [data-sonner-toaster] {
   /* token-doc-ok: sonner's OWN property names, not VMark tokens */
   --normal-bg: var(--bg-color); /* token-unused-ok: consumed inside sonner's stylesheet */
@@ -524,7 +524,7 @@ body {
 /* Tailwind's ring paints --tw-ring-offset-color (a REGISTERED inherits:false
    property defaulting to #fff), so every ring-offset ring wore a white halo
    on dark themes. A universal rule reaches non-inheriting registered
-   properties by direct match (WI-UI1.6). */
+   properties by direct match. */
 * {
   /* token-doc-ok: Tailwind's registered ring property, not a VMark token */
   --tw-ring-offset-color: var(--bg-color); /* token-unused-ok: consumed by Tailwind's ring utilities */
@@ -537,7 +537,7 @@ body {
   cursor: default;
 }
 
-/* Cursor policy (D7, scoped per platform — audit 20260901, WI-UA15).
+/* Cursor policy (D7, scoped per platform).
    macOS chrome follows the Apple HIG: arrow on buttons and controls.
    Windows/Linux users of a webview app expect pointer feedback, so the
    interactive-chrome primitives consume this token instead of a literal.
@@ -561,7 +561,7 @@ body {
   outline: none;
 }
 
-/* WI-UI4.5: translucency is an aesthetic, not information — honour the OS
+/* Translucency is an aesthetic, not information — honour the OS
    setting with ONE owner instead of touching all 14 backdrop-filter sites. */
 @media (prefers-reduced-transparency: reduce) {
   * {
@@ -571,7 +571,7 @@ body {
 }
 
 /* ===========================================
-   Reduced motion — ONE owner (D9/R10, WI-UI1.7)
+   Reduced motion — ONE owner (D9/R10)
    A duration COLLAPSE, not `animation: none`: `forwards` end states still
    land (checked: the three `forwards` animations rest correctly and 0
    `animationend` listeners exist), and because this is UNLAYERED it also

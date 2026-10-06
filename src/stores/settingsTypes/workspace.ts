@@ -25,7 +25,7 @@ import type { SplitViewMode } from "@/lib/formats/types";
  * with rich previews. Defaults are all OFF on first install AND on upgrade.
  *
  * `externalEditor` is the explicit override for the "Open in external editor"
- * button on read-only code tabs (WI-4.4). Empty string = fall back to the
+ * button on read-only code tabs. Empty string = fall back to the
  * env-var chain (`$VMARK_EXTERNAL_EDITOR` → `$VISUAL` → `$EDITOR` → platform
  * default). The GUI setting wins over env vars when both are set — explicit
  * beats implicit.
@@ -45,7 +45,7 @@ export interface FormatsSettings {
   externalEditor: string;
   /** Default Source/Split/Preview view mode for newly-opened split-pane /
    *  viewer tabs that have no per-tab override. `"split"` preserves today's
-   *  behavior. See dev-docs/plans/20260703-split-pane-view-modes.md. */
+   *  behavior. See .claude/adr/plans/20260703-split-pane-view-modes.md. */
   defaultViewMode: SplitViewMode;
   /** Internal: set true once the upgrade nudge toast has been shown so it
    *  never repeats. Not user-toggled — only updated by the nudge handler. */
@@ -75,7 +75,7 @@ export interface LargeFileSettings {
 }
 
 // ---------------------------------------------------------------------------
-// Embedded browser (WI-1.10)
+// Embedded browser
 // ---------------------------------------------------------------------------
 
 /** Embedded-browser feature settings. Gated off by default until the surface,
@@ -133,7 +133,7 @@ export interface GeneralSettings {
    */
   closeToTray: boolean;
   // Tab behavior
-  // fix(#946) — when true, opening an existing file uses a new tab instead of
+  // When true, opening an existing file uses a new tab instead of
   // replacing the current clean untitled tab. Default false preserves the
   // legacy "reuse the empty tab" behavior so existing users are unaffected.
   openInNewTab: boolean;

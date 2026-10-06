@@ -16,6 +16,11 @@
  *     expressed in image syntax (poster, controls=false, non-default preload)
  *   - Video embed nodes serialize to provider-specific <iframe> HTML
  *   - TOC nodes serialize to `toc` MDAST type (remarkTocBlock handles markdown output)
+ *   - A list item is written spread when it holds more than one non-list block,
+ *     or a block after a nested list: written tight, that block would join the
+ *     nested list's last item on re-parse
+ *   - A list item's `tightBefore` attribute travels as `data.tightBefore`, where
+ *     listItemGapJoin.ts reads it
  *
  * @coordinates-with mdastBlockConverters.ts — reverse direction (MDAST → PM)
  * @coordinates-with pmInlineConverters.ts — handles inline content within blocks
@@ -42,7 +47,7 @@ import type {
   ThematicBreak,
 } from "mdast";
 import type { Math } from "mdast-util-math";
-import type { Details, Toc, Yaml } from "./types";
+import type { Toc, Yaml } from "./types";
 export type PmToMdastNode = Content | ListItem;
 
 export interface PmToMdastContext {
@@ -77,9 +82,12 @@ export function convertCodeBlock(node: PMNode): Code | Math {
     };
   }
 
+  const meta = (node.attrs.meta as string | null | undefined) ?? null;
   return {
     type: "code",
     lang: lang || undefined,
+    // A fence cannot carry meta without a language to precede it.
+    ...(lang && meta ? { meta } : {}),
     value: node.textContent,
   };
 }
@@ -119,34 +127,6 @@ export function convertAlertBlock(context: PmToMdastContext, node: PMNode): Bloc
   return { type: "blockquote", children };
 }
 
-export function convertDetailsBlock(context: PmToMdastContext, node: PMNode): Details {
-  const firstChild = node.firstChild;
-  const hasSummaryNode = firstChild?.type.name === "detailsSummary";
-  const summary = hasSummaryNode ? firstChild.textContent : "Details";
-  // Start from index 1 only if first child is summary; otherwise start from 0
-  const startIndex = hasSummaryNode ? 1 : 0;
-
-  const children: BlockContent[] = [];
-  for (let i = startIndex; i < node.childCount; i += 1) {
-    const child = node.child(i);
-    const converted = context.convertNode(child);
-    if (converted) {
-      if (Array.isArray(converted)) {
-        children.push(...(converted as BlockContent[]));
-      } else {
-        children.push(converted as BlockContent);
-      }
-    }
-  }
-
-  return {
-    type: "details",
-    open: Boolean(node.attrs.open),
-    summary,
-    children,
-  };
-}
-
 export function convertList(context: PmToMdastContext, node: PMNode, ordered: boolean): List {
   const children: ListItem[] = [];
   node.forEach((child) => {
@@ -156,8 +136,9 @@ export function convertList(context: PmToMdastContext, node: PMNode, ordered: bo
     }
   });
 
-  // Derive list spread from children: loose only if any child item is spread
-  const spread = children.some((item) => item.spread === true);
+  // Loose when the list was loose (where the schema records it) or any item
+  // holds more than one block.
+  const spread = node.attrs.spread === true || children.some((item) => item.spread === true);
   const list: List = {
     type: "list",
     ordered,
@@ -190,17 +171,25 @@ export function convertListItem(context: PmToMdastContext, node: PMNode): ListIt
   const safeChildren: BlockContent[] =
     children.length > 0 ? children : [{ type: "paragraph", children: [] }];
 
-  // Spread: true only if the item has multiple non-list block children
-  // (e.g., multi-paragraph items). Single paragraph + nested list = tight.
+  // Spread: true if the item has multiple non-list block children (e.g.,
+  // multi-paragraph items), or a block AFTER a nested list — written tight, a
+  // paragraph there is a lazy continuation of the nested list's last item.
+  // Single paragraph + nested list = tight.
   const nonListChildren = safeChildren.filter((c) => c.type !== "list");
+  const blockAfterList = safeChildren.some(
+    (child, index) => index > 0 && child.type !== "list" && safeChildren[index - 1].type === "list",
+  );
   const listItem: ListItem = {
     type: "listItem",
-    spread: nonListChildren.length > 1,
+    spread: nonListChildren.length > 1 || blockAfterList,
     children: safeChildren,
   };
   const checked = node.attrs.checked;
   if (checked === true || checked === false) {
     listItem.checked = checked;
+  }
+  if (node.attrs.tightBefore === true) {
+    listItem.data = { tightBefore: true };
   }
 
   return listItem;

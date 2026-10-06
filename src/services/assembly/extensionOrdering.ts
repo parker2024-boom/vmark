@@ -1,5 +1,5 @@
 /**
- * Total-order pinning for the two composition roots (WI-3.4, ADR-015 D1).
+ * Total-order pinning for the two composition roots (ADR-015 D1).
  *
  * Purpose: turn a root's single canonical id list into the explicit `after`
  *   constraints the extension resolver consumes, so the physical extension array

@@ -56,7 +56,7 @@ export interface MarkdownSettings {
   /**
    * Preserve runs of more than one blank line between blocks across the WYSIWYG
    * round trip (default off). v1 preserves runs present in the loaded document;
-   * see dev-docs/plans/20260721-blank-line-preservation.md.
+   * see .claude/adr/plans/20260721-blank-line-preservation.md.
    */
   preserveBlankLines: boolean;
   showBrTags: boolean; // Display <br> tags visibly

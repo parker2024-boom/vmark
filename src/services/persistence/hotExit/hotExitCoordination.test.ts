@@ -6,7 +6,7 @@
  * Critical: Finder file open must wait for hot exit restore to complete.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   isRestoreInProgress,
   setRestoreInProgress,
@@ -19,6 +19,12 @@ describe('hotExitCoordination', () => {
   beforeEach(() => {
     // Reset state before each test
     resetCoordinationState();
+    // Every wait runs on the fake clock and is advanced past its timeout or
+    // its notify, never slept through on the wall clock.
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('isRestoreInProgress', () => {
@@ -83,8 +89,10 @@ describe('hotExitCoordination', () => {
     it('should handle timeout gracefully', async () => {
       setRestoreInProgress(true);
 
-      // Wait with a short timeout
-      const result = await waitForRestoreComplete(50);
+      // Wait with a short timeout, and let it lapse
+      const pending = waitForRestoreComplete(50);
+      await vi.advanceTimersByTimeAsync(50);
+      const result = await pending;
 
       // Should have timed out but not throw
       expect(result).toBe(false); // Indicates timeout
@@ -97,8 +105,9 @@ describe('hotExitCoordination', () => {
         notifyRestoreComplete();
       }, 10);
 
-      const result = await waitForRestoreComplete(1000);
-      expect(result).toBe(true);
+      const pending = waitForRestoreComplete(1000);
+      await vi.advanceTimersByTimeAsync(10);
+      expect(await pending).toBe(true);
     });
   });
 
@@ -120,6 +129,7 @@ describe('hotExitCoordination', () => {
       setTimeout(() => {
         notifyRestoreComplete();
       }, 10);
+      await vi.advanceTimersByTimeAsync(10);
 
       const results = await Promise.all([waiter1, waiter2, waiter3]);
       expect(results).toEqual([true, true, true]);
@@ -136,8 +146,10 @@ describe('hotExitCoordination', () => {
     it('timeout fires and removes waiter from pending list (lines 60-69)', async () => {
       setRestoreInProgress(true);
 
-      // Use real short timeout to actually hit the timeout callback
-      const result = await waitForRestoreComplete(5);
+      // A short timeout, advanced past, so the timeout callback runs
+      const pending = waitForRestoreComplete(5);
+      await vi.advanceTimersByTimeAsync(5);
+      const result = await pending;
       expect(result).toBe(false);
 
       // Calling notify after timeout is safe — waiter was already removed

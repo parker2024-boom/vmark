@@ -2,6 +2,8 @@
  * Advanced Settings Section
  *
  * Developer and system configuration.
+ *
+ * @module pages/settings/AdvancedSettings
  */
 
 import { useTranslation } from "react-i18next";
@@ -80,7 +82,7 @@ export function AdvancedSettings() {
       <CoherenceSettingsGroup />
 
       {/* Workflow-file viewing/editing — these are the two toggles the
-          website documents (audit 20260612 H28); not devtools-gated because
+          website documents; not devtools-gated because
           the GHA viewer itself isn't. */}
       <SettingsGroup title={t("workflowEditor:settings.groupTitle")}>
         <SettingRow
@@ -135,7 +137,7 @@ export function AdvancedSettings() {
               rendered here reads an empty array and its Revoke button mutates a store
               the document window never sees. It told you that you had revoked, and you
               had not. They live in the browser sidebar instead, in the window that owns
-              them. (Audit finding, High.) */}
+              them. */}
           {browserEnabled && (
             <>
               <SettingRow
@@ -168,12 +170,12 @@ export function AdvancedSettings() {
       {/* Developer features - only visible when developer mode is enabled */}
       {devTools && (
         <SettingsGroup title={t("advanced.group.experimental")}>
-          {/* The GitHub Actions viewer has no switch (D6, WI-FL2.6): the
+          {/* The GitHub Actions viewer has no switch (D6): the
               workbench and its source-pane aids ship on. Its one preference —
               how the structured editor writes YAML back — stays here under the
               developer section, no longer behind the viewer flag that used to
               reveal it. It never hung off the engine flag and must not: that is
-              what made it unreachable for a viewer-only user before WI-19. */}
+              what used to make it unreachable for a viewer-only user. */}
           <SettingRow
             label={t("advanced.workflowEditorPreserveYamlFormatting.label")}
             description={t("advanced.workflowEditorPreserveYamlFormatting.description")}
@@ -183,7 +185,7 @@ export function AdvancedSettings() {
               onChange={(v) => updateAdvancedSetting("workflowEditorPreserveYamlFormatting", v)}
             />
           </SettingRow>
-          {/* The engine is a different feature (WI-19): it executes YAML — it
+          {/* The engine is a different feature: it executes YAML — it
               spawns AI providers, writes files, and takes snapshots — and its
               Rust commands refuse while this is off. */}
           <SettingRow

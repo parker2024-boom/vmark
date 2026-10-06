@@ -1,5 +1,6 @@
 //! Tokenizer for the workflow `if:` condition evaluator (see `condition.rs`,
-//! which owns the grammar table and the Pratt parser over these tokens).
+//! which owns the grammar table and the Pratt parser over these tokens), and
+//! the one step that comes before it: removing the optional outer `${{ }}`.
 
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Token {
@@ -21,6 +22,23 @@ pub(super) enum Token {
     Not,
     LParen,
     RParen,
+}
+
+/// Strip exactly one outer `${{ ... }}` wrapper if the entire (trimmed)
+/// condition is a single such expression. Inner `${{ ... }}` refs are left
+/// for the operand resolver.
+pub(super) fn strip_outer_wrapper(s: &str) -> &str {
+    if let Some(inner) = s.strip_prefix("${{") {
+        if let Some(inner) = inner.strip_suffix("}}") {
+            // Only strip if there's no nested `}}` that would close earlier,
+            // i.e. the wrapper spans the whole string. `find("}}")` on the
+            // inner body must be None for this to be a single outer wrapper.
+            if !inner.contains("}}") {
+                return inner.trim();
+            }
+        }
+    }
+    s
 }
 
 pub(super) fn tokenize(input: &str) -> Result<Vec<Token>, String> {

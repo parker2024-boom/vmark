@@ -73,7 +73,7 @@
 }
 
 /* Code-block action button (Copy / Run in Terminal, by `data-code-action`).
-   The SQUARE is the canonical `.vm-icon-btn--sm` (WI-UI2.3); this residual
+   The SQUARE is the canonical `.vm-icon-btn--sm`; this residual
    class keeps only what is genuinely local — reveal-on-hover, the editor's
    syntax-char ink, and the success/error feedback tints. */
 .tiptap-editor .code-copy-btn {
@@ -97,7 +97,7 @@
   color: var(--text-secondary);
 }
 
-/* Run in Terminal (WI-4.3) — same button, one distinguishing hover colour. */
+/* Run in Terminal — same button, one distinguishing hover colour. */
 .tiptap-editor .code-copy-btn[data-code-action="run"]:hover {
   color: var(--success-color);
 }
@@ -131,7 +131,7 @@
   padding: var(--space-half) var(--space-1-5);
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
-  /* WI-UI1.3: --md-char-color is reserved for syntax markers (it renders
+  /* --md-char-color is reserved for syntax markers (it renders
      green on night); an enabled control label reads in the text ramp. */
   color: var(--text-secondary);
   background: transparent;
@@ -203,7 +203,7 @@
   padding: var(--space-1);
 }
 
-/* Thin scrollbar comes from `.vm-scroll--thin` (WI-UI3.4). */
+/* Thin scrollbar comes from `.vm-scroll--thin`. */
 
 
 /* Language item */

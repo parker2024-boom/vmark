@@ -21,10 +21,10 @@ describe("codePreview setupThemeObserver", () => {
     // Adding/removing a class on documentElement should trigger the observer
     // Even if it doesn't, we verify the module loads without error
     document.documentElement.classList.add("dark");
-    // Allow microtasks to settle
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // Mutation records are delivered in a microtask: one tick lets the observer run.
+    await Promise.resolve();
     document.documentElement.classList.remove("dark");
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.resolve();
 
     // clearPreviewCache should be callable (verifies the observer callback's effect)
     expect(() => clearPreviewCache()).not.toThrow();
@@ -68,9 +68,9 @@ describe("codePreview setupThemeObserver", () => {
 
     // Trigger MutationObserver via class change
     document.documentElement.classList.add("dark");
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await Promise.resolve();
     document.documentElement.classList.remove("dark");
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await Promise.resolve();
 
     // updateMarkmapTheme should have been called (covers line 77)
     // Note: may not be called if MutationObserver already processed the "class" attribute

@@ -33,7 +33,7 @@ export function removeSessionEntry(
     cancelAnimationFrame(entry.pendingRafId);
     entry.pendingRafId = null;
   }
-  // Dispose BEFORE kill (WI-1.3): instance.dispose() flushes a pending IME
+  // Dispose BEFORE kill: instance.dispose() flushes a pending IME
   // commit through the PTY, so the session must still be live. Catch (not just
   // finally) so a throwing dispose never propagates — the PTY is still killed
   // and the entry removed, instead of leaking the PTY and orphaning the entry.
@@ -116,7 +116,7 @@ export function disposeAllSessions(sessions: Map<string, SessionEntry>): void {
     }
     clearTimeout(entry.ptyResizeTimer);
     entry.ptyResizeTimer = undefined;
-    // Dispose BEFORE kill (WI-1.3) — see removeSessionEntry. Catch per entry so
+    // Dispose BEFORE kill — see removeSessionEntry. Catch per entry so
     // one throwing dispose never blocks cleanup of the remaining sessions.
     try {
       entry.instance.dispose();

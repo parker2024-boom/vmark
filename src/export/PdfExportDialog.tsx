@@ -42,7 +42,8 @@ interface PdfExportContentProps {
    * `undefined` as not supplied.
    */
   defaultName?: string | undefined;
-  onClose: () => void;
+  /** Close the export window. A rejection re-arms the page (see handleExport). */
+  onClose: () => Promise<void>;
 }
 
 /** Renders the PDF export settings panel and handles export. */
@@ -204,9 +205,19 @@ export function PdfExportContent({
         pdfError("Failed to open exported PDF:", openErr);
       }
 
-      onClose();
+      // The export is done whether or not the window goes away. One that
+      // cannot close must not be left disabled on its last progress stage
+      // with nothing to press: re-arm it so the user can export again or
+      // close it themselves.
+      try {
+        await onClose();
+      } catch (closeErr) {
+        pdfError("Failed to close export window:", closeErr);
+        setExporting(false);
+        setExportStage("");
+      }
     } catch (error) {
-      // Two-line toast (WI-UI4.4): Paged.js/WKWebView details as the detail.
+      // Two-line toast: Paged.js/WKWebView details as the detail.
       // Raw error — errorDetail owns the normalization (commandErrorMessage).
       toast.errorDetail(tDialog("toast.pdfExportFailed"), error);
       setExporting(false);

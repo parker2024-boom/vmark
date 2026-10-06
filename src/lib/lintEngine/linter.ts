@@ -3,6 +3,8 @@
  *
  * Purpose: Parses markdown via remark (lint-safe mode) and runs all
  * registered rules over the MDAST + raw source text. Returns sorted diagnostics.
+ *
+ * @module lib/lintEngine/linter
  */
 
 import { createMarkdownProcessor } from "@/utils/markdownPipeline/parser";
@@ -36,7 +38,7 @@ export function lintMarkdown(source: string): LintDiagnostic[] {
   const mdast = processor.runSync(tree) as Root;
 
   // Split source + compute line offsets once, shared by every line-oriented
-  // rule (O6 / WI-2.5) instead of each rule re-splitting and recomputing.
+  // rule (O6) instead of each rule re-splitting and recomputing.
   const index = buildLineIndex(source);
 
   const diagnostics: LintDiagnostic[] = [];

@@ -15,8 +15,6 @@ import {
   getActiveFilePath,
   getToastAnchorRect,
   pasteAsText,
-  expandHomePath,
-  validateLocalPath,
 } from "./smartPasteUtils";
 
 // These drive the REAL stores; bind them to the seams the plugin reads,
@@ -280,59 +278,5 @@ describe("pasteAsText", () => {
     const view = createView("hello", 0);
     pasteAsText(view, "", 0, 0);
     expect(view.state.doc.toString()).toBe("hello");
-  });
-});
-
-describe("expandHomePath", () => {
-  it("returns the path unchanged when it does not start with ~/", async () => {
-    const result = await expandHomePath("/absolute/path/file.md");
-    expect(result).toBe("/absolute/path/file.md");
-  });
-
-  it("returns the path unchanged for relative paths", async () => {
-    const result = await expandHomePath("relative/path/file.md");
-    expect(result).toBe("relative/path/file.md");
-  });
-
-  it("returns the path unchanged for empty string", async () => {
-    const result = await expandHomePath("");
-    expect(result).toBe("");
-  });
-
-  it("attempts to expand ~/ paths", async () => {
-    // In test environment, homeDir() may fail (Tauri not available)
-    // The function catches the error and returns null
-    const result = await expandHomePath("~/Documents/file.md");
-    // Will return null if homeDir() throws (no Tauri runtime)
-    expect(result === null || typeof result === "string").toBe(true);
-  });
-
-  it("returns null when homeDir throws", async () => {
-    const pathMod = await import("@tauri-apps/api/path");
-    vi.mocked(pathMod.homeDir).mockRejectedValueOnce(new Error("no home"));
-    const result = await expandHomePath("~/some/file.md");
-    expect(result).toBeNull();
-  });
-});
-
-describe("validateLocalPath", () => {
-  it("returns false when exists() returns falsy", async () => {
-    // Mock exists returns undefined by default
-    const result = await validateLocalPath("/nonexistent/path/file.txt");
-    expect(result).toBeFalsy();
-  });
-
-  it("returns false when exists() throws", async () => {
-    const { exists } = await import("@tauri-apps/plugin-fs");
-    vi.mocked(exists).mockRejectedValueOnce(new Error("fs error"));
-    const result = await validateLocalPath("/bad/path");
-    expect(result).toBe(false);
-  });
-
-  it("returns true when exists() returns true", async () => {
-    const { exists } = await import("@tauri-apps/plugin-fs");
-    vi.mocked(exists).mockResolvedValueOnce(true);
-    const result = await validateLocalPath("/valid/file.txt");
-    expect(result).toBe(true);
   });
 });

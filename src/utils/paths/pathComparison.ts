@@ -1,5 +1,5 @@
 /**
- * Platform-aware path COMPARISON normalization (WI-17.1).
+ * Platform-aware path COMPARISON normalization.
  *
  * Purpose: one comparison identity for containment/equality checks so that
  * ownership classification, nested-root specificity, root deduplication, and
@@ -17,7 +17,7 @@
  *     (plan D9), not a bug to fix by folding.
  *   - Linux stays byte-exact (case-sensitive filesystems).
  *   - These functions are for COMPARISON ONLY — never persist or display
- *     their output; persist the instance's stored rootPath instead (WI-17.2).
+ *     their output; persist the instance's stored rootPath instead.
  *
  * Pure string functions — no filesystem access, no store imports.
  *
@@ -41,7 +41,7 @@ export function normalizePathForCompare(
 }
 
 /**
- * Canonical MAP-KEY form of an absolute document path (WI-8c): forward slashes,
+ * Canonical MAP-KEY form of an absolute document path: forward slashes,
  * dot segments collapsed. Two spellings of one file (`/a/b/../b/x.md`,
  * `/a/./b/x.md`) otherwise occupy two keys, and a live-buffer lookup misses —
  * which, in orphan cleanup, is the difference between protecting a document's

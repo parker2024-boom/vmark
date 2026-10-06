@@ -6,7 +6,7 @@
 import { Schema } from "@tiptap/pm/model";
 import { EditorState, SelectionRange } from "@tiptap/pm/state";
 import { multiCursorPlugin } from "../multiCursorPlugin";
-import { MultiSelection } from "../MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 
 /** Minimal schema: single paragraph with text. */
 const schema = new Schema({

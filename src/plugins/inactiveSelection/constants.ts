@@ -6,4 +6,5 @@
  *
  * @module plugins/inactiveSelection/constants
  */
+
 export const INACTIVE_SELECTION_CLASS = "vmark-inactive-selection";

@@ -23,16 +23,34 @@ import { dirname, join, normalize } from "@tauri-apps/api/path";
 import { exportWarn } from "@/utils/debug";
 
 /**
+ * The resolution base AND containment root of a document with no folder (an
+ * unsaved buffer). It is not a path: no directory can spell it (a NUL byte is
+ * illegal in every filesystem path), and `resolveRelativePath` refuses every
+ * local source when either directory is this value — before any path
+ * arithmetic, so the refusal does not depend on how `normalize` treats it.
+ */
+export const NO_DOCUMENT_DIR = "\u0000unsaved-document";
+
+/**
  * Check that `normalizedPath` is `normalizedBase` or sits under it, with a
  * separator boundary so a sibling directory like `/a/b-evil` cannot pass a
  * `/a/b` baseDir check via plain `startsWith`. Tries both POSIX and Windows
  * separators because Tauri's `normalize()` returns platform-native paths.
+ *
+ * @edge-case A base ending in separators is compared without them. Tauri's
+ * `normalize` re-appends a trailing separator, so a filesystem root comes back
+ * as "//" and a drive root as "D:\\\\"; appending one more and matching that
+ * prefix admitted nothing, so a workspace at a root embedded no images. A
+ * base that is ONLY separators is the filesystem root and holds every
+ * absolute path. An empty base holds nothing (fail closed).
  */
 export function isInsideBase(normalizedPath: string, normalizedBase: string): boolean {
+  if (normalizedBase === "" || normalizedBase === NO_DOCUMENT_DIR) return false;
   if (normalizedPath === normalizedBase) return true;
+  const trimmed = normalizedBase.replace(/[/\\]+$/, "");
   return (
-    normalizedPath.startsWith(normalizedBase + "/") ||
-    normalizedPath.startsWith(normalizedBase + "\\")
+    normalizedPath.startsWith(trimmed + "/") ||
+    normalizedPath.startsWith(trimmed + "\\")
   );
 }
 
@@ -66,6 +84,12 @@ export async function resolveRelativePath(
   baseDir: string,
   containWithin: string = baseDir
 ): Promise<string | null> {
+  // A document with no folder may embed no local file, whatever the spelling.
+  if (baseDir === NO_DOCUMENT_DIR || containWithin === NO_DOCUMENT_DIR) {
+    exportWarn(`Local image refused for an unsaved document: ${src}`);
+    return null;
+  }
+
   // Handle absolute paths — must still be within the containment root
   if (src.startsWith("/")) {
     const normalizedPath = await normalize(src);
@@ -88,8 +112,8 @@ export async function resolveRelativePath(
       // original path verbatim — works for macOS ("/Users/..."), Windows
       // forward-slash ("C:/Users/..."), and Windows backslash paths.
       // Naively decoding url.pathname would produce "//Users/..." on macOS
-      // (the encoded leading "/" becomes a second slash) which Tauri's
-      // normalize() does not collapse, breaking the baseDir check below.
+      // (the encoded leading "/" becomes a second slash) and "/C:/Users/..."
+      // on Windows, which is not a path at all.
       const extractedPath = decodeURIComponent(url.pathname.slice(1));
       const normalizedPath = await normalize(extractedPath);
       const normalizedBase = await normalize(containWithin);
@@ -136,8 +160,10 @@ export async function resolveRelativePath(
  */
 export async function getDocumentBaseDir(filePath: string | null): Promise<string> {
   if (!filePath) {
-    // Return current working directory or home as fallback
-    return "/";
+    // An unsaved buffer has no folder, so it has nothing to embed from. It
+    // used to return "/", which was refused only because Tauri normalizes "/"
+    // to "//"; with roots compared correctly, "/" would admit every file.
+    return NO_DOCUMENT_DIR;
   }
   return await dirname(filePath);
 }
@@ -171,6 +197,9 @@ export async function getDocumentBaseDir(filePath: string | null): Promise<strin
  * widening to a root the document does not live under would hand the export
  * reach that opening the workspace never justified. `isInsideBase` is what
  * makes `/p-evil` not count as inside `/p`.
+ *
+ * An unsaved buffer gets `NO_DOCUMENT_DIR` even with a workspace open: a
+ * document that lives in no folder lives in no workspace either.
  *
  * @param filePath - the document being exported; null for an unsaved buffer
  * @param workspaceRoot - the open workspace root, or null/empty when none

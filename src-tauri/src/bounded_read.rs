@@ -3,7 +3,7 @@
 //! Purpose: the one open-then-check-then-read for every caller that loads a
 //! user-writable file into memory (`genies::commands::read_genie`,
 //! `workflow::actions`' `read-file` and `read-folder`). Each of them used to
-//! `metadata()` a PATH and then open that path again (#148, #253, #254): a
+//! `metadata()` a PATH and then open that path again: a
 //! check on one inode and a read of whatever the name resolved to a moment
 //! later — a file swapped for a FIFO blocked the reader, a file that grew
 //! passed its size check.

@@ -9,7 +9,7 @@
  *
  * A split is always side-by-side. The stacked (top/bottom) orientation the
  * shape once carried had no writer — nothing ever set it but a session-restore
- * replay — and was removed (feature-ledger plan, WI-FL3.10); a persisted
+ * replay — and was removed (feature-ledger plan); a persisted
  * `orientation` is dropped on load (splitLayoutPersistence.ts).
  *
  * @module stores/paneStoreTypes
@@ -37,7 +37,7 @@ export interface WindowSplit {
 }
 
 /**
- * Frozen (audit #490): `getSplit` hands this very object to every window
+ * Frozen: `getSplit` hands this very object to every window
  * without state, so a consumer mutating "its" split would have corrupted the
  * default for every window with no store update to notice. Updaters spread it.
  */

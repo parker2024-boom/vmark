@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
-vi.mock("@/plugins/sourcePopup/sourcePopupUtils", () => ({
+vi.mock("@/plugins/shared/sourcePopupUtils", () => ({
   getAnchorRectFromRange: vi.fn(() => ({ top: 0, bottom: 20, left: 0, right: 100 })),
 }));
 
@@ -61,30 +61,12 @@ vi.mock("@/utils/markdownLinkPatterns", () => ({
   findWikiLinkAtPosition: vi.fn(() => null),
 }));
 
-vi.mock("./sourceAdapterHelpers", () => ({
-  insertText: vi.fn((view: EditorView, text: string, cursorOffset?: number) => {
-    const { from, to } = view.state.selection.main;
-    view.dispatch({
-      changes: { from, to, insert: text },
-      selection: {
-        anchor: typeof cursorOffset === "number" ? from + cursorOffset : from + text.length,
-      },
-    });
-  }),
-}));
-
-vi.mock("./sourceAdapterLinks", () => ({
-  findWordAtCursorSource: vi.fn(() => null),
-}));
-
 import { sourceActionError } from "@/utils/debug";
 import { unlinkAtCursor, insertImage, insertVideoTag, insertAudioTag } from "./sourceImageActions";
-import { insertText } from "./sourceAdapterHelpers";
 import { findMarkdownLinkAtPosition, findWikiLinkAtPosition } from "@/utils/markdownLinkPatterns";
 import { readClipboardImagePath } from "@/services/media/clipboardImagePath";
 import { copyImageToAssets } from "@/services/media/imageOperations";
-import { getAnchorRectFromRange } from "@/plugins/sourcePopup/sourcePopupUtils";
-import { findWordAtCursorSource } from "./sourceAdapterLinks";
+import { getAnchorRectFromRange } from "@/plugins/shared/sourcePopupUtils";
 import { hasVideoExtension, hasAudioExtension } from "@/utils/mediaPathDetection";
 
 function createView(doc: string, ranges: Array<{ from: number; to: number }>): EditorView {
@@ -210,11 +192,9 @@ describe("insertVideoTag", () => {
   it("inserts video HTML tag with cursor in src", () => {
     const view = createView("", [{ from: 0, to: 0 }]);
     insertVideoTag(view);
-    expect(insertText).toHaveBeenCalledWith(
-      view,
-      '<video src="" controls></video>',
-      12
-    );
+    expect(view.state.doc.toString()).toBe('<video src="" controls></video>');
+    // The caret lands between the src quotes, ready to type the path.
+    expect(view.state.selection.main.head).toBe(12);
     view.destroy();
   });
 });
@@ -227,11 +207,8 @@ describe("insertAudioTag", () => {
   it("inserts audio HTML tag with cursor in src", () => {
     const view = createView("", [{ from: 0, to: 0 }]);
     insertAudioTag(view);
-    expect(insertText).toHaveBeenCalledWith(
-      view,
-      '<audio src="" controls></audio>',
-      12
-    );
+    expect(view.state.doc.toString()).toBe('<audio src="" controls></audio>');
+    expect(view.state.selection.main.head).toBe(12);
     view.destroy();
   });
 });
@@ -242,7 +219,6 @@ describe("insertImage (async paths)", () => {
     // Re-establish default mock implementations after clearAllMocks
     vi.mocked(readClipboardImagePath).mockResolvedValue(null);
     vi.mocked(getAnchorRectFromRange).mockReturnValue({ top: 0, bottom: 20, left: 0, right: 100 });
-    vi.mocked(findWordAtCursorSource).mockReturnValue(null);
     vi.mocked(findMarkdownLinkAtPosition).mockReturnValue(null);
     vi.mocked(findWikiLinkAtPosition).mockReturnValue(null);
     vi.mocked(hasVideoExtension).mockReturnValue(false);
@@ -337,8 +313,8 @@ describe("insertImage (async paths)", () => {
   });
 
   it("uses word at cursor as alt text when no selection", async () => {
+    // Cursor inside "hello": the real word finder expands to it.
     const view = createView("hello world", [{ from: 2, to: 2 }]);
-    vi.mocked(findWordAtCursorSource).mockReturnValue({ from: 0, to: 5 });
 
     insertImage(view);
 

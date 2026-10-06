@@ -1,5 +1,5 @@
 /**
- * WI-5.2 — the real-IME lane (`pnpm e2e:ime`).
+ * The real-IME lane (`pnpm e2e:ime`).
  *
  * The ONLY tier where the REAL macOS input method drives the SHIPPING
  * WKWebView: raw `key code` events injected at the OS level (never
@@ -27,7 +27,7 @@
  * identity only the real IME pipeline can produce.
  *
  * @coordinates-with e2e/lib/bridge.mjs — in-process observation
- * @coordinates-with dev-docs/plans/20260805-markdown-testing-adoption.md — WI-5.2
+ * @coordinates-with .claude/adr/plans/20260805-markdown-testing-adoption.md
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
@@ -238,7 +238,7 @@ async function main() {
        * `Control` keydown.
        *
        * This lane cannot exercise that, because **System Events injection
-       * produces no modifier key event at all**. Measured 2026-09-17 against
+       * produces no modifier key event at all**. Measured against
        * real Safari + the real macOS SCIM IME: `key down control` held for a
        * full second logged ZERO DOM events, and so did `key down shift`;
        * `key code 50 using {control down}` surfaced `ctrl: true` only on the

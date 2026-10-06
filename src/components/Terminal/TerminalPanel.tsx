@@ -11,7 +11,7 @@
  *
  * User interactions:
  *   - Drag the resize handle to adjust panel height (top/bottom) or width (left/right)
- *   - Double-click the resize handle to maximize the panel and back (WI-4.5)
+ *   - Double-click the resize handle to maximize the panel and back
  *   - Right-click for copy / paste / select-all / clear / reset-display /
  *     copy-command-output menu (the last needs shell integration)
  *   - Use the tab bar to create/switch/close sessions and swap the panel side
@@ -45,6 +45,7 @@
 import { useRef, useEffect, useState, useCallback, useId, type RefObject, type MutableRefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { useUIStore } from "@/stores/uiStore";
+import { useTerminalStore } from "@/stores/terminalStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
 import { getCurrentWindowLabel } from "@/services/persistence/workspaceStorage";
@@ -92,7 +93,7 @@ export function TerminalPanel() {
     setSearchVisible((v) => !v);
   }, []);
 
-  const activeSessionId = useUIStore((s) => s.terminal.activeSessionId);
+  const activeSessionId = useTerminalStore((s) => s.activeSessionId);
   const transcript = useRenderedTranscript(activeSessionId, transcriptEnabled, visible, transcriptConfiguration);
   const transcriptId = useId();
 
@@ -152,7 +153,7 @@ export function TerminalPanel() {
   );
 
   // Double-clicking the handle maximizes the panel to its cap and back
-  // (WI-4.5/F6) — the honest answer to "I wanted 80%", which the persisted
+  // (F6) — the honest answer to "I wanted 80%", which the persisted
   // ratio deliberately cannot give.
   const handleHandleDoubleClick = useCallback(() => {
     toggleMaximize();
@@ -186,7 +187,7 @@ export function TerminalPanel() {
   }, []);
 
   // Context menu state. `line` is the buffer row under the pointer, used by
-  // "Copy Command Output" to pick which command's output to copy (WI-4.4).
+  // "Copy Command Output" to pick which command's output to copy.
   const [contextMenu, setContextMenu] = useState<
     { x: number; y: number; line?: number } | null
   >(null);
@@ -213,7 +214,7 @@ export function TerminalPanel() {
   // Tab bar actions — the ONE remove+hide policy (audit 20260831 #32):
   // membership-verified, visible fallback, no hidden-panel resurrect.
   const handleClose = useCallback(() => {
-    const activeId = useUIStore.getState().terminal.activeSessionId;
+    const activeId = useTerminalStore.getState().activeSessionId;
     if (!activeId) return;
     removeTerminalSessionWithPanelPolicy(activeId, { onlyIfVisible: true });
   }, []);

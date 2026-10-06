@@ -12,7 +12,7 @@ Os Gênios de IA são modelos de prompt que transformam seu texto usando IA. Sel
 
 ## O Seletor de Gênios
 
-Pressione `Mod + Y` (ou menu **Ferramentas > Gênios de IA**) para abrir uma sobreposição no estilo Spotlight com uma única entrada unificada.
+Pressione `Mod + Y` (ou menu **Editar → Assistentes → Pesquisar assistentes…**) para abrir uma sobreposição no estilo Spotlight com uma única entrada unificada. O mesmo submenu lista todos os gênios pelo nome, então um gênio também pode ser executado diretamente pelo menu.
 
 **Pesquisa e formulário livre** — Comece a digitar para filtrar gênios por nome, descrição ou categoria. Se nenhum gênio corresponder, a entrada se torna um campo de prompt livre.
 
@@ -22,17 +22,17 @@ Pressione `Mod + Y` (ou menu **Ferramentas > Gênios de IA**) para abrir uma sob
 
 **Ciclo de escopo** — Pressione `Tab` para ciclar entre escopos: seleção → bloco → documento → todos.
 
-**Histórico de prompts** — No modo livre (sem gênios correspondentes), pressione `ArrowUp` / `ArrowDown` para ciclar pelos prompts anteriores. Pressione `Ctrl + R` para abrir um dropdown de histórico pesquisável. O texto fantasma mostra o prompt correspondente mais recente como uma dica cinza — pressione `Tab` para aceitá-la.
+**Histórico de prompts** — No modo livre (sem gênios correspondentes), pressione `ArrowUp` / `ArrowDown` para ciclar pelos prompts anteriores. Pressione `Ctrl + R` para abrir um dropdown de histórico pesquisável; o botão **Limpar histórico** dele esvazia de uma vez o histórico salvo (até 100 prompts), sem pedir confirmação. O texto fantasma mostra o prompt correspondente mais recente como uma dica cinza — pressione `Tab` para aceitá-la ou `Escape` para dispensá-la (ela volta assim que você altera o que digitou).
 
 ### Feedback de Processamento
 
 Após selecionar um gênio ou enviar um prompt livre, o seletor mostra feedback inline:
 
 - **Processando** — Um indicador de pensamento com contador de tempo decorrido. Pressione `Escape` para cancelar.
-- **Visualização** — A resposta da IA é transmitida em tempo real. Use `Aceitar` para aplicar ou `Rejeitar` para descartar.
+- **Visualização** — A resposta da IA aparece à medida que chega: provedores CLI a transmitem enquanto ela é gerada, já os provedores REST entregam a resposta inteira de uma vez quando a solicitação termina. Use `Aceitar` para aplicar ou `Rejeitar` para descartar.
 - **Erro** — Se algo der errado, a mensagem de erro aparece com um botão `Tentar Novamente`.
 
-A barra de status também mostra o progresso da IA — um ícone giratório com tempo decorrido enquanto executa, um breve flash "Concluído" no sucesso, ou um indicador de erro com botões Tentar Novamente/Dispensar. A barra de status é exibida automaticamente quando a IA tem status ativo, mesmo que você a tenha ocultado anteriormente com `F7`.
+A barra de status também mostra o progresso da IA — um ícone giratório com tempo decorrido enquanto executa, um breve flash "Concluído" no sucesso, ou um indicador de erro com botões **Tentar novamente** e **Dispensar**. **Tentar novamente** executa de novo a solicitação que falhou — o mesmo gênio ou prompt, na seleção atual — mesmo depois que o seletor foi fechado; o botão não aparece quando não há nada a repetir, como sem provedor. A barra de status é exibida automaticamente quando a IA tem status ativo, mesmo que você a tenha ocultado anteriormente com `F7`.
 
 ## Gênios Integrados
 
@@ -130,11 +130,11 @@ Os gênios são armazenados no diretório de dados do aplicativo:
 | Windows | `%APPDATA%\app.vmark\genies\` |
 | Linux | `~/.local/share/app.vmark/genies/` |
 
-Abra esta pasta no menu **Ferramentas > Abrir Pasta de Gênios**.
+Abra esta pasta no menu **Editar → Assistentes → Abrir pasta de assistentes**; depois de adicionar ou editar arquivos, **Editar → Assistentes → Recarregar assistentes** atualiza a lista.
 
 ### Estrutura de Diretório
 
-Subdiretórios se tornam **categorias** no seletor. Você pode organizar os gênios como quiser:
+Subdiretórios se tornam **categorias** no seletor, e a varredura é recursiva — aninhe pastas tão fundo quanto quiser; a categoria de um gênio é o caminho da pasta dele relativo a `genies/` (assim `academic/thesis/abstract.md` vai para `academic/thesis`), a menos que o frontmatter defina `category`. Links simbólicos são ignorados. Você pode organizar os gênios como quiser:
 
 ```text
 genies/

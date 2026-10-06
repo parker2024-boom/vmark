@@ -2,7 +2,7 @@
  * runInTerminal
  *
  * Purpose: Send a fenced shell code block from the document into the
- * integrated terminal (F1/WI-4.3). VMark is a markdown editor full of `bash`
+ * integrated terminal (F1). VMark is a markdown editor full of `bash`
  * fences; this closes the copy-switch-paste loop.
  *
  * SECURITY BOUNDARY — read before changing anything here.
@@ -31,8 +31,8 @@
  * Key decisions:
  *   - Delivery goes through `term.paste()`, not `term.write()`. Paste applies
  *     bracketed-paste wrapping when the shell enabled it, so a multi-line
- *     block lands in the input line as one editable unit (the G2 invariant of
- *     the 2026-06-01 plan).
+ *     block lands in the input line as one editable unit (a plan
+ *     invariant).
  *   - Transcript fences (`console`, `shell-session`) keep only their PROMPTED
  *     lines. Such a block interleaves commands with their output; pasting the
  *     output too would leave `PASS` sitting on the input line as a second

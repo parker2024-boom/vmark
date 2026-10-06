@@ -5,8 +5,8 @@
  * with proper error wrapping per project conventions.
  *
  * Tool results only. `toMcpContents` / `createResourceHandler` — the
- * `resources/read` half — were deleted with the resource capability itself
- * (audit 20260728 §4): `cli.ts` looped over an always-empty resource registry,
+ * `resources/read` half — were deleted with the resource capability itself:
+ * `cli.ts` looped over an always-empty resource registry,
  * so nothing but their own tests ever reached them.
  *
  * @coordinates-with cli.ts (consumer of these adapters)

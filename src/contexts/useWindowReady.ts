@@ -10,19 +10,23 @@
  *   - none of them cleared the timer, so a window unmounted inside the delay
  *     still fired into a dead webview.
  *
- * A document window waits for a FACT, not a duration: `useCommandBootstrap`
- * signals once the single Tauri menu listener is actually mounted. It gets
- * there via an `await`ed dynamic import, so the 100 ms constant this replaced
- * could not bound it — when the constant expired first, Rust was told the
- * window was listening and the next `menu:open` went nowhere. The wait is
- * budgeted and its expiry is logged, so a barrier that never signals degrades
- * to the old behaviour instead of hanging the window forever.
+ * A document window waits for FACTS, not a duration. Two of them, because Rust
+ * acts on `ready` in two ways: it starts sending menu events, and it starts
+ * sending close and quit requests. `useCommandBootstrap` signals once the
+ * single Tauri menu listener is actually mounted — it gets there via an
+ * `await`ed dynamic import, so the 100 ms constant this replaced could not
+ * bound it — and `useWindowClose` signals once its close and quit listeners
+ * are registered. Announcing on the first alone left a gap in which a quit
+ * request, sent once, reached no listener. Each wait is budgeted and its
+ * expiry is logged, so a barrier that never signals degrades to the old
+ * behaviour instead of hanging the window forever.
  *
  * That same moment is the only honest answer to "is this app drivable yet?", so
  * it is PUBLISHED to the DOM as well as to Rust — see {@link READY_ATTRIBUTE}.
  *
  * @coordinates-with WindowContext.tsx — sole consumer
- * @coordinates-with services/commands/menuCommandsReady.ts — the barrier a document window waits on
+ * @coordinates-with services/commands/menuCommandsReady.ts — the menu-listener barrier a document window waits on
+ * @coordinates-with services/windowClose/closeListenersReady.ts — the close/quit-listener barrier it also waits on
  * @coordinates-with e2e/lib/readiness.mjs — the automation harness reads the attribute
  * @module contexts/useWindowReady
  */
@@ -30,6 +34,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { windowContextError } from "@/utils/debug";
 import { isDocumentWindowLabel } from "@/utils/windowLabels";
 import { waitForMenuCommands } from "@/services/commands/menuCommandsReady";
+import { waitForCloseListeners } from "@/services/windowClose/closeListenersReady";
 
 /**
  * How long a document window will wait for its menu listener before giving up
@@ -37,6 +42,13 @@ import { waitForMenuCommands } from "@/services/commands/menuCommandsReady";
  * `menuCommandsReady` for why the wait exists and why it must not hang.
  */
 const MENU_COMMANDS_BUDGET_MS = 5_000;
+
+/**
+ * The same budget for the close and quit listeners. They are three `listen()`
+ * round-trips with nothing to fetch, so in practice they are in place long
+ * before the menu listener; the budget is for the case where one never is.
+ */
+const CLOSE_LISTENERS_BUDGET_MS = 5_000;
 
 /**
  * Delay for a window that mounts no menu listener — settings, pdf-export.
@@ -94,7 +106,7 @@ export function useWindowReady(): { isReady: boolean; markReady: (w: ReadyTarget
       // SYNCHRONOUS throw escapes `Promise.resolve(...)` entirely, and it
       // used to take the attribute publish below down with it — leaving a
       // fully-listening window advertising itself as never ready, which is a
-      // permanent hang for anything gating on it (audit finding #11).
+      // permanent hang for anything gating on it.
       void Promise.resolve(w.emit("ready", w.label)).catch((e) =>
         windowContextError("ready emit failed:", e));
     } catch (e) {
@@ -112,7 +124,7 @@ export function useWindowReady(): { isReady: boolean; markReady: (w: ReadyTarget
     // Idempotent by construction. The timer version overwrote `timerRef` and
     // left the previous timer ORPHANED — still scheduled, still firing,
     // emitting `ready` a second time into a webview cleanup believed it had
-    // disarmed (audit finding #12). `markReady` is reached from five call
+    // disarmed. `markReady` is reached from five call
     // sites including two error paths, so a second call is a real shape; the
     // latch below makes the whole announcement run at most once.
     if (announcingRef.current) return;
@@ -123,12 +135,22 @@ export function useWindowReady(): { isReady: boolean; markReady: (w: ReadyTarget
       return;
     }
 
-    void waitForMenuCommands(MENU_COMMANDS_BUDGET_MS).then((mounted) => {
-      if (!mounted) {
-        // Loud, because the window is about to claim something it could not
-        // confirm. Silent expiry here would look exactly like success.
+    // Both waits run together: the announcement goes out when the later of
+    // the two facts is true, not after the sum of two budgets.
+    void Promise.all([
+      waitForMenuCommands(MENU_COMMANDS_BUDGET_MS),
+      waitForCloseListeners(CLOSE_LISTENERS_BUDGET_MS),
+    ]).then(([menuMounted, closeListening]) => {
+      // Loud, because the window is about to claim something it could not
+      // confirm. Silent expiry here would look exactly like success.
+      if (!menuMounted) {
         windowContextError(
           `menu commands did not mount within ${MENU_COMMANDS_BUDGET_MS}ms; announcing ready anyway`,
+        );
+      }
+      if (!closeListening) {
+        windowContextError(
+          `close listeners did not register within ${CLOSE_LISTENERS_BUDGET_MS}ms; announcing ready anyway — a quit or close request can be lost`,
         );
       }
       announce(w);

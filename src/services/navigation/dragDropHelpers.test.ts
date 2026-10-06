@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fileBytes } from "@/test/fileBytes";
 import { useDocumentStore, useFileLoadStore } from "@/stores/documentStore";
 import { useTabStore } from "@/stores/tabStore";
 import { useRecentFilesStore } from "@/stores/workspaceStore";
@@ -26,7 +27,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: (...args: unknown[]) => mockReadTextFile(...args),
+  readFile: (...args: unknown[]) => fileBytes(mockReadTextFile(...args)),
 }));
 vi.mock("@/services/tabs/replaceableTab", () => ({
   findExistingTabForPath: (...args: unknown[]) => mockFindExistingTabForPath(...args),

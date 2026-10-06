@@ -1,7 +1,7 @@
 //! Tauri command surface (ADR-C4 services tier) + the resolution write
-//! API (WI-1.9a). Commands are thin wrappers over testable free
+//! API. Commands are thin wrappers over testable free
 //! functions; the MCP Rust-terminal routing calls the same functions
-//! through managed state (WI-1.10) with no webview hop.
+//! through managed state with no webview hop.
 
 use serde_json::json;
 
@@ -22,7 +22,7 @@ use super::types::WriterId;
 pub struct CoherenceState {
     pub registry: KernelRegistry,
     pub writer: WriterId,
-    /// Guards against a CONCURRENT check sweep (found by dogfooding, 2026-07-20).
+    /// Guards against a CONCURRENT check sweep (found by dogfooding).
     /// The sweep deliberately drops the kernel lock across its provider calls, so
     /// two invocations both snapshot "not yet checked" and both spend on the SAME
     /// edges — observed as 9 check-results for 5 distinct edges, two runs offset
@@ -33,7 +33,7 @@ pub struct CoherenceState {
     pub sweep_in_flight: std::sync::atomic::AtomicBool,
 }
 
-/// The resolution write path (WI-1.9a): validates the edge, computes a
+/// The resolution write path: validates the edge, computes a
 /// single `resolved_against` from the live selection (rejecting
 /// multi-head per spec §9.2), and appends the append-only record (I5).
 pub fn perform_resolve(
@@ -49,7 +49,7 @@ pub fn perform_resolve(
     )
 }
 
-/// WI-3.5 (D2.4): the actor-generic resolve — agent resolutions carry
+/// The actor-generic resolve (D2.4) — agent resolutions carry
 /// the delegation reference (spec §5.4.3 rev 2 typed validation rejects
 /// them without it).
 pub fn perform_resolve_as(
@@ -126,7 +126,7 @@ pub fn perform_breakdown(kernel: &mut WorkspaceKernel) -> Result<Vec<EdgeRow>, S
     perform_breakdown_in(kernel, None)
 }
 
-/// Context-aware breakdown (WI-2b.7): project the given context (None =
+/// Context-aware breakdown: project the given context (None =
 /// the implicit default). Check liveness binds to THAT context's current
 /// claim snapshot (D5.6).
 pub fn perform_breakdown_in(

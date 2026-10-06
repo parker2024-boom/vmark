@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { KatexModule } from "./katexLoader";
+import type { KatexModule } from "@/plugins/shared/katexLoader";
 import {
   renderInlineMath,
   clearInlineMathRenderCache,

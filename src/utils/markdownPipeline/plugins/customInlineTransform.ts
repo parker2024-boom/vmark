@@ -45,7 +45,7 @@ function transformCustomMarks(tree: Root): void {
  * Apply the mark transform to every node, deepest first.
  *
  * Iterative because this used to recurse once per non-text child, and the
- * weekly pathological soak has been failing on exactly that since 2026-08-17:
+ * weekly pathological soak has been failing on exactly that:
  *
  *   Error: [MarkdownPipeline] Parse failed: Maximum call stack size exceeded
  *   Input preview: "*a **a *a **a *a **a *a **a …"

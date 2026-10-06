@@ -1,152 +1,10 @@
-//! Tests for the workflow runner (extracted from runner.rs to keep the
-//! production file within the size gate).
+//! Tests kept beside the runner: the built-in actions and the parameter
+//! resolver, called the way a step reaches them. Whole runs are in
+//! `runner_flow.test.rs`, and each step phase has its own test file.
 
 use super::*;
-
-#[test]
-fn test_topological_sort_sequential() {
-    let steps = vec![
-        RawStep {
-            id: Some("a".into()),
-            uses: "action/read-file".into(),
-            with: HashMap::new(),
-            needs: NeedsDef::None,
-            condition: None,
-            model: None,
-            approval: None,
-            limits: None,
-        },
-        RawStep {
-            id: Some("b".into()),
-            uses: "genie/summarize".into(),
-            with: HashMap::new(),
-            needs: NeedsDef::Single("a".into()),
-            condition: None,
-            model: None,
-            approval: None,
-            limits: None,
-        },
-    ];
-    let sorted = topological_sort(steps).unwrap();
-    assert_eq!(sorted[0].id, "a");
-    assert_eq!(sorted[1].id, "b");
-}
-
-#[test]
-fn test_topological_sort_fan_out() {
-    let steps = vec![
-        RawStep {
-            id: Some("read".into()),
-            uses: "action/read-folder".into(),
-            with: HashMap::new(),
-            needs: NeedsDef::None,
-            condition: None,
-            model: None,
-            approval: None,
-            limits: None,
-        },
-        RawStep {
-            id: Some("sum".into()),
-            uses: "genie/summarize".into(),
-            with: HashMap::new(),
-            needs: NeedsDef::Single("read".into()),
-            condition: None,
-            model: None,
-            approval: None,
-            limits: None,
-        },
-        RawStep {
-            id: Some("translate".into()),
-            uses: "genie/translate".into(),
-            with: HashMap::new(),
-            needs: NeedsDef::Single("read".into()),
-            condition: None,
-            model: None,
-            approval: None,
-            limits: None,
-        },
-        RawStep {
-            id: Some("save".into()),
-            uses: "action/save-file".into(),
-            with: HashMap::new(),
-            needs: NeedsDef::List(vec!["sum".into(), "translate".into()]),
-            condition: None,
-            model: None,
-            approval: None,
-            limits: None,
-        },
-    ];
-    let sorted = topological_sort(steps).unwrap();
-    // "read" must come first, "save" must come last
-    assert_eq!(sorted[0].id, "read");
-    assert_eq!(sorted[3].id, "save");
-    // "sum" and "translate" are in between (order among them doesn't matter)
-    let middle: HashSet<&str> = [sorted[1].id.as_str(), sorted[2].id.as_str()].into();
-    assert!(middle.contains("sum"));
-    assert!(middle.contains("translate"));
-}
-
-#[test]
-fn test_topological_sort_circular() {
-    let steps = vec![
-        RawStep {
-            id: Some("a".into()),
-            uses: "action/read-file".into(),
-            with: HashMap::new(),
-            needs: NeedsDef::Single("b".into()),
-            condition: None,
-            model: None,
-            approval: None,
-            limits: None,
-        },
-        RawStep {
-            id: Some("b".into()),
-            uses: "genie/summarize".into(),
-            with: HashMap::new(),
-            needs: NeedsDef::Single("a".into()),
-            condition: None,
-            model: None,
-            approval: None,
-            limits: None,
-        },
-    ];
-    let result = topological_sort(steps);
-    assert!(result.is_err());
-    assert!(result.unwrap_err().contains("Circular"));
-}
-
-#[test]
-fn test_topological_sort_missing_dep() {
-    let steps = vec![RawStep {
-        id: Some("a".into()),
-        uses: "action/read-file".into(),
-        with: HashMap::new(),
-        needs: NeedsDef::Single("nonexistent".into()),
-        condition: None,
-        model: None,
-        approval: None,
-        limits: None,
-    }];
-    let result = topological_sort(steps);
-    assert!(result.is_err());
-    assert!(result.unwrap_err().contains("unknown step"));
-}
-
-#[test]
-fn test_truncate_utf8_safe_ascii() {
-    let s = "hello world";
-    assert_eq!(truncate_utf8_safe(s, 100), s);
-}
-
-#[test]
-fn test_truncate_utf8_safe_cjk() {
-    let s = "你好世界测试数据";
-    // Each CJK char is 3 bytes. 8 chars = 24 bytes.
-    let result = truncate_utf8_safe(s, 10);
-    // Should truncate at char boundary, not panic
-    assert!(result.contains("..."));
-    assert!(!result.is_empty());
-}
+use crate::workflow::actions::{execute_action, matches_accept};
+use crate::workflow::expressions::{self, WorkflowOutputs};
 
 #[tokio::test]
 async fn test_execute_action_notify() {
@@ -173,81 +31,6 @@ async fn test_execute_action_unknown() {
     let params = HashMap::new();
     let root = std::path::Path::new("/tmp");
     let result = execute_action("action/unknown", &params, root).await;
-    assert!(result.is_err());
-}
-
-fn step_with_uses(uses: &str) -> RawStep {
-    RawStep {
-        id: Some("s".into()),
-        uses: uses.into(),
-        with: HashMap::new(),
-        needs: NeedsDef::None,
-        condition: None,
-        model: None,
-        approval: None,
-        limits: None,
-    }
-}
-
-#[tokio::test]
-async fn test_execute_step_unknown_type() {
-    let params = HashMap::new();
-    let root = std::path::Path::new("/tmp");
-    let defaults = RawDefaults::default();
-    let result = execute_step(
-        &step_with_uses("unknown/thing"),
-        &params,
-        root,
-        CancellationToken::new(),
-        None,
-        None,
-        &defaults,
-    )
-    .await;
-    assert!(result.is_err());
-}
-
-// Per-step timeout enforcement (WI-2.5): see cli::tests::cancellation_kills_long_running_shim
-// for the cancellation primitive proof. The runner wraps each step
-// exec in tokio::time::timeout(step_config.timeout_secs, ...) and fires
-// the shared CancellationToken on elapsed; both layers are exercised
-// separately by the ai_provider tests and the standard tokio test suite.
-
-#[tokio::test]
-async fn test_genie_step_without_provider_returns_error() {
-    // Without an active provider configured, a genie step fails fast
-    // with a clear message rather than panicking.
-    let params = HashMap::new();
-    let root = std::path::Path::new("/tmp");
-    let defaults = RawDefaults::default();
-    let result = execute_step(
-        &step_with_uses("genie/summarize"),
-        &params,
-        root,
-        CancellationToken::new(),
-        None,
-        None,
-        &defaults,
-    )
-    .await;
-    assert!(matches!(result, Err(ref e) if e.contains("provider")));
-}
-
-#[tokio::test]
-async fn test_webhook_step_returns_error() {
-    let params = HashMap::new();
-    let root = std::path::Path::new("/tmp");
-    let defaults = RawDefaults::default();
-    let result = execute_step(
-        &step_with_uses("webhook/stripe"),
-        &params,
-        root,
-        CancellationToken::new(),
-        None,
-        None,
-        &defaults,
-    )
-    .await;
     assert!(result.is_err());
 }
 
@@ -295,113 +78,7 @@ fn test_env_substitution_multiple_vars_via_resolver() {
     assert_eq!(result, "hello/world");
 }
 
-#[test]
-fn test_resolve_params_output_ref_missing() {
-    let mut params = HashMap::new();
-    params.insert("input".to_string(), "missing.output".to_string());
-    let outputs = WorkflowOutputs::new();
-    let env = HashMap::new();
-    let root = std::path::Path::new("/tmp");
-    let result = resolve_params(&params, &outputs, &env, root);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_resolve_params_steps_outputs_field() {
-    // WI-2.3: ${{ steps.X.outputs.Y }} resolves to outputs[X][Y].
-    let mut params = HashMap::new();
-    params.insert(
-        "input".to_string(),
-        "${{ steps.outline.outputs.text }}".to_string(),
-    );
-    let mut outputs = WorkflowOutputs::new();
-    outputs.insert(
-        "outline".to_string(),
-        HashMap::from([("text".to_string(), "section list".to_string())]),
-    );
-    let env = HashMap::new();
-    let root = std::path::Path::new("/tmp");
-    let resolved = resolve_params(&params, &outputs, &env, root).unwrap();
-    assert_eq!(resolved.get("input").unwrap(), "section list");
-}
-
-#[test]
-fn test_resolve_params_bare_alias_still_works() {
-    // Backward compat: stepId.output reads outputs[id]["text"].
-    let mut params = HashMap::new();
-    params.insert("input".to_string(), "outline.output".to_string());
-    let mut outputs = WorkflowOutputs::new();
-    outputs.insert(
-        "outline".to_string(),
-        HashMap::from([("text".to_string(), "compat ok".to_string())]),
-    );
-    let env = HashMap::new();
-    let root = std::path::Path::new("/tmp");
-    let resolved = resolve_params(&params, &outputs, &env, root).unwrap();
-    assert_eq!(resolved.get("input").unwrap(), "compat ok");
-}
-
 // -- audit g3-rust-rest regression tests --------------------------------------
-
-#[test]
-fn test_topological_sort_rejects_duplicate_ids() {
-    let steps = vec![
-        RawStep {
-            id: Some("dup".into()),
-            uses: "action/read-file".into(),
-            with: HashMap::new(),
-            needs: NeedsDef::None,
-            condition: None,
-            model: None,
-            approval: None,
-            limits: None,
-        },
-        RawStep {
-            id: Some("dup".into()),
-            uses: "action/save-file".into(),
-            with: HashMap::new(),
-            needs: NeedsDef::None,
-            condition: None,
-            model: None,
-            approval: None,
-            limits: None,
-        },
-    ];
-    let result = topological_sort(steps);
-    assert!(
-        result.is_err(),
-        "duplicate ids must not be silently dropped"
-    );
-    assert!(result.unwrap_err().contains("dup"));
-}
-
-#[test]
-fn test_topological_sort_rejects_duplicate_derived_ids() {
-    // Two id-less steps using the same action derive the same id.
-    let steps = vec![
-        RawStep {
-            id: None,
-            uses: "action/notify".into(),
-            with: HashMap::new(),
-            needs: NeedsDef::None,
-            condition: None,
-            model: None,
-            approval: None,
-            limits: None,
-        },
-        RawStep {
-            id: None,
-            uses: "action/notify".into(),
-            with: HashMap::new(),
-            needs: NeedsDef::None,
-            condition: None,
-            model: None,
-            approval: None,
-            limits: None,
-        },
-    ];
-    assert!(topological_sort(steps).is_err());
-}
 
 #[cfg(unix)]
 #[tokio::test]
@@ -450,4 +127,50 @@ fn test_matches_accept_comma_separated_list() {
     assert!(matches_accept("notes.txt", "*.md, *.txt"));
     // Empty accept behaves like "*" (matches everything).
     assert!(matches_accept("anything.bin", ""));
+}
+
+// === the cancel bridge ===
+
+/// The job the bridge exists for. The clock is paused: the bridge finds the
+/// flag on its next poll, which virtual time reaches without waiting.
+#[tokio::test(start_paused = true)]
+async fn the_cancel_bridge_carries_the_flag_to_the_token() {
+    let flag = Arc::new(AtomicBool::new(false));
+    let token = CancellationToken::new();
+    let bridge = spawn_cancel_bridge(Arc::clone(&flag), token.clone());
+    tokio::task::yield_now().await;
+    assert!(!token.is_cancelled(), "nothing was requested yet");
+
+    flag.store(true, Ordering::SeqCst);
+    token.cancelled().await;
+    bridge
+        .await
+        .expect("the bridge ends once the token is cancelled");
+}
+
+/// A run that ends cancels its own token, and the bridge must end THEN, not
+/// on its next tick. No clock here: a few turns of the scheduler are over
+/// long before a poll interval is.
+#[tokio::test]
+async fn the_cancel_bridge_stops_as_soon_as_its_token_is_cancelled() {
+    let flag = Arc::new(AtomicBool::new(false));
+    let token = CancellationToken::new();
+    let bridge = spawn_cancel_bridge(Arc::clone(&flag), token.clone());
+    tokio::task::yield_now().await;
+
+    token.cancel();
+    for _ in 0..16 {
+        if bridge.is_finished() {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    assert!(
+        bridge.is_finished(),
+        "the bridge is still waiting out its poll interval"
+    );
+    assert!(
+        !flag.load(Ordering::SeqCst),
+        "ending the bridge is not a cancel request"
+    );
 }

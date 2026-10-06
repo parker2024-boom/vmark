@@ -1,10 +1,10 @@
-// @vitest-environment node
 // RW-7 (L3) — wire GHA workflow export to UI
 //
 // Tests the side-effecting export glue: clipboard copy for Mermaid, and
-// data-URI → bytes → Tauri save-dialog → writeFile for SVG/PNG. The pure
-// render functions (toMermaid / exportCanvas) have their own tests; here
-// we only verify the I/O wiring.
+// data-URI → bytes → Tauri save-dialog → writeFile for SVG/PNG. The real
+// exportCanvas runs against a jsdom viewport; only the rasterizing package
+// (html-to-image) and the Tauri plugins are mocked, so viewport lookup and
+// format dispatch are exercised for real.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -14,18 +14,27 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   save: vi.fn(),
 }));
-vi.mock("../toImage", () => ({
-  exportCanvas: vi.fn(),
+vi.mock("html-to-image", () => ({
+  toPng: vi.fn(),
+  toSvg: vi.fn(),
 }));
 
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
-import { exportCanvas } from "../toImage";
+import { toPng, toSvg } from "html-to-image";
 import { copyMermaid, saveImage } from "../saveExport";
 
 const mockSave = save as unknown as ReturnType<typeof vi.fn>;
 const mockWriteFile = writeFile as unknown as ReturnType<typeof vi.fn>;
-const mockExportCanvas = exportCanvas as unknown as ReturnType<typeof vi.fn>;
+const mockToPng = toPng as unknown as ReturnType<typeof vi.fn>;
+const mockToSvg = toSvg as unknown as ReturnType<typeof vi.fn>;
+
+function mountViewport(): HTMLElement {
+  const el = document.createElement("div");
+  el.className = "react-flow__viewport";
+  document.body.appendChild(el);
+  return el;
+}
 
 describe("copyMermaid", () => {
   const writeText = vi.fn(async () => undefined);
@@ -52,21 +61,25 @@ describe("saveImage", () => {
   beforeEach(() => {
     mockSave.mockReset();
     mockWriteFile.mockReset();
-    mockExportCanvas.mockReset();
+    mockToPng.mockReset();
+    mockToSvg.mockReset();
   });
   afterEach(() => {
+    document.body.innerHTML = "";
     vi.restoreAllMocks();
   });
 
   it("renders PNG, prompts a save dialog, and writes decoded base64 bytes", async () => {
     // "data:image/png;base64," + base64("PNG") => "UE5H"
-    mockExportCanvas.mockResolvedValue("data:image/png;base64,UE5H");
+    const viewport = mountViewport();
+    mockToPng.mockResolvedValue("data:image/png;base64,UE5H");
     mockSave.mockResolvedValue("/tmp/workflow.png");
 
     const result = await saveImage("png");
 
     expect(result).toBe("saved");
-    expect(mockExportCanvas).toHaveBeenCalledWith("png");
+    expect(mockToPng).toHaveBeenCalledWith(viewport, expect.objectContaining({ pixelRatio: 2 }));
+    expect(mockToSvg).not.toHaveBeenCalled();
     expect(mockSave).toHaveBeenCalledWith(
       expect.objectContaining({ defaultPath: "workflow.png" }),
     );
@@ -75,7 +88,8 @@ describe("saveImage", () => {
   });
 
   it("decodes a URL-encoded (non-base64) SVG data URI", async () => {
-    mockExportCanvas.mockResolvedValue(
+    const viewport = mountViewport();
+    mockToSvg.mockResolvedValue(
       "data:image/svg+xml;charset=utf-8,%3Csvg%3E%3C%2Fsvg%3E",
     );
     mockSave.mockResolvedValue("/tmp/workflow.svg");
@@ -83,12 +97,14 @@ describe("saveImage", () => {
     const result = await saveImage("svg");
 
     expect(result).toBe("saved");
+    expect(mockToSvg).toHaveBeenCalledWith(viewport, expect.any(Object));
     const [, bytes] = mockWriteFile.mock.calls[0];
     expect(new TextDecoder().decode(bytes as Uint8Array)).toBe("<svg></svg>");
   });
 
   it("returns 'cancelled' and does not write when the dialog is dismissed", async () => {
-    mockExportCanvas.mockResolvedValue("data:image/png;base64,UE5H");
+    mountViewport();
+    mockToPng.mockResolvedValue("data:image/png;base64,UE5H");
     mockSave.mockResolvedValue(null);
 
     const result = await saveImage("png");
@@ -97,8 +113,16 @@ describe("saveImage", () => {
     expect(mockWriteFile).not.toHaveBeenCalled();
   });
 
-  it("propagates a render failure so the caller can surface it", async () => {
-    mockExportCanvas.mockRejectedValue(new Error("no viewport"));
-    await expect(saveImage("svg")).rejects.toThrow(/viewport/);
+  it("propagates a missing-viewport failure so the caller can surface it", async () => {
+    await expect(saveImage("svg")).rejects.toThrow(/react-flow__viewport/);
+    expect(mockSave).not.toHaveBeenCalled();
+    expect(mockWriteFile).not.toHaveBeenCalled();
+  });
+
+  it("propagates a rasterizer failure without writing", async () => {
+    mountViewport();
+    mockToPng.mockRejectedValue(new Error("canvas tainted"));
+    await expect(saveImage("png")).rejects.toThrow(/canvas tainted/);
+    expect(mockWriteFile).not.toHaveBeenCalled();
   });
 });

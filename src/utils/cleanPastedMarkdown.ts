@@ -9,6 +9,8 @@
  * <br> is the only valid way to represent a line break (cells cannot contain
  * literal newlines), so converting it to "\n" would structurally break the
  * table.
+ *
+ * @module utils/cleanPastedMarkdown
  */
 
 import { buildCodeMask } from "./markdownCodeMask";

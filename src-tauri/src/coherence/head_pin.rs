@@ -1,4 +1,4 @@
-//! The read-time revision pin behind `coherence_head` (audit T5, #133).
+//! The read-time revision pin behind `coherence_head`.
 //!
 //! An MCP read records which revision the client was served, so a later
 //! upstream edit is never attributed as the input of the client's next write.

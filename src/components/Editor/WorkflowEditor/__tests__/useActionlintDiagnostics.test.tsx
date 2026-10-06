@@ -27,7 +27,6 @@ vi.mock("@/services/ime/imeToast", async (importOriginal) => {
   };
 });
 
-import { __resetActionlintPathCacheForTests } from "@/lib/ghaWorkflow/lint/actionlint";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import {
@@ -75,7 +74,7 @@ const EXPECTED_ROW = {
 
 const initialAdvanced = useSettingsStore.getState().advanced;
 
-/** `get_login_shell_path` (the wrapper's first IPC) then `gha_lint`. */
+/** `gha_lint` answers with `reply`; any other command gets an inert string. */
 function lintReplies(reply: unknown): void {
   invokeMock.mockImplementation((cmd: string) =>
     cmd === "gha_lint"
@@ -131,7 +130,6 @@ beforeEach(() => {
   invokeMock.mockReset();
   infoMock.mockReset();
   warningMock.mockReset();
-  __resetActionlintPathCacheForTests();
   __resetActionlintNoticesForTests();
   useDocumentStore.setState({ documents: {} });
   seedDocument("tab-1", YAML);

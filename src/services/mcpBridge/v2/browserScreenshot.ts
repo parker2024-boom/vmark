@@ -1,5 +1,5 @@
 /**
- * MCP v2 `vmark.browser.screenshot` handler (WI-P1.2).
+ * MCP v2 `vmark.browser.screenshot` handler.
  *
  * Purpose: give the AI a visual channel onto the embedded browser. `read`
  * returns only an ARIA tree; `screenshot` returns a base64 JPEG of the tab's
@@ -21,6 +21,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { wrapHandler } from "./wrapHandler";
 import { urlForAgent } from "@/lib/browser/url";
 import { runReadClass } from "./browserReadClass";
+import { readOperationArgsChecked } from "./readOperationArgs";
 
 /** `vmark.browser.screenshot` — base64 JPEG of the current page. Args `{tabId?}`. */
 export async function handleBrowserScreenshot(
@@ -28,7 +29,7 @@ export async function handleBrowserScreenshot(
   args: Record<string, unknown>,
 ): Promise<void> {
   return wrapHandler(id, () =>
-    runReadClass<string>(id, args, {
+    runReadClass<string>(id, readOperationArgsChecked("vmark.browser.screenshot", args), {
       invoke: (tab) =>
         invoke<string>("browser_screenshot", {
           tabId: tab.tabId,

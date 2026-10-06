@@ -307,7 +307,7 @@ errors:
   workflow.restoreWhileRunning: "Ein Workflow läuft gerade. Warten Sie, bis er fertig ist, oder brechen Sie ihn ab, bevor Sie Dateien wiederherstellen."
   workflow.restoreSuperseded: "Seit dieser Momentaufnahme lief ein weiterer Workflow; eine Wiederherstellung könnte dessen Änderungen rückgängig machen. Es wurde nichts wiederhergestellt."
 
-  # === Speicherpfad (file_write.rs, WI-14 CommandError) ===
+  # === Speicherpfad (files/write.rs, WI-14 CommandError) ===
   save.parentMissing: "Der Ordner dieser Datei existiert nicht mehr: %{dir}"
   save.noParentDirectory: "Der Dateipfad hat keinen übergeordneten Ordner"
   save.symlinkLoop: "Der Alias dieser Datei verweist im Kreis, daher wurde die eigentliche Datei nicht gefunden"
@@ -357,7 +357,13 @@ errors:
 
   # === CLI install ===
   cli.noFile: "Installation schien erfolgreich zu sein, aber die Datei wurde nicht erstellt."
-  cli.mismatch: "Installation abgeschlossen, aber Dateiinhalt stimmt nicht mit erwartetem Skript überein."
+  cli.mismatch: "Der installierte Befehl entsprach nicht dem erwarteten Skript und wurde deshalb entfernt."
+  cli.mismatchNotRemoved: "Die Datei „%{path}“ entspricht nicht dem erwarteten Skript und konnte nicht entfernt werden. Bitte löschen Sie sie manuell."
+
+  # === External editor ===
+  externalEditor.unknownName: "„%{name}“ ist kein Editor, den VMark dem Namen nach kennt – geben Sie stattdessen den vollständigen Pfad zum Editor an"
+  externalEditor.notAnEditor: "„%{name}“ führt die übergebenen Dateien aus, statt sie zu öffnen, und kann daher nicht als externer Editor verwendet werden"
+  externalEditor.notPlainPath: "Der externe Editor muss ein Editorname oder ein vollständiger Pfad sein, ohne „..“ und ohne abschließenden Schrägstrich"
 
   # === Genies ===
   genie.pathBlocked: "Genie-Pfad liegt außerhalb der erlaubten Verzeichnisse"
@@ -412,7 +418,7 @@ errors:
   # === Secure store (secure_store.rs) ===
   secureStore.keychainDenied: "Der Zugriff auf den Schlüsselbund wurde verweigert. Erlauben Sie VMark in der Schlüsselbund-Abfrage oder gewähren Sie den Zugriff in der Schlüsselbundverwaltung, und versuchen Sie es erneut."
 
-  # === Arbeitsbereich-Freigaben (workspace_grants/commands.rs, WI-LX1.1) ===
+  # === Arbeitsbereich-Freigaben (workspace/grants/commands.rs, WI-LX1.1) ===
   workspaceAccess.notGranted: "VMark hat keinen Zugriff auf „%{path}“. Wählen Sie den Ordner über Datei → Arbeitsbereich öffnen..., um ihn freizugeben."
   workspaceAccess.pickerBusy: "Ein Ordnerdialog ist bereits geöffnet"
   workspaceAccess.checkBusy: "VMark prüft den Zugriff auf diesen Ordner noch. Versuche es gleich noch einmal"

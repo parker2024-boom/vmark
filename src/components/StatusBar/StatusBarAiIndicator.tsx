@@ -2,7 +2,7 @@
  * StatusBarAiIndicator
  *
  * Purpose: the AI status trio (running / error / success) in the status bar's
- * right cluster. Extracted from StatusBarRight.tsx when the WI-UA11 grouping
+ * right cluster. Extracted from StatusBarRight.tsx when the role-grouping
  * work approached that file's 300-line ceiling.
  *
  * Key decisions:
@@ -13,6 +13,8 @@
  *     spammed every second.
  *   - Styles stay in StatusBar.css (`.status-ai-indicator*`) — one CSS file
  *     per surface, and the indicator is part of the status bar surface.
+ *   - Retry renders only when the parent passes `onRetryAi`: a failure with
+ *     nothing to re-run gets Dismiss alone, never a Retry that only dismisses.
  *
  * @coordinates-with StatusBarRight.tsx — parent passes all props
  * @module components/StatusBar/StatusBarAiIndicator
@@ -27,7 +29,8 @@ interface StatusBarAiIndicatorProps {
   aiError: string | null;
   showSuccess: boolean;
   onCancelAi: () => void;
-  onRetryAi: () => void;
+  /** Absent when the failure has nothing to re-run; hides the Retry button. */
+  onRetryAi?: (() => void) | undefined;
   onDismissError: () => void;
 }
 
@@ -86,7 +89,9 @@ export function StatusBarAiIndicator({
         <span className="status-ai-text">
           {aiError.length > 30 ? `${aiError.slice(0, 30)}…` : aiError}
         </span>
-        <button className="status-ai-action" onClick={onRetryAi}>{t("aiRetry")}</button>
+        {onRetryAi && (
+          <button className="status-ai-action" onClick={onRetryAi}>{t("aiRetry")}</button>
+        )}
         <button
           className="status-ai-cancel"
           onClick={onDismissError}

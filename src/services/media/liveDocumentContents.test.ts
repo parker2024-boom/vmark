@@ -4,11 +4,26 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { useDocumentStore } from "@/stores/documentStore";
+import { useTabStore } from "@/stores/tabStore";
 import { liveContentsExcluding } from "./liveDocumentContents";
 
 function reset() {
-  const store = useDocumentStore.getState();
-  Object.keys(store.documents).forEach((id) => store.removeDocument(id));
+  useTabStore.setState({ tabs: {}, activeTabId: {}, untitledCounter: 0 });
+  useDocumentStore.setState({ documents: {} });
+}
+
+/** Open a document in a tab with a chosen id, in `windowLabel`. */
+function open(tabId: string, content: string, filePath: string | null, windowLabel = "main"): void {
+  useTabStore.setState((state) => ({
+    tabs: {
+      ...state.tabs,
+      [windowLabel]: [
+        ...(state.tabs[windowLabel] ?? []),
+        { kind: "document", id: tabId, filePath, title: tabId, isPinned: false, formatId: "markdown" },
+      ],
+    },
+  }));
+  useDocumentStore.getState().initDocument(tabId, content, filePath);
 }
 
 describe("liveContentsExcluding", () => {
@@ -19,8 +34,8 @@ describe("liveContentsExcluding", () => {
   });
 
   it("maps every open document by path", () => {
-    useDocumentStore.getState().initDocument("t1", "A", "/tmp/a.md");
-    useDocumentStore.getState().initDocument("t2", "B", "/tmp/b.md");
+    open("t1", "A", "/tmp/a.md");
+    open("t2", "B", "/tmp/b.md");
 
     const live = liveContentsExcluding();
 
@@ -29,15 +44,15 @@ describe("liveContentsExcluding", () => {
   });
 
   it("returns the UNSAVED buffer, not the saved content", () => {
-    useDocumentStore.getState().initDocument("t1", "saved", "/tmp/a.md");
+    open("t1", "saved", "/tmp/a.md");
     useDocumentStore.getState().setEditorContent("t1", "![](./assets/images/pasted.png)");
 
     expect(liveContentsExcluding().get("/tmp/a.md")).toBe("![](./assets/images/pasted.png)");
   });
 
   it("omits the excluded tabs", () => {
-    useDocumentStore.getState().initDocument("t1", "A", "/tmp/a.md");
-    useDocumentStore.getState().initDocument("t2", "B", "/tmp/b.md");
+    open("t1", "A", "/tmp/a.md");
+    open("t2", "B", "/tmp/b.md");
 
     const live = liveContentsExcluding(new Set(["t1"]));
 
@@ -50,26 +65,70 @@ describe("liveContentsExcluding", () => {
     // nowhere on disk — omitting it deleted the image (review finding). The
     // synthetic key never matches a directory filter, so it acts purely as
     // extra reference evidence.
-    useDocumentStore.getState().initDocument("t1", "![](/w/assets/images/x.png)", null);
+    open("t1", "![](/w/assets/images/x.png)", null);
     expect(liveContentsExcluding().get("untitled:t1")).toBe("![](/w/assets/images/x.png)");
   });
 
   it("prefers the dirty buffer when two tabs hold one path", () => {
-    useDocumentStore.getState().initDocument("clean", "saved", "/tmp/a.md");
-    useDocumentStore.getState().initDocument("dirty", "saved", "/tmp/a.md");
+    open("clean", "saved", "/tmp/a.md", "main");
+    open("dirty", "saved", "/tmp/a.md", "doc-1");
     useDocumentStore.getState().setEditorContent("dirty", "![](./assets/images/pasted.png)");
 
-    // Whichever order the store iterates, the buffer carrying the extra
+    // Whichever order the tabs come in, the buffer carrying the extra
     // reference must win — the clean twin would leave that image unprotected.
     expect(liveContentsExcluding().get("/tmp/a.md")).toBe("![](./assets/images/pasted.png)");
   });
 
   it("keeps the dirty buffer even when the clean twin comes last", () => {
-    useDocumentStore.getState().initDocument("dirty", "saved", "/tmp/a.md");
+    open("dirty", "saved", "/tmp/a.md", "main");
     useDocumentStore.getState().setEditorContent("dirty", "![](./assets/images/pasted.png)");
-    useDocumentStore.getState().initDocument("clean", "saved", "/tmp/a.md");
+    open("clean", "saved", "/tmp/a.md", "doc-1");
 
     expect(liveContentsExcluding().get("/tmp/a.md")).toBe("![](./assets/images/pasted.png)");
+  });
+});
+
+// WI-RA1C.4 — a buffer here REPLACES the file on disk as the scan's evidence
+// for that path. Only an open document may do that: one left behind without a
+// tab holds text nobody can see or save, and trusting it over the file deletes
+// an image the file on disk still references.
+describe("liveContentsExcluding — only open documents stand in for their files", () => {
+  beforeEach(reset);
+
+  it("omits a document that has no tab, so the scan reads that file from disk", () => {
+    open("t1", "A", "/tmp/a.md");
+    // Left behind with no tab; its buffer has lost a reference the file holds.
+    useDocumentStore.getState().initDocument("ghost", "text without the image", "/tmp/ghost.md");
+
+    const live = liveContentsExcluding();
+
+    expect(live.has("/tmp/ghost.md")).toBe(false);
+    expect([...live.keys()]).toEqual(["/tmp/a.md"]);
+  });
+
+  it("does not let a tabless twin override the open tab's buffer for the same path", () => {
+    open("t1", "![](./assets/images/kept.png)", "/tmp/a.md");
+    useDocumentStore.getState().initDocument("ghost", "saved", "/tmp/a.md");
+    useDocumentStore.getState().setEditorContent("ghost", "dirty, and without the image");
+
+    expect(liveContentsExcluding().get("/tmp/a.md")).toBe("![](./assets/images/kept.png)");
+  });
+
+  it("omits an untitled document that has no tab", () => {
+    useDocumentStore.getState().initDocument("ghost", "![](/w/assets/images/x.png)", null);
+
+    expect(liveContentsExcluding().size).toBe(0);
+  });
+
+  it("omits a document whose tab was closed, even while the document remains", () => {
+    open("t1", "A", "/tmp/a.md");
+    open("t2", "B", "/tmp/b.md");
+
+    // No tab-state cleanup runs in this test, so the document stays behind.
+    useTabStore.getState().closeTab("main", "t2");
+
+    expect(useDocumentStore.getState().getDocument("t2")).toBeDefined();
+    expect([...liveContentsExcluding().keys()]).toEqual(["/tmp/a.md"]);
   });
 });
 
@@ -81,7 +140,7 @@ describe("liveContentsExcluding — flushes pending editor state first", () => {
 
   it("sees an edit that was still in the editor's debounce window", async () => {
     const { registerWysiwygFlusher } = await import("@/utils/wysiwygFlush");
-    useDocumentStore.getState().initDocument("t1", "old", "/tmp/a.md");
+    open("t1", "old", "/tmp/a.md");
     // The mounted editor holds newer content than the store.
     registerWysiwygFlusher("t1", () => {
       useDocumentStore.getState().setEditorContent("t1", "![](./assets/images/pasted.png)");
@@ -95,7 +154,7 @@ describe("liveContentsExcluding — flushes pending editor state first", () => {
 
   it("survives a throwing flusher", async () => {
     const { registerWysiwygFlusher } = await import("@/utils/wysiwygFlush");
-    useDocumentStore.getState().initDocument("t1", "content", "/tmp/a.md");
+    open("t1", "content", "/tmp/a.md");
     registerWysiwygFlusher("t1", () => {
       throw new Error("editor already unmounted");
     });

@@ -12,6 +12,7 @@
 # the result does not depend on which grep is installed.
 #
 # @coordinates-with scripts/check-feature-ledger-phase.sh — the first consumer
+# @coordinates-with scripts/check-repo-audit-phase.sh — asserts the audit plan's tests through assert_test_file
 
 PASS=0; FAIL=0; UNVERIFIED=0; FAIL_DETAIL=()
 ok()   { echo "  ✓ $1"; PASS=$((PASS+1)); }
@@ -26,10 +27,10 @@ assert_no_file()  { if [[ ! -e "$1" ]]; then ok "${2:-$1} removed"; else fail "$
 # unreadable file, a missing one, an invalid regex. Six wrappers branching on
 # `if grep` gave that third status three different answers: the NEGATIVE ones
 # read it as "the stale text is gone" and passed the phase on evidence never
-# gathered (audit R2 #153), while the POSITIVE ones reported "text not in
+# gathered, while the POSITIVE ones reported "text not in
 # <file>" for a file that does not exist — a true verdict with a false reason,
 # which is what sends a reader looking in the wrong place. One matcher, one
-# answer per status (audit R2 #80/#152).
+# answer per status.
 #
 # _grep_match <present|absent> <grep flags> <rendered pattern> <pattern> <target> <label>
 _grep_match() {
@@ -52,8 +53,8 @@ assert_grep_dir() { _grep_match present -rqF "text '$1'" "$1" "$2" "$3"; }
 # assert_grep_in_section <heading ERE> <content ERE> <file> <label>
 # The content must appear INSIDE the named section, which two document-wide
 # greps cannot show: one proves a heading exists and the other that the text
-# exists somewhere, never that the text is in that section (audit R2 #43). The
-# section runs from its heading to the next heading of ANY level.
+# exists somewhere, never that the text is in that section. The section runs
+# from its heading to the next heading of ANY level.
 assert_grep_in_section() {
   local heading="$1" want="$2" file="$3" label="$4" body
   if [[ ! -f "$file" ]]; then fail "$label (file missing: $file)"; return; fi
@@ -77,7 +78,7 @@ DOD_SYNTAX="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/dod-syntax.mjs"
 #
 # The transport is one request/reply stream with no request ids, so it is
 # correct only while ONE process talks to it. Four rules keep it that way, and
-# each is a way it used to return a wrong answer (audit 2026-09-28):
+# each is a way it used to return a wrong answer:
 #   - Only the shell that started the server (BASH_SUBSHELL 0) uses it.
 #     Subshells inherit the descriptors, and a pipeline stage or background job
 #     runs CONCURRENTLY with its parent — two callers on one stream consumed
@@ -221,7 +222,7 @@ rust_code_grep() {
 # The CODE of one Rust file must match. `grep` is satisfied by a doc comment
 # naming the symbol, by a `//`-commented-out call, and by the symbol quoted in
 # a string — none of which the compiler sees, and each of which let a phase
-# report a platform or security assertion as met (audit R2 #44/#47/#48/#49).
+# report a platform or security assertion as met.
 # Pass --keep-strings when the SUBJECT is a literal (a menu id, an env-var
 # name); the default blanks literals as well as comments.
 assert_rust_code_grep() {
@@ -232,7 +233,7 @@ assert_rust_code_grep() {
 }
 # assert_ts_code_grep <JS regex> <file.ts(x)> <label> [--keep-strings]
 # The CODE of one TypeScript file must match — same contract as
-# assert_rust_code_grep, through the TypeScript parser (audit R2 #44). Pass
+# assert_rust_code_grep, through the TypeScript parser. Pass
 # --keep-strings when the SUBJECT is a literal (an event name, a menu id).
 assert_ts_code_grep() {
   local re="$1" file="$2" label="$3" keep="${4:-}"
@@ -247,13 +248,22 @@ assert_ts_code_grep() {
 # once per `.rs` in a directory of eighty is minutes, not seconds.
 # Also leaves the path in `_DOD_MOUNT`, so a caller can read it without a
 # command substitution — a subshell would not use the probe server.
+# The 2018-edition directory-module file `<dir>.rs`, one level up, mounts a
+# test inside `<dir>/` as `#[path = "<dir>/<basename>"]` (a top-level `#[path]`
+# is relative to the directory of the file that carries it): `pty.rs` mounts
+# `pty/commands.test.rs` that way, and looking only beside the test reported
+# those tests as included by nothing.
 rust_mount_owner() {
-  local file="$1" dir base cand; dir="$(dirname "$file")"; base="$(basename "$file")"
+  local file="$1" dir base cand up; dir="$(dirname "$file")"; base="$(basename "$file")"
   _DOD_MOUNT=""
   while IFS= read -r cand; do
     [[ -n "$cand" && "$cand" != "$file" ]] || continue
     if rust_test_included "$cand" "$base"; then _DOD_MOUNT="$cand"; printf '%s\n' "$cand"; return 0; fi
   done < <(grep -lF -- "\"$base\"" "$dir"/*.rs 2>/dev/null)
+  up="$(basename "$dir")/$base"
+  if [[ -f "$dir.rs" ]] && grep -qF -- "\"$up\"" "$dir.rs" 2>/dev/null && rust_test_included "$dir.rs" "$up"; then
+    _DOD_MOUNT="$dir.rs"; printf '%s\n' "$dir.rs"; return 0
+  fi
   return 1
 }
 # Is `mod <stem>;` declared, in CODE, by a mod.rs/lib.rs/main.rs beside `$1`?
@@ -267,7 +277,7 @@ rust_module_declared() {
   # `$dir.rs` is the 2018-edition directory module — the form this crate
   # actually uses: `menu/localized.rs` declares `mod export_menu;` for
   # `menu/localized/`, and `pty.rs` declares `mod session;` for `pty/`. Looking
-  # only INSIDE the directory reported both as uncompiled (audit R2 #154).
+  # only INSIDE the directory reported both as uncompiled.
   for parent in "$dir/mod.rs" "$dir/lib.rs" "$dir/main.rs" "$dir.rs"; do
     [[ -f "$parent" ]] || continue
     dod_syntax rust-code-grep "(^|[^A-Za-z0-9_])mod\\s+${stem}\\s*;" "$parent" >/dev/null 2>&1 && return 0
@@ -275,7 +285,7 @@ rust_module_declared() {
   # A `#[path = "<base>"] mod x;` mount is a declaration too, and a file
   # mounted that way carries no `mod <stem>;` anywhere — `nav_payloads_macos.rs`
   # is mounted from `nav_delegate_macos.rs`, so a test it includes was reported
-  # as an uncompiled module (audit R2 #154, second half). Same one-level
+  # as an uncompiled module. Same one-level
   # posture as above: whether the MOUNTING file is itself in the crate needs the
   # full walk this probe deliberately does not do.
   rust_mount_owner "$file" >/dev/null
@@ -293,7 +303,7 @@ assert_test_file() {
       # file, not the sibling stem. 13 of this crate's 229 `*.test.rs` files
       # have no `X.rs` beside them at all — they are mounted from `mod.rs` or a
       # differently-named module — and every one of them was reported as "not
-      # included" (audit R2 #154). The sibling is tried first because it is the
+      # included". The sibling is tried first because it is the
       # convention in the other 216 cases; the scan is the fallback.
       local mod base; base="$(basename "$f")"; mod=""
       if [[ -f "${f%.test.rs}.rs" ]] && rust_test_included "${f%.test.rs}.rs" "$base"; then
@@ -306,7 +316,7 @@ assert_test_file() {
       elif ! rust_module_declared "$mod"; then
         # One level further out: the including module must itself be part of
         # the crate. A `.rs` file that no `mod x;` declares is not compiled, so
-        # the include inside it reaches nothing (audit R2 #46, same class as #40).
+        # the include inside it reaches nothing.
         fail "$label is included by $(basename "$mod"), but nothing beside it declares \`mod $(basename "$mod" .rs)\` (a mod.rs/lib.rs/main.rs statement, or a #[path] mount) — an undeclared module is not compiled, so cargo never runs the test"
       else
         ok "$label (included from $(basename "$mod"))"
@@ -325,9 +335,9 @@ assert_journey() {
   else fail "$label present but not a runner-discoverable journey (${why:-needs \`export default { name, run }\`})"; fi
 }
 # `$1` as a LITERAL inside a POSIX ERE. Work-item and decision ids carry dots
-# (`WI-FL3.1`, `D1.2`), and interpolated raw a dot matches ANY character — so
-# a plan recording `WI-FL3X1 evidence:` satisfied the assertion for `WI-FL3.1`
-# (audit R2 #155). `]` and `}` are ordinary outside their constructs and
+# (`D1.2`), and interpolated raw a dot matches ANY character — so a plan
+# recording `D1X2 outcome:` satisfied the assertion for `D1.2`. `]` and `}`
+# are ordinary outside their constructs and
 # escaping them is undefined in POSIX, so they are left alone — the same set
 # scripts/check-deleted-names.mjs escapes.
 _ere_escape() {
@@ -338,7 +348,7 @@ _ere_escape() {
   printf '%s' "$s"
 }
 # Evidence and decisions live in the checker's plan file — `$PLAN`, set by the
-# caller — as `- WI-x.y evidence: <ref>` / `- Dn outcome: <text>` lines.
+# caller — as `- <work-item id> evidence: <ref>` / `- Dn outcome: <text>` lines.
 assert_evidence() { if grep -qE -- "^- $(_ere_escape "$1") evidence: [^[:space:]]+" "$PLAN" 2>/dev/null; then ok "$2 (evidence recorded)"; else fail "$2 (no '- $1 evidence: <ref>' line in $PLAN)"; fi; }
 assert_decision() { if grep -qE -- "^- $(_ere_escape "$1") outcome: [^[:space:]]+" "$PLAN" 2>/dev/null; then ok "$2 (decision recorded)"; else fail "$2 (no '- $1 outcome: <text>' line in $PLAN)"; fi; }
 # package.json joins, parsed — never a one-line grep.
@@ -355,7 +365,7 @@ assert_in_static() {
 # A ratchet that reached zero. A JSON or schema error is REPORTED, not folded
 # into the entry count: `|| echo "?"` swallowed the parser's message and the
 # phase then said "baseline has ? entries", which describes neither the failure
-# nor where to look (audit R2 #156). Still fails closed either way.
+# nor where to look. Still fails closed either way.
 assert_baseline_empty() {
   local f="$1" label="$2"
   if [[ ! -f "$f" ]]; then fail "$label (baseline missing: $f)"; return; fi
@@ -371,11 +381,11 @@ assert_baseline_empty() {
 # defaulted here. Under `set -u` an unset one used to abort the whole run from
 # inside an assertion with a bare "EXEC: unbound variable" and no label; a
 # `${EXEC:-0}` default would be worse still — every gate would quietly become
-# "unverified", which is the silent-skip this file exists to prevent (audit R2
-# #157). A missing EXEC is a wiring bug in the caller, named as one.
+# "unverified", which is the silent-skip this file exists to prevent. A
+# missing EXEC is a wiring bug in the caller, named as one.
 #
 # The gate's own output IS the diagnostic. Discarding it left "exited non-zero:
-# pnpm lint:x" and nothing to act on (audit R2 #158).
+# pnpm lint:x" and nothing to act on.
 ASSERT_EXEC_TAIL=20
 assert_exec() {
   local label="$1"; shift
@@ -396,13 +406,13 @@ assert_exec() {
 # may legitimately contain a pipe — a markdown table row, an alternation
 # written into prose, a `Result<T, String> | CommandError` — and splitting at
 # the first separator made the pattern everything before it and the "file"
-# everything after, so the probe reported "no match" for a file it never opened
-# (audit R2 #159). A path containing a pipe is still not expressible; that is
+# everything after, so the probe reported "no match" for a file it never
+# opened. A path containing a pipe is still not expressible; that is
 # reported by `assert_any` rather than guessed at.
 #
 # `nogrep` branches on grep's STATUS: shell negation turns an execution error
 # (exit 2 — unreadable file, no grep) into a PASS, so `assert_any` would accept
-# evidence it never gathered (audit R2 #160). Only exit 1, the explicit
+# evidence it never gathered. Only exit 1, the explicit
 # "no match", is the absence this probe claims.
 probe() {
   local kind="${1%%|*}" rest="${1#*|}" pattern file rc

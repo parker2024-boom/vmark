@@ -1,6 +1,6 @@
 /**
  * GeniePickerOverlay — app-level mount for the genie picker, carrying its occlusion
- * policy (WI-SOC.1).
+ * policy.
  *
  * The picker itself is a large component that is already at its file-size baseline, and
  * occlusion is a shell concern rather than a picker concern: it is about the native

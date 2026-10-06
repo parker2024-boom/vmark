@@ -1,5 +1,5 @@
 /**
- * Tab MRU — most-recently-used order per window (WI-TNAV2.1).
+ * Tab MRU — most-recently-used order per window.
  *
  * Purpose: F3. `tab.next`/`tab.prev` are positional, so nothing in VMark could
  * answer "the document I was just in". This store keeps that order.
@@ -97,7 +97,7 @@ export function mruKeyOf(windowLabel: string, tabId: string): string | null {
 }
 
 /**
- * Collapse a window's MRU to exactly the tab that is active (WI-TNAV2.5).
+ * Collapse a window's MRU to exactly the tab that is active.
  *
  * Hot-exit restore recreates each tab with an ACTIVATING `createTab`
  * (`restoreHelpers.ts:212`) and then activates the persisted one, so a naive

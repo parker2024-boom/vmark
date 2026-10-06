@@ -18,6 +18,7 @@
  * @coordinates-with quickOpenStore.ts, useQuickOpenItems.ts, fuzzyMatch.ts
  * @coordinates-with Sidebar/FileExplorer/useFileTree.ts — the workspace tier's listing
  * @coordinates-with services/navigation/openWithDefaultApp.ts — the system-app door
+ * @module components/QuickOpen/QuickOpen
  */
 
 import {
@@ -60,7 +61,7 @@ export function QuickOpen({ windowLabel }: QuickOpenProps) {
   const { t } = useTranslation("editor");
   const isOpen = useQuickOpenStore((s) => s.isOpen);
   // The native browser view paints over all React DOM in its rect, so freeze every
-  // mounted browser tab while this overlay is up (WI-SOC.1).
+  // mounted browser tab while this overlay is up.
   useBrowserOccluder(isOpen, "quick-open");
   const [filter, setFilter] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -72,7 +73,8 @@ export function QuickOpen({ windowLabel }: QuickOpenProps) {
   const previousFocusRef = useRef<Element | null>(null);
   const ime = useImeComposition();
 
-  // Only load the workspace tree while open; this avoids an idle watcher.
+  // Only load the workspace tree while open: a closed palette holds no tree and
+  // no subscription.
   const { rootPath, isWorkspaceMode, excludeFolders, config } =
     useActiveWorkspaceScope(windowLabel);
   // #1428: the workspace tier is scoped by the SAME workspace config the file
@@ -85,7 +87,9 @@ export function QuickOpen({ windowLabel }: QuickOpenProps) {
     excludeFolders,
     showHidden: config?.showHiddenFiles ?? false,
     showAllFiles: config?.showAllFiles ?? false,
-    watchId: `quick-open-${windowLabel}`,
+    // The window's own watcher — the only one there is. Events are scoped by
+    // watcher id, so any other id is a subscription nothing ever fires.
+    watchId: windowLabel,
   });
 
   // Flatten workspace tree to file paths
@@ -121,7 +125,7 @@ export function QuickOpen({ windowLabel }: QuickOpenProps) {
   // the resets are bound to the open/close transition and bundled with real side
   // effects (focus capture/restore, RAF focus, picker close), so they can't be
   // derived during render (#1063).
-  /* eslint-disable react-hooks/set-state-in-effect */
+  /* eslint-disable react-hooks/set-state-in-effect -- resets bound to the open/close transition alongside focus capture/restore and RAF focus */
   useEffect(() => {
     /* v8 ignore next -- @preserve reason: false branch (close path) restores focus; jsdom focus tracking unreliable */
     if (isOpen) {

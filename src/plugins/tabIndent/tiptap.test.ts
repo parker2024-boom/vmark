@@ -5,15 +5,16 @@
  * - getTabSize: reads from settings store
  * - isInListItem: list item detection at various depths
  * - Tab key handling: space insertion, Shift+Tab outdent
- * - Mark/link escape via canTabEscape
+ * - Mark/link escape (real canTabEscape / canShiftTabEscape on marked docs)
  * - Table navigation delegation
  * - IME composition guard
  * - Edge cases: empty doc, deeply nested lists
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Schema } from "@tiptap/pm/model";
-import { EditorState, TextSelection } from "@tiptap/pm/state";
+import { Schema, type Node as PMNode } from "@tiptap/pm/model";
+import { EditorState, SelectionRange, TextSelection } from "@tiptap/pm/state";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 
 // Mock settingsStore
 vi.mock("@/stores/settingsStore", () => ({
@@ -32,30 +33,6 @@ const mockGetTableInfo = vi.fn(() => null);
 vi.mock("@/plugins/tableUI/tableActions.tiptap", () => ({
   isInTable: (...args: unknown[]) => mockIsInTable(...args),
   getTableInfo: (...args: unknown[]) => mockGetTableInfo(...args),
-}));
-
-// Mock tabEscape
-const mockCanTabEscape = vi.fn(() => null);
-vi.mock("./tabEscape", () => ({
-  canTabEscape: (...args: unknown[]) => mockCanTabEscape(...args),
-}));
-
-// Mock shiftTabEscape
-const mockCanShiftTabEscape = vi.fn(() => null);
-vi.mock("./shiftTabEscape", () => ({
-  canShiftTabEscape: (...args: unknown[]) => mockCanShiftTabEscape(...args),
-}));
-
-// Mock multiCursor
-vi.mock("@/plugins/multiCursor/MultiSelection", () => ({
-  MultiSelection: class MockMultiSelection {
-    ranges: unknown[];
-    primaryIndex: number;
-    constructor(ranges: unknown[], primaryIndex: number) {
-      this.ranges = ranges;
-      this.primaryIndex = primaryIndex;
-    }
-  },
 }));
 
 // Mock PM tables
@@ -113,8 +90,6 @@ describe("tabIndentExtension", () => {
   beforeEach(() => {
     mockIsInTable.mockReturnValue(false);
     mockGetTableInfo.mockReturnValue(null);
-    mockCanTabEscape.mockReturnValue(null);
-    mockCanShiftTabEscape.mockReturnValue(null);
     vi.clearAllMocks();
   });
 
@@ -219,29 +194,12 @@ describe("tabIndentExtension", () => {
   });
 
   describe("Tab escape from marks", () => {
-    it("delegates to canTabEscape for forward Tab", () => {
-      mockCanTabEscape.mockReturnValue({ type: "mark", targetPos: 10 });
-      const result = mockCanTabEscape({});
-      expect(result).toEqual({ type: "mark", targetPos: 10 });
-    });
-
     it("does not check canTabEscape for Shift+Tab", () => {
       // Shift+Tab is for outdent, not escape
       const event = new KeyboardEvent("keydown", { key: "Tab", shiftKey: true });
       expect(event.shiftKey).toBe(true);
     });
 
-    it("clears link stored marks when escaping a link", () => {
-      mockCanTabEscape.mockReturnValue({ type: "link", targetPos: 15 });
-      const result = mockCanTabEscape({});
-      expect(result.type).toBe("link");
-    });
-
-    it("clears all marks when escaping an inline mark", () => {
-      mockCanTabEscape.mockReturnValue({ type: "mark", targetPos: 15 });
-      const result = mockCanTabEscape({});
-      expect(result.type).toBe("mark");
-    });
   });
 
   describe("table navigation", () => {
@@ -392,18 +350,6 @@ describe("tabIndentExtension", () => {
     });
   });
 
-  describe("multi-cursor tab escape", () => {
-    it("handles MultiSelection result from canTabEscape", async () => {
-      const { MultiSelection } = await import(
-        "@/plugins/multiCursor/MultiSelection"
-      );
-      const ms = new MultiSelection([], 0);
-      mockCanTabEscape.mockReturnValue(ms);
-      const result = mockCanTabEscape({});
-      expect(result).toBeInstanceOf(MultiSelection);
-    });
-  });
-
   describe("Shift+Tab edge cases", () => {
     it("handles single leading space (less than tabSize)", () => {
       const state = createState(" hello", 2);
@@ -460,8 +406,6 @@ describe("tabIndent plugin handler integration", () => {
   beforeEach(() => {
     mockIsInTable.mockReturnValue(false);
     mockGetTableInfo.mockReturnValue(null);
-    mockCanTabEscape.mockReturnValue(null);
-    mockCanShiftTabEscape.mockReturnValue(null);
     vi.clearAllMocks();
 
     // Extract the actual plugin from the extension
@@ -604,108 +548,7 @@ describe("tabIndent plugin handler integration", () => {
     expect(tr.doc.textContent).toBe("  hello");
   });
 
-  it("delegates to canTabEscape on forward Tab and dispatches escape", () => {
-    mockCanTabEscape.mockReturnValue({ type: "mark", targetPos: 6 });
-    const state = createState("hello", 3);
-    const view = createMockView(state);
-    const event = makeTabEvent();
-    const result = keydownHandler(view, event);
-    expect(result).toBe(true);
-    expect(mockCanTabEscape).toHaveBeenCalledWith(state);
-    expect(view.dispatch).toHaveBeenCalledTimes(1);
-  });
-
-  it("dispatches link escape and clears link stored mark", () => {
-    mockCanTabEscape.mockReturnValue({ type: "link", targetPos: 6 });
-    const state = createState("hello", 3);
-    const view = createMockView(state);
-    const event = makeTabEvent();
-    const result = keydownHandler(view, event);
-    expect(result).toBe(true);
-    expect(view.dispatch).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not call canTabEscape on Shift+Tab", () => {
-    mockCanTabEscape.mockReturnValue({ type: "mark", targetPos: 6 });
-    const state = createState("  hello", 3);
-    const view = createMockView(state);
-    const event = makeTabEvent({ shiftKey: true });
-    keydownHandler(view, event);
-    expect(mockCanTabEscape).not.toHaveBeenCalled();
-  });
-
-  it("delegates to canShiftTabEscape on Shift+Tab and dispatches escape", () => {
-    mockCanShiftTabEscape.mockReturnValue({ type: "mark", targetPos: 1 });
-    const state = createState("hello", 3);
-    const view = createMockView(state);
-    const event = makeTabEvent({ shiftKey: true });
-    const result = keydownHandler(view, event);
-    expect(result).toBe(true);
-    expect(mockCanShiftTabEscape).toHaveBeenCalledWith(state);
-    expect(view.dispatch).toHaveBeenCalledTimes(1);
-  });
-
-  it("dispatches Shift+Tab link escape and clears link stored mark", () => {
-    mockCanShiftTabEscape.mockReturnValue({ type: "link", targetPos: 1 });
-    const state = createState("hello", 3);
-    const view = createMockView(state);
-    const event = makeTabEvent({ shiftKey: true });
-    const result = keydownHandler(view, event);
-    expect(result).toBe(true);
-    expect(view.dispatch).toHaveBeenCalledTimes(1);
-  });
-
-  it("handles MultiSelection from canShiftTabEscape", async () => {
-    const { MultiSelection } = await import("@/plugins/multiCursor/MultiSelection");
-    const ms = new MultiSelection([], 0);
-    mockCanShiftTabEscape.mockReturnValue(ms);
-
-    const schemaWithMarks = new Schema({
-      nodes: {
-        doc: { content: "paragraph+" },
-        paragraph: { content: "inline*" },
-        text: { group: "inline", inline: true },
-      },
-      marks: {
-        bold: {},
-        link: { attrs: { href: { default: "" } } },
-      },
-    });
-    const doc = schemaWithMarks.node("doc", null, [
-      schemaWithMarks.node("paragraph", null, [schemaWithMarks.text("hello")]),
-    ]);
-    const state = EditorState.create({ doc, schema: schemaWithMarks });
-
-    const mockTr = {
-      setSelection: vi.fn().mockReturnThis(),
-      removeStoredMark: vi.fn().mockReturnThis(),
-    };
-    const view = {
-      state: { ...state, tr: mockTr, schema: schemaWithMarks },
-      dispatch: vi.fn(),
-      dom: document.createElement("div"),
-    };
-
-    const result = keydownHandler(view, makeTabEvent({ shiftKey: true }));
-    expect(result).toBe(true);
-    expect(mockTr.setSelection).toHaveBeenCalledWith(ms);
-    // Should clear all escapable mark types present in schema
-    expect(mockTr.removeStoredMark).toHaveBeenCalledWith(schemaWithMarks.marks.bold);
-    expect(mockTr.removeStoredMark).toHaveBeenCalledWith(schemaWithMarks.marks.link);
-    expect(view.dispatch).toHaveBeenCalled();
-  });
-
-  it("does not call canShiftTabEscape on forward Tab", () => {
-    mockCanShiftTabEscape.mockReturnValue({ type: "mark", targetPos: 1 });
-    const state = createState("hello", 3);
-    const view = createMockView(state);
-    const event = makeTabEvent();
-    keydownHandler(view, event);
-    expect(mockCanShiftTabEscape).not.toHaveBeenCalled();
-  });
-
   it("falls through to table/list/outdent when Shift+Tab escape returns null", () => {
-    mockCanShiftTabEscape.mockReturnValue(null);
     const state = createState("  hello", 3);
     const view = createMockView(state);
     const event = makeTabEvent({ shiftKey: true });
@@ -748,23 +591,6 @@ describe("tabIndent plugin handler integration", () => {
     expect(result).toBe(true);
   });
 
-  it("handles MultiSelection from canTabEscape (instanceof branch)", async () => {
-    // The MultiSelection branch requires a proper PM Selection subclass,
-    // which cannot be fully constructed in jsdom. We verify canTabEscape
-    // is called and verify the instanceof check branch exists.
-    const { MultiSelection } = await import("@/plugins/multiCursor/MultiSelection");
-    const ms = new MultiSelection([], 0);
-    expect(ms).toBeInstanceOf(MultiSelection);
-    // When canTabEscape returns a non-MultiSelection result, it uses the single-cursor path
-    mockCanTabEscape.mockReturnValue({ type: "mark", targetPos: 6 });
-    const state = createState("hello", 3);
-    const view = createMockView(state);
-    const event = makeTabEvent();
-    const result = keydownHandler(view, event);
-    expect(result).toBe(true);
-    expect(mockCanTabEscape).toHaveBeenCalledWith(state);
-  });
-
   it("handles empty document Tab insertion", () => {
     const doc = schema.node("doc", null, [
       schema.node("paragraph", null, []),
@@ -790,104 +616,6 @@ describe("tabIndent plugin handler integration", () => {
     expect(result).toBe(true);
     // No dispatch — nothing to remove
     expect(view.dispatch).not.toHaveBeenCalled();
-  });
-
-  it("handles MultiSelection from canTabEscape (dispatches and clears link marks)", async () => {
-    const { MultiSelection } = await import("@/plugins/multiCursor/MultiSelection");
-    const ms = new MultiSelection([], 0);
-    mockCanTabEscape.mockReturnValue(ms);
-
-    // Use a schema with link mark so removeStoredMark path is exercised
-    const schemaWithLink = new Schema({
-      nodes: {
-        doc: { content: "paragraph+" },
-        paragraph: { content: "inline*" },
-        text: { group: "inline", inline: true },
-      },
-      marks: {
-        link: { attrs: { href: { default: "" } } },
-      },
-    });
-    const doc = schemaWithLink.node("doc", null, [
-      schemaWithLink.node("paragraph", null, [schemaWithLink.text("hello")]),
-    ]);
-    const state = EditorState.create({ doc, schema: schemaWithLink });
-
-    const mockTr = {
-      setSelection: vi.fn().mockReturnThis(),
-      removeStoredMark: vi.fn().mockReturnThis(),
-    };
-    const view = {
-      state: { ...state, tr: mockTr, schema: schemaWithLink },
-      dispatch: vi.fn(),
-      dom: document.createElement("div"),
-    };
-
-    const result = keydownHandler(view, makeTabEvent());
-    expect(result).toBe(true);
-    expect(mockTr.setSelection).toHaveBeenCalledWith(ms);
-    expect(mockTr.removeStoredMark).toHaveBeenCalledWith(schemaWithLink.marks.link);
-    expect(view.dispatch).toHaveBeenCalled();
-  });
-
-  it("clears link stored marks when escaping a link (schema with link mark)", () => {
-    mockCanTabEscape.mockReturnValue({ type: "link", targetPos: 6 });
-
-    const schemaWithLink = new Schema({
-      nodes: {
-        doc: { content: "paragraph+" },
-        paragraph: { content: "inline*" },
-        text: { group: "inline", inline: true },
-      },
-      marks: {
-        link: { attrs: { href: { default: "" } } },
-      },
-    });
-    const doc = schemaWithLink.node("doc", null, [
-      schemaWithLink.node("paragraph", null, [schemaWithLink.text("hello")]),
-    ]);
-    const state = EditorState.create({ doc, schema: schemaWithLink });
-    const view = createMockView(state);
-    const event = makeTabEvent();
-    const result = keydownHandler(view, event);
-    expect(result).toBe(true);
-    expect(view.dispatch).toHaveBeenCalledTimes(1);
-    // The transaction should include removeStoredMark for link
-    const tr = view.dispatch.mock.calls[0][0];
-    expect(tr).toBeDefined();
-  });
-
-  it("clears inline marks when escaping a mark (schema with marks)", () => {
-    mockCanTabEscape.mockReturnValue({ type: "mark", targetPos: 6 });
-
-    const schemaWithMarks = new Schema({
-      nodes: {
-        doc: { content: "paragraph+" },
-        paragraph: { content: "inline*" },
-        text: { group: "inline", inline: true },
-      },
-      marks: {
-        bold: {},
-        italic: {},
-      },
-    });
-    // Create text with bold mark applied
-    const boldMark = schemaWithMarks.marks.bold.create();
-    const doc = schemaWithMarks.node("doc", null, [
-      schemaWithMarks.node("paragraph", null, [
-        schemaWithMarks.text("hello", [boldMark]),
-      ]),
-    ]);
-    let state = EditorState.create({ doc, schema: schemaWithMarks });
-    // Set selection inside the bold text
-    state = state.apply(
-      state.tr.setSelection(TextSelection.create(state.doc, 3))
-    );
-    const view = createMockView(state);
-    const event = makeTabEvent();
-    const result = keydownHandler(view, event);
-    expect(result).toBe(true);
-    expect(view.dispatch).toHaveBeenCalledTimes(1);
   });
 
   it("adds row after when at last table cell (goToNextCell returns false)", async () => {
@@ -950,7 +678,6 @@ describe("tabIndent plugin handler integration", () => {
     );
 
     mockIsInTable.mockReturnValue(false);
-    mockCanTabEscape.mockReturnValue(null);
 
     const view = createMockView(stateWithSel);
     // Use Shift+Tab — skips canTabEscape, goes to table check (false), then isInListItem
@@ -963,42 +690,128 @@ describe("tabIndent plugin handler integration", () => {
     expect(view.dispatch).toHaveBeenCalledTimes(1);
   });
 
-  it("MultiSelection canTabEscape without link mark (line 92 false branch)", async () => {
-    // Covers line 92: if (linkMarkType) — the FALSE branch (schema has no link mark)
-    const { MultiSelection } = await import("@/plugins/multiCursor/MultiSelection");
-    const ms = new MultiSelection([], 0);
-    mockCanTabEscape.mockReturnValue(ms);
+});
 
-    // Schema with NO link mark — so linkMarkType is undefined at line 91
-    const schemaNoLink = new Schema({
-      nodes: {
-        doc: { content: "paragraph+" },
-        paragraph: { content: "inline*" },
-        text: { group: "inline", inline: true },
-      },
-      // No marks at all
-    });
-    const doc = schemaNoLink.node("doc", null, [
-      schemaNoLink.node("paragraph", null, [schemaNoLink.text("hello")]),
+// Mark/link escape runs the REAL canTabEscape / canShiftTabEscape against a
+// document that carries the marks, and asserts where the caret lands.
+describe("tabIndent plugin handler — mark and link escape", () => {
+  let keydownHandler: (view: unknown, event: KeyboardEvent) => boolean;
+
+  const markSchema = new Schema({
+    nodes: {
+      doc: { content: "block+" },
+      paragraph: { group: "block", content: "inline*" },
+      text: { group: "inline" },
+    },
+    marks: {
+      bold: {},
+      italic: {},
+      link: { attrs: { href: { default: "" } } },
+    },
+  });
+
+  /** "ab" + marked "cdef" + "gh": the marked run spans positions 3..7. */
+  function markedDoc(mark: "bold" | "link"): PMNode {
+    const m = mark === "link" ? markSchema.mark("link", { href: "https://x.test" }) : markSchema.mark("bold");
+    return markSchema.node("doc", null, [
+      markSchema.node("paragraph", null, [
+        markSchema.text("ab"),
+        markSchema.text("cdef", [m]),
+        markSchema.text("gh"),
+      ]),
     ]);
-    const baseState = EditorState.create({ doc, schema: schemaNoLink });
+  }
 
-    const mockTr = {
-      setSelection: vi.fn().mockReturnThis(),
-      removeStoredMark: vi.fn().mockReturnThis(),
-    };
-    const view = {
-      state: { ...baseState, tr: mockTr, schema: schemaNoLink },
-      dispatch: vi.fn(),
-      dom: document.createElement("div"),
-    };
+  function stateAt(doc: PMNode, pos: number): EditorState {
+    const state = EditorState.create({ doc, schema: markSchema });
+    return state.apply(state.tr.setSelection(TextSelection.create(state.doc, pos)));
+  }
 
-    const event = makeTabEvent();
-    const result = keydownHandler(view, event);
-    expect(result).toBe(true);
-    // setSelection called but removeStoredMark NOT called (no link mark)
-    expect(mockTr.setSelection).toHaveBeenCalledWith(ms);
-    expect(mockTr.removeStoredMark).not.toHaveBeenCalled();
-    expect(view.dispatch).toHaveBeenCalledTimes(1);
+  function multiStateAt(doc: PMNode, positions: number[]): EditorState {
+    const state = EditorState.create({ doc, schema: markSchema });
+    const ranges = positions.map((pos) => new SelectionRange(state.doc.resolve(pos), state.doc.resolve(pos)));
+    return state.apply(state.tr.setSelection(new MultiSelection(ranges, 0)));
+  }
+
+  function press(state: EditorState, shiftKey = false) {
+    const dispatch = vi.fn();
+    const handled = keydownHandler(
+      { state, dispatch, dom: document.createElement("div") },
+      new KeyboardEvent("keydown", { key: "Tab", bubbles: true, shiftKey }),
+    );
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    const tr = dispatch.mock.calls[0][0] as import("@tiptap/pm/state").Transaction;
+    return { handled, tr };
+  }
+
+  beforeEach(() => {
+    mockIsInTable.mockReturnValue(false);
+    vi.clearAllMocks();
+    const plugins = tabIndentExtension.config.addProseMirrorPlugins?.call({
+      name: tabIndentExtension.name,
+      options: { getTabSize: () => 2 },
+      storage: tabIndentExtension.storage,
+      editor: {} as never,
+      type: null,
+      parent: undefined,
+    }) ?? [];
+    keydownHandler = plugins[0].props.handleDOMEvents!.keydown as typeof keydownHandler;
+  });
+
+  it("Tab inside bold jumps to the end of the bold run without editing text", () => {
+    const state = stateAt(markedDoc("bold"), 5);
+    const { handled, tr } = press(state);
+    expect(handled).toBe(true);
+    expect(tr.selection.from).toBe(7);
+    expect(tr.doc.eq(state.doc)).toBe(true);
+    expect((tr.storedMarks ?? []).some((m) => m.type.name === "bold")).toBe(false);
+  });
+
+  it("Tab inside a link jumps past the link and clears the stored link mark", () => {
+    const state = stateAt(markedDoc("link"), 5);
+    const { tr } = press(state);
+    expect(tr.selection.from).toBe(7);
+    expect(tr.doc.eq(state.doc)).toBe(true);
+    expect((tr.storedMarks ?? []).some((m) => m.type.name === "link")).toBe(false);
+  });
+
+  it("Shift+Tab inside bold jumps to the START of the run (left escape, not outdent)", () => {
+    const state = stateAt(markedDoc("bold"), 5);
+    const { handled, tr } = press(state, true);
+    expect(handled).toBe(true);
+    expect(tr.selection.from).toBe(3);
+    expect(tr.doc.eq(state.doc)).toBe(true);
+  });
+
+  it("Shift+Tab inside a link jumps to the start of the link", () => {
+    const state = stateAt(markedDoc("link"), 5);
+    const { tr } = press(state, true);
+    expect(tr.selection.from).toBe(3);
+    expect((tr.storedMarks ?? []).some((m) => m.type.name === "link")).toBe(false);
+  });
+
+  it("Tab in plain text after the marked run inserts spaces instead of escaping", () => {
+    const state = stateAt(markedDoc("bold"), 8);
+    const { tr } = press(state);
+    expect(tr.doc.textContent).toBe("abcdefg  h");
+  });
+
+  it("multi-cursor Tab escapes only the cursor inside a mark and clears escapable stored marks", () => {
+    const state = multiStateAt(markedDoc("bold"), [5, 8]);
+    const { tr } = press(state);
+    expect(tr.selection).toBeInstanceOf(MultiSelection);
+    const ranges = (tr.selection as MultiSelection).ranges.map((r) => r.$from.pos);
+    expect(ranges).toEqual([7, 8]);
+    expect(tr.doc.eq(state.doc)).toBe(true);
+    expect((tr.storedMarks ?? []).some((m) => ["bold", "italic", "link"].includes(m.type.name))).toBe(false);
+  });
+
+  it("multi-cursor Shift+Tab moves the cursor inside a mark to the run's start", () => {
+    const state = multiStateAt(markedDoc("bold"), [5, 8]);
+    const { tr } = press(state, true);
+    expect(tr.selection).toBeInstanceOf(MultiSelection);
+    const ranges = (tr.selection as MultiSelection).ranges.map((r) => r.$from.pos);
+    expect(ranges).toEqual([3, 8]);
+    expect(tr.doc.eq(state.doc)).toBe(true);
   });
 });

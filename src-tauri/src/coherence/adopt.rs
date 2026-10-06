@@ -1,12 +1,12 @@
 //! Object adoption, observed-external synthesis, and registry
-//! maintenance (WI-1.6, ADR-C4 services tier). Split from `capture.rs`
+//! maintenance (ADR-C4 services tier). Split from `capture.rs`
 //! for the file-size gate; `capture.rs` re-exports these, so callers
 //! import from `capture` unchanged.
 
 use serde_json::json;
 
 use super::adopt_duplicate::refuse_live_duplicate;
-use super::canonical::text_content_hash;
+use super::canonical::mask_and_hash_canonical;
 use super::frontmatter::{assign_identity, read_identity};
 use super::state::WorkspaceKernel;
 use super::types::{
@@ -83,7 +83,10 @@ fn adopt_from_disk_locked(
         }
     };
     register_if_needed(kernel, identity.id, rel_path, identity.schema.as_deref())?;
-    let content_hash = text_content_hash(&content);
+    // `text` is canonical (read_canonical) and an identity block joined in at
+    // line boundaries keeps it so: mask and hash it once, store what was hashed.
+    let masked = mask_and_hash_canonical(&content);
+    let content_hash = masked.hash.clone();
     if let Some(existing) = kernel
         .index()
         .revision_by_content(&identity.id, &content_hash)?
@@ -92,7 +95,7 @@ fn adopt_from_disk_locked(
     }
     let parents = kernel.index().heads(&identity.id)?;
     let revision = RevisionId::compute(&content_hash, &parents);
-    kernel.snapshots().put_text(&content)?;
+    kernel.snapshots().put_masked(&masked)?;
     let env = observed_external_entry(kernel, identity.id, &revision, &content_hash, parents);
     kernel.append_and_apply(&env)?;
     Ok(Some((identity.id, revision)))

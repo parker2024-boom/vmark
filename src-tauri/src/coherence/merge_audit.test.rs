@@ -12,7 +12,7 @@ fn hash(n: u8) -> ContentHash {
 }
 
 fn run_git(dir: &std::path::Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::ai_provider::build_command("git", &[])
         .args(args)
         .current_dir(dir)
         .env("GIT_AUTHOR_NAME", "t")

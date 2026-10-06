@@ -17,7 +17,7 @@
  * Each slice's TRANSITIONS are pure functions in a sibling module —
  * `workflowPreviewSlice`, `workflowViewSlice`, `workflowApprovalSlice`,
  * `workflowEditQueue`, `workflowSerialize` — and this file is the wiring that
- * lifts them into Zustand (audit #1001). One store, five readable domains.
+ * lifts them into Zustand. One store, five readable domains.
  *
  * Why one store? The five legacy stores all coordinate around a single
  * workflow document; splitting them only spread per-feature state
@@ -72,15 +72,15 @@ interface WorkflowStoreActions {
   setGhaWorkflow: (tabId: string, workflow: WorkflowIR | null) => void;
   resetGha: () => void;
 
-  // preview slice — per-tab document preview (#129), and the window's run
+  // preview slice — per-tab document preview, and the window's run
   previewOpenPanel: (tabId: string) => void;
   previewClosePanel: (tabId: string) => void;
   setGraph: (tabId: string, graph: WorkflowGraph | null, error?: string) => void;
-  /** Register a run — with the panel that started it, in one write (#113) — or roll it back. */
+  /** Register a run — with the panel that started it, in one write — or roll it back. */
   setExecution: (id: string | null, owner?: RunOwner) => void;
   /** `executionId`'s snapshot was restored in full: never offer it again. */
   markRunRestored: (executionId: string) => void;
-  /** End a run, keeping its step statuses (audit #767); see the impl. */
+  /** End a run, keeping its step statuses; see the impl. */
   finishExecution: (executionId: string, outcome: WorkflowRunOutcome) => void;
   setStepStatus: (stepId: string, entry: StepStatusEntry) => void;
   resetPreviewStatuses: () => void;
@@ -101,8 +101,8 @@ interface WorkflowStoreActions {
   renameDocument: (from: string, to: string) => void;
   setPreserveYamlFormatting: (preserve: boolean | null) => void;
   /**
-   * Apply the bound queue to `originalYaml` and report EXACTLY what happened
-   * (audit #991/#1006) — a parse failure, a patch that would not apply, the
+   * Apply the bound queue to `originalYaml` and report EXACTLY what happened:
+   * a parse failure, a patch that would not apply, the
    * wrong document, a legitimate no-op, or the new text.
    */
   serializeWorkflowEdits: (originalYaml: string, documentId?: string) => WorkflowEditsResult;
@@ -116,7 +116,7 @@ interface WorkflowStoreActions {
 
   // approval slice
   enqueueApproval: (req: ApprovalRequestPayload) => void;
-  /** Clear the pending approval; `only` scopes it to that request (#1009). */
+  /** Clear the pending approval; `only` scopes it to that request. */
   dismissApproval: (only?: { executionId: string; stepId: string }) => void;
   resetApproval: () => void;
 }
@@ -214,7 +214,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => {
         // An UNBOUND queue has no stash slot (`mirrorActiveQueue` skips the mirror
         // while `boundDocumentId` is null), so a plain bind DROPPED it — the first
         // bind replaced those patches with the incoming document's stash and the
-        // edits were gone with no signal at all (audit #1004). They are adopted
+        // edits were gone with no signal at all. They are adopted
         // into the document being bound instead, through the same dedup/mirror
         // algebra every other queue write uses. The incoming document's own queue
         // keeps precedence and the orphans follow it, the ordering
@@ -243,8 +243,8 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => {
     serializeWorkflowEdits: (originalYaml, documentId) => {
       const { pendingPatches, preserveYamlFormatting, boundDocumentId } = get().edit;
       // The binding is a single global slot, so a caller that read its queue and
-      // then awaited could serialize whatever ANOTHER pane bound meanwhile
-      // (audit #1005). A mismatch is its OWN outcome now (#991): it used to be
+      // then awaited could serialize whatever ANOTHER pane bound meanwhile.
+      // A mismatch is its OWN outcome now: it used to be
       // spelled "the text came back unchanged", indistinguishable from a parse
       // failure and from an edit that genuinely changes nothing.
       if (documentId !== undefined && boundDocumentId !== documentId) {
@@ -271,7 +271,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => {
   };
 });
 
-/* The legacy `export type { IRPatch }` compat alias is GONE (audit #1010). It
+/* The legacy `export type { IRPatch }` compat alias is GONE. It
  * dated from the T09 store consolidation, had no deprecation and no removal
  * path, and its last consumer (`WorkflowEditor/withRowPlans.ts`) now imports the
  * type from `@/lib/ghaWorkflow/save/mutators`, which defines it.

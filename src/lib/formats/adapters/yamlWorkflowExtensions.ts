@@ -9,7 +9,7 @@
  * because per-extension failure handling is more code than an adapter's
  * declaration block should carry.
  *
- * Key decisions (audit 20260804-F8):
+ * Key decisions:
  *   - Each import is INDIVIDUALLY guarded. They used to share one
  *     `Promise.all`, so a single failed chunk rejected `loadExtraExtensions`
  *     wholesale and the user lost completion AND cursor sync AND goto-def —

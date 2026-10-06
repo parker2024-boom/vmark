@@ -4,6 +4,8 @@
  * Shared interface for cursor position context across both editor modes.
  * Source mode (CodeMirror) and WYSIWYG mode (Tiptap/ProseMirror) implement
  * this interface with their own detection logic.
+ *
+ * @module types/cursorContext
  */
 
 import type { FormatType } from "@/plugins/sourceContextDetection/formatTypes";

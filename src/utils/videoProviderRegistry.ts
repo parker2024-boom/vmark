@@ -16,11 +16,16 @@
  *     `parseUrlFull` — no per-provider special cases at the call sites
  *   - Embed URLs are built only from IDs the provider's `isValidId` accepts
  *     (imported/programmatic node attrs are untrusted input)
+ *   - Each provider declares the ONE origin its embed URLs point at (the
+ *     privacy-enhanced host for YouTube). `VIDEO_EMBED_ORIGINS` is the list of
+ *     frames the app ever creates, and the release CSP's `frame-src` must name
+ *     exactly these (a test reads `tauri.conf.json` and fails when either
+ *     side drifts)
  *
  * @coordinates-with youtubeUrlParser.ts — YouTube URL parsing
  * @coordinates-with vimeoUrlParser.ts — Vimeo URL parsing + privacy hashes
  * @coordinates-with plugins/videoEmbed/tiptap.ts — uses registry for paste + parseHTML
- * @coordinates-with utils/sanitize.ts — domain whitelist mirrors registry providers
+ * @coordinates-with src-tauri/tauri.conf.json — the CSP `frame-src` names the embed origins
  * @module utils/videoProviderRegistry
  */
 
@@ -62,6 +67,11 @@ export interface ProviderConfig {
    * without extra metadata derive this from `parseUrl`.
    */
   parseUrlFull: (url: string) => VideoIdInfo | null;
+  /**
+   * The origin (`https://host`) every embed URL of this provider points at.
+   * `buildEmbedUrl` builds on it, so the two cannot name different hosts.
+   */
+  embedOrigin: string;
   /** Build the embed iframe src URL from a video ID */
   buildEmbedUrl: (videoId: string) => string;
   /**
@@ -128,12 +138,17 @@ function parseBilibiliUrl(url: string): string | null {
  */
 const YOUTUBE_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
 
+/** YouTube's privacy-enhanced host: no tracking cookies until the user plays. */
+const YOUTUBE_EMBED_ORIGIN = "https://www.youtube-nocookie.com";
+const VIMEO_EMBED_ORIGIN = "https://player.vimeo.com";
+const BILIBILI_EMBED_ORIGIN = "https://player.bilibili.com";
+
 const PROVIDERS: Record<VideoProvider, ProviderConfig> = {
   youtube: Object.freeze<ProviderConfig>({
     parseUrl: parseYoutubeUrl,
     parseUrlFull: fullFromIdParser(parseYoutubeUrl),
-    buildEmbedUrl: (videoId) =>
-      `https://www.youtube-nocookie.com/embed/${videoId}`,
+    embedOrigin: YOUTUBE_EMBED_ORIGIN,
+    buildEmbedUrl: (videoId) => `${YOUTUBE_EMBED_ORIGIN}/embed/${videoId}`,
     isValidId: (videoId) => YOUTUBE_ID_RE.test(videoId),
     defaultWidth: 560,
     defaultHeight: 315,
@@ -142,8 +157,8 @@ const PROVIDERS: Record<VideoProvider, ProviderConfig> = {
   vimeo: Object.freeze<ProviderConfig>({
     parseUrl: parseVimeoUrl,
     parseUrlFull: parseVimeoUrlFull,
-    buildEmbedUrl: (videoId) =>
-      `https://player.vimeo.com/video/${videoId}`,
+    embedOrigin: VIMEO_EMBED_ORIGIN,
+    buildEmbedUrl: (videoId) => `${VIMEO_EMBED_ORIGIN}/video/${videoId}`,
     isValidId: isVimeoVideoId,
     defaultWidth: 560,
     defaultHeight: 315,
@@ -152,8 +167,8 @@ const PROVIDERS: Record<VideoProvider, ProviderConfig> = {
   bilibili: Object.freeze<ProviderConfig>({
     parseUrl: parseBilibiliUrl,
     parseUrlFull: fullFromIdParser(parseBilibiliUrl),
-    buildEmbedUrl: (videoId) =>
-      `https://player.bilibili.com/player.html?bvid=${videoId}`,
+    embedOrigin: BILIBILI_EMBED_ORIGIN,
+    buildEmbedUrl: (videoId) => `${BILIBILI_EMBED_ORIGIN}/player.html?bvid=${videoId}`,
     isValidId: (videoId) => BILIBILI_BV_RE.test(videoId),
     defaultWidth: 560,
     defaultHeight: 350,
@@ -165,6 +180,14 @@ Object.freeze(PROVIDERS);
 /** Derived from the registry keys — the one place providers are declared. */
 const PROVIDER_LIST = Object.freeze(
   Object.keys(PROVIDERS) as VideoProvider[]
+);
+
+/**
+ * Every origin an embed iframe built here can point at — the only frames the
+ * app creates outside its own pages. Derived from the provider configs.
+ */
+export const VIDEO_EMBED_ORIGINS: readonly string[] = Object.freeze(
+  PROVIDER_LIST.map((provider) => PROVIDERS[provider].embedOrigin)
 );
 
 /**

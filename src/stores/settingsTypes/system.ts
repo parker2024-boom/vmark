@@ -39,11 +39,11 @@ export interface TerminalSettings {
   macOptionIsMeta: boolean; // Default: true — treat macOS Option as Meta for Alt+Arrow word navigation; disable for dead-key accent composition (Option+E/N/U)
   shellIntegration: boolean; // Default: true — inject OSC 133 command marks + OSC 7 cwd (zsh, bash) for prompt nav, exit-status decorations, cwd tracking
   osc52Clipboard: boolean; // Default: true — let programs in the terminal (ssh/tmux) WRITE the host clipboard via OSC 52. Reads are always denied (D5) — this toggle only controls writes.
-  screenReaderMode: boolean; // Default: false — expose terminal output to assistive tech (VoiceOver); off by default for performance (G3/WI-3.1)
+  screenReaderMode: boolean; // Default: false — expose terminal output to assistive tech (VoiceOver); off by default for performance (G3)
   bellMode: TerminalBellMode; // Default: "visual" — how the terminal bell is signalled (off/visual indicator/audible beep)
   notifyOnBell: boolean; // Default: true — OS notification when an unfocused window's terminal rings the bell
   minimumContrastRatio: number; // Default: 4.5 (WCAG AA) — xterm foreground-lift floor (1 = off … 21 = max)
-  scrollback: number; // Default: 5000 — number of scrollback lines retained per session (G7/WI-4.2)
+  scrollback: number; // Default: 5000 — number of scrollback lines retained per session (G7)
   position: TerminalPosition; // Default: "auto" — auto-reposition based on window aspect ratio
   panelRatio: number;  // Default: 0.4 — fraction of available space (0.1–0.8), persisted on drag end
 }
@@ -67,7 +67,7 @@ export interface AdvancedSettingsState {
   /**
    * The bespoke YAML workflow EXECUTION engine: the side panel's Run/Cancel
    * controls, the live preview graph that feeds them, and the `run_workflow`
-   * Rust runner. Off means the backend refuses the commands too (WI-19), not
+   * Rust runner. Off means the backend refuses the commands too, not
    * merely that the buttons are hidden. Default: false.
    */
   workflowEngine: boolean;
@@ -81,7 +81,7 @@ export interface AdvancedSettingsState {
   /**
    * Fetch `action.yml` from referenced GitHub Actions over the network to
    * populate the structured editor's `with:` form. Disable for a purely
-   * offline workflow viewer (audit 20260612 H28 — the privacy off-switch
+   * offline workflow viewer (the privacy off-switch
    * the website documents). Default: true.
    */
   workflowFetchActionMetadata: boolean;

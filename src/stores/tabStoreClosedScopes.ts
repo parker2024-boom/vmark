@@ -1,5 +1,5 @@
 /**
- * Scoped closed-tab history (WI-11.1 / plan D4).
+ * Scoped closed-tab history (plan D4).
  *
  * Purpose: THE closed-tab metadata structure — replaces tabStore's old flat
  * per-window pool. Entries hold the full closed Tab plus a monotonic close
@@ -9,7 +9,7 @@
  *   - `WINDOW_ALL_SCOPE` (rail off, or no owning instance).
  *
  * One cap policy (10) applies PER SCOPE, so an inactive workspace's history
- * cannot be evicted by closes in another workspace. Reopen (WI-11.2) compares
+ * cannot be evicted by closes in another workspace. Reopen compares
  * the active instance's head with the browser-global head by sequence.
  * Instance records' persisted `closedTabIds` derive from these scopes at
  * hot-exit capture — this store is the lookup structure, not the records.
@@ -44,7 +44,7 @@ export const WINDOW_ALL_SCOPE = "window:all" as const;
 
 const MAX_PER_SCOPE = 10;
 
-/** Hydrated closedSeq values need increment headroom — see audit #14. */
+/** Hydrated closedSeq values need increment headroom so nextSeq stays monotonic. */
 const SAFE_SEQ_HEADROOM = Number.MAX_SAFE_INTEGER - 1_000_000;
 
 
@@ -71,7 +71,7 @@ interface ClosedTabScopesState {
    *  this the reopen history was orphaned under an id nothing reads. */
   rekeyClosedScope: (windowLabel: string, oldId: string, newId: string) => void;
   removeWindowClosedScopes: (windowLabel: string) => void;
-  /** WI-9.4: rehydrate a window's scopes from a hot-exit payload (validated). */
+  /** Rehydrate a window's scopes from a hot-exit payload (validated). */
   hydrateWindowClosedScopes: (
     windowLabel: string,
     scopes: Record<string, unknown>,
@@ -97,7 +97,7 @@ function resolveScopeKey(windowLabel: string, tab: Tab): string {
     windowState?.activeWorkspaceInstanceId ?? null,
   );
   // Fallback for an unowned tab: the ACTIVE instance's scope — unless that
-  // instance is a placeholder (R2-8, audit round 2). A placeholder is evicted
+  // instance is a placeholder. A placeholder is evicted
   // the moment a real workspace arrives, and removeClosedScope drops its
   // history with it, so recording under a placeholder id orphans the entry.
   // WINDOW_ALL_SCOPE is the reachable home for ownerless history.
@@ -194,10 +194,10 @@ export const useClosedTabScopesStore = create<ClosedTabScopesState>()((set, get)
           // no increment headroom rather than corrupt ordering forever.
           .filter((entry) => entry.closedSeq < SAFE_SEQ_HEADROOM)
           // The store contract is newest-first; a reordered persisted payload
-          // must not decide which entries survive the cap (audit #13).
+          // must not decide which entries survive the cap.
           .sort((a, b) => b.closedSeq - a.closedSeq);
         // One scope per id across the whole payload (exclusivity) — marked at
-        // ACCEPTANCE, not while filtering (R2-9, audit round 2): an id whose
+        // ACCEPTANCE, not while filtering: an id whose
         // only occurrence in this scope falls beyond the cap must not be
         // suppressed from every later scope by an entry that never survived.
         const entries: ClosedTabEntry[] = [];
@@ -211,7 +211,7 @@ export const useClosedTabScopesStore = create<ClosedTabScopesState>()((set, get)
         valid[scopeKey] = entries;
         for (const entry of entries) maxSeq = Math.max(maxSeq, entry.closedSeq);
       }
-      // Audit R2-F15: hydration REPLACES the window's scopes — an empty or
+      // Hydration REPLACES the window's scopes — an empty or
       // wholly-invalid payload clears rather than leaking prior state.
       return {
         nextSeq: maxSeq + 1,

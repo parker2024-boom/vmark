@@ -197,7 +197,7 @@ function chordOfBinding(
  * Build a `Map<CanonicalChord, Binding[]>` from bindings, resolving each
  * `shortcutId` to its chord. A binding whose chord can't be resolved (unbound
  * shortcut, unknown id) is dropped and reported via `onDropped` — it never enters
- * the index (referential integrity, WI-1.3).
+ * the index (referential integrity).
  */
 export function buildIndex(
   bindings: readonly Binding[],
@@ -234,7 +234,7 @@ export interface BindingConflict {
 }
 
 /**
- * Scan the index for potential conflicts (WI-1.4). Within a single chord, two or
+ * Scan the index for potential conflicts. Within a single chord, two or
  * more bindings that share the SAME capture owner, scope, AND priority would tie
  * at resolve time (`AmbiguousBindingError`) for any context where their `when`
  * predicates overlap. Cross-scope (specificity decides), cross-owner, and
@@ -253,8 +253,8 @@ export function detectConflicts(index: BindingIndex): BindingConflict[] {
       // Group by scope SPECIFICITY, not scope NAME: two distinct scopes with the
       // SAME specificity (e.g. editor-wysiwyg / editor-source, both 40) tie at
       // resolve time and would throw AmbiguousBindingError if a context ever
-      // carried both — so they must be reported as a potential conflict here
-      // (audit-fix #4). Distinct specificities are ranked, never a tie.
+      // carried both — so they must be reported as a potential conflict here.
+      // Distinct specificities are ranked, never a tie.
       const key = `${b.captureOwner}|${SCOPE_SPECIFICITY[b.scope]}|${b.priority}`;
       const g = groups.get(key);
       if (g) g.push(b);

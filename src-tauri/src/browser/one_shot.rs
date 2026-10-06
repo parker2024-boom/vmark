@@ -1,4 +1,4 @@
-//! Single-use browser authorizations — the user's "Allow once" (WI-2.1 / R5 / R7a).
+//! Single-use browser authorizations — the user's "Allow once" (R5 / R7a).
 //!
 //! These live in the DRIVER, not the frontend store, because the driver is the
 //! authority. A one-shot held only by the frontend would be checked there and then
@@ -20,8 +20,8 @@
 //!     delta): the one-shot binds a hash of the exact script the user approved, so
 //!     an "Allow once" for `return document.title` cannot be spent on a substituted
 //!     `steal-the-session` retry — the AI chooses what it re-sends, and without
-//!     this the approved-A-runs-B escalation is open. (Security review P5, High #1;
-//!     audit 20260903 A-05 for the act operations.)
+//!     this the approved-A-runs-B escalation is open.
+//!     (audit 20260903 A-05 for the act operations.)
 //!
 //! Consumption is deliberately not separable from the check: a one-shot authorizes
 //! exactly ONE action, so `consume_one_shot` removes it as it answers.
@@ -56,8 +56,7 @@ pub struct OneShot {
     pub target: Option<OneShotTarget>,
     /// Hex SHA-256 of the exact script this one-shot authorizes — `Some` for the
     /// payload-binding operations, `None` otherwise. Binds the approval to the
-    /// payload so an approved-A cannot be spent on a substituted-B. (Security
-    /// review P5, High #1.)
+    /// payload so an approved-A cannot be spent on a substituted-B.
     #[serde(default)]
     pub payload_hash: Option<String>,
 }
@@ -161,7 +160,7 @@ pub fn consume_one_shot(
 /// Withdraw every unspent one-shot with exactly this identity — tab, generation,
 /// origin pattern, operation, target AND payload hash, the same binding
 /// `same_binding` matches on — the mint that a cancelled workflow run confirmed
-/// AFTER the run was gone (round 3, #124). Returns how many were removed. The
+/// AFTER the run was gone. Returns how many were removed. The
 /// payload hash is part of the identity on purpose: revoking one payload-bound
 /// mint must not take an unrelated one-shot for the same target with it.
 pub fn revoke_one_shot(

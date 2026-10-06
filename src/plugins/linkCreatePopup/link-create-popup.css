@@ -4,7 +4,7 @@
  * Popup for creating new links (text + URL inputs).
  */
 
-/* Shell chrome comes from `.popup-container` (WI-UI3.2). */
+/* Shell chrome comes from `.popup-container`. */
 .link-create-popup {
   flex-direction: column;
   align-items: stretch;
@@ -54,6 +54,6 @@
   font-size: var(--font-size-xs);
 }
 
-/* Buttons carry the canonical `.popup-icon-btn` (WI-UI2.3) — the byte-for-byte
+/* Buttons carry the canonical `.popup-icon-btn` — the byte-for-byte
    duplicate recipe that lived here is gone; suffix classes remain as query
    hooks only. */

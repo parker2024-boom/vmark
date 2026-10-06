@@ -5,7 +5,7 @@
 //! initialize the workspace, wrong for one that is not. Capture-on-save OFF
 //! (`CapturePolicy::TrackedOnly`) is the latter, and a pre-lock "is there a
 //! ledger?" check cannot close it on its own: `.vmark/` deleted between that
-//! check and the lock was recreated by the lock (audit #52, round 2). Here the
+//! check and the lock was recreated by the lock. Here the
 //! lock itself declines when `.vmark/` is absent at the moment it is opened.
 //!
 //! `acquire_lock_file`, the creating lock `with_write_lock` takes, lives here
@@ -22,7 +22,7 @@ use super::state::WorkspaceKernel;
 use super::workspace_files::{ensure_lock_ignore_rules, flock_exclusive};
 
 impl WorkspaceKernel {
-    /// Open + exclusively `flock` the workspace lock file (re-review #1). The
+    /// Open + exclusively `flock` the workspace lock file. The
     /// lock is held for the returned File's lifetime (released on fd close). The
     /// lock path is a permanently-ignored runtime file (never git-tracked, so a
     /// checkout can't swap its inode while held). Non-Unix skips the OS lock

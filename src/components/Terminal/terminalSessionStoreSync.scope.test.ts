@@ -32,7 +32,7 @@ import {
 } from "./terminalSessionStoreSync";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useSettingsStore } from "@/stores/settingsStore";
-import { resetTerminalSessionStore, useUIStore } from "@/stores/uiStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 
 interface FakeInstance {
   busy: boolean;
@@ -89,7 +89,7 @@ function setRoot(root: string) {
 
 /** Create a store session (stamped or not) and return its id. */
 function createStoreSession(ownerInstanceId?: string): string {
-  return useUIStore
+  return useTerminalStore
     .getState()
     .terminalCreateSession(ownerInstanceId ? { ownerInstanceId } : undefined)!.id;
 }
@@ -149,7 +149,7 @@ describe("WI-TS2.1 — scoped sessions never follow the workspace root", () => {
     expect(entry.pendingRoot).toBe("/root/b"); // recorded while unscoped
 
     // The rail switch adopts the session into the outgoing instance.
-    useUIStore.getState().terminalAdoptUnscopedSessions("wsi-a");
+    useTerminalStore.getState().terminalAdoptUnscopedSessions("wsi-a");
 
     instance.busy = false;
     instance.idleCb?.();

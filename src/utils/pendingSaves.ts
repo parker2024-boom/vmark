@@ -10,11 +10,14 @@
  * - If they match, it's our save (regardless of timing)
  *
  * Usage:
- * 1. Call registerPendingSave(path, content) BEFORE writeTextFile()
+ * 1. Call registerPendingSave(path, content) BEFORE the write
  *    — returns a token for safe clearing
- * 2. Call clearPendingSave(path, token) AFTER markSaved()
- *    — only clears if the token matches (prevents overlapping saves
- *      from clearing each other's registrations)
+ * 2. After a SUCCESSFUL write, call clearPendingSaveAfterGrace(path, token):
+ *    the registration outlives the write by PENDING_SAVE_GRACE_MS so a late
+ *    watcher event still matches. After a FAILED write, call
+ *    clearPendingSave(path, token) at once — nothing reached the disk, so
+ *    there is no echo to wait for. Either way the clear only happens if the
+ *    token matches (overlapping saves cannot clear each other's registrations)
  * 3. Use matchesPendingSave(path, diskContent) to check if disk matches what we wrote
  *
  * Key decisions:
@@ -23,6 +26,9 @@
  *   - Map keyed by normalized path for cross-platform consistency
  *   - Token-based clearing prevents overlapping saves to the same path
  *     from prematurely clearing a newer registration
+ *   - The grace window is ONE constant and ONE helper. It is a contract with
+ *     the watcher pipeline, not a per-caller choice: a caller that clears
+ *     early turns its own write into a "file changed on disk" prompt
  *
  * @coordinates-with saveToPath.ts — registers pending save before write
  * @coordinates-with reloadFromDisk.ts — checks matchesPendingSave to skip self-triggered reloads
@@ -45,7 +51,7 @@ let nextToken = 1;
 
 /**
  * Register that we're about to save specific content to a file.
- * Call this BEFORE writeTextFile().
+ * Call this BEFORE the write.
  *
  * @param path - File path being saved to
  * @param content - The exact content being written
@@ -59,9 +65,9 @@ export function registerPendingSave(path: string, content: string): number {
 }
 
 /**
- * Clear a pending save, but only if the token matches the current registration.
- * This prevents overlapping saves from clearing each other's entries.
- * Call this AFTER markSaved() completes.
+ * Clear a pending save NOW, but only if the token matches the current
+ * registration. This prevents overlapping saves from clearing each other's
+ * entries. For a write that succeeded, use `clearPendingSaveAfterGrace`.
  *
  * @param path - File path to clear
  * @param token - Token returned by registerPendingSave. If omitted, clears unconditionally.
@@ -73,6 +79,30 @@ export function clearPendingSave(path: string, token?: number): void {
     if (entry && entry.token !== token) return; // Newer save registered — don't clear
   }
   pendingSaves.delete(normalized);
+}
+
+/**
+ * How long a finished write stays registered, in milliseconds.
+ *
+ * The watcher reports our own write asynchronously: Rust debounce (200 ms) →
+ * emit → JS event loop → async `readDocumentText` → comparison. Under heavy I/O
+ * that pipeline has exceeded 500 ms, and macOS FSEvents can deliver late on
+ * top of it. The registration has to still be there when the event arrives,
+ * or the app asks the user about a change it made itself.
+ */
+export const PENDING_SAVE_GRACE_MS = 1000;
+
+/**
+ * Clear a pending save once the grace window has passed.
+ *
+ * Token-guarded like `clearPendingSave`: if a newer save registered the same
+ * path meanwhile, that registration survives and gets its own full window.
+ *
+ * @param path - File path to clear
+ * @param token - Token returned by registerPendingSave
+ */
+export function clearPendingSaveAfterGrace(path: string, token: number): void {
+  setTimeout(() => clearPendingSave(path, token), PENDING_SAVE_GRACE_MS);
 }
 
 /**

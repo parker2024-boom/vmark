@@ -106,7 +106,7 @@ export function dispatchAdapterToWysiwyg(
   // switch `activeTabId` can already point at the new tab while `activeWysiwygEditor`
   // still references the old tab's editor; dispatching then would mutate the wrong
   // document. Treat that as "not available yet" so the retry waits for the new
-  // tab's editor to mount (audit-fix #1).
+  // tab's editor to mount.
   if (!editor || active.activeWysiwygTabId !== origin.tabId) return false;
 
   const view = editor.view;
@@ -131,8 +131,7 @@ export function dispatchAdapterToWysiwyg(
     }
     // Build the multi-selection context from the CURRENT view state, inside the
     // callback: an IME-deferred action runs after compositionend, which can change
-    // the selection — a snapshot taken before the queue would gate on stale state
-    // (audit-fix #2).
+    // the selection — a snapshot taken before the queue would gate on stale state.
     const multiSelection = getWysiwygMultiSelectionContext(view, null);
     const context = { surface: "wysiwyg", view, editor, context: null, multiSelection } as const;
     if (action.startsWith("heading:")) {
@@ -168,7 +167,7 @@ export function dispatchAdapterToSource(
   const active = useEditorStore.getState().active;
   const view = active.activeSourceView;
   // The globally-active Source view must belong to the ORIGIN tab — see
-  // dispatchAdapterToWysiwyg: guards the same tab-switch race for CodeMirror (audit-fix #1).
+  // dispatchAdapterToWysiwyg: guards the same tab-switch race for CodeMirror.
   if (!view || active.activeSourceTabId !== origin.tabId) return false;
 
   runOrQueueCodeMirrorAction(view, () => {
@@ -186,7 +185,7 @@ export function dispatchAdapterToSource(
     // Read the cursor context and build the multi-selection context from CURRENT
     // state, inside the callback: an IME-deferred action runs after compositionend,
     // which can move the cursor/selection — a snapshot taken before the queue would
-    // gate on stale state (audit-fix #2).
+    // gate on stale state.
     const cursorContext = useEditorStore.getState().source.context;
     const multiSelection = getSourceMultiSelectionContext(view, cursorContext);
     const context = { surface: "source", view, context: cursorContext, multiSelection } as const;

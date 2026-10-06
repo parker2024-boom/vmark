@@ -1,9 +1,13 @@
 //! Provider dispatch shared by the streaming and collect entry points.
 //!
-//! Moved out of `mod.rs` mechanically when `dispatch_to_provider` traded its
-//! nine-argument signature (`#[allow(clippy::too_many_arguments)]`) for the
-//! `ProviderRequest` params struct (Codex audit 20260718); behavior is
-//! unchanged.
+//! Split out of `mod.rs` when `dispatch_to_provider` traded its nine-argument
+//! signature (`#[allow(clippy::too_many_arguments)]`) for the
+//! `ProviderRequest` params struct.
+//!
+//! Key decision: a CLI provider is spawned with a fixed argv
+//! (`cli_stdin_args`) and given the prompt on stdin. The prompt is document
+//! text; as an argument it would be parsed by cmd.exe behind a Windows `.cmd`
+//! shim, and would be bounded by the platform's argument-size limit.
 
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -23,6 +27,25 @@ pub(super) struct ProviderRequest<'a> {
     pub endpoint: Option<String>,
     pub cli_path: Option<String>,
     pub max_tokens: Option<u64>,
+}
+
+/// The fixed argv that puts a CLI provider in its non-interactive mode with
+/// the prompt read from stdin, or `None` for a provider that is not a CLI.
+///
+/// Nothing here is caller data: the prompt is document text and reaches the
+/// child on stdin only (`cli/prompt.rs`). All three CLIs have a stdin mode, so
+/// none keeps the prompt in argv.
+fn cli_stdin_args(provider: &str) -> Option<&'static [&'static str]> {
+    match provider {
+        // Print mode with no prompt argument reads the prompt from stdin.
+        "claude" => Some(&["-p", "--output-format", "text"]),
+        // `-` in the prompt position is codex's "read instructions from stdin".
+        "codex" => Some(&["exec", "--skip-git-repo-check", "-"]),
+        // With no prompt argument and a stdin that is not a terminal, gemini
+        // runs headless on what stdin holds.
+        "gemini" => Some(&[]),
+        _ => None,
+    }
 }
 
 /// Provider dispatch shared between `run_ai_prompt` (window streaming) and
@@ -46,59 +69,28 @@ pub(super) async fn dispatch_to_provider(
         max_tokens,
     } = request;
 
-    // CLI providers don't honor max_tokens — log once per call if set so
-    // authors aren't silently misled into thinking it's enforced (D8).
-    if max_tokens.is_some() && matches!(provider, "claude" | "codex" | "gemini") {
-        log::warn!(
-            "max_tokens={:?} is not enforced for CLI provider '{}'; the genie step will run unconstrained",
-            max_tokens, provider
-        );
+    // CLI providers — run on tokio::process so kill() works from another task.
+    if let Some(args) = cli_stdin_args(provider) {
+        // CLI providers don't honor max_tokens — log once per call if set so
+        // authors aren't silently misled into thinking it's enforced (D8).
+        if max_tokens.is_some() {
+            log::warn!(
+                "max_tokens={:?} is not enforced for CLI provider {:?}; the genie step will run unconstrained",
+                max_tokens, provider
+            );
+        }
+        return cli::run_cli_blocking(
+            sink,
+            cancel,
+            provider,
+            args.iter().map(|arg| (*arg).to_string()).collect(),
+            Some(prompt.to_string()),
+            cli_path,
+        )
+        .await;
     }
-    match provider {
-        // CLI providers — run on tokio::process so kill() works from another task.
-        "claude" => {
-            cli::run_cli_blocking(
-                sink,
-                cancel,
-                "claude",
-                vec![
-                    "-p".into(),
-                    prompt.to_string(),
-                    "--output-format".into(),
-                    "text".into(),
-                ],
-                None,
-                cli_path,
-            )
-            .await
-        }
-        "codex" => {
-            cli::run_cli_blocking(
-                sink,
-                cancel,
-                "codex",
-                vec![
-                    "exec".into(),
-                    "--skip-git-repo-check".into(),
-                    prompt.to_string(),
-                ],
-                None,
-                cli_path,
-            )
-            .await
-        }
-        "gemini" => {
-            cli::run_cli_blocking(
-                sink,
-                cancel,
-                "gemini",
-                vec!["-p".into(), prompt.to_string()],
-                None,
-                cli_path,
-            )
-            .await
-        }
 
+    match provider {
         // REST providers — cooperative cancellation via tokio::select!. If
         // the caller cancels, we drop the in-flight request and emit Cancelled.
         "anthropic" => {

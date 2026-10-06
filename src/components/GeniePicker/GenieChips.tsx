@@ -2,6 +2,8 @@
  * Quick Action Chips
  *
  * Pre-built action buttons shown when picker is opened with filterScope: "selection".
+ *
+ * @module components/GeniePicker/GenieChips
  */
 
 import { useTranslation } from "react-i18next";

@@ -24,7 +24,7 @@
 //     the `\p{Cf}` property escape (ES2018) is the one newer feature in use;
 //   - a field's VALUE property is never read: the recorder shim ships these bytes,
 //     and its Rust include pins that a typed value can never enter its buffer;
-//   - every walk is BUDGETED and lazy (#103 / #105 / #119): a cursor per open node
+//   - every walk is BUDGETED and lazy: a cursor per open node
 //     reads children by index — never a copied child list — and text is gathered a
 //     window at a time, so a hostile page can make an answer incomplete but never
 //     make the webview allocate without limit. Budgets are functions, not literals,
@@ -152,7 +152,7 @@ function __vmarkContentText(el, all) {
 /** The first `max` characters of an element's text — every descendant text node,
  *  as textContent would give — normalised like a name. The walk stops once `max`
  *  characters are in hand, so summarising a match that holds megabytes costs `max`
- *  characters, and textContent itself is never read (#119). */
+ *  characters, and textContent itself is never read. */
 function __vmarkTextHead(el, max) {
   var out = "", visits = __vmarkContentVisitBudget(), visited = 0, stack = [{ kids: el.childNodes, i: 0 }];
   while (stack.length && out.length < max) {
@@ -175,7 +175,7 @@ function __vmarkIdListText(el, ids) {
     out = "",
     budget = __vmarkContentBudget(),
     parts = String(ids).trim().split(/\s+/, __vmarkIdListMax());
-  // The AGGREGATE is budgeted too (#105): the list stops once the whole has
+  // The AGGREGATE is budgeted too: the list stops once the whole has
   // gathered a budget of text, and ids past the cap are never looked up.
   for (var i = 0; i < parts.length && out.length < budget; i++) {
     var ref = parts[i] && root ? root.getElementById(parts[i]) : null;

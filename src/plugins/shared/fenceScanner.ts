@@ -84,8 +84,7 @@ export interface EnclosingFence {
  * its indent is measured from column 0, and `10. ``` ` (content column 4)
  * could never be closed by the `    ``` ` remark pairs it with. The range then
  * ran unclosed to the end of the document, and the code-block toggle's unfence
- * half deleted the opener while leaving the real closer behind as text (audit
- * R2, #874).
+ * half deleted the opener while leaving the real closer behind as text.
  *
  * Re-read the line under the permissive grammar and keep it only when it sits
  * 0-3 columns past the opener's content column, which is where CommonMark

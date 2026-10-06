@@ -320,6 +320,58 @@ describe("sanitizeFileName", () => {
     });
   });
 
+  // WI-RA10A.12 — a name is cut on a character boundary. `slice` stopped
+  // between the halves of a surrogate pair, and the lone surrogate left behind
+  // is a string serde refuses when the name crosses IPC.
+  describe("Length truncation keeps characters whole", () => {
+    const LONE_SURROGATE =
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+    const GRIN = "\u{1F600}";
+    const FAMILY = "\u{1F468}‍\u{1F469}‍\u{1F467}";
+
+    it("drops an emoji that straddles the limit instead of halving it", () => {
+      const result = sanitizeFileName(`${"A".repeat(79)}${GRIN}tail`);
+      expect(result).toBe("A".repeat(79));
+      expect(result).not.toMatch(LONE_SURROGATE);
+    });
+
+    it("keeps an emoji that ends exactly at the limit", () => {
+      const result = sanitizeFileName(`${"A".repeat(78)}${GRIN}tail`);
+      expect(result).toBe(`${"A".repeat(78)}${GRIN}`);
+    });
+
+    it("does not cut a supplementary-plane Han character in half", () => {
+      const rareHan = "\u{20BB7}";
+      const result = sanitizeFileName(`${"野".repeat(79)}${rareHan}家`);
+      expect(result).toBe("野".repeat(79));
+      expect(result).not.toMatch(LONE_SURROGATE);
+    });
+
+    it("does not cut a family emoji between its members", () => {
+      const result = sanitizeFileName(`${"A".repeat(76)}${FAMILY}`);
+      expect(result).toBe("A".repeat(76));
+    });
+
+    it("is well-formed at every limit for an all-emoji title", () => {
+      const title = GRIN.repeat(60);
+      for (let max = 1; max <= 121; max += 1) {
+        const result = sanitizeFileName(title, max);
+        expect(result.length).toBeLessThanOrEqual(max);
+        expect(result).not.toMatch(LONE_SURROGATE);
+      }
+    });
+
+    it("still prefers a word boundary, measured after the character-safe cut", () => {
+      const result = sanitizeFileName(`${"A".repeat(70)} ${"B".repeat(8)}${GRIN}tail`);
+      expect(result).toBe("A".repeat(70));
+    });
+
+    it("reaches the save dialog well-formed through getSaveFileName", () => {
+      const result = getSaveFileName(`# ${"A".repeat(79)}${GRIN}`, "Untitled-1", "Untitled");
+      expect(result).toBe("A".repeat(79));
+    });
+  });
+
   describe("Windows reserved names", () => {
     it("appends suffix to CON", () => {
       expect(sanitizeFileName("CON")).toBe("CON_export");
@@ -413,48 +465,48 @@ describe("sanitizeFileName", () => {
 describe("getExportFolderName", () => {
   describe("H1 extraction priority", () => {
     it("uses H1 when available", () => {
-      expect(getExportFolderName("# My Document", "/path/to/file.md")).toBe("My Document");
+      expect(getExportFolderName("# My Document", "/path/to/file.md", "Untitled")).toBe("My Document");
     });
 
     it("sanitizes H1", () => {
-      expect(getExportFolderName("# What/Why?", "/path/to/file.md")).toBe("What-Why");
+      expect(getExportFolderName("# What/Why?", "/path/to/file.md", "Untitled")).toBe("What-Why");
     });
 
     it("uses H1 even when file path is null", () => {
-      expect(getExportFolderName("# Title", null)).toBe("Title");
+      expect(getExportFolderName("# Title", null, "Untitled")).toBe("Title");
     });
 
     it("uses H1 even when file path is undefined", () => {
-      expect(getExportFolderName("# Title", undefined)).toBe("Title");
+      expect(getExportFolderName("# Title", undefined, "Untitled")).toBe("Title");
     });
   });
 
   describe("File name fallback", () => {
     it("falls back to file name when no H1", () => {
-      expect(getExportFolderName("No heading here", "/path/to/notes.md")).toBe("notes");
+      expect(getExportFolderName("No heading here", "/path/to/notes.md", "Untitled")).toBe("notes");
     });
 
     it("removes extension from file name", () => {
-      expect(getExportFolderName("No H1", "/path/to/document.md")).toBe("document");
-      expect(getExportFolderName("No H1", "/path/to/file.txt")).toBe("file");
+      expect(getExportFolderName("No H1", "/path/to/document.md", "Untitled")).toBe("document");
+      expect(getExportFolderName("No H1", "/path/to/file.txt", "Untitled")).toBe("file");
     });
 
     it("handles files without extension", () => {
-      expect(getExportFolderName("No H1", "/path/to/README")).toBe("README");
+      expect(getExportFolderName("No H1", "/path/to/README", "Untitled")).toBe("README");
     });
 
     it("handles Windows-style paths", () => {
-      expect(getExportFolderName("No H1", "C:\\Users\\doc.md")).toBe("doc");
+      expect(getExportFolderName("No H1", "C:\\Users\\doc.md", "Untitled")).toBe("doc");
     });
 
     it("sanitizes file name", () => {
-      expect(getExportFolderName("No H1", "/path/to/file:name.md")).toBe("file-name");
+      expect(getExportFolderName("No H1", "/path/to/file:name.md", "Untitled")).toBe("file-name");
     });
   });
 
   describe("Fallback value", () => {
-    it("uses 'Untitled' as default fallback", () => {
-      expect(getExportFolderName("No heading", null)).toBe("Untitled");
+    it("uses the caller's translated fallback as given (WI-RA24.4)", () => {
+      expect(getExportFolderName("No heading", null, "未命名")).toBe("未命名");
     });
 
     it("uses custom fallback when provided", () => {
@@ -462,7 +514,7 @@ describe("getExportFolderName", () => {
     });
 
     it("uses fallback when H1 sanitizes to empty", () => {
-      expect(getExportFolderName("# ???", null)).toBe("Untitled");
+      expect(getExportFolderName("# ???", null, "Untitled")).toBe("Untitled");
     });
 
     it("uses file name when hidden file (leading dot stripped)", () => {
@@ -482,19 +534,19 @@ describe("getExportFolderName", () => {
 
   describe("Empty and edge cases", () => {
     it("handles empty markdown", () => {
-      expect(getExportFolderName("", "/path/to/file.md")).toBe("file");
+      expect(getExportFolderName("", "/path/to/file.md", "Untitled")).toBe("file");
     });
 
     it("handles empty markdown and null path", () => {
-      expect(getExportFolderName("", null)).toBe("Untitled");
+      expect(getExportFolderName("", null, "Untitled")).toBe("Untitled");
     });
 
     it("handles whitespace-only markdown", () => {
-      expect(getExportFolderName("   \n\n   ", null)).toBe("Untitled");
+      expect(getExportFolderName("   \n\n   ", null, "Untitled")).toBe("Untitled");
     });
 
     it("handles markdown with only H2+", () => {
-      expect(getExportFolderName("## Section\n### Subsection", "/doc.md")).toBe("doc");
+      expect(getExportFolderName("## Section\n### Subsection", "/doc.md", "Untitled")).toBe("doc");
     });
   });
 
@@ -503,21 +555,21 @@ describe("getExportFolderName", () => {
       const md = `# How to Learn Programming
 
 Programming is a valuable skill...`;
-      expect(getExportFolderName(md, "/posts/draft.md")).toBe("How to Learn Programming");
+      expect(getExportFolderName(md, "/posts/draft.md", "Untitled")).toBe("How to Learn Programming");
     });
 
     it("handles README with project name", () => {
       const md = `# VMark
 
 A markdown editor for macOS.`;
-      expect(getExportFolderName(md, "/Users/dev/vmark/README.md")).toBe("VMark");
+      expect(getExportFolderName(md, "/Users/dev/vmark/README.md", "Untitled")).toBe("VMark");
     });
 
     it("handles document with long title", () => {
       const md = `# This is an extremely long title that goes on and on and should be truncated at some reasonable point for filesystem compatibility
 
 Content here.`;
-      const result = getExportFolderName(md, null);
+      const result = getExportFolderName(md, null, "Untitled");
       expect(result.length).toBeLessThanOrEqual(80);
     });
 
@@ -525,26 +577,26 @@ Content here.`;
       const md = `# FAQ: What's New in v2.0?
 
 Changelog...`;
-      expect(getExportFolderName(md, "/docs/faq.md")).toBe("FAQ- What's New in v2.0");
+      expect(getExportFolderName(md, "/docs/faq.md", "Untitled")).toBe("FAQ- What's New in v2.0");
     });
 
     it("handles CJK document", () => {
       const md = `# 如何学习编程
 
 编程是一项有价值的技能...`;
-      expect(getExportFolderName(md, "/posts/draft.md")).toBe("如何学习编程");
+      expect(getExportFolderName(md, "/posts/draft.md", "Untitled")).toBe("如何学习编程");
     });
 
     it("handles mixed language document", () => {
       const md = `# Getting Started 入门指南
 
 Welcome...`;
-      expect(getExportFolderName(md, null)).toBe("Getting Started 入门指南");
+      expect(getExportFolderName(md, null, "Untitled")).toBe("Getting Started 入门指南");
     });
 
     it("handles untitled new document", () => {
       const md = "Just started typing some notes...";
-      expect(getExportFolderName(md, null)).toBe("Untitled");
+      expect(getExportFolderName(md, null, "Untitled")).toBe("Untitled");
     });
   });
 });
@@ -552,93 +604,93 @@ Welcome...`;
 describe("getSaveFileName", () => {
   describe("H1 extraction priority", () => {
     it("uses H1 when available in content", () => {
-      expect(getSaveFileName("# My Document", "Untitled")).toBe("My Document");
+      expect(getSaveFileName("# My Document", "Untitled", "Untitled")).toBe("My Document");
     });
 
     it("sanitizes H1 for filesystem", () => {
-      expect(getSaveFileName("# What/Why?", "Untitled")).toBe("What-Why");
+      expect(getSaveFileName("# What/Why?", "Untitled", "Untitled")).toBe("What-Why");
     });
 
     it("handles H1 with special characters", () => {
-      expect(getSaveFileName("# Title: Subtitle", "Untitled")).toBe("Title- Subtitle");
+      expect(getSaveFileName("# Title: Subtitle", "Untitled", "Untitled")).toBe("Title- Subtitle");
     });
 
     it("handles CJK H1", () => {
-      expect(getSaveFileName("# 我的文档", "Untitled")).toBe("我的文档");
+      expect(getSaveFileName("# 我的文档", "Untitled", "Untitled")).toBe("我的文档");
     });
   });
 
   describe("inline markdown stripping", () => {
     it("strips bold formatting", () => {
-      expect(getSaveFileName("# **Bold** Title", "Untitled")).toBe("Bold Title");
+      expect(getSaveFileName("# **Bold** Title", "Untitled", "Untitled")).toBe("Bold Title");
     });
 
     it("strips italic formatting with asterisks", () => {
-      expect(getSaveFileName("# *Italic* Title", "Untitled")).toBe("Italic Title");
+      expect(getSaveFileName("# *Italic* Title", "Untitled", "Untitled")).toBe("Italic Title");
     });
 
     it("strips italic formatting with underscores", () => {
-      expect(getSaveFileName("# _Italic_ Title", "Untitled")).toBe("Italic Title");
+      expect(getSaveFileName("# _Italic_ Title", "Untitled", "Untitled")).toBe("Italic Title");
     });
 
     it("strips bold with underscores", () => {
-      expect(getSaveFileName("# __Bold__ Title", "Untitled")).toBe("Bold Title");
+      expect(getSaveFileName("# __Bold__ Title", "Untitled", "Untitled")).toBe("Bold Title");
     });
 
     it("strips inline code", () => {
-      expect(getSaveFileName("# `Code` Title", "Untitled")).toBe("Code Title");
+      expect(getSaveFileName("# `Code` Title", "Untitled", "Untitled")).toBe("Code Title");
     });
 
     it("strips strikethrough", () => {
-      expect(getSaveFileName("# ~~Struck~~ Title", "Untitled")).toBe("Struck Title");
+      expect(getSaveFileName("# ~~Struck~~ Title", "Untitled", "Untitled")).toBe("Struck Title");
     });
 
     it("strips links but keeps text", () => {
-      expect(getSaveFileName("# [Click Here](url)", "Untitled")).toBe("Click Here");
+      expect(getSaveFileName("# [Click Here](url)", "Untitled", "Untitled")).toBe("Click Here");
     });
 
     it("strips images but keeps alt text", () => {
-      expect(getSaveFileName("# ![Alt](image.png) Title", "Untitled")).toBe("Alt Title");
+      expect(getSaveFileName("# ![Alt](image.png) Title", "Untitled", "Untitled")).toBe("Alt Title");
     });
 
     it("strips reference-style links but keeps text", () => {
-      expect(getSaveFileName("# [Click Here][ref] Title", "Untitled")).toBe("Click Here Title");
+      expect(getSaveFileName("# [Click Here][ref] Title", "Untitled", "Untitled")).toBe("Click Here Title");
     });
 
     it("strips reference-style images but keeps alt text", () => {
-      expect(getSaveFileName("# ![Alt][img] Title", "Untitled")).toBe("Alt Title");
+      expect(getSaveFileName("# ![Alt][img] Title", "Untitled", "Untitled")).toBe("Alt Title");
     });
 
     it("handles complex mixed formatting", () => {
-      expect(getSaveFileName("# My **Bold** and _Italic_ Title", "Untitled")).toBe("My Bold and Italic Title");
+      expect(getSaveFileName("# My **Bold** and _Italic_ Title", "Untitled", "Untitled")).toBe("My Bold and Italic Title");
     });
   });
 
   describe("fallback to tab title", () => {
     it("uses tab title when no H1", () => {
-      expect(getSaveFileName("No heading here", "My Tab")).toBe("My Tab");
+      expect(getSaveFileName("No heading here", "My Tab", "Untitled")).toBe("My Tab");
     });
 
     it("uses tab title when H1 is empty", () => {
-      expect(getSaveFileName("# ", "My Tab")).toBe("My Tab");
+      expect(getSaveFileName("# ", "My Tab", "Untitled")).toBe("My Tab");
     });
 
     it("uses tab title when H1 sanitizes to empty", () => {
-      expect(getSaveFileName("# ???", "My Tab")).toBe("My Tab");
+      expect(getSaveFileName("# ???", "My Tab", "Untitled")).toBe("My Tab");
     });
   });
 
   describe("final fallback", () => {
-    it("returns 'Untitled' when no H1 and no tab title", () => {
-      expect(getSaveFileName("No heading", "")).toBe("Untitled");
+    it("returns the caller's translated fallback when no H1 and no tab title (WI-RA24.4)", () => {
+      expect(getSaveFileName("No heading", "", "Sans titre")).toBe("Sans titre");
     });
 
-    it("returns 'Untitled' when content is empty and no tab title", () => {
-      expect(getSaveFileName("", "")).toBe("Untitled");
+    it("returns the fallback when content is empty and no tab title", () => {
+      expect(getSaveFileName("", "", "제목 없음")).toBe("제목 없음");
     });
 
     it("returns tab title even if it's 'Untitled'", () => {
-      expect(getSaveFileName("No heading", "Untitled")).toBe("Untitled");
+      expect(getSaveFileName("No heading", "Untitled", "Untitled")).toBe("Untitled");
     });
   });
 
@@ -647,7 +699,7 @@ describe("getSaveFileName", () => {
       const content = `# My New Document
 
 This is my new document content.`;
-      expect(getSaveFileName(content, "Untitled-1")).toBe("My New Document");
+      expect(getSaveFileName(content, "Untitled-1", "Untitled")).toBe("My New Document");
     });
 
     it("falls back for document without H1", () => {
@@ -656,11 +708,11 @@ This is my new document content.`;
 ## Section 1
 
 More content.`;
-      expect(getSaveFileName(content, "Untitled-2")).toBe("Untitled-2");
+      expect(getSaveFileName(content, "Untitled-2", "Untitled")).toBe("Untitled-2");
     });
 
     it("handles blank new document", () => {
-      expect(getSaveFileName("", "Untitled-1")).toBe("Untitled-1");
+      expect(getSaveFileName("", "Untitled-1", "Untitled")).toBe("Untitled-1");
     });
   });
 });

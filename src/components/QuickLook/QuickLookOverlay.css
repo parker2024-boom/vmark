@@ -1,6 +1,6 @@
 /* Quick Look — Finder-style full-screen preview overlay */
 
-/* Backdrop/panel chrome come from the shared overlay shell (WI-UI3.1). */
+/* Backdrop/panel chrome come from the shared overlay shell. */
 .quick-look-backdrop {
   padding: var(--space-6);
   backdrop-filter: blur(8px);
@@ -43,7 +43,7 @@
   color: var(--text-secondary);
 }
 
-/* The close button is canonical `.vm-icon-btn--sm` (WI-UI2.3). */
+/* The close button is canonical `.vm-icon-btn--sm`. */
 
 .quick-look-body {
   flex: 1;

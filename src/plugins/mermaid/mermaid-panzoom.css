@@ -58,7 +58,7 @@
 }
 
 /* Export button — to the left of reset. The square is canonical
-   `.vm-icon-btn--sm` (WI-UI2.3); this residual owns only the overlay
+   `.vm-icon-btn--sm`; this residual owns only the overlay
    placement and the reveal-on-hover. `.mermaid-export-btn` stays in the DOM
    as the pan-zoom hit-test hook. */
 .mermaid-export-overlay {
@@ -79,7 +79,7 @@
 }
 
 /* Theme picker menu — fixed to escape overflow:hidden container */
-/* Surface chrome comes from `.vm-menu` (overlay-shared.css, WI-UI3.1). */
+/* Surface chrome comes from `.vm-menu` (overlay-shared.css). */
 .mermaid-export-menu {
   z-index: var(--z-popup);
   display: flex;

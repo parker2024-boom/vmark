@@ -161,46 +161,6 @@ describe("getActiveFilePathForCurrentWindow", () => {
   });
 });
 
-describe("validateLocalPath", () => {
-  it("returns true when exists() returns true", async () => {
-    const { validateLocalPath } = await import("./imageHandlerUtils");
-    const { exists } = await import("@tauri-apps/plugin-fs");
-    vi.mocked(exists).mockResolvedValueOnce(true);
-    const result = await validateLocalPath("/valid/path.png");
-    expect(result).toBe(true);
-  });
-
-  it("returns false when exists() throws", async () => {
-    const { validateLocalPath } = await import("./imageHandlerUtils");
-    const { exists } = await import("@tauri-apps/plugin-fs");
-    vi.mocked(exists).mockRejectedValueOnce(new Error("fs error"));
-    const result = await validateLocalPath("/bad/path");
-    expect(result).toBe(false);
-  });
-});
-
-describe("expandHomePath", () => {
-  it("returns path unchanged when not starting with ~/", async () => {
-    const { expandHomePath } = await import("./imageHandlerUtils");
-    const result = await expandHomePath("/absolute/path.md");
-    expect(result).toBe("/absolute/path.md");
-  });
-
-  it("expands ~/ path using homeDir and join (line 96)", async () => {
-    const { expandHomePath } = await import("./imageHandlerUtils");
-    const result = await expandHomePath("~/Documents/file.md");
-    expect(result).toBe("/Users/test/Documents/file.md");
-  });
-
-  it("returns null when homeDir throws for ~/ path", async () => {
-    const { expandHomePath } = await import("./imageHandlerUtils");
-    const pathMod = await import("@tauri-apps/api/path");
-    vi.mocked(pathMod.homeDir).mockRejectedValueOnce(new Error("no home"));
-    const result = await expandHomePath("~/Documents/file.md");
-    expect(result).toBeNull();
-  });
-});
-
 describe("isImageFile", () => {
   it("returns true for image MIME type", () => {
     const file = new File([""], "photo.jpg", { type: "image/jpeg" });

@@ -1,4 +1,4 @@
-//! Turning a child's output pipe into log lines (#135, #315).
+//! Turning a child's output pipe into log lines.
 //!
 //! Split from `spawn.rs` at the file-size gate, and it is a real seam: this
 //! half knows nothing about processes, only about bytes arriving on a reader
@@ -19,13 +19,13 @@ const MAX_LOG_LINE: u64 = 64 * 1024;
 /// Bytes, not `BufRead::lines()`: that iterator yields `Err` for a line that
 /// is not UTF-8, and `map_while(Result::ok)` then ENDED the drain — the pipe's
 /// read end was dropped with the child still writing, so its next write got
-/// EPIPE (#135). Invalid UTF-8 is replaced and the drain continues; only a
+/// EPIPE. Invalid UTF-8 is replaced and the drain continues; only a
 /// genuine read error stops it, and that is logged. A line longer than
 /// `MAX_LOG_LINE` is delivered in bounded pieces rather than buffered whole.
 ///
 /// A piece cut by that BOUND is cut at a byte, which is not a character
 /// boundary: a multi-byte code point straddling it had BOTH halves replaced,
-/// so a CJK log line lost a character every 64 KiB (#315). The incomplete
+/// so a CJK log line lost a character every 64 KiB. The incomplete
 /// suffix is carried into the next read instead — only when the bound made
 /// the cut, and only for a truncated sequence, so invalid bytes mid-line are
 /// still replaced where they are.

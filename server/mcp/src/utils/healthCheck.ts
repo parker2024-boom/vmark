@@ -13,7 +13,7 @@
  * It sets `process.exitCode` rather than calling `process.exit()`: stdout is
  * ASYNCHRONOUS when it is a pipe, and every caller reads it through one — the
  * app's `useMcpHealthCheck.ts` JSON.parses the result — so exiting immediately
- * after a `console.log` can truncate the report (audit R3 #195).
+ * after a `console.log` can truncate the report.
  *
  * @coordinates-with src/cli.ts — the only caller
  * @coordinates-with src/index.ts — TOOL_REGISTRY, the surface this verifies
@@ -22,7 +22,21 @@
  */
 import { createVMarkMcpServer, EXPECTED_TOOL_COUNT, TOOL_REGISTRY } from '../index.js';
 
-export async function runHealthCheck(version: string): Promise<void> {
+/** The part of the server factory the health check uses. */
+export type HealthCheckServerFactory = (
+  bridge: Parameters<typeof createVMarkMcpServer>[0],
+  options: { version: string },
+) => Pick<ReturnType<typeof createVMarkMcpServer>, 'listTools'>;
+
+/**
+ * `createServer` defaults to the real factory; it is a parameter so a test can
+ * hand the validation a malformed surface (a wrong name, a duplicate) that the
+ * real registry, by construction, never produces.
+ */
+export async function runHealthCheck(
+  version: string,
+  createServer: HealthCheckServerFactory = createVMarkMcpServer,
+): Promise<void> {
   // Note: no import self-test here. The server module is statically imported
   // below (hoisted, evaluated before any of this runs), so an import failure
   // crashes the process before runHealthCheck — a dynamic re-import could
@@ -40,7 +54,7 @@ export async function runHealthCheck(version: string): Promise<void> {
     };
 
     // 2. Can we instantiate the server and list tools?
-    const server = createVMarkMcpServer(mockBridge, { version });
+    const server = createServer(mockBridge, { version });
     const allTools = server.listTools();
 
     // 3. Validate the registered tools are EXACTLY the declared surface.
@@ -48,7 +62,7 @@ export async function runHealthCheck(version: string): Promise<void> {
     // A count comparison passes on compensating errors — `browser` registering
     // zero and `document` registering two keeps the total right — and it says
     // nothing about NAMES, so a tool registered under the wrong one satisfied
-    // it too (audit R3 #197). The expectation comes from `TOOL_REGISTRY`, which
+    // it too. The expectation comes from `TOOL_REGISTRY`, which
     // is already the single source of truth `EXPECTED_TOOL_COUNT` derives from,
     // so this restates no contract; it reads the same one more precisely.
     const expected = TOOL_REGISTRY.map((t) => t.name as string);

@@ -25,9 +25,9 @@ import {
 } from "./refreshGuards";
 import { messageOf } from "./breakdownShared";
 
-/** WI-2b.7: load the context set (implicit default always present). */
+/** Load the context set (implicit default always present). */
 export async function refreshContexts(workspaceRoot: string): Promise<void> {
-  if (!isActiveWorkspace(workspaceRoot)) return; // audit #4/#5: no ticket for a left workspace
+  if (!isActiveWorkspace(workspaceRoot)) return; // no ticket for a left workspace
   const ticket = takeRefreshTicket("contexts");
   try {
     const contexts = await invoke<ContextRow[]>("coherence_contexts", {
@@ -83,9 +83,9 @@ export async function setContextEnforcement(
   await refreshContexts(workspaceRoot);
 }
 
-/** WI-3.6: the pull-only branch-context candidate for the current branch. */
+/** The pull-only branch-context candidate for the current branch. */
 export async function refreshBranchCandidate(workspaceRoot: string): Promise<void> {
-  if (!isActiveWorkspace(workspaceRoot)) return; // audit #4/#5: no ticket for a left workspace
+  if (!isActiveWorkspace(workspaceRoot)) return; // no ticket for a left workspace
   const ticket = takeRefreshTicket("branch");
   try {
     const candidate = await invoke<BranchCandidate | null>(
@@ -102,7 +102,7 @@ export async function refreshBranchCandidate(workspaceRoot: string): Promise<voi
   }
 }
 
-/** WI-3.6: create a context mapped to the current branch (explicit act). */
+/** Create a context mapped to the current branch (explicit act). */
 export async function createContextFromBranch(workspaceRoot: string): Promise<void> {
   try {
     await invoke("coherence_context_from_branch", { workspaceRoot });

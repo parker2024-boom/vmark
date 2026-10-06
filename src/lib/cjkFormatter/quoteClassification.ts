@@ -10,14 +10,17 @@
  *   - Curly glyphs carry their role (“/‘ open, ”/’ close): classifying them
  *     by whitespace context made the role flip between formatting passes when
  *     the pipeline's own spacing rules inserted a space next to the glyph
- *     (non-idempotence, WI-5)
+ *     (non-idempotence)
  *   - Corner brackets 「」『』 have fixed roles by nature (CORNER_QUOTE_ROLES)
  *   - Straight quotes are classified from context: whitespace/bracket
  *     neighbors, then the open-stack state, defaulting to open
  *
  * @coordinates-with quotePairing.ts — tokenizeQuotes consumes every export here
+ * @coordinates-with rules/shared.ts — the one definition of a Latin letter
  * @module lib/cjkFormatter/quoteClassification
  */
+
+import { isLatinLetter } from "./rules/shared";
 
 // Quote characters
 export const STRAIGHT_DOUBLE = '"';
@@ -62,18 +65,18 @@ export function isApostrophe(text: string, pos: number): boolean {
   const after = pos < text.length - 1 ? text[pos + 1] : "";
 
   // Letter + ' + letter: don't, it's, l'amour
-  if (/[a-zA-Z]/.test(before) && /[a-zA-Z]/.test(after)) {
+  if (isLatinLetter(before) && isLatinLetter(after)) {
     return true;
   }
 
   // Letter + ' + s (possessive): Xiaolai's
   // Note: this block is structurally unreachable — if after==="s", the letter+'+letter check above
-  // already returns true (since "s" passes /[a-zA-Z]/).
-  /* v8 ignore next 5 -- @preserve unreachable: when after==="s", the letter+letter contraction branch above fires first; "s" always matches /[a-zA-Z]/ */
-  if (/[a-zA-Z]/.test(before) && after.toLowerCase() === "s") {
+  // already returns true (since "s" is a Latin letter).
+  /* v8 ignore next 5 -- @preserve unreachable: when after==="s", the letter+letter contraction branch above fires first; "s" is always a Latin letter */
+  if (isLatinLetter(before) && after.toLowerCase() === "s") {
     // Check if followed by word boundary
     const afterS = pos + 2 < text.length ? text[pos + 2] : "";
-    if (!/[a-zA-Z]/.test(afterS)) {
+    if (!isLatinLetter(afterS)) {
       return true;
     }
   }

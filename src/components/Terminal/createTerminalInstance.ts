@@ -71,6 +71,7 @@ import { maybeInstallDevInputTrace } from "./terminalInputTrace";
 import { createResourceStack } from "./resourceStack";
 import {
   buildTerminalOptions,
+  shouldUseWebglRenderer,
   type TerminalInstanceSettings,
 } from "./terminalOptions";
 
@@ -109,7 +110,7 @@ export interface TerminalInstance {
    */
   onCompositionCommit: ((text: string) => void) | null;
   /** Report a byte-run the wiring actually forwarded from onData to the PTY
-   *  — feeds the gate's write-derived insert ownership (WI-13). */
+   *  — feeds the gate's write-derived insert ownership. */
   noteExternalWrite: (data: string) => void;
   /**
    * User-triggered "redraw the terminal" action (#856). Clears the WebGL
@@ -121,10 +122,10 @@ export interface TerminalInstance {
    * DOM renderer, and broadcasts nothing.
    */
   resetDisplay: () => void;
-  /** The shell's last-reported cwd via OSC 7, or null if never reported (WI-2.1). */
+  /** The shell's last-reported cwd via OSC 7, or null if never reported. */
   getCwd: () => string | null;
   /** Command marks from OSC 133 (prompt line + exit code) for prompt nav and
-   *  exit-status decorations (WI-3.2). Empty without shell integration. */
+   *  exit-status decorations. Empty without shell integration. */
   getCommands: () => CommandMark[];
   /** True while a foreground command is running (OSC 133 C→D). False without
    *  shell integration. Used to avoid injecting `cd` into a busy shell. */
@@ -143,7 +144,7 @@ interface CreateOptions {
   ptyRef: React.RefObject<import("@/lib/pty").IPty | null>;
   onSearch: () => void;
   /** Fired when the shell rings the bell (BEL / OSC) — drives the background
-   *  activity indicator (WI-4.3). */
+   *  activity indicator. */
   onBell?: () => void;
 }
 
@@ -188,20 +189,20 @@ export function createTerminalInstance(
     // (IME textarea, WebGL canvases).
     term.open(container);
 
-    // Resolve + validate the helper textarea via the public getter, failing loud
-    // (WI-1.1/1.2). Dev throws on a missing/misplaced textarea; prod logs and
+    // Resolve + validate the helper textarea via the public getter, failing loud.
+    // Dev throws on a missing/misplaced textarea; prod logs and
     // returns undefined, in which case we install a no-op IME handle so the
     // terminal still works (the old `textarea!` path crashed on addEventListener).
     const textarea = resolveHelperTextarea(term, container);
-    // Channel Ownership is the only input path (WI-4b removed the legacy dual-writer
-    // path). A missing textarea (prod fail-loud) → inert no-op handle.
+    // Channel Ownership is the only input path (the legacy dual-writer
+    // path was removed). A missing textarea (prod fail-loud) → inert no-op handle.
     const ime = textarea
       ? setupImeCompositionGate({ container, textarea })
       : createNoopImeHandle();
     resources.acquire(() => ime.cleanup());
 
     // Dev-only input-trace recorder (no-op in prod / unless the localStorage flag
-    // is set). Lets a human capture real IME traces by typing — plan WI-0.1.
+    // is set). Lets a human capture real IME traces by typing.
     const detachInputTrace = textarea
       ? maybeInstallDevInputTrace(textarea)
       : () => {};
@@ -215,16 +216,16 @@ export function createTerminalInstance(
     const webgl = setupWebglRenderer({
       term,
       container,
-      enabled: !!settings.useWebGL,
+      enabled: shouldUseWebglRenderer(!!settings.useWebGL),
     });
     resources.acquire(() => webgl.cleanup());
 
-    // OSC 7 cwd tracking — feeds relative file-link resolution (WI-2.1/2.3).
+    // OSC 7 cwd tracking — feeds relative file-link resolution.
     const osc = setupOsc7(term);
-    // OSC 133 command boundaries — prompt nav + exit-status decorations (WI-3.2).
+    // OSC 133 command boundaries — prompt nav + exit-status decorations.
     const osc133 = setupOsc133(term);
 
-    // Bell → background-activity indicator (WI-4.3).
+    // Bell → background-activity indicator.
     if (onBell) term.onBell(() => onBell());
 
     setupWebLinks(term);
@@ -247,7 +248,7 @@ export function createTerminalInstance(
     });
     resources.acquire(() => cleanupCopyOnSelect());
 
-    // OSC 52 clipboard (WI-3.5): write-only by design — see setupOsc52 for why
+    // OSC 52 clipboard: write-only by design — see setupOsc52 for why
     // read is denied even when this setting is on.
     const cleanupOsc52 = setupOsc52(term, settings.osc52Clipboard);
     resources.acquire(() => cleanupOsc52());

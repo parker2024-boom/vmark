@@ -3,6 +3,8 @@
  *
  * Generates stable, unique IDs for document headings.
  * Used for bookmark/anchor links and fragment navigation.
+ *
+ * @module utils/headingSlug
  */
 
 import type { Node as PMNode } from "@tiptap/pm/model";

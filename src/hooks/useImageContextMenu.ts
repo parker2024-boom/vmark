@@ -2,12 +2,12 @@
  * Image Context Menu Hook
  *
  * Purpose: Handles actions from the image context menu — Change Image,
- *   Delete Image, Copy Image Path, and Reveal in Finder.
+ *   Delete Image, Copy Image Path, and Reveal (Finder / Explorer / file manager).
  *
  * Key decisions:
  *   - Change Image replaces the src attribute without removing/reinserting node
  *   - Copy path resolves to absolute path (relative → absolute via document dir)
- *   - Reveal uses Tauri's revealItemInDir for native Finder integration
+ *   - Reveal uses Tauri's revealItemInDir; its failure message names the platform's file manager
  *
  * @coordinates-with imageContextMenuStore.ts — reads menu state (position, nodePos)
  * @coordinates-with services/media/imageOperations.ts — copyImageToAssets for new images
@@ -24,6 +24,7 @@ import { useImageContextMenuStore } from "@/stores/imageContextMenuStore";
 import { copyImageToAssets } from "@/services/media/imageOperations";
 import { useDocumentFilePath } from "@/hooks/useDocumentState";
 import { imageContextMenuWarn, imageContextMenuError } from "@/utils/debug";
+import { revealFailedKey } from "@/utils/revealFailedKey";
 import i18n from "@/i18n";
 import { IMAGE_EXTENSIONS } from "@/utils/mediaExtensions";
 import { attrsForSingleEdit } from "@/plugins/mediaPopup/mediaAttrUpdates";
@@ -177,8 +178,8 @@ export function useImageContextMenu(getEditorView: GetEditorView) {
             try {
               await revealItemInDir(absolutePath);
             } catch (error) {
-              imageContextMenuError("Failed to reveal in Finder:", error);
-              await message(i18n.t("dialog:toast.failedToRevealImage"), {
+              imageContextMenuError("Failed to reveal in file manager:", error);
+              await message(i18n.t(revealFailedKey()), {
                 kind: "error",
               });
             }

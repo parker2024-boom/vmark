@@ -1,15 +1,16 @@
 /**
  * Footnote DOM Utilities Tests
  *
- * Tests for scrollToPosition, findFootnoteDefinition, findFootnoteReference,
- * getFootnoteRefFromTarget, and getFootnoteDefFromTarget.
+ * Tests for scrollToPosition, jumpToFootnoteDefinition, findFootnoteDefinition,
+ * findFootnoteReference, getFootnoteRefFromTarget, and getFootnoteDefFromTarget.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Schema } from "@tiptap/pm/model";
-import { EditorState } from "@tiptap/pm/state";
+import { EditorState, type Transaction } from "@tiptap/pm/state";
 import {
   scrollToPosition,
+  jumpToFootnoteDefinition,
   findFootnoteDefinition,
   findFootnoteReference,
   getFootnoteRefFromTarget,
@@ -206,6 +207,71 @@ describe("scrollToPosition", () => {
   it("does nothing when the view is not inside an editor-content element", () => {
     // Should not throw
     scrollToPosition(viewIn(null, vi.fn(() => ({ top: 300 }))), 10);
+  });
+});
+
+describe("jumpToFootnoteDefinition", () => {
+  /** A live view inside a scroller; `events` records each side effect in order. */
+  function liveView(doc: ReturnType<typeof schema.node>) {
+    const events: string[] = [];
+    let state = EditorState.create({ doc, schema });
+    const scroller = {
+      getBoundingClientRect: () => ({ top: 0 }),
+      scrollTop: 0,
+      scrollTo: vi.fn(() => { events.push("scroll"); }),
+      hasAttribute: () => false,
+    };
+    const view = {
+      dom: { closest: () => scroller, firstElementChild: null },
+      get state() { return state; },
+      dispatch: (tr: Transaction) => { events.push("select"); state = state.apply(tr); },
+      focus: () => { events.push("focus"); },
+      coordsAtPos: () => ({ top: 500 }),
+    } as unknown as import("@tiptap/pm/view").EditorView;
+    return { view, events, scroller };
+  }
+
+  const docWithDefs = () =>
+    schema.node("doc", null, [pWithRef("See", "a"), p("Body"), fnDef("a", "Alpha"), fnDef("b", "Beta")]);
+
+  it("selects the start of the definition's text, focuses, then scrolls", () => {
+    const { view, events, scroller } = liveView(docWithDefs());
+    const defPos = findFootnoteDefinition(view, "b")!.pos;
+
+    expect(jumpToFootnoteDefinition(view, "b", defPos)).toBe(true);
+
+    expect(events).toEqual(["select", "focus", "scroll"]);
+    const { $from, empty } = view.state.selection;
+    expect(empty).toBe(true);
+    expect($from.node(-1).attrs.label).toBe("b");
+    expect($from.parentOffset).toBe(0);
+    expect(scroller.scrollTo).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["another footnote's definition", (view: import("@tiptap/pm/view").EditorView) => findFootnoteDefinition(view, "a")!.pos],
+    ["a non-definition node", () => 0],
+    ["a position past the end of the document", (view: import("@tiptap/pm/view").EditorView) => view.state.doc.content.size + 50],
+  ])("re-finds the definition by label when the stored position points at %s", (_case, stalePos) => {
+    const { view, events } = liveView(docWithDefs());
+
+    expect(jumpToFootnoteDefinition(view, "b", stalePos(view))).toBe(true);
+
+    expect(events).toEqual(["select", "focus", "scroll"]);
+    expect(view.state.selection.$from.node(-1).attrs.label).toBe("b");
+  });
+
+  it.each([
+    ["the label has no definition", "zzz", 5],
+    ["there is no stored position", "b", null],
+  ])("does nothing when %s", (_case, label, pos) => {
+    const { view, events } = liveView(docWithDefs());
+    const before = view.state;
+
+    expect(jumpToFootnoteDefinition(view, label, pos)).toBe(false);
+
+    expect(events).toEqual([]);
+    expect(view.state).toBe(before);
   });
 });
 

@@ -35,13 +35,13 @@ VMark prend en charge la vidéo, l'audio et les embeds YouTube dans vos document
 Utilisez des balises HTML5 vidéo standard :
 
 ```html
-<video src="chemin/vers/video.mp4" controls></video>
+<video src="path/to/video.mp4" controls></video>
 ```
 
 Avec des attributs optionnels :
 
 ```html
-<video src="video.mp4" title="Démo" poster="miniature.jpg" controls></video>
+<video src="video.mp4" title="Demo" poster="thumbnail.jpg" controls></video>
 ```
 
 ### Audio
@@ -49,7 +49,7 @@ Avec des attributs optionnels :
 Utilisez des balises HTML5 audio standard :
 
 ```html
-<audio src="chemin/vers/audio.mp3" controls></audio>
+<audio src="path/to/audio.mp3" controls></audio>
 ```
 
 ### Embeds YouTube
@@ -69,6 +69,8 @@ Utilisez des iframes du lecteur Vimeo :
 ```
 
 Vous pouvez également coller directement une URL Vimeo (par ex. `https://vimeo.com/123456789`) et VMark la convertira automatiquement en embed.
+
+Les vidéos Vimeo non répertoriées sont également prises en charge : collez le lien de partage non répertorié (`https://vimeo.com/123456789/abcdef1234` ou une URL avec `?h=…`) et VMark conserve le hachage de confidentialité dont l'embed a besoin pour être lu.
 
 ### Embeds Bilibili
 
@@ -117,6 +119,18 @@ En mode Source, tapez les balises HTML directement. Les balises médias sont mis
 - **Vimeo** — bordure bleue
 - **Bilibili** — bordure rose
 
+### Collage intelligent en mode Source
+
+Coller en mode Source fait ce qui est correct en Markdown au lieu de déverser du texte brut :
+
+- **Un chemin d'image** — ou plusieurs, issus d'une copie de plusieurs fichiers dans le Finder ou l'Explorateur — est validé, copié dans le dossier des ressources du document et inséré sous la forme `![](relative-path)`. Lorsqu'un collage est ambigu, une petite notification de confirmation vous le demande d'abord
+- **Une capture d'écran ou une image copiée** (données d'image binaires dans le presse-papiers) est enregistrée dans le dossier des ressources et insérée de la même manière
+- **Une URL collée sur du texte sélectionné** devient un lien : `[selected text](https://…)`
+- **Du HTML ou du Markdown copié depuis une autre application** est converti et nettoyé avant d'être inséré — sauf à l'intérieur d'un bloc de code délimité, où le texte collé reste tel quel
+- **Les fichiers image glissés depuis le Finder ou l'Explorateur** dans l'éditeur source sont également copiés et insérés
+
+La conversion suit **Paramètres → Markdown → Traitement du collage depuis le presse-papiers** (`Intelligent` est la valeur par défaut ; les autres modes la désactivent), et les fichiers sont copiés dans le dossier des ressources tant que **Paramètres → Fichiers et images → Copier dans le dossier des ressources** est activé (par défaut).
+
 ## Modifier les médias
 
 Double-cliquez sur n'importe quel élément multimédia en mode WYSIWYG pour ouvrir la fenêtre contextuelle multimédia :
@@ -135,13 +149,19 @@ VMark prend en charge trois types de chemins médias :
 | Type de chemin | Exemple | Comportement |
 |----------------|---------|-------------|
 | Relatif | `./assets/video.mp4` | Résolu par rapport au répertoire du document |
-| Absolu | `/Users/moi/video.mp4` | Utilisé directement via le protocole d'assets Tauri |
+| Relatif au parent | `../images/photo.png` | Résolu par rapport au répertoire du document, en remontant d'autant de niveaux que le chemin le demande |
+| Absolu | `/Users/me/video.mp4` | Utilisé directement via le protocole d'assets Tauri |
 | URL externe | `https://example.com/video.mp4` | Chargé directement depuis le web |
 
 Les chemins relatifs sont recommandés — ils gardent vos documents portables entre les machines.
 
+Un dossier de ressources partagé à côté de vos notes fonctionne tel quel — `notes/report.md`
+peut référencer `../images/photo.png`. (Avant la version 0.9.79, ces chemins s'affichaient comme des
+espaces réservés cassés.)
+
 ## Sécurité
 
-- Les chemins relatifs sont validés contre les attaques de traversée de répertoire
-- Les iframes d'embeds vidéo sont restreints aux domaines autorisés : `youtube.com`, `youtube-nocookie.com`, `player.vimeo.com` et `player.bilibili.com`
+- Un chemin de média ne peut pas porter de schéma d'URI (`javascript:`, `file:` ou un schéma personnalisé) ; de telles sources sont refusées au lieu d'être chargées
+- Un chemin qui désigne un répertoire plutôt qu'un fichier est refusé
+- Les embeds vidéo ne se chargent que depuis trois hôtes : `www.youtube-nocookie.com` (le lecteur à confidentialité renforcée de YouTube), `player.vimeo.com` et `player.bilibili.com`. Un lien YouTube, ou un iframe écrit avec `youtube.com`, est intégré via l'hôte à confidentialité renforcée. La politique de sécurité du contenu de VMark autorise le chargement de cadres depuis ces hôtes et depuis aucun autre site
 - Les autres sources iframe sont supprimées par le désinfectant

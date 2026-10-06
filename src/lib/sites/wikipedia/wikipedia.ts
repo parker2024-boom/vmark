@@ -1,5 +1,5 @@
 /**
- * Wikipedia site plugin (WI-NB4.3) — the registry's first production
+ * Wikipedia site plugin — the registry's first production
  * registration, so `registerSite`/`dispatchSite`/`readerForUrl` run in anger
  * rather than only in tests.
  *

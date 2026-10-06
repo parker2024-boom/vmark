@@ -28,9 +28,6 @@ vi.mock("@/services/ime/imeToast", () => ({
 vi.mock("@/services/tabs/tabOperations", () => ({
   closeTabsWithDirtyCheck: vi.fn(),
 }));
-vi.mock("@/services/windowClose/tabCleanup", () => ({
-  cleanupTabState: vi.fn(),
-}));
 
 import {
   handleCloseWorkspace,

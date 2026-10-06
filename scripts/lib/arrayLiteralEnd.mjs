@@ -14,7 +14,7 @@
  * count still consistent, nothing to fail on.
  *
  * ONE HAND-ROLLED LEXER CANNOT SERVE BOTH LANGUAGES, which is why `lang` is a
- * parameter rather than a heuristic (audit R2 #136/#138/#139/#140). The
+ * parameter rather than a heuristic. The
  * previous single loop was wrong for each language in a different way: TS
  * regex literals (`/[a]/`) and templates nested inside `${…}` moved the depth
  * count, while Rust block comments NEST and Rust raw strings (`r#"a"b"#`) hold

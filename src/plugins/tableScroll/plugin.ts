@@ -10,6 +10,8 @@
  * wrapper div between the node's outer DOM and the tbody content
  * hole can break posAtCoords mapping (clicks don't place cursor)
  * and leaves no ignoreMutation to filter resize-handle mutations.
+ *
+ * @module plugins/tableScroll/plugin
  */
 
 import { Table } from "@tiptap/extension-table";

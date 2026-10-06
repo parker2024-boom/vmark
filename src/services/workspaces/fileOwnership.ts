@@ -1,3 +1,11 @@
+/**
+ * fileOwnership — decides whether a tab may write a file that is also open in
+ * other tabs: duplicate opens become read-only, and a dirty writable copy
+ * elsewhere blocks writing unless forced.
+ *
+ * @module services/workspaces/fileOwnership
+ */
+
 import { isWorkspaceRailEnabled } from "@/services/featureFlags/workspaceRailFeatureFlag";
 import { imeToast as toast } from "@/services/ime/imeToast";
 import { useDocumentStore } from "@/stores/documentStore";
@@ -89,7 +97,7 @@ export function applyFileOwnershipAfterOpen(
   const resolution = resolveFileOpenOwnership(filePath, { ...options, currentTabId: tabId });
   const windowLabel = findWindowLabelForTab(tabId);
   if (windowLabel) {
-    // WI-12.2: every USER-facing open lands here (fileOpen, Finder, media,
+    // Every USER-facing open lands here (fileOpen, Finder, media,
     // replace-tab). The claim is atomic and, when this tab is the ACTIVE one,
     // the visible workspace follows its owner — an active tab must never be
     // hidden by the projection. MCP opens use their own background path (D10).

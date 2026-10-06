@@ -1,7 +1,7 @@
 /**
  * Purpose: read the four code registries README.md restates — MCP providers,
  *   shortcut definitions, UI languages, and the theme catalog with its
- *   Windows/Linux subset — as plain values, from source text (WI-FL0.5).
+ *   Windows/Linux subset — as plain values, from source text.
  *
  * Text, not imports, on purpose: `providers.rs` is Rust, and a gates-tier
  * script has no business evaluating `LanguageSettings.tsx` (React) to read one

@@ -109,7 +109,7 @@ VMark valida el contenido SVG antes de renderizarlo:
 - El XML debe estar bien formado (sin errores de análisis)
 - El elemento raíz debe ser `<svg>`
 
-Si la validación falla, se muestra un mensaje de error **SVG No Válido** en lugar del gráfico renderizado. Haz doble clic en el error para editar y corregir el código fuente.
+Si la validación falla, se muestra un mensaje de error **SVG no válido** en lugar del gráfico renderizado. Haz doble clic en el error para editar y corregir el código fuente.
 
 ## Flujo de Trabajo con IA
 
@@ -138,6 +138,12 @@ La IA genera un gráfico de barras SVG que se renderiza en línea en tu document
 ### Seguridad
 
 VMark sanea el contenido SVG antes de renderizarlo. Las etiquetas de script y los atributos de controladores de eventos (`onclick`, `onerror`, etc.) se eliminan. Esto protege contra XSS al pegar SVG de fuentes no confiables.
+
+También se eliminan las referencias externas: `<use>` e `<image>` pueden apuntar a un fragmento del mismo documento (`href="#arrowhead"`) o a un contenido `data:image/…` en línea, pero una URL que apunte fuera del equipo se descarta. Sin esto, el simple hecho de abrir un documento que contenga un diagrama no confiable obtendría esa URL — revelando tu dirección IP y el momento en que abriste el archivo. Las herramientas de diagramas como Mermaid solo hacen referencia a fragmentos, así que los diagramas normales no se ven afectados.
+
+La hoja de estilos propia de un SVG (`<style>`) queda confinada a ese SVG: cada selector se reescribe para que solo pueda coincidir dentro del SVG del que procede, de modo que un diagrama no puede cambiar el estilo del editor ni de otro diagrama. Solo se conservan las reglas de estilo, `@media` y `@keyframes` (los nombres de animación se hacen únicos por SVG); se descartan `@import`, `@font-face` y otras reglas at, las referencias `url()` externas y `position: fixed` / `sticky`. Los elementos `<form>` se eliminan (su contenido se conserva).
+
+Los enlaces dentro de un SVG renderizado nunca hacen navegar al propio VMark. Al hacer clic en un enlace web se abre en el navegador del sistema; un enlace relativo a un archivo abre el archivo en una pestaña de VMark; los enlaces `javascript:`, `file:` y `data:` nunca se abren.
 
 ### Tamaño
 

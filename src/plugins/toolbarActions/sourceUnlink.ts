@@ -4,7 +4,7 @@
  * Purpose: `unlinkAtCursor` (sourceImageActions.ts) handles inline
  * markdown links and wiki links; reference links ([text][label] and the
  * collapsed [text][]) were silently ignored, leaving the context menu's
- * "Remove Link" a no-op on them (audit finding, round 1). This wrapper
+ * "Remove Link" a no-op on them. This wrapper
  * tries the existing path first, then unwraps reference links to their
  * visible text. `sourceAdapter`'s "unlink" case dispatches here.
  *

@@ -1,5 +1,5 @@
 /**
- * Coherence capture funnel (WI-1.6)
+ * Coherence capture funnel
  *
  * Purpose: the single frontend seam into the Rust coherence kernel —
  * write capture (`captureWrite`), live-buffer AI-edit capture
@@ -31,7 +31,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
-import { registerPendingSave, clearPendingSave } from "@/utils/pendingSaves";
+import { registerPendingSave, clearPendingSaveAfterGrace } from "@/utils/pendingSaves";
 import { coherenceLog } from "@/utils/debug";
 import { currentCapturePolicy } from "./capturePolicy";
 
@@ -84,8 +84,8 @@ export interface CoherenceCaptureReceipt {
   content_with_identity: string | null;
 }
 
-// All captures from this webview run strictly in submission order (audit
-// T2): overlapping saves/applies must not reach the kernel out of order,
+// All captures from this webview run strictly in submission order:
+// overlapping saves/applies must not reach the kernel out of order,
 // or an older buffer could become the newest revision.
 let captureQueue: Promise<unknown> = Promise.resolve();
 
@@ -105,7 +105,7 @@ export function workspaceRelativePath(root: string, absolutePath: string): strin
   const rel = absolutePath.slice(normalizedRoot.length + 1);
   if (rel.length === 0 || rel.includes("\\")) return null;
   // Traversal segments never survive to the IPC boundary (the Rust guard
-  // rejects them too — this is defense in depth, audit T1).
+  // rejects them too — this is defense in depth).
   const segments = rel.split("/");
   if (segments.some((s) => s === "" || s === "." || s === "..")) return null;
   return rel;
@@ -113,7 +113,7 @@ export function workspaceRelativePath(root: string, absolutePath: string): strin
 
 /** Capture one successful write. Never throws; null = not captured
  *  (outside the workspace, declined by the capture-on-save policy, or failed).
- *  Serialized per webview (audit T2); a caller-minted idem survives
+ *  Serialized per webview; a caller-minted idem survives
  *  retries (spec §5.1). */
 export async function captureWrite(
   args: CaptureWriteArgs
@@ -144,7 +144,7 @@ export async function captureWrite(
       if (receipt?.content_with_identity) {
         // The kernel rewrote the file on disk; let the watcher match it.
         const token = registerPendingSave(args.absolutePath, receipt.content_with_identity);
-        setTimeout(() => clearPendingSave(args.absolutePath, token), 1000);
+        clearPendingSaveAfterGrace(args.absolutePath, token);
       }
       return receipt;
     });
@@ -166,7 +166,7 @@ export async function captureWrite(
 export async function captureAiEdit(
   args: CaptureAiEditArgs
 ): Promise<CoherenceCaptureReceipt | null> {
-  // Snapshot NOW (audit T3): the store is read synchronously at the
+  // Snapshot NOW: the store is read synchronously at the
   // apply site's call, so a rapid second apply or tab switch cannot
   // change what this capture records.
   const doc = useDocumentStore.getState().getDocument(args.tabId);
@@ -187,7 +187,7 @@ export async function captureAiEdit(
 }
 
 /**
- * One-line funnel for explorer-created files (WI-1.6): registers the
+ * One-line funnel for explorer-created files: registers the
  * object from birth without rewriting the fresh empty file — identity
  * lands with the first real save. Fire-and-forget.
  */

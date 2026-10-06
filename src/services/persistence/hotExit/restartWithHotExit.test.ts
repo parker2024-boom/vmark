@@ -6,13 +6,17 @@
  * Critical: Session file must NOT be deleted until restore is confirmed complete.
  */
 
-import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { checkAndRestoreSession } from './restartWithHotExit';
 import { migrateSession } from './schemaMigration';
 import { HOT_EXIT_EVENTS, type SessionData } from './types';
 import { restoreMainWindowState } from '../resilience/_hotExitRestore';
+import { ASYNC_IMPORT_WAIT } from '@/test/waitBudget';
+
+/** A fixed capture time (seconds); restore never compares it with the clock. */
+const SESSION_TIMESTAMP = 1_768_478_400;
 
 // Mock Tauri APIs
 vi.mock('@tauri-apps/api/core', () => ({
@@ -56,6 +60,23 @@ describe('checkAndRestoreSession', () => {
     });
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** The restore command has run, so the outcome listeners are armed. */
+  const untilRestoreInvoked = () =>
+    vi.waitFor(() => expect(mockRestoreMainWindow).toHaveBeenCalled(), ASYNC_IMPORT_WAIT);
+
+  /**
+   * Drain pending promise reactions until `done()` holds. Moves no clock, so it
+   * is safe under fake timers, where `vi.waitFor` advances time on each poll.
+   */
+  async function untilSettled(done: () => boolean): Promise<void> {
+    for (let turn = 0; turn < 1000 && !done(); turn++) await Promise.resolve();
+    expect(done()).toBe(true);
+  }
+
   it('should return false when no session exists', async () => {
     mockInvoke.mockResolvedValueOnce(null); // hot_exit_inspect_session returns null
 
@@ -71,7 +92,7 @@ describe('checkAndRestoreSession', () => {
     // Single-window session (main only) - uses legacy hot_exit_restore
     const mockSession = {
       version: 1,
-      timestamp: Date.now() / 1000,
+      timestamp: SESSION_TIMESTAMP,
       vmark_version: '0.3.24',
       windows: [{ window_label: 'main', is_main_window: true, tabs: [] }],
     };
@@ -84,8 +105,7 @@ describe('checkAndRestoreSession', () => {
     // Start restore but don't emit complete event yet
     const restorePromise = checkAndRestoreSession();
 
-    // Give time for the restore command to be called
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await untilRestoreInvoked();
 
     // Verify restore was called (single-window uses legacy command)
     // Session is migrated from v1 to current schema before restore
@@ -116,7 +136,7 @@ describe('checkAndRestoreSession', () => {
     // Single-window session (main only) - uses legacy hot_exit_restore
     const mockSession = {
       version: 1,
-      timestamp: Date.now() / 1000,
+      timestamp: SESSION_TIMESTAMP,
       vmark_version: '0.3.24',
       windows: [{ window_label: 'main', is_main_window: true, tabs: [] }],
     };
@@ -128,8 +148,7 @@ describe('checkAndRestoreSession', () => {
     // Start restore
     const restorePromise = checkAndRestoreSession();
 
-    // Give time for the restore command to be called
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await untilRestoreInvoked();
 
     // Emit restore-failed event
     const failedHandler = eventListeners.get(HOT_EXIT_EVENTS.RESTORE_FAILED);
@@ -152,7 +171,7 @@ describe('checkAndRestoreSession', () => {
     // Single-window session (main only) - uses legacy hot_exit_restore
     const mockSession = {
       version: 1,
-      timestamp: Date.now() / 1000,
+      timestamp: SESSION_TIMESTAMP,
       vmark_version: '0.3.24',
       windows: [{ window_label: 'main', is_main_window: true, tabs: [] }],
     };
@@ -161,12 +180,18 @@ describe('checkAndRestoreSession', () => {
       .mockResolvedValueOnce(mockSession) // hot_exit_inspect_session
       .mockResolvedValueOnce(undefined);  // hot_exit_restore
 
-    // Start restore with short timeout for testing
-    // Note: In real implementation, we'll use a configurable timeout
-    const restorePromise = checkAndRestoreSession(100); // 100ms timeout for test
+    vi.useFakeTimers();
+    let settled = false;
+    const restorePromise = checkAndRestoreSession(100).finally(() => {
+      settled = true;
+    });
+    // The timeout is armed before the restore command runs; wait for that
+    // command without moving the clock, then move it to either side of 100ms.
+    await untilSettled(() => mockRestoreMainWindow.mock.calls.length > 0);
 
-    // Wait for timeout
-    await new Promise(resolve => setTimeout(resolve, 150));
+    await vi.advanceTimersByTimeAsync(99);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
 
     const result = await restorePromise;
 
@@ -182,7 +207,7 @@ describe('checkAndRestoreSession', () => {
     // Single-window session (main only) - uses legacy hot_exit_restore
     const mockSession = {
       version: 1,
-      timestamp: Date.now() / 1000,
+      timestamp: SESSION_TIMESTAMP,
       vmark_version: '0.3.24',
       windows: [{ window_label: 'main', is_main_window: true, tabs: [] }],
     };
@@ -203,7 +228,7 @@ describe('checkAndRestoreSession', () => {
 
     const restorePromise = checkAndRestoreSession();
 
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await untilRestoreInvoked();
 
     // Emit complete
     const completeHandler = eventListeners.get(HOT_EXIT_EVENTS.RESTORE_COMPLETE);
@@ -220,7 +245,7 @@ describe('checkAndRestoreSession', () => {
   it('should call restoreMainWindowState directly after invoke returns', async () => {
     const mockSession = {
       version: 2,
-      timestamp: Date.now() / 1000,
+      timestamp: SESSION_TIMESTAMP,
       vmark_version: '0.3.30',
       windows: [{ window_label: 'main', is_main_window: true, tabs: [] }],
     };
@@ -232,8 +257,7 @@ describe('checkAndRestoreSession', () => {
 
     const restorePromise = checkAndRestoreSession();
 
-    // Wait for invoke to complete
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await untilRestoreInvoked();
 
     // Verify restoreMainWindowState was called (bypasses RESTORE_START event race)
     expect(mockRestoreMainWindow).toHaveBeenCalled();
@@ -251,7 +275,7 @@ describe('checkAndRestoreSession', () => {
     // Covers the `if (resolved) return;` true branch in handleResolve
     const mockSession = {
       version: 2,
-      timestamp: Date.now() / 1000,
+      timestamp: SESSION_TIMESTAMP,
       vmark_version: '0.3.30',
       windows: [{ window_label: 'main', is_main_window: true, tabs: [] }],
     };
@@ -263,7 +287,7 @@ describe('checkAndRestoreSession', () => {
 
     const restorePromise = checkAndRestoreSession();
 
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await untilRestoreInvoked();
 
     // Fire COMPLETE first — sets resolved = true
     const completeHandler = eventListeners.get(HOT_EXIT_EVENTS.RESTORE_COMPLETE);

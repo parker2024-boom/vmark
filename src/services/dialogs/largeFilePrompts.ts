@@ -4,7 +4,7 @@
  * Purpose: Two native dialogs used by the open flow before a large file is
  * read from disk — a warning confirmation for the "huge" tier (≥ 5 MB) and
  * a non-negotiable refusal for the "refused" tier (≥ 50 MB). Both run in
- * front of `readTextFile`, so the "no modal during load" contract from the
+ * front of the text read, so the "no modal during load" contract from the
  * large-file plan is preserved — nothing is loading yet at prompt time.
  *
  * Implementation notes:
@@ -16,7 +16,7 @@
  *   - Translation keys live in `src/locales/**\/dialog.json` under
  *     `largeFile.warn*` / `largeFile.refuse*`.
  *
- * @coordinates-with hooks/useFinderFileOpen.ts — calls confirmOpenHugeFile before readTextFile.
+ * @coordinates-with hooks/useFinderFileOpen.ts — calls confirmOpenHugeFile before the text read.
  * @coordinates-with services/navigation/fileOpen.ts — same; routes all open paths through tier checks.
  * @coordinates-with utils/fileSizeThresholds.ts — provides the byte→tier classification.
  * @module services/dialogs/largeFilePrompts

@@ -1,14 +1,18 @@
-// WI-3.2 — Standalone SVG (.svg) adapter.
-//
-// CodeMirror language: @codemirror/lang-xml.
-// Validator: well-formedness check (must start with <svg or <?xml,
-// must parse as XML, root element must be <svg>). Reuses the same
-// rules as the existing src/plugins/svg/svgRender.ts so the
-// behavior stays consistent.
-// Preview: inline SVG render via the existing renderSvgBlock helper.
-//
-// Per the plan, the SVG renderer is pure (no environment coupling),
-// so the wrapper is thin compared to Mermaid's.
+/**
+ * Standalone SVG (.svg) adapter — source editing, well-formedness validation and inline preview.
+ *
+ * CodeMirror language: @codemirror/lang-xml.
+ * Validator: well-formedness check (must start with <svg or <?xml,
+ * must parse as XML, root element must be <svg>). Reuses the same
+ * rules as the existing src/plugins/svg/svgRender.ts so the
+ * behavior stays consistent.
+ * Preview: inline SVG render via the existing renderSvgBlock helper.
+ *
+ * The SVG renderer is pure (no environment coupling),
+ * so the wrapper is thin compared to Mermaid's.
+ *
+ * @module lib/formats/adapters/svg
+ */
 
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,6 +20,7 @@ import type { Extension } from "@codemirror/state";
 import { parseSvg, renderSvgBlock } from "@/plugins/svg/svgRender";
 import { sanitizeSvg } from "@/utils/sanitize";
 import { registerFormat } from "../registry";
+import { usePreviewLinkGuard } from "./usePreviewLinkGuard";
 import "./svg-preview.css";
 import type {
   FormatConfig,
@@ -27,7 +32,7 @@ import type {
 export const svgValidator: Validator = (content) => {
   if (content.length === 0) return [];
 
-  // One parse, one notion of well-formed (WI-4.7). This file used to run its
+  // One parse, one notion of well-formed. This file used to run its
   // own DOMParser twice — once for the parsererror check and again for the root
   // element — alongside renderSvgBlock's third, with two independently
   // maintained definitions of "valid SVG".
@@ -61,8 +66,9 @@ export const svgValidator: Validator = (content) => {
   }
 };
 
-function SvgPreview({ content, diagnostics }: PreviewRendererProps) {
+function SvgPreview({ content, diagnostics, path }: PreviewRendererProps) {
   const { t } = useTranslation("editor");
+  const linkGuard = usePreviewLinkGuard(path);
   const rendered = useMemo(() => {
     const raw = renderSvgBlock(content);
     if (raw === null) return null;
@@ -95,6 +101,8 @@ function SvgPreview({ content, diagnostics }: PreviewRendererProps) {
 
   return (
     <div
+      // The SVG's own links and forms must not navigate the app's page.
+      ref={linkGuard}
       className="svg-preview"
       // The renderer's well-formedness check above is the source of
       // trust: only valid SVG well-formed XML reaches this branch.

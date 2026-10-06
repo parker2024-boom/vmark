@@ -239,7 +239,7 @@ fn the_settings_window_has_no_filesystem_or_shell_permission() {
 // It was `**/*`, which matches every absolute path without a dot component —
 // so the per-file asset grants in `asset_access.rs` guarded nothing. It is now
 // the fs static roots, extended at runtime by the same grants that extend the
-// fs scope (`fs_scope.rs`, `asset_access.rs`, `workspace_grants`).
+// fs scope (`fs_scope.rs`, `asset_access.rs`, `workspace::grants`).
 
 const TAURI_CONF: &str = include_str!("../tauri.conf.json");
 const TAURI_WINDOWS_CONF: &str = include_str!("../tauri.windows.conf.json");

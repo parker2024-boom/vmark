@@ -1,4 +1,4 @@
-//! The commit half of `action/save-file` (#257): put the bytes in the
+//! The commit half of `action/save-file`: put the bytes in the
 //! directory the sandbox VALIDATED, not at the path it was named by.
 //!
 //! `sandbox::validate_path` judges a path, and a path can be redirected — an
@@ -49,7 +49,7 @@ mod fallback {
     /// parent is resolved and checked on the writing thread, immediately
     /// before the commit — the round-1 behaviour, kept.
     ///
-    /// **The residual, stated (#257).** This is still check-then-commit: the
+    /// **The residual, stated.** This is still check-then-commit: the
     /// containment check reads `canonical_parent`, and `atomic_replace` then
     /// resolves that path AGAIN to create its temp file and to rename over the
     /// target. A directory replaced with a junction in between is followed.

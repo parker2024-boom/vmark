@@ -5,7 +5,7 @@
  * fails — correctly, since a result that does not match the input is corrupt.
  * But the only trace was `cjkFmtWarn`, a log-file logger, so from the user's
  * side the accelerator did nothing at all and "refused" was indistinguishable
- * from "already formatted" (WI-CJKF6.2).
+ * from "already formatted".
  *
  * Key decisions:
  *   - Only a REFUSAL is surfaced. A run that finds nothing to change is the

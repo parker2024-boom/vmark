@@ -2,7 +2,7 @@
 //!
 //! Purpose: the vocabulary of the `pdf-export-progress` event and the rule that
 //! makes it trustworthy: stages advance in one direction, each fires at most
-//! once, and nothing fires after the outcome is settled. Until WI-FL6.2 only
+//! once, and nothing fires after the outcome is settled. Previously only
 //! the macOS backend emitted anything, so the export dialog on Windows and
 //! Linux sat on "Preparing…" until the file appeared — a gap in those
 //! backends, not a stub (`pdf-renderer-backends`, F5).
@@ -20,8 +20,8 @@
 //!     unit tests capture the sequence without a webview.
 //!   - **Emission is ORDERED without holding a lock across the sink.** The
 //!     reporter is `Send + Sync`, so two stages accepted on two threads must
-//!     leave in acceptance order (#230) — yet a sink that re-enters the
-//!     reporter must not deadlock on a lock held around it (#231). Accepted
+//!     leave in acceptance order — yet a sink that re-enters the
+//!     reporter must not deadlock on a lock held around it. Accepted
 //!     stages join a queue under the state lock, and whichever caller finds
 //!     the queue idle drains it in order with the lock released; a
 //!     re-entrant or concurrent report only enqueues.
@@ -45,7 +45,7 @@ pub const PROGRESS_EVENT: &str = "pdf-export-progress";
 /// because there is never more than one producer: `export_pdf` holds the
 /// `ExportGate` (`pdf_export/export_gate.rs`) for its whole run, so a second
 /// export is refused rather than started, and two runs can never interleave
-/// their stages in this one window (#199).
+/// their stages in this one window.
 pub const PROGRESS_WINDOW: &str = "pdf-export";
 
 /// How far a render has got — the `stage` field of every progress event.
@@ -109,7 +109,7 @@ pub struct PdfProgressEvent {
 /// `emit_to` a label with no window is a no-op that returns `Ok`, which is
 /// what the smoke harness relies on: it has no export window and captures the
 /// same emission through `listen_any` instead. A delivery FAILURE is logged
-/// with everything needed to place it (#229) — a dialog stuck on "Preparing…"
+/// with everything needed to place it — a dialog stuck on "Preparing…"
 /// used to be undiagnosable because the emit's result was discarded.
 pub fn emit(app: &AppHandle, stage: PdfProgress) {
     if let Err(e) = app.emit_to(PROGRESS_WINDOW, PROGRESS_EVENT, PdfProgressEvent { stage }) {
@@ -186,7 +186,7 @@ impl ProgressReporter {
     /// closed. An accepted stage reaches the sink in acceptance order: the
     /// sink runs with the lock released, so a sink that reports again (or a
     /// second thread that reports meanwhile) only enqueues, and the caller
-    /// already draining delivers it next (#230, #231).
+    /// already draining delivers it next.
     pub fn report(&self, stage: PdfProgress) -> bool {
         {
             let mut st = self.state();
@@ -211,7 +211,7 @@ impl ProgressReporter {
             let next = {
                 let mut st = self.state();
                 // Closing while a drain is in flight DISCARDS what is still
-                // queued (#438). Without this the drainer kept delivering
+                // queued. Without this the drainer kept delivering
                 // stages it had accepted before the close — after the outcome
                 // had been settled, which is the one thing `close` exists to
                 // prevent. Whichever caller is draining checks here, so the
@@ -236,7 +236,7 @@ impl ProgressReporter {
 
     /// No stage is accepted after this: the outcome it would describe has
     /// been delivered. A drain already in flight stops at its next turn of
-    /// the loop and discards what is left queued (#438) — an accepted stage
+    /// the loop and discards what is left queued — an accepted stage
     /// is not a promised one once the result is out.
     pub fn close(&self) {
         let mut st = self.state();

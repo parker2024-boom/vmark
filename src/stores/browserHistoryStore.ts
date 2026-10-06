@@ -1,5 +1,5 @@
 /**
- * browserHistoryStore — per-window browsing history (WI-S2.2).
+ * browserHistoryStore — per-window browsing history.
  *
  * "A visited list from nav events" is not a specification. It can mean commit history,
  * finish history, redirect history, or per-tab history, and each produces a visibly

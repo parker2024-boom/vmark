@@ -22,7 +22,7 @@ export const TRUSTED_SCHEME = "vmark-trusted";
 const TRUSTED_HOST = "doc";
 
 /**
- * The origin a trusted document has on Windows (WI-FL6.5).
+ * The origin a trusted document has on Windows.
  *
  * WebView2 cannot register a URL scheme, so wry serves every custom protocol
  * over http at `http://<scheme>.<host>/…` and reverts that prefix to

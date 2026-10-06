@@ -13,16 +13,11 @@
 // change — an intermittent failure that would look like a flaky harness.
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { publishDebugHandle, readDebugHandle } from "./devDebugHandle";
-
-declare global {
-  interface Window {
-    __VMARK_DEBUG__?: Record<string, unknown>;
-  }
-}
+import { publishDebugHandle, publishDevGlobal, readDebugHandle } from "./devDebugHandle";
 
 beforeEach(() => {
   delete window.__VMARK_DEBUG__;
+  Reflect.deleteProperty(window, "__mcpStore");
   vi.unstubAllEnvs();
 });
 
@@ -68,5 +63,28 @@ describe("publishDebugHandle", () => {
     vi.stubEnv("DEV", false);
     publishDebugHandle("alpha", 1);
     expect(window.__VMARK_DEBUG__).toBeUndefined();
+  });
+});
+
+// WI-RA17F.7 — the top-level DEV globals (`window.__mcpStore` and friends) go
+// through the same DEV gate as `__VMARK_DEBUG__` instead of each store casting
+// `window` itself.
+describe("publishDevGlobal", () => {
+  it("publishes a named top-level global in DEV", () => {
+    const handle = { getState: () => 1 };
+    publishDevGlobal("__mcpStore", handle);
+    expect(Reflect.get(window, "__mcpStore")).toBe(handle);
+  });
+
+  it("does not touch the __VMARK_DEBUG__ bag", () => {
+    publishDebugHandle("alpha", 1);
+    publishDevGlobal("__mcpStore", "store");
+    expect(window.__VMARK_DEBUG__).toEqual({ alpha: 1 });
+  });
+
+  it("is inert in a production build", () => {
+    vi.stubEnv("DEV", false);
+    publishDevGlobal("__mcpStore", "store");
+    expect(Reflect.has(window, "__mcpStore")).toBe(false);
   });
 });

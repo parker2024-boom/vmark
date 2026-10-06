@@ -12,15 +12,6 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("@/stores/uiStore", () => ({
-  useUIStore: {
-    getState: () => ({
-      terminal: { sessions: [], activeSessionId: null },
-      terminalSetActiveSession: vi.fn(),
-    }),
-  },
-}));
-
 vi.mock("@/stores/settingsStore", () => ({
   useSettingsStore: {
     getState: () => ({ terminal: { fontSize: 13 }, updateTerminalSetting: vi.fn() }),

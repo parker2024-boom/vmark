@@ -8,8 +8,8 @@
  *
  * The three functions are the external half of the field contract documented
  * in `documentState.ts`:
- *   - `adoptDiskConvention` — the file changed shape, not content (WI-1.6)
- *   - `buildIngestState`    — an origin-governed ingest (WI-1.2/1.3)
+ *   - `adoptDiskConvention` — the file changed shape, not content
+ *   - `buildIngestState`    — an origin-governed ingest
  *
  * There used to be a third, `buildLoadState`, backing a separate `loadContent`
  * action. It duplicated the baseline branch above and had already drifted from
@@ -17,7 +17,7 @@
  * document's existing metadata whenever no explicit `meta` was passed — which
  * was every production caller. A reload of a file whose line endings had
  * changed on disk therefore kept the stale convention and wrote it back on the
- * next `preserve` save: the WI-1.6 defect again, at a different door. Both
+ * next `preserve` save: the stale-convention defect again, at a different door. Both
  * callers now use `ingestExternalContent(..., "disk-open")` and the duplicate
  * is gone rather than resynchronised.
  *
@@ -43,7 +43,7 @@ import type { DocumentState } from "./documentState";
  * bytes the file no longer has, so a later `preserve` save wrote the OLD
  * convention back and the editor and the sync engine flipped the file between
  * them indefinitely. Content, dirty state and UI flags stay untouched — this
- * says only "the file on disk now looks like THIS" (WI-1.6).
+ * says only "the file on disk now looks like THIS".
  */
 export function adoptDiskConvention(diskContent: string): Partial<DocumentState> {
   const { lineEnding, hardBreakStyle, hasBom } = ingestExternalText(diskContent);

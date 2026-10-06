@@ -8,7 +8,7 @@
  *   and key order are preserved. `validate` runs actionlint and
  *   forwards diagnostics.
  *
- * Origin: MCP pruning plan (2026-05-04, retired) ADR-5.
+ * Origin: MCP pruning plan (retired) ADR-5.
  *
  * Key decisions:
  *   - `IRPatch` is a public contract once exposed via MCP. We accept
@@ -19,22 +19,21 @@
  *     uses, so diagnostics surface identically across UI and MCP.
  *   - Only `yaml-workflow` tabs accept `apply_patch`. Markdown tabs
  *     return NOT_WORKFLOW — the AI must fall back to `document.write`.
+ *   - Both handlers resolve their tab through `tabGuard.ts`, which first
+ *     flushes the mounted editors into the store — so a patch is applied to,
+ *     and a lint runs over, the text the user actually has, pending
+ *     keystrokes included.
  *
+ * @coordinates-with tabGuard.ts — tab resolution, the flush, INVALID_TAB and STALE
+ * @coordinates-with checkpoint.ts — the checkpoint a patch batch leaves behind
  * @coordinates-with lib/ghaWorkflow/save/cstParser.ts — parseAsCst / stringifyCst
  * @coordinates-with lib/ghaWorkflow/save/mutators.ts — applyPatch + IRPatch types
  * @coordinates-with lib/ghaWorkflow/lint/actionlint.ts — lintWithActionlint
- * @coordinates-with stores/documentStore/revision.ts — STALE detection
+ * @coordinates-with stores/documentStore/revision.ts — the revision token
  * @module services/mcpBridge/v2/workflow
  */
 
-import { useTabStore } from "@/stores/tabStore";
-import { useDocumentStore } from "@/stores/documentStore";
-import { useRevisionStore } from "@/stores/documentStore";
-import { getCurrentWindowLabel } from "@/services/persistence/workspaceStorage";
-import {
-  isWorkflowYaml,
-  looksLikeWorkflowPath,
-} from "@/lib/ghaWorkflow/detection";
+import { useDocumentStore, useRevisionStore } from "@/stores/documentStore";
 import {
   parseAsCst,
   stringifyCst,
@@ -44,10 +43,15 @@ import { lintWithActionlint } from "@/lib/ghaWorkflow/lint/actionlint";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { respond } from "@/services/mcpBridge/utils";
 import { wrapHandler } from "./wrapHandler";
-import { v2ErrorString } from "./types";
+import { recordBridgeCheckpoint } from "./checkpoint";
+import { readOperationArgs } from "./readOperationArgs";
+import {
+  requireCurrentRevision,
+  requireTab,
+  structuredError,
+  type GuardedTab,
+} from "./tabGuard";
 import type { V2Error } from "./types";
-import { useMcpStore } from "@/stores/mcpStore";
-import { appendCheckpoint } from "@/stores/mcpCheckpointPersistence";
 import { errorMessage } from "@/utils/errorMessage";
 
 const VALID_PATCH_KINDS: ReadonlySet<string> = new Set([
@@ -60,10 +64,6 @@ const VALID_PATCH_KINDS: ReadonlySet<string> = new Set([
   "needs.remove",
   "trigger.setFilters",
 ]);
-
-function structuredError(id: string, err: V2Error): Promise<void> {
-  return respond({ id, success: false, error: v2ErrorString(err) });
-}
 
 /** Compose a one-line summary of a patch batch for the checkpoint panel. */
 function describePatchBatch(patches: IRPatch[]): string {
@@ -123,50 +123,25 @@ function validatePatches(value: unknown): IRPatch[] | V2Error {
   return value as IRPatch[];
 }
 
-interface WorkflowTab {
-  tabId: string;
-  filePath: string | null;
-  content: string;
-}
-
-function resolveWorkflowTab(
+/**
+ * Resolve the request's tab and require it to be a workflow, or answer the
+ * refusal (`INVALID_TAB`, `NOT_WORKFLOW`) and return `null`.
+ */
+async function requireWorkflowTab(
+  id: string,
   tabIdArg: string | undefined,
-): WorkflowTab | V2Error {
-  const tabState = useTabStore.getState();
-  const docState = useDocumentStore.getState();
-
-  let tabId: string;
-  if (tabIdArg) {
-    if (
-      !Object.values(tabState.tabs).some((list) =>
-        list.some((t) => t.id === tabIdArg),
-      )
-    ) {
-      return { error: "INVALID_TAB", message: "Unknown tabId" };
-    }
-    tabId = tabIdArg;
-  } else {
-    const focused = getCurrentWindowLabel();
-    const active = tabState.activeTabId[focused];
-    if (!active) return { error: "INVALID_TAB", message: "No focused tab" };
-    tabId = active;
-  }
-
-  const doc = docState.documents[tabId];
-  if (!doc) return { error: "INVALID_TAB", message: "No document for tab" };
-
-  const isWorkflow =
-    looksLikeWorkflowPath(doc.filePath ?? undefined) ||
-    isWorkflowYaml(doc.content);
-  if (!isWorkflow) {
-    return {
+): Promise<GuardedTab | null> {
+  const tab = await requireTab(id, tabIdArg);
+  if (!tab) return null;
+  if (tab.kind !== "yaml-workflow") {
+    await structuredError(id, {
       error: "NOT_WORKFLOW",
       message:
         "Tab is not a GitHub Actions workflow YAML; use document.write instead",
-    };
+    });
+    return null;
   }
-
-  return { tabId, filePath: doc.filePath, content: doc.content };
+  return tab;
 }
 
 /**
@@ -179,42 +154,22 @@ export async function handleWorkflowApplyPatch(
   args: Record<string, unknown>,
 ): Promise<void> {
   return wrapHandler(id, async () => {
-    const tabIdArg =
-      typeof args.tabId === "string" ? args.tabId : undefined;
-    const expectedRevision =
-      typeof args.expected_revision === "string"
-        ? args.expected_revision
-        : undefined;
+    const wire = readOperationArgs("vmark.workflow.apply_patch", args);
 
-    const patchesOrError = validatePatches(args.patches);
+    const patchesOrError = validatePatches(wire.patches);
     if (!Array.isArray(patchesOrError)) {
       await structuredError(id, patchesOrError);
       return;
     }
     const patches = patchesOrError;
 
-    const tabOrError = resolveWorkflowTab(tabIdArg);
-    if ("error" in tabOrError) {
-      await structuredError(id, tabOrError);
-      return;
-    }
-
-    const revisionStore = useRevisionStore.getState();
-    if (
-      expectedRevision !== undefined &&
-      !revisionStore.isCurrentRevision(tabOrError.tabId, expectedRevision)
-    ) {
-      await structuredError(id, {
-        error: "STALE",
-        message: "Document has changed since the last read",
-        current_revision: revisionStore.getRevision(tabOrError.tabId),
-      });
-      return;
-    }
+    const tab = await requireWorkflowTab(id, wire.tabId);
+    if (!tab) return;
+    if (!(await requireCurrentRevision(id, tab.tabId, wire.expected_revision))) return;
 
     let nextContent: string;
     try {
-      const cst = parseAsCst(tabOrError.content);
+      const cst = parseAsCst(tab.content);
       for (const patch of patches) {
         applyPatch(cst, patch);
       }
@@ -229,33 +184,27 @@ export async function handleWorkflowApplyPatch(
       return;
     }
 
-    if (nextContent === tabOrError.content) {
+    const revisionStore = useRevisionStore.getState();
+    const revisionBefore = revisionStore.getRevision(tab.tabId);
+    if (nextContent === tab.content) {
       // No-op patch batch — don't bump revision, don't checkpoint.
-      await respond({
-        id,
-        success: true,
-        data: { revision: revisionStore.getRevision(tabOrError.tabId) },
-      });
+      await respond({ id, success: true, data: { revision: revisionBefore } });
       return;
     }
 
-    const contentBefore = tabOrError.content;
-    const revisionBefore = revisionStore.getRevision(tabOrError.tabId);
-    useDocumentStore.getState().setEditorContent(tabOrError.tabId, nextContent);
-    revisionStore.updateRevision(tabOrError.tabId);
-    const revisionAfter = revisionStore.getRevision(tabOrError.tabId);
+    useDocumentStore.getState().setEditorContent(tab.tabId, nextContent);
+    // Bumped here, last, so the token returned is the document's newest.
+    const revisionAfter = revisionStore.updateRevision(tab.tabId);
 
-    const cpId = useMcpStore.getState().checkpointPush({
-      tabId: tabOrError.tabId,
-      filePath: tabOrError.filePath,
+    recordBridgeCheckpoint({
+      tabId: tab.tabId,
+      filePath: tab.filePath,
       tool: "workflow.apply_patch",
       description: describePatchBatch(patches),
-      contentBefore,
+      contentBefore: tab.content,
       revisionBefore,
       revisionAfter,
     });
-    const cp = useMcpStore.getState().checkpointGet(cpId);
-    if (cp) void appendCheckpoint(cp);
 
     await respond({
       id,
@@ -276,13 +225,9 @@ export async function handleWorkflowValidate(
   args: Record<string, unknown>,
 ): Promise<void> {
   return wrapHandler(id, async () => {
-    const tabIdArg =
-      typeof args.tabId === "string" ? args.tabId : undefined;
-    const tabOrError = resolveWorkflowTab(tabIdArg);
-    if ("error" in tabOrError) {
-      await structuredError(id, tabOrError);
-      return;
-    }
+    const wire = readOperationArgs("vmark.workflow.validate", args);
+    const tab = await requireWorkflowTab(id, wire.tabId);
+    if (!tab) return;
     if (!useSettingsStore.getState().advanced.workflowActionlint) {
       await respond({
         id,
@@ -296,7 +241,7 @@ export async function handleWorkflowValidate(
       });
       return;
     }
-    const outcome = await lintWithActionlint(tabOrError.content);
+    const outcome = await lintWithActionlint(tab.content);
     const diagnostics = outcome.diagnostics.map((d) => ({
       line: d.position?.startLine ?? 0,
       col: d.position?.startCol ?? 0,

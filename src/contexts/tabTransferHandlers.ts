@@ -33,7 +33,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { openWorkspaceWithConfig } from "@/services/workspaces/openWorkspaceWithConfig";
-import { cleanupTabState } from "@/services/windowClose/tabCleanup";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useTabStore } from "@/stores/tabStore";
 import { useRecentFilesStore, useWorkspaceStore } from "@/stores/workspaceStore";
@@ -87,14 +86,15 @@ export async function applyTabTransferData(
 /**
  * Claim transfer data from Rust and create the tab + document.
  * Returns true if a transfer was handled (caller should skip normal init).
+ *
+ * The claim names no window: Rust hands over the payload registered for the
+ * window the call came from, so one window cannot take another's transfer.
  */
 export async function handleTabTransfer(label: string): Promise<boolean> {
   const urlParams = new URLSearchParams(globalThis.location?.search || "");
   if (!urlParams.has("transfer")) return false;
 
-  const data = await invoke<TabTransferPayload | null>("claim_tab_transfer", {
-    windowLabel: label,
-  });
+  const data = await invoke<TabTransferPayload | null>("claim_tab_transfer");
   if (!data) return false;
   await applyTabTransferData(label, data);
 
@@ -137,8 +137,8 @@ async function closeWindowIfEmpty(label: string): Promise<void> {
   const remaining = useTabStore.getState().getTabsByWindow(label);
   if (remaining.length > 0 || label === "main") return;
 
-  const win = getCurrentWebviewWindow();
-  await invoke("close_window", { label: win.label }).catch((error: unknown) => {
+  // Closes the window that asks: this one.
+  await invoke("close_window").catch((error: unknown) => {
     /* v8 ignore next -- @preserve String(error) fallback: invoke errors are always Error instances */
     windowCloseWarn("Failed to close window:", commandErrorMessage(error));
   });
@@ -175,8 +175,8 @@ export async function handleTabRemovalRequest(
   }
 
   // commit — the source now holds the restored tab; drop this window's copy.
+  // The removal frees the tab's document and the rest of its per-tab state.
   useTabStore.getState().detachTab(label, tabId);
-  cleanupTabState(tabId);
   await sendAck({ requestId, tabId, phase, accepted: true });
   await closeWindowIfEmpty(label);
 }

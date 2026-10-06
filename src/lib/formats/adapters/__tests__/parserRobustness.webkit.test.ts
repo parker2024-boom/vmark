@@ -17,9 +17,16 @@
  * @coordinates-with ../json.tsx — jsonValidator
  * @module lib/formats/adapters/__tests__/parserRobustness.webkit.test
  */
-import { describe, it, expect } from "vitest";
+import { beforeAll, describe, it, expect } from "vitest";
 import { tomlValidator } from "../toml";
 import { jsonValidator } from "../json";
+import { loadTomlParser } from "../tomlParser";
+
+// The parser loads on first use (tomlParser.ts); the validator answers
+// synchronously, so load it first.
+beforeAll(async () => {
+  await loadTomlParser();
+});
 
 const hasError = (diags: { severity: string }[]) =>
   diags.some((d) => d.severity === "error");

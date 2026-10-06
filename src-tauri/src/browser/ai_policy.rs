@@ -1,4 +1,4 @@
-//! AI browser navigation policy (WI-N1.3 / R4).
+//! AI browser navigation policy (R4).
 //!
 //! This validator is deliberately separate from the human omnibox validator. The
 //! human browser may visit local development services; AI navigation must reject
@@ -19,7 +19,7 @@ use crate::browser::registry::AutomationMode;
 
 /// Why an AI destination was rejected.
 ///
-/// The two arms are NOT interchangeable (audit 20260803 §6). `Blocked` is a
+/// The two arms are NOT interchangeable. `Blocked` is a
 /// policy refusal the caller can do nothing about; `Invalid` means the argument
 /// never named a destination at all. Collapsing them reported empty strings and
 /// typos to the user — and to the AI client, as `SSRF_BLOCKED` — as security
@@ -190,7 +190,7 @@ fn blocked_hostname(host: &str, allow_loopback: bool) -> bool {
         || lan_facing_suffix(host)
 }
 
-/// LAN-facing name suffixes (WI-1.7).
+/// LAN-facing name suffixes.
 ///
 /// These never reach the IP-literal blocks: they parse as `Host::Domain`, so
 /// `blocked_ip` is not consulted at all and the request leaves the machine to

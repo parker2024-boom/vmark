@@ -8,7 +8,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import type { AnchorRect } from "@/utils/popupPosition";
 
 // Mock KaTeX loader
-vi.mock("@/plugins/latex/katexLoader", () => ({
+vi.mock("@/plugins/shared/katexLoader", () => ({
   loadKatex: vi.fn(() =>
     Promise.resolve({
       default: {

@@ -8,20 +8,18 @@
  *     too; only the primary BUTTON starts a drag, and the session then answers
  *     to the starting `pointerId` alone. Document listeners
  *     see every pointer, so without the id a second finger's move resized the
- *     bar the first one was holding, and its pointerup ended the drag (audit
- *     R2, #568). The pointer is captured where the engine supports it, so a
+ *     bar the first one was holding, and its pointerup ended the drag. The pointer is captured where the engine supports it, so a
  *     fast drag past the bar keeps moving — and the capture is RELEASED by the
  *     same teardown that removes the listeners, since a blur-ended drag never
- *     reaches the pointerup that would have released it implicitly (#570).
+ *     reaches the pointerup that would have released it implicitly.
  *   - The drag reports a FRACTION of the divider's parent width; clamping is
  *     the store's job (paneStore.setFraction), exactly as for the keyboard. A
  *     zero-width parent would make that fraction `Infinity` or `NaN`, which
  *     the store's `Math.max` propagates rather than clamps, so no session is
- *     installed for one (#567).
+ *     installed for one.
  *   - `onResize` is read from a ref at move time, never captured: the consumer
  *     passes an inline arrow, so its identity changes on the re-render every
- *     move causes and a captured one is stale from the second move onward
- *     (#569).
+ *     move causes and a captured one is stale from the second move onward.
  *   - Cleanup follows useSidebarResize: the document listeners and the body
  *     cursor/user-select are torn down on pointerup, pointercancel, window
  *     blur (the user switched away mid-drag) AND unmount — closing the split
@@ -29,7 +27,7 @@
  *     Handlers live in a ref so the teardown removes the exact functions, and
  *     the body styles are restored only when this hook OWNS a session: an
  *     unmount with no drag in progress used to clear the cursor and
- *     user-select another resizer had set (#566).
+ *     user-select another resizer had set.
  *
  * @coordinates-with ./SplitDivider.tsx — the only consumer
  * @coordinates-with src/hooks/useSidebarResize.ts — the cleanup discipline this mirrors
@@ -54,7 +52,7 @@ interface DragHandlers {
  * Install everything a drag owns and return the teardown that undoes exactly
  * it: four listeners, the two body styles, and the pointer capture.
  *
- * Attach and detach are written ADJACENTLY on purpose (audit R3 #565). They
+ * Attach and detach are written ADJACENTLY on purpose. They
  * used to be two lists in two functions — one building the session, one
  * `cleanup` — so a fifth listener added to one and forgotten in the other
  * leaks for the lifetime of the window, and nothing about either function
@@ -63,7 +61,7 @@ interface DragHandlers {
  * Capture is an OPTIMISATION for a fast drag past the bar; the document
  * listeners carry the drag either way, so a refusal is swallowed. Releasing it
  * is not optional: a blur-ended drag never reaches the pointerup that would
- * have released it implicitly (#570).
+ * have released it implicitly.
  */
 function beginDragSession(
   target: HTMLElement,
@@ -107,7 +105,7 @@ export function useSplitDrag(onResize: (fraction: number) => void) {
   const cleanup = useCallback(() => {
     const session = sessionRef.current;
     // No session means this hook set none of it — clearing the body styles
-    // would take away another resizer's (#566).
+    // would take away another resizer's.
     if (!session) return;
     sessionRef.current = null;
     session.stop();
@@ -131,7 +129,7 @@ export function useSplitDrag(onResize: (fraction: number) => void) {
       cleanup();
       const rect = container.getBoundingClientRect();
       // Every fraction below divides by this. Zero is not a narrow split, it
-      // is a container that has not been laid out (#567).
+      // is a container that has not been laid out.
       if (!(rect.width > 0)) return;
       const pointerId = e.pointerId;
       const move = (ev: PointerEvent) => {

@@ -42,7 +42,7 @@ pub(super) async fn wake_retry_after_timeout<R: tauri::Runtime>(
     log::warn!(
         "[MCP Bridge] Client {} request {} timed out after {}s (webview_alive={}), attempting wake + retry",
         client_id,
-        request_type_for_log,
+        crate::peer_text::peer_text(request_type_for_log),
         REQUEST_TIMEOUT.as_secs(),
         webview_was_alive
     );
@@ -51,8 +51,7 @@ pub(super) async fn wake_retry_after_timeout<R: tauri::Runtime>(
     // resumes, the QUEUED original event may execute immediately and
     // its response must land in this channel rather than the
     // already-abandoned first oneshot — otherwise a successful wake
-    // recovery turns into a client timeout (cross-model review,
-    // audit 20260612 remediation).
+    // recovery turns into a client timeout (cross-model review).
     let (retry_tx, retry_rx) = oneshot::channel();
     {
         let mut guard = bridge.lock().await;
@@ -72,7 +71,7 @@ pub(super) async fn wake_retry_after_timeout<R: tauri::Runtime>(
     if let Some(window) = app.get_webview_window(target_label) {
         if let Err(e) = window.emit("mcp-bridge:request", event) {
             log::warn!(
-                "[MCP Bridge] Retry emit to window '{}' failed: {}",
+                "[MCP Bridge] Retry emit to window {:?} failed: {}",
                 target_label,
                 e
             );
@@ -92,7 +91,7 @@ pub(super) async fn wake_retry_after_timeout<R: tauri::Runtime>(
         }
     } else {
         log::warn!(
-            "[MCP Bridge] Target window '{}' no longer exists for retry",
+            "[MCP Bridge] Target window {:?} no longer exists for retry",
             target_label
         );
         fail_pending(
@@ -113,7 +112,7 @@ pub(super) async fn wake_retry_after_timeout<R: tauri::Runtime>(
             log::info!(
                 "[MCP Bridge] Retry succeeded for client {} request {}",
                 client_id,
-                request_type_for_log
+                crate::peer_text::peer_text(request_type_for_log)
             );
             response
         }
@@ -122,7 +121,7 @@ pub(super) async fn wake_retry_after_timeout<R: tauri::Runtime>(
             log::warn!(
                 "[MCP Bridge] Client {} request {} retry channel closed",
                 client_id,
-                request_type_for_log
+                crate::peer_text::peer_text(request_type_for_log)
             );
             fail_pending(
                 bridge,
@@ -140,7 +139,7 @@ pub(super) async fn wake_retry_after_timeout<R: tauri::Runtime>(
             log::warn!(
                 "[MCP Bridge] Client {} request {} timed out after retry ({}s total)",
                 client_id,
-                request_type_for_log,
+                crate::peer_text::peer_text(request_type_for_log),
                 REQUEST_TIMEOUT_TOTAL.as_secs()
             );
             fail_pending(
@@ -160,3 +159,7 @@ pub(super) async fn wake_retry_after_timeout<R: tauri::Runtime>(
     };
     Some(response)
 }
+
+#[cfg(all(test, not(target_os = "windows")))]
+#[path = "wake_retry.test.rs"]
+mod tests;

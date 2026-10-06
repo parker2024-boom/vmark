@@ -7,7 +7,7 @@
  *   flow through the CommandBus / keybinding registry (genies.togglePicker /
  *   genies.openPicker) — see genieCommands.ts.
  *
- * Every async step here is UNMOUNT-AWARE (audit #736). The cleanup hides the
+ * Every async step here is UNMOUNT-AWARE. The cleanup hides the
  * native Genies submenu, and a menu refresh still in flight when it ran used to
  * land afterwards and put the submenu back — for a feature the user had just
  * switched off. Loading genies reads from disk, so that window is real.
@@ -47,7 +47,7 @@ export function getMenuShortcuts(): Record<string, string> | null {
     return { "search-genies": prosemirrorToTauri(key) };
   } catch (error) {
     // Same VERDICT as an absent binding — the backend default is the only safe
-    // fallback — but not the same EVENT (audit #734). A store read or a key
+    // fallback — but not the same EVENT. A store read or a key
     // conversion that throws is a defect, and swallowing it silently made a
     // shortcut quietly revert to the default with nothing anywhere to say why.
     genieWarn("Could not derive the genies menu shortcut; using the backend default:", error);
@@ -58,7 +58,7 @@ export function getMenuShortcuts(): Record<string, string> | null {
 /**
  * Load genies from disk and refresh the native Genies menu.
  *
- * `isDisposed` is checked after the disk read (audit #736): the hook's cleanup
+ * `isDisposed` is checked after the disk read: the hook's cleanup
  * hides the submenu, and a refresh that resolves after it would show the menu
  * again for an unmounted feature.
  */
@@ -70,8 +70,8 @@ async function loadAndSyncMenu(isDisposed: () => boolean = () => false): Promise
 }
 
 /**
- * Handle a listener registration's own failure, at the moment it fails (audit
- * #738), and hand back a promise that always resolves — so the cleanup path
+ * Handle a listener registration's own failure, at the moment it fails,
+ * and hand back a promise that always resolves — so the cleanup path
  * has exactly one shape whether or not the listener was ever installed.
  */
 function registerOrWarn(
@@ -108,7 +108,7 @@ export function useGenieShortcuts() {
   // Direct genie invocation from Genies menu — reads from disk directly
   // to avoid name-collision issues with the deduplicated store.
   useEffect(() => {
-    // The registration's OWN rejection handler (audit #738). `listen()` returns
+    // The registration's OWN rejection handler. `listen()` returns
     // a promise, and until this hook unmounts nothing else looks at it — so a
     // failed registration was an unhandled rejection at mount, and the cleanup
     // path (`safeUnlistenAsync`) only ever saw it much later, if at all. The

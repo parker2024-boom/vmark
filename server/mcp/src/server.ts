@@ -40,7 +40,7 @@ export interface VMarkMcpServerConfig {
  * replaced the `vmark://document/*` and `vmark://windows/*` URIs with a single
  * round-trip — so the registry, the `resources/*` handlers, and the capability
  * declaration that advertised them were removed rather than left asserting a
- * capability the server could not honour (audit 20260728 §4).
+ * capability the server could not honour.
  */
 export class VMarkMcpServer implements McpServerInterface {
   public readonly tools: Map<string, ToolRegistration> = new Map();
@@ -118,7 +118,7 @@ export class VMarkMcpServer implements McpServerInterface {
    * error it could not act on. The message is defensive too — a failure without
    * `error` previously produced `new Error(undefined)`, i.e. an empty message.
    *
-   * Every request is checked against its operation schema first (WI-15). That
+   * Every request is checked against its operation schema first. That
    * is what makes `operationSchemas.ts` the contract rather than a comment: a
    * payload carrying a field the contract does not declare cannot quietly
    * cross the wire and land in a branch nobody knew was reachable.

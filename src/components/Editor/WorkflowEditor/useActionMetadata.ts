@@ -8,8 +8,8 @@
  *   uses at all (run-step). The form skips its metadata UI in that
  *   case — there is nothing to fetch.
  *
- * Origin: GitHub Actions workflow viewer plan (2026-05-04, retired)
- *   §6 Phase 9 / WI-6.2 — tooltip preview consumer.
+ * Origin: GitHub Actions workflow viewer plan (retired)
+ *   §6 Phase 9 — tooltip preview consumer.
  *
  * Key decisions:
  *   - Cancellation via a mounted-flag, not AbortController, because the
@@ -39,7 +39,7 @@ import { WindowContext } from "@/contexts/WindowContext";
 /**
  * Derive (workflowFile, wsRoot) for resolving `./` action refs.
  *
- * Codex audit HIGH-5 final fix: strictly window-scoped via
+ * Strictly window-scoped via
  * `useWindowLabel()` from WindowContext. We read ONLY the active
  * tab of the current window — no global scan, no doc-length
  * heuristic. Multi-window safe by construction because the hook
@@ -104,7 +104,7 @@ export function useActionMetadata(
   // Legitimate setState-in-effect: transitions to loading then resolves from an
   // async metadata fetch (with a mounted guard) — driven by I/O keyed on `uses`,
   // not derivable during render (#1063).
-  /* eslint-disable react-hooks/set-state-in-effect */
+  /* eslint-disable react-hooks/set-state-in-effect -- loading transition and an async metadata fetch keyed on `uses`, with a mounted guard */
   useEffect(() => {
     if (!uses || !isResolvableRef(uses)) {
       setResult({ state: "idle" });

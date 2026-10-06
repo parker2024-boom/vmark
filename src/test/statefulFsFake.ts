@@ -4,10 +4,10 @@
  * Purpose: let a test drive the REAL save / open / autosave / external-change
  * composition — real stores, real services — with `@tauri-apps/*` as the only
  * mocked boundary. Bytes written through the app's own write path come back
- * out of `readTextFile`, so an assertion can be about the file, not about
- * which function was called with what.
+ * out of `readFile` (and, decoded, `readTextFile`), so an assertion can be
+ * about the file, not about which function was called with what.
  *
- * Two contracts this fake exists to keep:
+ * Three contracts this fake exists to keep:
  *
  *   1. STATEFUL. `write(P, bytes)` → `read(P)` returns those bytes; mtime is
  *      settable and observable through `stat`. A choreography mock cannot
@@ -18,6 +18,20 @@
  *      flow that silently stopped writing still passed — the false-confidence
  *      class this tier exists to close. Reading an unknown path rejects like
  *      the real plugin does; an unstubbed command rejects by name.
+ *   3. THE PLUGIN'S DECODING. Files are bytes. `readFile` returns them as
+ *      they are; `readTextFile` decodes them as the plugin does, which DROPS a
+ *      leading BOM. This fake used to hand `readTextFile` callers the BOM, and
+ *      every jsdom BOM test passed on that difference while the real app lost
+ *      the mark (statefulFsFake.plugin.test.ts pins the contract).
+ *      Verified against the source of tauri-plugin-fs 2.x, the version
+ *      `package.json` and `src-tauri/Cargo.toml` pin: the Rust commands
+ *      `read_file` and `read_text_file` both call `read_file_inner`
+ *      (`src/commands.rs`), which returns the file's raw bytes with no
+ *      validation or BOM handling; in the guest JS (`guest-js/index.ts`),
+ *      `readFile` returns those bytes as a `Uint8Array` and `readTextFile`
+ *      returns `new TextDecoder(options?.encoding ?? 'utf-8').decode(bytes)`.
+ *      Confirmed in the running app: `readFile` of a BOM'd file begins
+ *      239, 187, 191 and `readTextFile` of it begins after them.
  *
  * Usage (the mock factory is lazy, so the dynamic import is safe):
  *
@@ -84,14 +98,24 @@ class StatefulFsFake {
     this.disk.seed(path, content, opts);
   }
 
+  /** Put raw bytes on the fake disk — e.g. a UTF-16 file, which no UTF-8 string describes. */
+  seedBytes(path: string, bytes: Uint8Array, opts?: { mtimeMs?: number }): void {
+    this.disk.seedBytes(path, bytes, opts);
+  }
+
   /** Simulate an EXTERNAL writer (editor, git, cloud sync): new bytes, new mtime. */
   externalWrite(path: string, content: string, opts?: { mtimeMs?: number }): void {
     this.disk.seed(path, content, opts);
   }
 
-  /** Bytes at `path`. Throws when absent — an assertion must never read a hole. */
+  /** The file at `path` as text, every byte kept (a leading BOM included). Throws when absent. */
   read(path: string): string {
     return this.disk.read(path);
+  }
+
+  /** The raw bytes at `path`. Throws when absent. */
+  readBytes(path: string): Uint8Array {
+    return this.disk.readBytes(path);
   }
 
   has(path: string): boolean {
@@ -136,6 +160,7 @@ class StatefulFsFake {
   fsModule(): Record<string, unknown> {
     const impl: Record<string, unknown> = {
       readTextFile: (path: string) => this.disk.readTextFile(path),
+      readFile: (path: string) => this.disk.readFile(path),
       writeTextFile: (path: string, contents: string) =>
         this.performWrite(path, contents, "writeTextFile"),
       exists: (path: string) => Promise.resolve(this.disk.has(path) || this.disk.hasDir(path)),
@@ -177,7 +202,13 @@ class StatefulFsFake {
         return this.performWrite(String(args.path), String(args.content), "atomic_write_file");
       case "get_file_size_bytes": {
         const size = this.disk.byteSize(String(args.path));
-        if (size === null) return Promise.reject(new Error(`ENOENT: ${String(args.path)}`));
+        // The real command's typed rejection (`files/ops.rs` via `from_io`).
+        if (size === null) {
+          return Promise.reject({
+            code: "not-found",
+            message: `invalid path '${String(args.path)}': No such file or directory (os error 2)`,
+          });
+        }
         return Promise.resolve(size);
       }
       default:

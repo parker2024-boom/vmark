@@ -1,4 +1,4 @@
-/* WI-1A.8 — ValidationGutter styles. */
+/* ValidationGutter styles. */
 
 .validation-gutter {
   /* Component-internal one-off — em-relative so the list scales with
@@ -52,7 +52,7 @@
   border-bottom: var(--border-hairline) solid var(--border-color);
 }
 
-/* The row's content grid — a <button> when the row can jump (#282), a <div>
+/* The row's content grid — a <button> when the row can jump, a <div>
  * when it cannot. The 24px floor is the D2 hit target for the button. */
 .validation-gutter__row-content {
   /* button-shape-ok: the jump button IS the diagnostic row — this padding is

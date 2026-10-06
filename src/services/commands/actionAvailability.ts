@@ -15,7 +15,7 @@
  * This is a closed structured record evaluated by one typed function — NOT a
  * serialized predicate DSL: VMark's actions are first-party compiled TS, so a
  * data DSL would add a parser and type-drift for zero current consumer
- * (ADR-017 / command-registry WI-2.2, Zed-cross-checked).
+ * (ADR-017, Zed-cross-checked).
  *
  * @coordinates-with commandContext.ts — the resolved context this reads
  * @coordinates-with editor/editorActionGates.ts — per-format category policy
@@ -72,7 +72,7 @@ function adapterKeyFor(id: ActionId): string {
  *     policy-"allow" marks) when any cursor is inside a code block, table, link,
  *     image, inline math, or footnote.
  * This is why the resolved context now carries the full `MultiSelectionContext`
- * rather than a bare boolean (closes command-registry WI-2.2 residuals a/b).
+ * rather than a bare boolean.
  */
 function isAvailableUnderMultiSelection(id: ActionId, multi: MultiSelectionContext): boolean {
   // undo/redo need no local bypass: the shared gate itself always allows

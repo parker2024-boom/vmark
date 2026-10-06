@@ -3,22 +3,22 @@
  *
  * Two commands: clear-recent-files and open-recent-file.
  *
- * The open path is a PREFLIGHT plus the shared open-decision executor (audit
- * #930). It used to be a five-way dispatcher of its own, and the copy had
+ * The open path is a PREFLIGHT plus the shared open-decision executor.
+ * It used to be a five-way dispatcher of its own, and the copy had
  * already drifted from `executeOpenDecision` in two ways that reached users:
  * it activated with a plain `setActiveTab`, leaving the sidebar on a different
- * workspace from the document it had just shown (#931), and it swallowed a
+ * workspace from the document it had just shown, and it swallowed a
  * failed workspace claim into a log line, so the file opened under the previous
- * context with nothing on screen to say so (#932).
+ * context with nothing on screen to say so.
  *
  * What is genuinely recents-specific is the ONE question the executor cannot
- * ask: is this entry still openable? That is asked once, before routing (#928),
+ * ask: is this entry still openable? That is asked once, before routing,
  * for every action that names the file on disk — so the new-window route offers
  * removal like the others instead of leaving a dead entry forever. Asking it up
  * front also retires the old per-branch guesswork: a replace that failed for any
  * reason at all used to be reported as "file not found" and offered for removal,
  * although ingestion, ownership and workspace-switch failures land there too
- * (#927). Those are now the executor's error toast, which is what they are.
+ * Those are now the executor's error toast, which is what they are.
  *
  * @coordinates-with services/navigation/executeOpenDecision.ts — the shared executor
  * @coordinates-with utils/openPolicy.ts — resolveOpenAction produces the decision
@@ -70,7 +70,7 @@ async function promptRemoveRecentFile(filePath: string): Promise<void> {
 }
 
 /**
- * Is this recents entry still a file we could open? (audit #926)
+ * Is this recents entry still a file we could open?
  *
  * Three things this has to get right, and the old `await exists(path)` got none
  * of them:
@@ -78,10 +78,10 @@ async function promptRemoveRecentFile(filePath: string): Promise<void> {
  *   - **A rejection is not an answer.** `exists()` REJECTS with "forbidden
  *     path" for a path outside the fs scope, and that rejection escaped the
  *     command — the menu item did nothing at all, with no message. Same defect
- *     `recentWorkspacesCommands` fixed for folders (#1252 / audit #936).
+ *     `recentWorkspacesCommands` fixed for folders (#1252).
  *   - **A probe that could not RUN is not evidence of absence.** Offering to
  *     remove a file that exists is the worse outcome, so an unreadable probe
- *     says "present" and lets the open surface any real failure (audit #937's
+ *     says "present" and lets the open surface any real failure (the folder
  *     rule, applied to files).
  *   - **`exists()` is true for a DIRECTORY too.** A folder standing where the
  *     file used to be is reported as gone, which is what it is.
@@ -148,7 +148,7 @@ function buildRecentFilesCommandSpecs(): CommandDefinition[] {
       if (!filePath) return;
 
       const { isWorkspaceMode, rootPath } = useWorkspaceStore.getState();
-      // fix(#946) — honor the "open files in a new tab" preference, same as Cmd+O.
+      // Honor the "open files in a new tab" preference, same as Cmd+O.
       const { openInNewTab, workspaceRailMode } = useSettingsStore.getState().general;
       const existingTab = useTabStore.getState().findTabByPath(windowLabel, filePath);
       const replaceableTab = getReplaceableTab(windowLabel);
@@ -179,8 +179,8 @@ function buildRecentFilesCommandSpecs(): CommandDefinition[] {
         // the preflight's question, and `"failed"` here means the read broke
         // AFTER the file was there (permission, encoding, a mid-flight delete),
         // which `openFileInNewTabCore` already reports and which is not grounds
-        // to offer the entry for removal — that is exactly the misreport #927
-        // names.
+        // to offer the entry for removal — that is exactly the misreport this
+        // avoids.
         await executeOpenDecision(windowLabel, filePath, result, async (label, path) => {
           await openFileInNewTabCore(label, path);
         });
@@ -192,7 +192,7 @@ function buildRecentFilesCommandSpecs(): CommandDefinition[] {
 }
 
 /**
- * Register both recent-file commands as ONE owner batch (audit #929).
+ * Register both recent-file commands as ONE owner batch.
  *
  * A `hasCommand("file.clearRecent")` sentinel silently skipped
  * `file.openRecent` whenever that first id was already registered, and offered

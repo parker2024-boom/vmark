@@ -5,7 +5,7 @@
  * Tests createSourceEditorExtensions and exported compartments.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 
 // --- Mocks ---
 
@@ -29,6 +29,7 @@ vi.mock("@codemirror/view", () => ({
     updateListener: { of: vi.fn((cb: unknown) => cb) },
     theme: vi.fn(() => "theme"),
     baseTheme: vi.fn(() => "baseTheme"),
+    domEventHandlers: vi.fn(() => "domEventHandlers"),
   },
   keymap: { of: vi.fn((keys: unknown) => keys) },
   drawSelection: vi.fn(() => "drawSelection"),
@@ -58,6 +59,7 @@ vi.mock("@codemirror/language", () => ({
 vi.mock("@codemirror/autocomplete", () => ({
   closeBrackets: vi.fn(() => "closeBrackets"),
   closeBracketsKeymap: [],
+  autocompletion: vi.fn(() => "autocompletion"),
 }));
 
 vi.mock("@codemirror/search", () => ({
@@ -192,14 +194,10 @@ import { keymap } from "@codemirror/view";
 import { performUnifiedUndo, performUnifiedRedo } from "@/services/history/unifiedUndoRedo";
 import { toggleTaskList } from "@/plugins/sourceContextDetection/taskListActions";
 import { isMacPlatform } from "@/utils/shortcutMatch";
+import { useSettingsStore } from "@/stores/settingsStore";
 
 // #129 — the engine preview is per tab: the assembly must hand it the editor's tabId.
-vi.mock("./workflowExtensionGates", () => ({
-  workflowExtensionGates: (filePath: string | null | undefined) => {
-    const yaml = !!filePath?.endsWith(".yml");
-    return { yaml, viewer: false, engine: yaml };
-  },
-}));
+// The real gate decides (YAML file + the `advanced.workflowEngine` setting).
 vi.mock("@/plugins/codemirror/sourceWorkflowPreview", () => ({
   sourceWorkflowPreviewExtensions: (tabId: string) => [`workflowPreview:${tabId}`],
 }));
@@ -441,6 +439,14 @@ describe("createSourceEditorExtensions — workflow preview (#129)", () => {
     updateListener: "listener" as never,
   };
 
+  beforeEach(() => {
+    useSettingsStore.getState().updateAdvancedSetting("workflowEngine", true);
+  });
+
+  afterEach(() => {
+    useSettingsStore.getState().updateAdvancedSetting("workflowEngine", false);
+  });
+
   it("hands the engine preview the editor's OWN tab, so two editors keep two previews", () => {
     const left = createSourceEditorExtensions({ ...base, filePath: "/w/a.yml", tabId: "tab-left" });
     const right = createSourceEditorExtensions({ ...base, filePath: "/w/b.yml", tabId: "tab-right" });
@@ -455,5 +461,11 @@ describe("createSourceEditorExtensions — workflow preview (#129)", () => {
     for (const exts of [untabbed, markdown]) {
       expect(exts.some((e) => String(e).startsWith("workflowPreview:"))).toBe(false);
     }
+  });
+
+  it("mounts no preview while the workflow engine setting is off", () => {
+    useSettingsStore.getState().updateAdvancedSetting("workflowEngine", false);
+    const exts = createSourceEditorExtensions({ ...base, filePath: "/w/a.yml", tabId: "t" });
+    expect(exts.some((e) => String(e).startsWith("workflowPreview:"))).toBe(false);
   });
 });

@@ -18,7 +18,7 @@
  * rejected answer is shown inside the dialog so the user can click again), and a
  * blocked-popup notice with "open in new tab".
  *
- * Freezing goes through `browserOcclusion` (WI-S0.8), never a raw `browser_freeze`:
+ * Freezing goes through `browserOcclusion`, never a raw `browser_freeze`:
  * occluders are reference-counted, so a crash overlay, a page dialog and an approval
  * prompt can be up at once without one thawing the view out from under another.
  *
@@ -66,7 +66,7 @@ export function BrowserSurface({ tabId }: { tabId: string }): React.ReactElement
   const crash = useBrowserUiStore((s) => s.entries[tabId]?.crash ?? null);
   const dialog = useBrowserUiStore((s) => s.entries[tabId]?.dialog ?? null);
   const popup = useBrowserUiStore((s) => s.entries[tabId]?.blockedPopup ?? null);
-  // Any layout state that can MOVE the reserved rect without resizing it (WI-S0.3b).
+  // Any layout state that can MOVE the reserved rect without resizing it.
   // Cheap boolean join: it changes only when the shell actually reflows.
   // `effectiveTerminalPosition` matters as much as `terminalVisible`: moving the terminal
   // from the bottom to the side changes the rect's x/y WITHOUT changing its size or the
@@ -119,7 +119,7 @@ export function BrowserSurface({ tabId }: { tabId: string }): React.ReactElement
     // The dialog and its occluder stay up until the native confirm has actually been
     // answered: dismissing first and swallowing a rejection left a parked confirm() with
     // no UI to answer it. One submission at a time; a rejection is painted INTO the
-    // dialog (audit round 3, #164) and releases the guard, so the next click is the retry.
+    // dialog and releases the guard, so the next click is the retry.
     if (respondingRef.current) return;
     respondingRef.current = true;
     invoke("browser_dialog_respond", { id: current.id, accepted })

@@ -10,6 +10,8 @@
  *   - Leading/trailing pipe handling follows GFM conventions
  *   - Row index is relative to the table header (row 0 = header row)
  *   - Header detection scans upward through all preceding rows (supports tables of any size)
+ *   - Lines are read one at a time through a LineSource, so the editor can ask
+ *     about the cursor's table without splitting the whole document into lines
  *
  * @coordinates-with cursorSync/tiptapAnchors.ts — the WYSIWYG counterpart
  * @module utils/cursorSync/table
@@ -25,24 +27,35 @@ function isTableRowLine(line: string): boolean {
   return /\|/.test(line);
 }
 
-function findTableHeaderLineIndex(lines: string[], lineIndex: number): number | null {
+/**
+ * The lines of a document, read one at a time by 0-based index. An array of
+ * lines is one; so is a view over an editor document, which lets a caller ask
+ * about one table without materializing every line of the file.
+ */
+export interface LineSource {
+  readonly length: number;
+  at(index: number): string | undefined;
+}
+
+function findTableHeaderLineIndex(lines: LineSource, lineIndex: number): number | null {
+  const lineAt = (index: number) => lines.at(index) ?? "";
   // Current line is separator
-  if (isTableSeparatorLine(lines[lineIndex]) && lineIndex - 1 >= 0) {
-    if (isTableRowLine(lines[lineIndex - 1])) return lineIndex - 1;
+  if (isTableSeparatorLine(lineAt(lineIndex)) && lineIndex - 1 >= 0) {
+    if (isTableRowLine(lineAt(lineIndex - 1))) return lineIndex - 1;
   }
 
   // Current line is header (next line is separator)
   if (lineIndex + 1 < lines.length &&
-      isTableRowLine(lines[lineIndex]) && isTableSeparatorLine(lines[lineIndex + 1])) {
+      isTableRowLine(lineAt(lineIndex)) && isTableSeparatorLine(lineAt(lineIndex + 1))) {
     return lineIndex;
   }
 
   // Scan upward for separator line, then header above it
   for (let i = lineIndex - 1; i >= 0; i--) {
-    if (isTableSeparatorLine(lines[i]) && i - 1 >= 0 && isTableRowLine(lines[i - 1])) {
+    if (isTableSeparatorLine(lineAt(i)) && i - 1 >= 0 && isTableRowLine(lineAt(i - 1))) {
       return i - 1;
     }
-    if (!isTableRowLine(lines[i])) break;
+    if (!isTableRowLine(lineAt(i))) break;
   }
 
   return null;
@@ -113,19 +126,27 @@ function skipWhitespaceBackward(text: string, end: number, start: number): numbe
   return idx;
 }
 
+/**
+ * Table anchor (row, column, offset in cell) for a cursor at `columnInLine` of
+ * line `lineIndex` (0-based), or undefined when that line is not a table row.
+ * Reads the cursor's line and the rows above it up to the table's header —
+ * never lines outside the table.
+ */
 export function getTableAnchorForLine(
-  lines: string[],
+  lines: LineSource,
   lineIndex: number,
   columnInLine: number
 ): BlockAnchor | undefined {
+  const lineText = lines.at(lineIndex);
+  if (lineText === undefined) return undefined;
   const headerLine = findTableHeaderLineIndex(lines, lineIndex);
   if (headerLine === null) return undefined;
-  if (isTableSeparatorLine(lines[lineIndex])) return undefined;
+  if (isTableSeparatorLine(lineText)) return undefined;
 
   const row =
     lineIndex === headerLine ? 0 : Math.max(0, lineIndex - (headerLine + 1));
 
-  const cellRanges = getTableCellRanges(lines[lineIndex]);
+  const cellRanges = getTableCellRanges(lineText);
   if (cellRanges.length === 0) return undefined;
 
   let col = cellRanges.findIndex(

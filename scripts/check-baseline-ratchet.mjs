@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Manifest-driven ratchet over EVERY committed baseline (architecture review
- * D2, WI-16).
+ * D2).
  *
  * ── Why this exists ──────────────────────────────────────────────────────
  * Each gate compares the tree against its baseline IN THE SAME COMMIT, so a

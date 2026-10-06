@@ -15,17 +15,19 @@
  *   - `position` is value-restricted rather than banned: KaTeX genuinely
  *     emits `relative` and `absolute` for layout, while `fixed`/`sticky`
  *     pin content to the viewport — a clickjacking surface, never math.
- *   - Stylesheet TEXT (an SVG `<style>` element) is filtered rule-by-rule
- *     rather than dropped wholesale, because Mermaid ships its theming that
- *     way and forbidding the element would break every themed diagram.
+ *   - Stylesheet TEXT (an SVG `<style>` element) is not handled here: a
+ *     stylesheet applies to the whole page, so filtering its values is not
+ *     enough. `svgStylesheetScope.ts` confines it to its SVG and runs every
+ *     declaration through `isSafeStyleValue`.
+ *   - Markup is re-parsed in an inert document, never the page's own: an
+ *     element of the page's document starts loading as it is parsed.
  *
  * @coordinates-with sanitize.ts — HTML preview and KaTeX
- * @coordinates-with svgSanitize.ts — SVG attribute and stylesheet filtering
- * @coordinates-with svgResourcePolicy.ts — which references may reach the network
+ * @coordinates-with svgSanitize.ts — SVG style attribute filtering
+ * @coordinates-with svgStylesheetScope.ts — declaration filtering inside SVG stylesheets
  * @module utils/styleSafety
  */
 
-import { hasExternalUrlReference } from "./svgResourcePolicy";
 import { normalizeCss } from "./cssNormalize";
 
 /**
@@ -136,45 +138,21 @@ export function sanitizeDeclarations(
 }
 
 /**
- * Filter stylesheet TEXT (an SVG `<style>` element's content).
- *
- * `@import` is removed outright — it exists to fetch. Remaining rules are
- * dropped only when they reference something external or carry an execution
- * vector, so a themed Mermaid diagram survives intact while a beacon does
- * not.
- */
-export function sanitizeStylesheetText(css: string): string {
-  const withoutImports = normalizeCss(css).replace(/@import[^;]*;?/gi, "");
-  const dangerous = (chunk: string) => {
-    const lowered = chunk.toLowerCase();
-    return (
-      lowered.includes("expression(") ||
-      lowered.includes("javascript:") ||
-      lowered.includes("-moz-binding") ||
-      hasExternalUrlReference(chunk)
-    );
-  };
-  // Split on rule boundaries, keeping the brace so a kept rule round-trips.
-  const rules = withoutImports.match(/[^{}]*\{[^{}]*\}|[^{}]+/g) ?? [];
-  return rules
-    .filter((rule) => !dangerous(rule))
-    .join("")
-    .trim();
-}
-
-/**
  * Rewrite every `style` attribute in `html` through the shared declaration
  * filter, using the given property allow-list. Without a DOM (SSR, worker)
  * the attributes are dropped entirely — the safe direction.
+ *
+ * The markup is re-parsed in an inert document: an element of the page's own
+ * document starts loading as the parser creates it, attached or not.
  */
 export function filterStyleAttributes(
   html: string,
   allowedProps: ReadonlySet<string>,
 ): string {
-  if (typeof document === "undefined") {
+  if (typeof DOMParser === "undefined") {
     return html.replace(/\s+style="[^"]*"/gi, "");
   }
-  const container = document.createElement("div");
+  const container = new DOMParser().parseFromString("", "text/html").createElement("div");
   container.innerHTML = html;
   for (const element of container.querySelectorAll<HTMLElement>("[style]")) {
     const filtered = sanitizeDeclarations(

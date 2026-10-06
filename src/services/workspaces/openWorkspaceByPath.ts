@@ -12,8 +12,8 @@
  * REQUIRES the caller to have settled ACCESS to `path` first (WI-LX1.1): every
  * caller does — the picker grants what it returns, and Open Recent and the
  * open_workspace MCP tool ask Rust (`resolveWorkspaceAccess`) and act on the
- * answer. This used to re-grant as well, asking Rust twice per open (audit F2
- * #145); a new caller that opens a folder it did not pick must ask first.
+ * answer. This used to re-grant as well, asking Rust twice per open;
+ * a new caller that opens a folder it did not pick must ask first.
  * Running two transitions unguarded interleaves restore tabs/split into
  * whichever workspace lands last. Opening a workspace is safe with unsaved
  * changes — it does not close existing tabs, so dirty docs survive (#1005);

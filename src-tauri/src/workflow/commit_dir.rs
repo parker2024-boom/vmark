@@ -1,4 +1,4 @@
-//! The descriptor half of `action/save-file`'s commit (#257) — Unix only.
+//! The descriptor half of `action/save-file`'s commit — Unix only.
 //!
 //! `commit.rs` explains WHY; this is the how. The parent directory is opened
 //! once — `dir_fd.rs` holds that type and the containment walk — and from then
@@ -46,7 +46,7 @@ pub(in crate::workflow) fn commit_with(
 
 /// [`commit_with`] against a root the caller already HOLDS open — a snapshot
 /// restore's many writes prove containment against one directory, so a root
-/// swapped for a link mid-restore cannot become "the workspace" (#74).
+/// swapped for a link mid-restore cannot become "the workspace".
 pub(in crate::workflow) fn commit_in(
     target: &Path,
     root: &Dir,
@@ -86,7 +86,7 @@ pub(in crate::workflow) fn commit_in(
     temp.write_all(bytes)
         .and_then(|()| temp.flush())
         .map_err(|e| format!("write failed: {e}"))?;
-    // Metadata BEFORE the sync (#528). `sync_all` is what makes the inode
+    // Metadata BEFORE the sync. `sync_all` is what makes the inode
     // durable, so a mode or an xattr applied after it survived only until the
     // next crash: the rename below is made durable by the directory fsync, and
     // the file would then be at the target with the temp file's own 0600 and
@@ -106,13 +106,13 @@ pub(in crate::workflow) fn commit_in(
     if let Err(e) = dir.rename(&temp_name, &final_name) {
         // The temp file holds the user's whole document and `keep()` has
         // already disarmed the RAII delete, so this unlink is the only thing
-        // that removes it. Its failure is REPORTED, not discarded (#530/#535):
+        // that removes it. Its failure is REPORTED, not discarded:
         // silently leaving private content beside the target is worse than the
         // rename failure that caused it, and the log line is the only record.
         if let Err(cleanup) = dir.unlink(&temp_name) {
             log::error!(
-                "[workflow] a save to {} failed AND its temp file could not be removed: {cleanup}",
-                target.display()
+                "[workflow] a save to {:?} failed AND its temp file could not be removed: {cleanup}",
+                target
             );
             return Err(format!("{e}; the temp file was left behind: {cleanup}"));
         }

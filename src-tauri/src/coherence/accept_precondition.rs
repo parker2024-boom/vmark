@@ -1,4 +1,4 @@
-//! Reproject-under-lock accept precondition (Phase 3.0, WI-3.0e; design v4.3 —
+//! Reproject-under-lock accept precondition (Phase 3.0; design v4.3 —
 //! the review-verified accept BLOCKER 3, G-B rounds 3–6). Before an operator
 //! accept appends, it re-projects the affected edges under the kernel lock and
 //! compares to what the preview saw. Two subtleties the reviews forced:

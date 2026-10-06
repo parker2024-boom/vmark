@@ -1,5 +1,5 @@
 /**
- * Source link-target resolution for the editor context menu (WI-4.2).
+ * Source link-target resolution for the editor context menu.
  *
  * Purpose: the source cursor context marks `inLink` with the link's
  * source extent but leaves `href` unparsed. Copy Link needs the actual

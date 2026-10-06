@@ -4,7 +4,7 @@ Los Genios de IA son plantillas de prompts que transforman tu texto usando IA. S
 
 ## Inicio Rápido
 
-1. Configura un proveedor de IA en **Configuración > Integraciones** (ver [Proveedores de IA](/es/guide/ai-providers))
+1. Configura un proveedor de IA en **Ajustes > Integraciones** (ver [Proveedores de IA](/es/guide/ai-providers))
 2. Selecciona algo de texto en el editor
 3. Pulsa `Mod + Y` para abrir el selector de genios
 4. Elige un genio o escribe un prompt de forma libre
@@ -12,7 +12,7 @@ Los Genios de IA son plantillas de prompts que transforman tu texto usando IA. S
 
 ## El Selector de Genios
 
-Pulsa `Mod + Y` (o menú **Herramientas > Genios de IA**) para abrir un overlay estilo Spotlight con una sola entrada unificada.
+Pulsa `Mod + Y` (o el menú **Editar → Genios → Buscar genios…**) para abrir un overlay estilo Spotlight con una sola entrada unificada. El mismo submenú enumera cada genio por su nombre, así que un genio también puede ejecutarse directamente desde el menú.
 
 **Búsqueda y forma libre** — Empieza a escribir para filtrar genios por nombre, descripción o categoría. Si no hay genios coincidentes, la entrada se convierte en un campo de prompt de forma libre.
 
@@ -22,17 +22,17 @@ Pulsa `Mod + Y` (o menú **Herramientas > Genios de IA**) para abrir un overlay 
 
 **Cambio de alcance** — Pulsa `Tab` para cambiar entre alcances: selección → bloque → documento → todo.
 
-**Historial de prompts** — En modo de forma libre (sin genios coincidentes), pulsa `ArrowUp` / `ArrowDown` para recorrer prompts anteriores. Pulsa `Ctrl + R` para abrir un menú desplegable de historial con búsqueda. El texto fantasma muestra el prompt coincidente más reciente como pista en gris — pulsa `Tab` para aceptarlo.
+**Historial de prompts** — En modo de forma libre (sin genios coincidentes), pulsa `ArrowUp` / `ArrowDown` para recorrer prompts anteriores. Pulsa `Ctrl + R` para abrir un menú desplegable de historial con búsqueda; su botón **Borrar historial** vacía de una vez el historial guardado (hasta 100 prompts), sin preguntar. El texto fantasma muestra el prompt coincidente más reciente como pista en gris — pulsa `Tab` para aceptarlo, o `Escape` para descartarlo (vuelve en cuanto cambias lo que escribiste).
 
 ### Retroalimentación de Procesamiento
 
 Después de seleccionar un genio o enviar un prompt de forma libre, el selector muestra retroalimentación en línea:
 
 - **Procesando** — Un indicador de pensamiento con contador de tiempo transcurrido. Pulsa `Escape` para cancelar.
-- **Vista previa** — La respuesta de IA se transmite en tiempo real. Usa `Aceptar` para aplicar o `Rechazar` para descartar.
+- **Vista previa** — La respuesta de IA aparece a medida que llega: los proveedores CLI la transmiten mientras se genera, mientras que los proveedores REST entregan la respuesta completa de una vez cuando termina la solicitud. Usa `Aceptar` para aplicar o `Rechazar` para descartar.
 - **Error** — Si algo sale mal, aparece el mensaje de error con un botón `Reintentar`.
 
-La barra de estado también muestra el progreso de IA — un icono giratorio con tiempo transcurrido mientras se ejecuta, un breve destello de "Listo" al terminar, o un indicador de error con botones Reintentar/Descartar. La barra de estado se muestra automáticamente cuando la IA tiene estado activo, incluso si la ocultaste previamente con `F7`.
+La barra de estado también muestra el progreso de IA — un icono giratorio con tiempo transcurrido mientras se ejecuta, un breve destello de "Listo" al terminar, o un indicador de error con botones **Reintentar** y **Descartar**. **Reintentar** vuelve a ejecutar la solicitud fallida — el mismo genio o la misma instrucción, sobre la selección actual — incluso después de cerrar el selector; no aparece si no hay nada que repetir, por ejemplo sin proveedor. La barra de estado se muestra automáticamente cuando la IA tiene estado activo, incluso si la ocultaste previamente con `F7`.
 
 ## Genios Integrados
 
@@ -130,11 +130,11 @@ Los genios se almacenan en el directorio de datos de la aplicación:
 | Windows | `%APPDATA%\app.vmark\genies\` |
 | Linux | `~/.local/share/app.vmark/genies/` |
 
-Abre esta carpeta desde el menú **Herramientas > Abrir Carpeta de Genios**.
+Abre esta carpeta desde el menú **Editar → Genios → Abrir carpeta de genios**; después de añadir o editar archivos, **Editar → Genios → Recargar genios** actualiza la lista.
 
 ### Estructura de Directorios
 
-Los subdirectorios se convierten en **categorías** en el selector. Puedes organizar los genios como desees:
+Los subdirectorios se convierten en **categorías** en el selector, y la exploración es recursiva — anida carpetas con la profundidad que quieras; la categoría de un genio es la ruta de su carpeta relativa a `genies/` (así `academic/thesis/abstract.md` queda en `academic/thesis`) salvo que el frontmatter defina `category`. Los enlaces simbólicos se omiten. Puedes organizar los genios como desees:
 
 ```text
 genies/
@@ -193,7 +193,7 @@ El marcador de posición `{{content}}` es el núcleo de cada genio. Cuando se ej
 1. **Extrae el texto** basándose en el alcance (texto seleccionado, bloque actual o documento completo)
 2. **Reemplaza** cada `{{content}}` en tu plantilla con el texto extraído
 3. **Envía** el prompt completado al proveedor de IA activo
-4. **Transmite** la respuesta de vuelta como una sugerencia en línea
+4. **Devuelve** la respuesta como una sugerencia en línea — transmitida a medida que se genera desde un proveedor CLI, de una sola vez desde un proveedor REST
 
 Por ejemplo, con esta plantilla:
 
@@ -516,7 +516,7 @@ Un solo genio ejecuta un solo prompt. Cuando necesitas encadenar varios pasos de
 
 Como los pasos de un flujo de trabajo rellenan el marcador `{{content}}` de un genio a partir de un mapa `with: { input: "..." }`, **los genios que escribes aquí se ejecutan sin cambios dentro de los flujos de trabajo** — no hace falta ninguna conversión.
 
-Consulta [Flujos de trabajo de Genie](/es/guide/workflows) para ver el esquema YAML completo, la sintaxis de expresiones, las aprobaciones y cómo ejecutar uno.
+Consulta [Flujos de trabajo de genios](/es/guide/workflows) para ver el esquema YAML completo, la sintaxis de expresiones, las aprobaciones y cómo ejecutar uno.
 
 ### Aislamiento del contenido no confiable
 
@@ -531,7 +531,7 @@ Cuando se ejecuta un paso `genie/<name>` de un flujo de trabajo, el texto del do
 
 ## Solución de Problemas
 
-**"No hay proveedor de IA disponible"** — Abre Configuración > Integraciones y configura un proveedor. Ver [Proveedores de IA](/es/guide/ai-providers).
+**"No hay proveedor de IA disponible"** — Abre Ajustes > Integraciones y configura un proveedor. Ver [Proveedores de IA](/es/guide/ai-providers).
 
 **El genio no aparece en el selector** — Verifica que el archivo tenga extensión `.md` (o `.yml`/`.yaml` para un [genio de flujo de trabajo](/es/guide/workflow-genies)) y frontmatter válido con delimitadores `---`. Las subcarpetas se exploran hasta ocho niveles de profundidad (y como máximo 10.000 entradas en total), y los enlaces simbólicos se omiten. Ejecuta **Editar → Genios → Recargar genios** después de añadir archivos.
 

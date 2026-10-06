@@ -1,5 +1,5 @@
 /**
- * Browser omnibox resolution (WI-S1.5).
+ * Browser omnibox resolution.
  *
  * The address bar is an *omnibox*: a single field that accepts either a URL to
  * navigate to or a search query. This leaf-pure module classifies the entry and

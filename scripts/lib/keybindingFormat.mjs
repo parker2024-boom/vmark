@@ -30,7 +30,7 @@
  * The PAIR is what makes the minus key, not the trailing empty alone: any
  * final empty used to become `-`, so `Mod-` (a dangling separator, no key)
  * rendered as `Mod + -` — indistinguishable from the real `Mod--` — and
- * `keyTokens("")` returned `["-"]`, a chord out of nothing (audit R2 #186).
+ * `keyTokens("")` returned `["-"]`, a chord out of nothing.
  */
 export function keyTokens(key) {
   const parts = key.split("-");
@@ -74,7 +74,7 @@ export function prosemirrorToDocs(key) {
  * because the gate runs under plain `node` with no TypeScript runtime and the
  * app's copy pulls in `@/utils/shortcutMatch`. The port used to sit inside the
  * gate under a "keep in sync if that converter changes" comment — a rule with
- * no enforcement, on the one value the whole gate compares by (audit R3 #57).
+ * no enforcement, on the one value the whole gate compares by.
  * `keybindingFormat.test.mjs` now runs both implementations over every key in
  * `shortcutDefinitions.ts` plus the edge shapes, so a divergence fails a test
  * instead of silently redefining what "aligned" means.

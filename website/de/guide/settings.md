@@ -244,13 +244,13 @@ Unter macOS und Linux erscheint die Einstellung nicht.
 | Einstellung | Beschreibung | Standard | Optionen |
 |-------------|-------------|---------|---------|
 | Autospeichern aktivieren | Dateien nach der Bearbeitung automatisch speichern | Ein | Ein / Aus |
-| Identitätsblock beim Speichern einfügen | Erlaubt VMark, einen `vmark:`-Identitätsblock in das Frontmatter einer Datei einzufügen und einen `.vmark`-Ordner im Arbeitsbereich anzulegen, damit die Kohärenz-Ebene das Dokument verfolgen kann. Das gilt für jeden Schreibvorgang — Speichern, KI- und MCP-Bearbeitungen, das Zurücksetzen auf frühere Versionen und neue Dateien. Wenn aus, wird nichts eingefügt und kein `.vmark`-Ordner angelegt; ein Arbeitsbereich, der bereits einen hat, zeichnet weiterhin Änderungen an den Dokumenten auf, die er verfolgt — an einem Dokument, das er bereits aufgezeichnet hat, oder an einem, das schon eine eigene `vmark:`-Identität trägt, etwa einer verfolgten Datei, die Sie verschoben oder ausgecheckt haben. Siehe [Kohärenz](/de/guide/coherence) | Aus | Ein / Aus |
+| Identitätsblock beim Speichern einfügen | Erlaubt VMark, einen `vmark:`-Identitätsblock in das Frontmatter einer Datei einzufügen und einen `.vmark`-Ordner im Arbeitsbereich anzulegen, damit die Kohärenz-Ebene das Dokument verfolgen kann. Das gilt für jeden Schreibvorgang — Speichern, KI- und MCP-Bearbeitungen, das Zurücksetzen auf frühere Versionen und neue Dateien. Wenn aus, wird nichts eingefügt und kein `.vmark`-Ordner angelegt; ein Arbeitsbereich, der bereits einen hat, zeichnet weiterhin Änderungen an den Dokumenten auf, die er verfolgt — an einem Dokument, das er bereits aufgezeichnet hat, oder an einem, das schon eine eigene `vmark:`-Identität trägt, etwa einer verfolgten Datei, die Sie verschoben oder ausgecheckt haben. Siehe [Kohärenz](/de/guide/coherence#so-funktioniert-es-30-sekunden) | Aus | Ein / Aus |
 | Speicherintervall | Zeit zwischen automatischen Speicherungen. Nur verfügbar, wenn Autospeichern aktiviert ist | 30 Sekunden | 10s, 30s, 1 Min., 2 Min., 5 Min. |
 | Dokumentverlauf speichern | Dokumentversionen für Rückgängig und Wiederherstellung verfolgen | Ein | Ein / Aus |
 | Maximale Versionen | Anzahl der Verlaufs-Snapshots pro Dokument | 50 Versionen | 10, 25, 50, 100 |
 | Versionen behalten für | Maximales Alter von Verlaufs-Snapshots, bevor sie bereinigt werden | 7 Tage | 1 Tag, 7 Tage, 14 Tage, 30 Tage |
 | Zusammenführungsfenster | Aufeinanderfolgende Autospeicherungen innerhalb dieses Fensters werden in einem einzigen Snapshot zusammengefasst | 30 Sekunden | Aus, 10s, 30s, 1 Min., 2 Min. |
-| Maximale Dateigröße für Verlauf | Verlaufs-Snapshots für Dateien überspringen, die größer als dieser Schwellenwert sind | 512 KB | 256 KB, 512 KB, 1 MB, 5 MB, Unbegrenzt |
+| Maximale Dateigröße für Verlauf | Verlaufs-Snapshots der automatischen Speicherung für Dateien überspringen, die größer als dieser Schwellenwert sind. Manuelle Speicherungen, MCP-Speicherungen und die Sicherheitskopie vor dem Wiederherstellen einer Version werden immer behalten | 512 KB | 256 KB, 512 KB, 1 MB, 5 MB, Unbegrenzt |
 
 ### Bilder
 
@@ -281,7 +281,7 @@ Der MCP-Server (Model Context Protocol) ermöglicht externen KI-Assistenten wie 
 | Einstellung | Beschreibung | Standard |
 |-------------|-------------|---------|
 | MCP-Server aktivieren | MCP-Server starten oder stoppen. Wenn er läuft, zeigt ein Status-Badge den Port und verbundene Clients | Ein (Umschalter) |
-| Beim Start starten | Den MCP-Server beim Öffnen von VMark automatisch starten | Ein |
+| Beim Start beginnen | Den MCP-Server beim Öffnen von VMark automatisch starten | Ein |
 | Speichern an neuem Ort und Genie-Ergebnisse automatisch genehmigen | Einem MCP-Client erlauben, ein Dokument ohne Rückfrage an einem neuen Ort zu speichern, und ein Genie sein Ergebnis direkt anwenden lassen, statt eine Vorschau anzuzeigen. Wenn aus, wird eine MCP-Anfrage zum Speichern unter einem neuen Pfad abgelehnt, und eine Toast-Meldung informiert Sie. MCP-Schreibvorgänge in Dokumente werden hiervon nie blockiert — für jeden wird ein Wiederherstellungspunkt angelegt, der sich über den Verlauf in der Statusleiste wiederherstellen lässt | Aus |
 
 Wenn der Server läuft, zeigt der Bereich auch:
@@ -339,7 +339,7 @@ und Sie können jeden Tab über den Umschalter auf dem Bildschirm oder mit `F6` 
 
 ### Externer Editor
 
-Für die Schaltfläche **In externem Editor öffnen** auf schreibgeschützten Code-Tabs wählen Sie den Editor, der gestartet werden soll. Ein App-Bundle (z. B. `/Applications/Visual Studio Code.app`) oder eine ausführbare Datei.
+Für die Schaltfläche **In externem Editor öffnen** auf schreibgeschützten Code-Tabs wählen Sie den Editor, der gestartet werden soll: den Namen eines bekannten Editors (`code`, `zed`, `subl`, `vim`, …) oder den vollständigen Pfad eines App-Bundles (z. B. `/Applications/Visual Studio Code.app`) oder einer ausführbaren Datei. Shells, Interpreter und Terminal-Emulatoren werden abgelehnt, ebenso ein Pfad, der nicht existiert.
 
 Die GUI-Einstellung überschreibt alle Umgebungsvariablen — explizit schlägt implizit. Lassen Sie das Feld leer, um die Fallback-Kette `$VMARK_EXTERNAL_EDITOR → $VISUAL → $EDITOR → Plattformstandard` zu nutzen. Unter [In externem Editor öffnen](/de/guide/formats#in-externem-editor-offnen) finden Sie die vollständige Auflösungsreihenfolge und Sicherheitsüberprüfung.
 
@@ -439,7 +439,7 @@ Konfigurieren Sie das integrierte Terminal-Panel. Öffnen Sie das Terminal mit `
 
 | Einstellung | Beschreibung | Standard | Optionen |
 |-------------|-------------|---------|---------|
-| Shell | Welche Shell verwendet werden soll. Erfordert einen Terminal-Neustart, um wirksam zu werden | Systemstandard | Automatisch erkannte Shells auf Ihrem System (z. B. zsh, bash, fish) |
+| Shell | Welche Shell verwendet werden soll. Erfordert einen Terminal-Neustart, um wirksam zu werden. Eine gespeicherte Shell, die nicht mehr verfügbar ist, erscheint als *(nicht verfügbar)*, und der Standard wird verwendet | Systemstandard | Automatisch erkannte Shells auf Ihrem System (z. B. zsh, bash, fish) |
 | Panel-Position | Wo das Terminal-Panel platziert werden soll | Auto | Auto (basierend auf Fenster-Seitenverhältnis), Oben, Unten, Links, Rechts |
 | Panel-Größe | Anteil des verfügbaren Platzes, den das Terminal einnimmt. Das Panel durch Ziehen zu ändern aktualisiert diesen Wert ebenfalls | 40% | 10% bis 80% |
 | Schriftgröße | Textgröße im Terminal | 13px | 10px bis 24px |
@@ -448,7 +448,7 @@ Konfigurieren Sie das integrierte Terminal-Panel. Öffnen Sie das Terminal mit `
 | Cursor blinken | Ob der Terminal-Cursor blinkt | Ein | Ein / Aus |
 | Bei Auswahl kopieren | Ausgewählten Terminaltext automatisch in die Zwischenablage kopieren | Aus | Ein / Aus |
 | Gesprächsprotokolle automatisch darstellen | Claude/Codex-Markdown, Tabellen und Mermaid-Diagramme neben der Terminal-CLI darstellen. Fügt der Konfiguration von Claude Code und Codex einen lokalen SessionStart-Hook hinzu; laufende CLI-Sitzungen nach dem Aktivieren neu starten | Aus | Ein / Aus |
-| WebGL-Renderer | GPU-beschleunigtes Rendering für das Terminal verwenden. Deaktivieren bei IME-Eingabeproblemen. Erfordert Terminal-Neustart | Ein | Ein / Aus |
+| WebGL-Renderer | GPU-beschleunigtes Rendering für das Terminal verwenden. Deaktivieren bei IME-Eingabeproblemen. Erfordert Terminal-Neustart. Nur macOS und Windows — Linux verwendet immer den DOM-Renderer | Ein | Ein / Aus |
 | Zwischenablage aus der Ferne (OSC 52) | Programmen im Terminal — über ssh, in tmux — erlauben, in Ihre Systemzwischenablage zu kopieren. Der Kanal ist nur schreibend: Das Lesen der Zwischenablage wird immer verweigert, da jede im Terminal ausgegebene Ausgabe es anfordern könnte | Ein | Ein / Aus |
 | Scrollback-Puffer | Anzahl der Ausgabezeilen, die jede Sitzung in ihrem Scrollverlauf behält. Höhere Werte benötigen mehr Speicher | 5.000 | 1.000 / 5.000 / 10.000 / 50.000 |
 | Screenreader-Modus | Terminalausgabe für assistive Technologien (VoiceOver) zugänglich machen. Aus Leistungsgründen standardmäßig deaktiviert | Aus | Ein / Aus |
@@ -467,7 +467,7 @@ Unter [Integriertes Terminal](/de/guide/terminal) finden Sie mehr über Sitzunge
 
 ## Über
 
-Zeigt App-Version, Links zur Website und zum GitHub-Repository sowie Update-Verwaltung.
+Zeigt App-Version, Links zur Website und zum GitHub-Repository sowie Update-Verwaltung. Der Link **Hinweise zu Drittanbietern** öffnet die Lizenztexte der mit VMark gebündelten Open-Source-Software in der Standard-App Ihres Systems für Textdateien.
 
 ### Updates
 
@@ -539,12 +539,33 @@ Die vier Standardwerte sind immer enthalten: Das Entfernen eines davon gilt nur 
 |-------------|-------------|---------|
 | Beide Editoren aktiv halten | Sowohl den WYSIWYG- als auch den Quellmodus-Editor gleichzeitig mounten, für schnelleres Moduswechseln. Erhöht den Speicherverbrauch | Aus |
 
-### Workflow-Engine
+### Kohärenz
 
 | Einstellung | Beschreibung | Standard | Optionen |
 |-------------|-------------|---------|---------|
-| Workflow-Engine | VMarks eigene YAML-Workflow-Dateien ausführen: Eine Workflow-Datei öffnet sich mit ihrem Schritt-Graphen und einer Ausführen-/Abbrechen-Symbolleiste neben dem Quelltext, und Workflow-Genies können ausgeführt werden. Schritte können KI-Anbieter aufrufen und Dateien schreiben, daher bleibt die Engine aus, bis Sie sie ausdrücklich einschalten | Aus | Ein / Aus |
+| Konfidenz der semantischen Prüfung | Wie sicher eine Prüfung sein muss, bevor ihre Antwort als Urteil aufgezeichnet wird. Darunter wird die Antwort behalten, aber als unbekannt markiert | 0,9 | 0,7, 0,8, 0,9, 0,95 |
+
+Was eine Prüfung ist und wie Urteile aufgezeichnet werden, erfahren Sie unter [Kohärenz](/de/guide/coherence).
+
+### Workflow-Dateien
+
+| Einstellung | Beschreibung | Standard | Optionen |
+|-------------|-------------|---------|---------|
+| Action-Metadaten abrufen | VMark erlauben, `action.yml` von referenzierten GitHub Actions abzurufen, um das `with:`-Formular des strukturierten Editors zu befüllen. Ausschalten, um den Workflow-Editor vollständig offline zu halten | Ein | Ein / Aus |
+| actionlint verwenden, falls verfügbar | Liegt die Binärdatei `actionlint` in Ihrem PATH, wird sie für ausführlichere Diagnosen auf Workflow-Dateien ausgeführt. Ohne Wirkung, wenn die Binärdatei nicht installiert ist | Ein | Ein / Aus |
+
+### Workflow
+
+Der GitHub-Actions-Viewer hat keinen Schalter: Das Öffnen einer Datei unter
+`.github/workflows/` zeigt den Graphen und den Formular-Editor, und die Hilfen im
+Quellbereich (Ausdrucksvervollständigung, Cursor-Canvas-Synchronisierung,
+Sprung zur Definition bei `uses:`) werden mit geladen. Was hier bleibt, ist die eine
+Einstellung des Viewers und die separate Ausführungs-Engine.
+
+| Einstellung | Beschreibung | Standard | Optionen |
+|-------------|-------------|---------|---------|
 | YAML-Formatierung erhalten | Beim Speichern von Workflow-Bearbeitungen aus dem Formular-Panel die ursprünglichen YAML-Kommentare, Anker, Schlüsselreihenfolge und Leerzeilen über die CST-Roundtrip-Pipeline erhalten. Wenn aus, verwendet das Speichern einen kompakten Serialisierer (schneller, aber verlustbehaftet) | Ein | Ein / Aus |
+| Workflow-Engine | VMarks eigene YAML-Workflow-Dateien ausführen: Eine Workflow-Datei öffnet sich mit ihrem Schritt-Graphen und einer Ausführen-/Abbrechen-Symbolleiste neben dem Quelltext, und Workflow-Genies können ausgeführt werden. Schritte können KI-Anbieter aufrufen und Dateien schreiben, daher bleibt die Engine aus, bis Sie sie ausdrücklich einschalten | Aus | Ein / Aus |
 
 Die Engine ändert nichts an dem, was der Viewer anzeigt: GitHub-Actions-Dateien
 öffnen sich in jedem Fall im Viewer, und bei ausgeschalteter Engine erscheint eine

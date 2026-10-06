@@ -14,7 +14,7 @@ use std::collections::HashMap;
 /// Field-level docs below describe the on-the-wire YAML shape. Author-facing
 /// guidance — including the v1 expression grammar and template binding rules
 /// — lives in `website/guide/workflow-genies.md`.
-// A typo in a wire struct must FAIL, not be ignored (audit #519). `need:`
+// A typo in a wire struct must FAIL, not be ignored. `need:`
 // for `needs:` silently drops a dependency edge and reorders execution;
 // `approvals:` for `approval:` silently reverts a step to the workflow
 // default — and for an engine that spawns AI providers and writes files,
@@ -23,13 +23,15 @@ use std::collections::HashMap;
 // every time, and the only place it can be reported is here.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[allow(dead_code)]
 pub struct RawWorkflow {
     /// Human-readable name of the workflow. Required. Surfaces in logs and
     /// (for picker-invoked workflow genies) as the description fallback when
     /// `description:` is absent.
     pub name: String,
-    /// Optional one-line description. Shown in the genie picker row.
+    /// Optional one-line description. Shown in the genie picker row, which
+    /// reads it from the file itself: the engine accepts the key and does not
+    /// act on it. It has to stay a field — these structs refuse unknown keys,
+    /// so without it a workflow that describes itself would not run.
     #[serde(default)]
     pub description: Option<String>,
     /// Workflow-scope environment variables available to every step via
@@ -40,7 +42,7 @@ pub struct RawWorkflow {
     pub env: HashMap<String, String>,
     /// Workflow-level defaults applied to every step that doesn't override.
     /// Resolution order is step → genie metadata → workflow defaults →
-    /// hard-coded fallback (ADR-6 in `dev-docs/plans/20260418-genie-in-workflow.md`).
+    /// hard-coded fallback (ADR-6 in `.claude/adr/plans/20260418-genie-in-workflow.md`).
     #[serde(default)]
     pub defaults: RawDefaults,
     /// Ordered list of steps. The runner enforces a 50-step ceiling at
@@ -55,7 +57,6 @@ pub struct RawWorkflow {
 /// `step_config::resolve_step_config`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[allow(dead_code)]
 pub struct RawDefaults {
     /// Default AI model for `genie/*` steps. Step-level `model:` overrides;
     /// genie metadata `model:` overrides defaults; provider default applies
@@ -76,7 +77,6 @@ pub struct RawDefaults {
 ///   - `webhook/...` — reserved; not yet implemented.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[allow(dead_code)]
 pub struct RawStep {
     /// Optional explicit step identifier. When absent, the runner derives
     /// one from `uses` (last path segment). Required for downstream
@@ -90,14 +90,18 @@ pub struct RawStep {
     /// the template `{{key}}` substitutions per ADR-2.
     #[serde(default)]
     pub with: HashMap<String, String>,
-    /// Dependency edges. The step doesn't run until every named step has
-    /// completed successfully. Accepts either a bare string or a YAML list
-    /// (the `untagged` `NeedsDef` enum normalizes them).
+    /// Dependency edges: the step is ordered after every named step. By
+    /// default it also runs only if they all completed — a named step that
+    /// failed or was skipped makes `success()` false for this one — but a
+    /// step whose `if:` says `failure()` or `always()` runs regardless.
+    /// Accepts either a bare string or a YAML list (the `untagged` `NeedsDef`
+    /// enum normalizes them).
     #[serde(default)]
     pub needs: NeedsDef,
-    /// Conditional execution gate. The runner currently recognizes only
-    /// literal `"false"` / `"0"` (skip the step). Anything else falls through
-    /// to execution; full expression evaluation is a follow-up.
+    /// Conditional execution gate, evaluated by `condition.rs`: the step runs
+    /// when it is true and is skipped (not failed) when it is false. Absent,
+    /// or naming none of `success()` / `failure()` / `always()`, it carries an
+    /// implied `success()`. A condition that does not parse fails the step.
     #[serde(rename = "if")]
     pub condition: Option<String>,
     /// Per-step model override. See `RawDefaults.model` for precedence.
@@ -135,19 +139,18 @@ impl NeedsDef {
 
 /// Per-step (or workflow-default) execution limits.
 ///
-/// `timeout` and `max_tokens` are now actively enforced (post-WI-2.5 +
-/// audit-fix #4). `max_cost` is parsed for forward compatibility but
+/// `timeout` and `max_tokens` are now actively enforced.
+/// `max_cost` is parsed for forward compatibility but
 /// remains unenforced — see ADR-6 / D9 in
-/// `dev-docs/plans/20260418-genie-in-workflow.md` for the rationale.
+/// `.claude/adr/plans/20260418-genie-in-workflow.md` for the rationale.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[allow(dead_code)]
 pub struct RawLimits {
     /// Per-step wall-clock timeout. Accepts a bare integer (seconds) or a
     /// suffixed form: `"30s"`, `"5m"`, `"1h"`. Defaults to 300 s when no
     /// step or workflow-default sets it. On elapse the runner cancels the
-    /// shared cancellation token, killing CLI children and dropping REST
-    /// requests, then surfaces `"Timed out after Xs"` as the step error.
+    /// step's own cancellation token, killing its CLI child or dropping its
+    /// REST request, then surfaces `"Timed out after Xs"` as the step error.
     pub timeout: Option<String>,
     /// Cap on AI provider response length. Mapping is provider-specific:
     /// Anthropic body `max_tokens`, OpenAI body `max_tokens`, Google AI
@@ -157,7 +160,9 @@ pub struct RawLimits {
     pub max_tokens: Option<u64>,
     /// Cap on AI provider cost. **Currently parsed but unenforced** — see
     /// D9: cost accounting needs per-provider pricing tables and per-model
-    /// tokenizers, deferred to a future plan.
+    /// tokenizers, deferred to a future plan. Nothing reads the value; it
+    /// stays a field because these structs refuse unknown keys, and a
+    /// workflow that states a budget must still run.
     pub max_cost: Option<String>,
 }
 
@@ -207,3 +212,7 @@ pub struct ExecutionCompleteEvent {
     /// cancelled mid-run).
     pub status: String,
 }
+
+#[cfg(test)]
+#[path = "types.test.rs"]
+mod tests;

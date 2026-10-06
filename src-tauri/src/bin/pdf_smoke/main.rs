@@ -40,8 +40,8 @@
 //! - `concurrent` — 2 at once collide on neither a window label nor each
 //!   other's output, checked by distinct content sentinels.
 //! - `progress_case` — the `pdf-export-progress` stages come out of THIS
-//!   platform's backend in the one shared order (WI-FL6.2). Windows and Linux
-//!   emitted nothing before it, and no `cargo test` can see that.
+//!   platform's backend in the one shared order. Windows and Linux
+//!   used to emit nothing, and no `cargo test` can see that.
 //!
 //! @coordinates-with pdf_export/renderer — the code under test
 //! @module bin/pdf_smoke
@@ -137,3 +137,4 @@ mod progress_case;
 mod render_one;
 mod scenarios;
 mod verify;
+mod window_check;

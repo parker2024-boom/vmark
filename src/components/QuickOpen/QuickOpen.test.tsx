@@ -525,6 +525,28 @@ describe("workspace tier visibility follows the workspace config (#1428)", () =>
 });
 
 /**
+ * WI-RA7C.7 — the workspace tier refreshes from the window's own watcher.
+ * Watch events are scoped by watcher id, and the only watcher a window runs is
+ * the one named after its label (`useWindowFileWatcher`). Quick Open used to
+ * subscribe as `quick-open-<label>`, an id no watcher emits under, so a file
+ * created while the palette was open never appeared in it.
+ */
+describe("workspace tier follows the window's watcher", () => {
+  it.each(["main", "doc-3"])("subscribes under the window label %s", (label) => {
+    mockWorkspaceState.rootPath = "/ws";
+    mockWorkspaceState.isWorkspaceMode = true;
+    useQuickOpenStore.setState({ isOpen: true });
+
+    render(<QuickOpen windowLabel={label} />);
+
+    expect(useFileTree).toHaveBeenLastCalledWith(
+      "/ws",
+      expect.objectContaining({ watchId: label }),
+    );
+  });
+});
+
+/**
  * #1428 — with `showAllFiles` on, the workspace tier lists file types VMark
  * does not open itself. Selecting one must go through the same door the file
  * explorer uses, or the SAME file opens two different ways depending on

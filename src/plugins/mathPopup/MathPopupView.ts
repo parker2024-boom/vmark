@@ -3,11 +3,13 @@
  *
  * DOM management for the inline math editing popup with live KaTeX preview.
  * Extends WysiwygPopupView for common popup lifecycle management.
+ *
+ * @module plugins/mathPopup/MathPopupView
  */
 
 import i18n from "@/i18n";
 import { isImeKeyEvent } from "@/utils/imeGuard";
-import { loadKatex } from "@/plugins/latex/katexLoader";
+import { loadKatex } from "@/plugins/shared/katexLoader";
 import { renderWarn } from "@/utils/debug";
 import { errorMessage } from "@/utils/errorMessage";
 import type { StoreApi } from "zustand";
@@ -116,6 +118,14 @@ export class MathPopupView extends WysiwygPopupView<MathPopupState> {
     // No special cleanup needed
   }
 
+  /**
+   * Click-outside commits the edit, as the Source math popup does. The base
+   * default would discard the textarea content the user just typed.
+   */
+  protected override onClickOutside(): void {
+    this.handleSave();
+  }
+
   private renderPreview(latex: string): void {
     const trimmed = latex.trim();
     this.error.textContent = "";
@@ -183,12 +193,16 @@ export class MathPopupView extends WysiwygPopupView<MathPopupState> {
       return;
     }
 
-    const tr = editorState.tr.setNodeMarkup(nodePos, undefined, {
-      ...node.attrs,
-      content: latex,
-    });
-
-    dispatch(tr);
+    // An unchanged formula needs no transaction: dispatching one would dirty
+    // the document and add an undo step for every click-away.
+    if (node.attrs.content !== latex) {
+      dispatch(
+        editorState.tr.setNodeMarkup(nodePos, undefined, {
+          ...node.attrs,
+          content: latex,
+        })
+      );
+    }
     state.closePopup();
     this.focusEditor();
   }

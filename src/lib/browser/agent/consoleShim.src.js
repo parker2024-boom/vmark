@@ -1,4 +1,4 @@
-// The page-world console-capture shim (WI-P7.1 / WI-NB3.1) — THE ONLY COPY.
+// The page-world console-capture shim — THE ONLY COPY.
 //
 // Injected verbatim by Rust (`console_shim_macos.rs` include_str!s this file)
 // into AI-owned tabs' page world at document start, and executed byte-identical
@@ -63,7 +63,7 @@
       if (typeof orig === "function") return orig.apply(console, arguments);
     };
   });
-  // Uncaught errors and unhandled rejections (WI-NB3.1): the single most useful
+  // Uncaught errors and unhandled rejections: the single most useful
   // debug signal a page emits, and console.* patching never sees them. Same
   // entry shape, level "error", prefixed so the reader can tell them apart.
   try {

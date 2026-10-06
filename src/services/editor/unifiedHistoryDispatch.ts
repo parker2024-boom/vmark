@@ -25,7 +25,7 @@ import { captureOrigin, isOriginValid } from "./editorActionDispatch";
  * tab + surface, same active view, and not read-only — exactly as the editor
  * dispatchers do, so a deferred history op can't fire against a stale, hidden,
  * torn-down, or read-only editor. No editor-mount retry: unified history is
- * per-window and needs no tab-bound remount wait (audit-fix #3).
+ * per-window and needs no tab-bound remount wait.
  */
 export function runUnifiedHistoryImeSafe(
   actionId: "undo" | "redo",

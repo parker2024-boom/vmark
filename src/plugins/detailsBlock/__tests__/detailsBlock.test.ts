@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from "vitest";
 import { Editor, getSchema } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { AllSelection, EditorState, NodeSelection, TextSelection } from "@tiptap/pm/state";
-import { DOMSerializer, DOMParser as PMDOMParser } from "@tiptap/pm/model";
+import { DOMSerializer, DOMParser as PMDOMParser, Schema } from "@tiptap/pm/model";
 import { detailsBlockExtension, detailsSummaryExtension } from "../tiptap";
 
 // ---------------------------------------------------------------------------
@@ -195,9 +195,7 @@ describe("detailsBlock renderHTML", () => {
 describe("createDetailsBlockNode returns null for missing types", () => {
   it("insertDetailsBlock returns false when schema lacks required node types", () => {
     // Create a schema without detailsBlock/detailsSummary
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Schema: PmSchema } = require("@tiptap/pm/model");
-    const bareSchema = new PmSchema({
+    const bareSchema = new Schema({
       nodes: {
         doc: { content: "paragraph+" },
         paragraph: { group: "block", content: "text*" },
@@ -253,9 +251,7 @@ describe("insertDetailsBlock command", () => {
 
   it("returns false when createDetailsBlockNode returns null (missing types in schema)", () => {
     // Use a schema without paragraph type to make createDetailsBlockNode return null
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Schema: PmSchema } = require("@tiptap/pm/model");
-    const bareSchema = new PmSchema({
+    const bareSchema = new Schema({
       nodes: {
         doc: { content: "block+" },
         paragraph: { group: "block", content: "text*" },
@@ -464,9 +460,7 @@ describe("detailsBlock addInputRules", () => {
     const handler = (rule as unknown as { handler: (...args: unknown[]) => unknown }).handler;
 
     // Create a state with a schema that lacks detailsBlock/detailsSummary
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Schema: PmSchema } = require("@tiptap/pm/model");
-    const bareSchema = new PmSchema({
+    const bareSchema = new Schema({
       nodes: {
         doc: { content: "paragraph+" },
         paragraph: { group: "block", content: "text*" },

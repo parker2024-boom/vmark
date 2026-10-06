@@ -152,6 +152,8 @@ fn a_fifo_with_a_genie_extension_is_not_listed() {
     std::fs::write(base.join("real.md"), "x").unwrap();
     let fifo = base.join("pipe.md");
     let c_path = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
+    // SAFETY: `c_path` is a NUL-terminated string that outlives the call, and
+    // `mkfifo` only reads it.
     assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0, "mkfifo");
 
     let mut entries = HashMap::new();

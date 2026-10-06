@@ -1,6 +1,7 @@
 /**
  * Purpose: Path-aware fuzzy matching for Quick Open file search.
  * @coordinates-with QuickOpen UI components
+ * @module components/QuickOpen/fuzzyMatch
  */
 
 /** Result of a fuzzy match with score, matched character indices, and optional path indices. */

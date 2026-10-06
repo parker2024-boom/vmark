@@ -1,20 +1,25 @@
-// WI-2.2 — TOML adapter.
-//
-// CodeMirror highlighting via @codemirror/legacy-modes/mode/toml (the
-// pack the project already pulls in via @codemirror/language-data).
-// Validation via smol-toml — Phase 0 WI-0.6 picked it over @iarna/toml
-// (actively maintained, prior CVEs all fixed in 1.6.1).
-// Tree preview via the same react-json-view-lite component used by
-// the JSON adapter — TOML parses to a plain object, so the renderer
-// is shared.
+/**
+ * TOML adapter — editor highlighting, validation, and tree preview for TOML files.
+ *
+ * CodeMirror highlighting via @codemirror/legacy-modes/mode/toml (the
+ * pack the project already pulls in via @codemirror/language-data).
+ * Validation via smol-toml — picked over @iarna/toml
+ * (actively maintained, prior CVEs all fixed in 1.6.1).
+ * Tree preview via the same react-json-view-lite component used by
+ * the JSON adapter — TOML parses to a plain object, so the renderer
+ * is shared (LazyJsonTree, loaded on first use). smol-toml itself loads
+ * on first use too (tomlParser.ts): until it arrives the validator reports
+ * nothing and the preview is empty, and `validatorUpdates` has the source
+ * pane and the preview run again once it has.
+ *
+ * @module lib/formats/adapters/toml
+ */
 
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { Extension } from "@codemirror/state";
-import { JsonView } from "react-json-view-lite";
-import "react-json-view-lite/dist/index.css";
-import { parse as parseToml } from "smol-toml";
-import { jsonViewStyles } from "./jsonViewStyles";
+import { onTomlParserLoaded, tomlParser, useTomlParser } from "./tomlParser";
+import { LazyJsonTree } from "./LazyJsonTree";
 import {
   CargoTomlSchemaRenderer,
   cargoTomlSchemaDetector,
@@ -23,7 +28,6 @@ import {
   PyprojectTomlSchemaRenderer,
   pyprojectTomlSchemaDetector,
 } from "./pyprojectToml";
-import { useIsDarkTheme } from "@/hooks/useIsDarkTheme";
 import { registerFormat } from "../registry";
 import "./json-tree.css";
 import type {
@@ -43,6 +47,9 @@ interface TomlError extends Error {
 
 export const tomlValidator: Validator = (content) => {
   if (content.length === 0) return [];
+  // No findings until the parser has loaded; `validatorUpdates` re-runs us.
+  const parseToml = tomlParser();
+  if (!parseToml) return [];
   try {
     parseToml(content);
     return [];
@@ -66,15 +73,17 @@ export const tomlValidator: Validator = (content) => {
 
 function TomlTreePreview({ content, diagnostics }: PreviewRendererProps) {
   const { t } = useTranslation("editor");
-  const isDark = useIsDarkTheme();
+  const parseToml = useTomlParser();
   const parsed = useMemo(() => {
+    if (!parseToml) return undefined;
     try {
       return parseToml(content);
     } catch {
       return null;
     }
-  }, [content]);
+  }, [content, parseToml]);
 
+  if (parsed === undefined) return null; // the parser is still loading
   if (parsed === null) {
     return (
       <div className="json-tree-preview json-tree-preview--invalid">
@@ -94,7 +103,7 @@ function TomlTreePreview({ content, diagnostics }: PreviewRendererProps) {
 
   return (
     <div className="json-tree-preview" data-format="toml">
-      <JsonView data={parsed} style={jsonViewStyles(isDark)} />
+      <LazyJsonTree data={parsed} />
     </div>
   );
 }
@@ -112,6 +121,7 @@ export const tomlFormat: FormatConfig = {
     return StreamLanguage.define(toml);
   },
   validator: tomlValidator,
+  validatorUpdates: onTomlParserLoaded,
   genericPreview: TomlTreePreview,
   // Composed detector: try Cargo first (filename match wins), then
   // pyproject. Both detectors are pure and side-effect-free.

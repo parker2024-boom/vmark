@@ -28,6 +28,8 @@
  * FAILS CLOSED: an eslint crash, unparseable JSON, or an empty result set is an
  * error, never a pass. An empty result is indistinguishable from "the config
  * matched no files", which is exactly how a gate silently stops working.
+ *
+ * @coordinates-with scripts/check-type-aware.test.mjs — runs this against a stub eslint
  */
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -39,6 +41,13 @@ const BASELINE = path.join(ROOT, "scripts/type-aware-baseline.json");
 const CONFIG = "eslint.typeaware.config.mjs";
 const WRITE = process.argv.includes("--write-baseline");
 
+// Checked BEFORE the import: importing a missing module throws, so placed after
+// it this message could never be printed.
+if (!existsSync(path.join(ROOT, CONFIG))) {
+  console.error(`${CONFIG} not found — the type-aware gate cannot run.`);
+  process.exit(64);
+}
+
 // The gate measures exactly the rules its config declares. See the comment on
 // TYPE_AWARE_RULES: eslint reports `react-hooks/*` findings here too, at
 // severity 2, which `pnpm lint` already owns.
@@ -48,11 +57,6 @@ if (!Array.isArray(TYPE_AWARE_RULES) || TYPE_AWARE_RULES.length === 0) {
   process.exit(64);
 }
 const OWNED = new Set(TYPE_AWARE_RULES);
-
-if (!existsSync(path.join(ROOT, CONFIG))) {
-  console.error(`${CONFIG} not found — the type-aware gate cannot run.`);
-  process.exit(64);
-}
 
 let raw;
 try {
@@ -134,7 +138,13 @@ if (!existsSync(BASELINE)) {
   console.error("scripts/type-aware-baseline.json missing. Create it with --write-baseline.");
   process.exit(64);
 }
-const baseline = JSON.parse(readFileSync(BASELINE, "utf8")).files || {};
+const baseline = JSON.parse(readFileSync(BASELINE, "utf8")).files;
+if (typeof baseline !== "object" || baseline === null || Array.isArray(baseline)) {
+  // Defaulting to `{}` here would read a damaged baseline as "nothing was ever
+  // frozen", which silently drops the FIXED direction of the ratchet.
+  console.error("scripts/type-aware-baseline.json has no `files` map — refusing to treat it as empty.");
+  process.exit(64);
+}
 
 const grown = [];
 const added = [];

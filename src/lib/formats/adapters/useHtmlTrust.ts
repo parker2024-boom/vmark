@@ -112,7 +112,7 @@ export function useHtmlTrust(path: string | null, liveContent: string): HtmlTrus
       // trusted frame's `?run=` parameter, so a completion belonging to a file
       // the pane has already left forced a DIFFERENT trusted document to
       // reload and re-execute — an execution nobody asked for, which is the
-      // one thing this feature promises never to do (audit finding #32).
+      // one thing this feature promises never to do.
       const startedOn = path;
       void (async () => {
         try {

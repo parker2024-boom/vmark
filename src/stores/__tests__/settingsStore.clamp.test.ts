@@ -1,10 +1,12 @@
 // @vitest-environment node
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   useSettingsStore,
   clampMergedSettings,
   CLAMP_RANGES,
 } from "../settingsStore";
+import { reconcileSettings } from "../settingsStore/reconcile";
+import { buildHistorySettings } from "@/utils/historyTypes";
 
 describe("section updater clamping (D4)", () => {
   beforeEach(() => {
@@ -63,5 +65,68 @@ describe("clampMergedSettings (persist boundary, D4)", () => {
         expect(min).toBeLessThanOrEqual(max);
       }
     }
+  });
+});
+
+// WI-RA10A.14 — history is kept for at least one day. A retention of 0 days
+// puts the prune cutoff at "now", so the snapshot a save has just written is
+// older than the cutoff and is deleted by the prune that follows it.
+describe("historyMaxAgeDays has a floor of one day", () => {
+  const STORAGE_KEY = "vmark-settings";
+  const retention = () => useSettingsStore.getState().general.historyMaxAgeDays;
+
+  beforeEach(() => {
+    localStorage.clear();
+    useSettingsStore.getState().resetSettings();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    useSettingsStore.getState().resetSettings();
+  });
+
+  it.each([0, -1, 0.5, Number.MIN_VALUE])("raises a programmatic set of %s to 1", (value) => {
+    useSettingsStore.getState().updateGeneralSetting("historyMaxAgeDays", value);
+    expect(retention()).toBe(1);
+  });
+
+  it.each([1, 7, 14, 30])("leaves the %s-day preset the settings page offers untouched", (value) => {
+    useSettingsStore.getState().updateGeneralSetting("historyMaxAgeDays", value);
+    expect(retention()).toBe(value);
+  });
+
+  it("raises a persisted 0 to 1 when the settings are loaded", () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ state: { general: { historyMaxAgeDays: 0 } }, version: 1 }),
+    );
+
+    useSettingsStore.persist.rehydrate();
+
+    expect(retention()).toBe(1);
+  });
+
+  it("raises a 0 arriving from another window's settings blob", () => {
+    const live = useSettingsStore.getState() as unknown as Record<string, unknown>;
+
+    const merged = reconcileSettings(live, { general: { historyMaxAgeDays: 0 } });
+
+    expect((merged.general as { historyMaxAgeDays: number }).historyMaxAgeDays).toBe(1);
+  });
+
+  it("hands the history layer a cutoff that lies in the past", () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ state: { general: { historyMaxAgeDays: 0 } }, version: 1 }),
+    );
+    useSettingsStore.persist.rehydrate();
+
+    const { maxAgeDays } = buildHistorySettings(useSettingsStore.getState().general);
+    const now = Date.UTC(2026, 0, 2, 3, 4, 5);
+    const cutoff = now - maxAgeDays * 24 * 60 * 60 * 1000;
+
+    // The prune keeps `timestamp >= cutoff`; a snapshot stamped a moment ago
+    // must be on the keeping side.
+    expect(now - 1).toBeGreaterThanOrEqual(cutoff);
   });
 });

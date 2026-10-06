@@ -22,6 +22,9 @@
  *   - Bounded numeric settings (CLAMP_RANGES) are clamped both on every set
  *     and at the persist boundary, so corrupt/devtools values can't render
  *     the editor broken (D4).
+ *   - The persisted link-protocol list is the user's own: a default protocol a
+ *     newer build introduces is added once, by the versioned `migrate`
+ *     (LINK_PROTOCOLS_INTRODUCED), never unioned back on every load.
  *
  * Known limitations:
  *   - No per-document or per-workspace setting overrides — all settings are global.
@@ -94,6 +97,41 @@ export type {
  */
 export { themesAsColors as themes } from "@/theme";
 
+/** The persisted settings schema version this build writes. */
+const SETTINGS_VERSION = 2;
+
+/**
+ * The default link protocols each settings version introduced. A blob older
+ * than a version gets that version's protocols added ONCE, on upgrade; after
+ * that the persisted list is the user's own, so a removed default stays
+ * removed (the list is the link-scheme allowlist). Adding a default protocol
+ * means bumping SETTINGS_VERSION and adding its entry here — a test holds that
+ * every default protocol is introduced by some version.
+ *
+ * Version 2 adds the whole v1 default list: v1 builds unioned the defaults
+ * into the persisted list on every load, so a v1 user always effectively had
+ * every one of them.
+ */
+export const LINK_PROTOCOLS_INTRODUCED: Readonly<Record<number, readonly string[]>> = {
+  2: ["obsidian", "vscode", "dict", "x-dictionary"],
+};
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Add, once, the default link protocols introduced after `fromVersion`. */
+function addIntroducedLinkProtocols(state: Record<string, unknown>, fromVersion: number): void {
+  const advanced = state.advanced;
+  // No list at all: the deep merge supplies the current defaults.
+  if (!isPlainObject(advanced) || !Array.isArray(advanced.customLinkProtocols)) return;
+  const introduced = Object.entries(LINK_PROTOCOLS_INTRODUCED)
+    .filter(([version]) => Number(version) > fromVersion)
+    .flatMap(([, protocols]) => protocols);
+  const own = advanced.customLinkProtocols.filter((p): p is string => typeof p === "string");
+  advanced.customLinkProtocols = [...new Set([...introduced, ...own])];
+}
+
 // Helper to create section updaters - reduces duplication
 const createSectionUpdater = <T extends ObjectSections>(
   set: (fn: (state: SettingsState) => Partial<SettingsState>) => void,
@@ -132,17 +170,18 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       // `merge` function below cannot recover. `migrate` returns the current
       // defaults so an incompatible blob from a future build (e.g. after a
       // downgrade) is dropped rather than deep-merged into a crashy state.
-      version: 1,
+      // v2: the link-protocol list stopped being unioned with the defaults on
+      // every load (see LINK_PROTOCOLS_INTRODUCED).
+      version: SETTINGS_VERSION,
       migrate: (persistedState, version) => {
-        // Forward migrations have no work to do today — the only currently
-        // released shape is v1. If a downgrade puts a v2+ blob here, we
-        // explicitly drop it: returning `undefined` tells persist to keep
-        // the in-memory default state, which is preferable to producing a
-        // partially-initialized object.
-        if (typeof version !== "number" || version > 1) {
-          return undefined;
-        }
-        return persistedState as SettingsState;
+        // A blob from a newer build (after a downgrade) is dropped: returning
+        // `undefined` tells persist to keep the in-memory default state,
+        // which is preferable to producing a partially-initialized object.
+        // So is a `state` that is not an object at all.
+        if (typeof version !== "number" || version > SETTINGS_VERSION) return undefined;
+        if (!isPlainObject(persistedState)) return undefined;
+        addIntroducedLinkProtocols(persistedState, version);
+        return persistedState as unknown as SettingsState;
       },
       // Guard localStorage access for SSR/non-browser environments, and wrap it
       // so a write carries only the sections THIS window changed. persist
@@ -156,10 +195,15 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       ),
       // Deep merge to preserve new default properties when loading old localStorage
       merge: (persistedState, currentState) => {
-        const rawPersisted = (persistedState ?? {}) as Record<string, unknown>;
+        // A `state` that is not an object (a string, an array) would spread
+        // its indices into the store as settings named "0", "1", ...: refuse
+        // it and keep the defaults. A current-version blob reaches here
+        // without passing `migrate`, so the guard lives here too.
+        if (!isPlainObject(persistedState)) return currentState;
+        const rawPersisted = persistedState;
         // Every persisted-blob migration, in order, on the raw untrusted blob
         // BEFORE shape-sanitization (the pipeline is pinned complete by
-        // migrations.test.ts — audit #495).
+        // migrations.test.ts).
         runPersistedSettingsMigrations(rawPersisted);
         // T4/D4: the shared trust boundary — shape-sanitize, deep-merge, clamp
         // bounded numerics, normalize browser posture. The cross-window
@@ -169,20 +213,10 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
           currentState as unknown as Record<string, unknown>,
           rawPersisted
         ) as unknown as typeof currentState;
-        // Union array-typed defaults so new entries (e.g., link protocols) reach
-        // existing users. Hydration-only: it exists so a NEW build's defaults
-        // reach an OLD persisted blob, which cannot arise cross-window (both
-        // windows run the same build). reconcileSettings validated that the
-        // value IS an array, not what is in it — drop non-string entries here,
-        // or they reach the link-scheme allowlist and the settings UI as
-        // `42` / `null` / `{}`.
-        const defaultProtocols = currentState.advanced.customLinkProtocols;
-        const persistedAdvanced = rawPersisted.advanced as Record<string, unknown> | undefined;
-        const persistedProtocols = persistedAdvanced?.customLinkProtocols;
-        if (Array.isArray(persistedProtocols)) {
-          const strings = persistedProtocols.filter((p): p is string => typeof p === "string");
-          merged.advanced.customLinkProtocols = [...new Set([...defaultProtocols, ...strings])];
-        }
+        // The persisted link-protocol list is taken as it is: reconcile keeps
+        // an array and drops its non-string entries. Defaults a newer build
+        // introduces arrive once, through `migrate` — never by a union here,
+        // which put every removed default back at the next launch.
         return merged;
       },
     }

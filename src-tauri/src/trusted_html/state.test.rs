@@ -311,3 +311,32 @@ fn the_registry_stores_content_and_owner_only_never_a_path() {
     assert_eq!(state.html(&token).as_deref(), Some(DOC));
     assert_eq!(state.grant_count(), 1);
 }
+
+/// WI-RA7C.1 — a poisoned registry is refused, as it was, but never silently:
+/// a revoke that could not run reported "no such grant", with no trace that
+/// the registry itself was unusable. Every refusing path now logs why.
+#[test]
+fn a_poisoned_registry_refuses_and_says_so() {
+    let state = TrustedHtmlState::default();
+    let token = granted(&state);
+    crate::lock_policy::tests::poison(&state.inner);
+
+    let mut answers = (true, 1, Some(String::new()));
+    let lines = crate::peer_text::log_capture::captured_logs(|| {
+        answers = (
+            state.revoke(&token),
+            state.revoke_window(W),
+            state.html(&token),
+        );
+    });
+
+    assert_eq!(
+        answers,
+        (false, 0, None),
+        "a poisoned registry serves nothing"
+    );
+    assert_eq!(lines.len(), 3, "one refusal logged per call: {lines:?}");
+    assert!(lines
+        .iter()
+        .all(|l| l.contains("trusted-HTML") && l.contains("poisoned")));
+}

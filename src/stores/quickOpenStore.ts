@@ -1,3 +1,9 @@
+/**
+ * quickOpenStore — holds whether the Quick Open overlay is visible.
+ *
+ * @module stores/quickOpenStore
+ */
+
 import { create } from "zustand";
 
 interface QuickOpenState {

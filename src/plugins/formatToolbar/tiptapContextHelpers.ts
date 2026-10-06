@@ -10,7 +10,7 @@
  */
 
 import type { Mark, ResolvedPos } from "@tiptap/pm/model";
-import type { CursorContext } from "@/plugins/toolbarContext/types";
+import type { CursorContext } from "@/plugins/shared/toolbarContextTypes";
 import { findWordBoundaries } from "@/utils/wordSegmentation";
 
 /**

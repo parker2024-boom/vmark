@@ -3,7 +3,7 @@
 # check-tag-green.sh <commit-sha> — verify that CI's required checks are green
 # on the given commit before a release tag is allowed to leave this machine.
 #
-# Called by the `.githooks/pre-push` tag leg (WI-7). Queries
+# Called by the `.githooks/pre-push` tag leg. Queries
 #   gh api repos/xiaolai/vmark/commits/<sha>/check-runs
 # and requires BOTH required branch-protection checks — `frontend` and `rust`
 # (the same two `main` requires) — to be `completed` + `success` on the exact

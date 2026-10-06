@@ -8,8 +8,8 @@
  *   - Hot open: app:open-file event when app is already running (warm path)
  *   - Workspace adoption, different workspace (new window), loadFileIntoTab errors
  */
-
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { fileBytes } from "@/test/fileBytes";
 import { renderHook } from "@testing-library/react";
 
 const {
@@ -37,7 +37,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: (...args: unknown[]) => mockReadTextFile(...args),
+  readFile: (...args: unknown[]) => fileBytes(mockReadTextFile(...args)),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({

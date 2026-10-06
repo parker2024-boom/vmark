@@ -117,7 +117,7 @@ Assistentes de codificação IA podem gerar SVG diretamente nos seus documentos 
 
 **Exemplo de prompt:**
 
-> Crie um gráfico de barras mostrando a receita trimestral: T1 R$2,1M, T2 R$2,8M, T3 R$3,2M, T4 R$3,9M
+> Crie um gráfico de barras mostrando a receita trimestral: T1 US$ 2,1M, T2 US$ 2,8M, T3 US$ 3,2M, T4 US$ 3,9M
 
 A IA gera um gráfico de barras SVG que é renderizado inline no seu documento, com pan+zoom e exportação PNG disponíveis imediatamente.
 
@@ -138,6 +138,12 @@ A IA gera um gráfico de barras SVG que é renderizado inline no seu documento, 
 ### Segurança
 
 O VMark sanitiza o conteúdo SVG antes de renderizar. Tags de script e atributos de manipuladores de eventos (`onclick`, `onerror`, etc.) são removidos. Isso protege contra XSS ao colar SVG de fontes não confiáveis.
+
+Referências externas também são removidas: `<use>` e `<image>` podem apontar para um fragmento do mesmo documento (`href="#arrowhead"`) ou para um conteúdo `data:image/…` inline, mas uma URL que aponta para fora da máquina é descartada. Sem isso, simplesmente abrir um documento contendo um diagrama não confiável buscaria essa URL — revelando seu endereço IP e o momento em que você abriu o arquivo. Ferramentas de diagrama como o Mermaid só referenciam fragmentos, então diagramas normais não são afetados.
+
+A folha de estilos própria de um SVG (`<style>`) fica confinada a esse SVG: cada seletor é reescrito para que só possa corresponder a elementos dentro do SVG de onde veio, de modo que um diagrama não consegue reestilizar o editor nem outro diagrama. Apenas regras de estilo, `@media` e `@keyframes` são mantidas (os nomes de animação se tornam únicos por SVG); `@import`, `@font-face` e outras at-rules, referências externas `url()` e `position: fixed` / `sticky` são descartados. Elementos `<form>` são removidos (seu conteúdo é mantido).
+
+Links dentro de um SVG renderizado nunca fazem o próprio VMark navegar. Clicar em um link da web o abre no navegador do sistema; um link relativo para um arquivo abre esse arquivo em uma aba do VMark; links `javascript:`, `file:` e `data:` nunca são abertos.
 
 ### Dimensionamento
 

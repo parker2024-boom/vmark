@@ -236,7 +236,7 @@ pub(crate) fn preflight_destination(
         Ok(addrs) if destination_allowed(&addrs, allow_loopback) => return Ok(()),
         Ok(_) => PreflightReason::ResolvesPrivate,
         Err(failure) => {
-            log::warn!("[browser] AI pre-flight could not resolve {host}: {failure}");
+            log::warn!("[browser] AI pre-flight could not resolve {host:?}: {failure}");
             PreflightReason::Unresolved
         }
     };

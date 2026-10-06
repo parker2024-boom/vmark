@@ -51,7 +51,7 @@ Les clients d'IA qui ouvrent des documents via MCP ne vous arrachent jamais votr
 | Réordonner | Faites glisser une pastille sur une autre |
 | Déplacer dans sa propre fenêtre | Faites glisser une pastille hors de la fenêtre |
 | Dupliquer dans une nouvelle fenêtre | Le bouton **⧉** au survol |
-| Fermer un espace de travail | Clic droit → Fermer (une invite par onglet modifié) |
+| Fermer un espace de travail | Clic droit → Fermer. Tous ses onglets se ferment avec lui, y compris les onglets épinglés ; chaque onglet modifié demande d'abord, et annuler conserve l'espace de travail |
 
 ## Sessions de terminal
 

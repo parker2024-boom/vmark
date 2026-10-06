@@ -1,5 +1,5 @@
 /**
- * WI-UI0.2 — C2g: colour/size/z literals inside `className` strings.
+ * C2g: colour/size/z literals inside `className` strings.
  *
  * The CSS gates cannot see a defect written in JSX, which is where the
  * Tailwind surfaces (Settings, PDF sidebar, tab strip) write theirs. This
@@ -9,7 +9,7 @@
  * initializer subtree (literals, template chunks, conditional branches,
  * `cn(…)` arguments alike).
  *
- * Flags, per dev-docs/plans/20260829-ui-consistency.md C2g:
+ * Flags, per the UI-consistency plan's C2g:
  *   - hex colours (`bg-[#fff]`)
  *   - Tailwind PALETTE colour classes (`ring-gray-400`, `bg-black/50`) — these
  *     bypass the token system entirely, so no theme can retint them

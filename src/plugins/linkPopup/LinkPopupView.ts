@@ -20,6 +20,8 @@
  *   - Focus follows `autoFocus`: a click-opened popup leaves the keyboard in
  *     the document (#1448), and an explicit edit (Cmd+K) arriving while it is
  *     open re-shows it to take focus.
+ *
+ * @module plugins/linkPopup/LinkPopupView
  */
 
 import i18n from "@/i18n";
@@ -241,7 +243,7 @@ export class LinkPopupView extends WysiwygPopupView<LinkPopupState> {
     }
 
     if (kind === "external") {
-      // Scheme-allowlisted opener (audit 20260612).
+      // Scheme-allowlisted opener.
       openExternalLink(href).catch((error: unknown) => {
         linkPopupError("Failed to open link:", error);
       });

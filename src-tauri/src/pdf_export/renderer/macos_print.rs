@@ -6,7 +6,7 @@
 //! the sheet.
 //!
 //! Key decisions:
-//!   - **The outcome comes from the delegate, not from a timer (WI-FL6.3).**
+//!   - **The outcome comes from the delegate, not from a timer.**
 //!     `runOperationModalForWindow:delegate:didRunSelector:contextInfo:`
 //!     returns as soon as the sheet is up. The old body then ticked the run
 //!     loop for two seconds and settled `Ok`, so `print_document` resolved
@@ -16,7 +16,7 @@
 //!     delegate callback fires with WKWebView; nothing had ever passed a
 //!     delegate to find out.
 //!   - **The delegate keeps itself and the webview alive, and the callback
-//!     is the ONLY release (#216).** AppKit does not document retaining the
+//!     is the ONLY release.** AppKit does not document retaining the
 //!     delegate, and the print operation draws from the WKWebView until the
 //!     job is spooled. Both are held in the delegate's ivars, and the
 //!     delegate holds itself, until `printOperationDidRun:` lets go —
@@ -31,16 +31,16 @@
 //!   - **Nothing blocks once the sheet is shown.** The body reports `shown`
 //!     and returns to the event loop; that is what lets the bounded wait in
 //!     `wait.rs` end there and the user take their time.
-//!   - **The sheet attaches to the INVOKING window, resolved BEFORE the load
-//!     (#218).** The command passes the label of the window it was called
+//!   - **The sheet attaches to the INVOKING window, resolved BEFORE the load.**
+//!     The command passes the label of the window it was called
 //!     from. That window is resolved and RETAINED before the load, which can
 //!     take ten seconds, and is re-checked at presentation BY IDENTITY: one
 //!     that closed meanwhile is a cancel, never a substitute — and a
-//!     replacement that reused the label is not the same window (#428). There is no key-window
+//!     replacement that reused the label is not the same window. There is no key-window
 //!     fallback for a labelled caller — a sheet on whichever window happens
 //!     to be key is the bug this replaces. An unlabelled caller (the smoke
 //!     harness) gets the key window, else the hidden render window.
-//!   - **The claim is the last thing before the sheet (#227).** It is one
+//!   - **The claim is the last thing before the sheet.** It is one
 //!     compare-and-swap with the caller's timeout, so a caller whose bounded
 //!     wait ended gets no sheet, and a caller that loses the race learns the
 //!     sheet is up and keeps waiting.
@@ -156,8 +156,8 @@ fn print_inner(
         .ok_or_else(|| CommandError::internal("Print must run on the main thread"))?;
 
     let ov = create_offscreen_webview(mtm);
-    // Resolved and RETAINED before the load, which can take ten seconds
-    // (#218): the retain keeps the NSWindow valid across it whatever the
+    // Resolved and RETAINED before the load, which can take ten seconds:
+    // the retain keeps the NSWindow valid across it whatever the
     // user does meanwhile.
     let parent = resolve_parent(app, mtm, parent_label, &ov.window)?;
     load_html_and_wait(mtm, &ov.webview, html_path, read_access_dir)?;
@@ -165,9 +165,9 @@ fn print_inner(
 
     // A window that closed during the load is a valid object and a useless
     // parent: a sheet on it is one nobody can see or dismiss, and the phase
-    // after `shown` has no bound. Cancel instead (#218).
+    // after `shown` has no bound. Cancel instead.
     //
-    // The check is on IDENTITY, not on the label (#428). Tauri labels are
+    // The check is on IDENTITY, not on the label. Tauri labels are
     // unique among LIVE windows only, so a window that closed and was
     // replaced during the load answers `get_webview_window` — while `parent`
     // still retains the closed NSWindow the label used to name. Re-resolving
@@ -182,8 +182,8 @@ fn print_inner(
         }
     }
 
-    // Immediately before presenting, and atomic with the caller's timeout
-    // (#227): a caller whose bounded wait ended gets no sheet, and a caller
+    // Immediately before presenting, and atomic with the caller's timeout:
+    // a caller whose bounded wait ended gets no sheet, and a caller
     // that loses this race learns the sheet is up and keeps waiting.
     if !sink.claim() {
         return Err(CommandError::cancelled(
@@ -207,7 +207,7 @@ fn print_operation_for(mtm: MainThreadMarker, ov: &OffscreenWebView) -> Retained
     print_op
 }
 
-/// The window the sheet attaches to (#218): the invoking window by label,
+/// The window the sheet attaches to: the invoking window by label,
 /// resolved now and retained. `choose_parent` is the rule.
 fn resolve_parent(
     app: &AppHandle,
@@ -235,8 +235,8 @@ fn invoking_window(app: &AppHandle, label: &str) -> Option<Retained<NSWindow>> {
 }
 
 /// The rule, pure so it is pinned without AppKit: a labelled caller gets ITS
-/// window or a cancel — never whichever window is key, which is the bug #218
-/// names; an unlabelled caller (the smoke harness, a direct call) gets the
+/// window or a cancel — never whichever window is key, which is the bug this
+/// replaces; an unlabelled caller (the smoke harness, a direct call) gets the
 /// key window, else the hidden render window.
 fn choose_parent<W>(
     label_given: bool,

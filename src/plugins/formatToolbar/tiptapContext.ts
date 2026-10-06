@@ -7,13 +7,13 @@
  * Pipeline: EditorState → extractTiptapContext() → CursorContext → editorStore (tiptapContext) → toolbar enable rules
  *
  * @coordinates-with tiptapContextHelpers.ts — helper functions for mark/position detection
- * @coordinates-with toolbarContext/types.ts — CursorContext type definition
+ * @coordinates-with shared/toolbarContextTypes.ts — CursorContext type definition
  * @coordinates-with toolbarActions/enableRules.ts — consumes CursorContext to decide toolbar item state
  * @module plugins/formatToolbar/tiptapContext
  */
 
 import type { EditorState } from "@tiptap/pm/state";
-import type { CursorContext } from "@/plugins/toolbarContext/types";
+import type { CursorContext } from "@/plugins/shared/toolbarContextTypes";
 import {
   detectMarksAtCursor,
   isAtLineStart,

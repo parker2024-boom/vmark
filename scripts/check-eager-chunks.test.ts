@@ -355,6 +355,8 @@ describe("LAZY_ONLY_CHUNK_PATTERNS — the shipped list", () => {
     ["sourceWorkflowCompletion-abc123.js", "expression completion"],
     ["sourceWorkflowCursorSync-abc123.js", "cursor sync"],
     ["sourceWorkflowGoto-abc123.js", "goto-def"],
+    // WI-RA24.9 — the TOML parser loads on first use, not at cold start.
+    ["vendor-toml-abc123.js", "TOML parser"],
   ])("covers %s (%s)", (chunk) => {
     expect(patterns.some((p) => p.re.test(chunk))).toBe(true);
   });
@@ -390,8 +392,8 @@ describe("eager byte budget — what cold start loads, whatever the chunk shape"
     expect(message).toContain((MAX_EAGER_BYTES / MiB).toFixed(2));
   });
 
-  it("sits within ~5% of the measured cold-start closure (3.09 MiB), like every other budget", () => {
-    const measured = 3.09 * MiB;
+  it("sits within ~5% of the measured cold-start closure (3.00 MiB), like every other budget", () => {
+    const measured = 3.0 * MiB;
     expect(MAX_EAGER_BYTES).toBeGreaterThan(measured);
     expect(MAX_EAGER_BYTES).toBeLessThanOrEqual(measured * 1.06);
   });

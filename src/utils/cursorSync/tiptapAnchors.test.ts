@@ -176,10 +176,7 @@ describe("getBlockAnchor", () => {
       }
     });
 
-    it("returns table anchor with index-based col for second column", () => {
-      // Note: getBlockAnchor uses $pos.index(pd + 1) which traverses the
-      // ancestor chain. The col and row values depend on PM's $pos.index()
-      // semantics at each depth level. We test the actual returned values.
+    it("returns col 1 for a cursor in the second column of the header row", () => {
       const doc = schema.node("doc", null, [
         table(1,
           tableRow(tableHeader("H1"), tableHeader("H2"))
@@ -204,19 +201,12 @@ describe("getBlockAnchor", () => {
       expect(anchor).toBeDefined();
       expect(anchor!.kind).toBe("table");
       if (anchor!.kind === "table") {
-        // col comes from $pos.index(tableCellDepth + 1) = paragraph index = 0
-        // row comes from $pos.index(tableDepth + 1) = cell-within-row index = 1
-        expect(anchor.row).toBe(1);
-        expect(anchor.col).toBe(0);
+        expect(anchor.row).toBe(0);
+        expect(anchor.col).toBe(1);
       }
     });
 
-    it("returns row based on $pos.index for second row", () => {
-      // Note: getBlockAnchor uses $pos.index(pd + 1) for row, which returns
-      // the child index within the table at that depth level.
-      // For a single-cell row, the cell index within the row is 0, and
-      // $pos.index(tableDepth + 1) gives the cell index (0), not row index.
-      // This is the actual code behavior we're testing.
+    it("returns row 1 for a cursor in the second row", () => {
       const doc = schema.node("doc", null, [
         table(1,
           tableRow(tableCell("R0")),
@@ -241,9 +231,7 @@ describe("getBlockAnchor", () => {
 
       expect(anchor!.kind).toBe("table");
       if (anchor!.kind === "table") {
-        // $pos.index(tableDepth + 1) returns the index within the parent at that depth
-        // For a single-cell-per-row table, this is the cell index (0) within the row
-        expect(anchor.row).toBe(0);
+        expect(anchor.row).toBe(1);
         expect(anchor.col).toBe(0);
       }
     });
@@ -601,5 +589,70 @@ describe("restoreCursorInCodeBlock — catch block", () => {
     expect(view.dispatch).not.toHaveBeenCalled();
 
     vi.mocked(TextSelection.near).mockRestore();
+  });
+});
+
+describe("table offsetInCell is a text offset within the cell", () => {
+  // Source mode (table.ts) reads and writes offsetInCell as the character
+  // offset inside the cell's text, so the WYSIWYG side must use the same unit
+  // or a mode switch moves the cursor.
+  function textPos(doc: ReturnType<typeof schema.node>, text: string, offset: number): number {
+    let found = -1;
+    doc.descendants((node, pos) => {
+      if (node.isText && node.text === text) found = pos + offset;
+    });
+    return found;
+  }
+
+  const doc = schema.node("doc", null, [
+    table(1,
+      tableRow(tableHeader("Head"), tableHeader("Other")),
+      tableRow(tableCell("alpha"), tableCell("beta")),
+    ),
+  ]);
+
+  it("getBlockAnchor reports the character offset inside the cell text", () => {
+    const anchor = getBlockAnchor(doc.resolve(textPos(doc, "beta", 2)));
+    expect(anchor).toEqual({ kind: "table", row: 1, col: 1, offsetInCell: 2 });
+  });
+
+  it("getBlockAnchor reports 0 at the start of the cell text", () => {
+    const anchor = getBlockAnchor(doc.resolve(textPos(doc, "alpha", 0)));
+    expect(anchor).toEqual({ kind: "table", row: 1, col: 0, offsetInCell: 0 });
+  });
+
+  it("restoreCursorInTable places the cursor at that character offset", () => {
+    const view = createMockView(createState(doc));
+    restoreCursorInTable(view as never, 1, { row: 1, col: 1, offsetInCell: 2 });
+    expect(view.dispatch.mock.calls[0][0].selection.head).toBe(textPos(doc, "beta", 2));
+  });
+
+  it("restoreCursorInTable clamps an offset past the text to the cell end", () => {
+    const view = createMockView(createState(doc));
+    restoreCursorInTable(view as never, 1, { row: 0, col: 0, offsetInCell: 999 });
+    expect(view.dispatch.mock.calls[0][0].selection.head).toBe(textPos(doc, "Head", 4));
+  });
+
+  it("restoreCursorInTable lands inside an empty cell", () => {
+    const empty = schema.node("doc", null, [table(1, tableRow(tableCell(""), tableCell("x")))]);
+    const view = createMockView(createState(empty));
+    restoreCursorInTable(view as never, 1, { row: 0, col: 0, offsetInCell: 3 });
+    const $head = view.dispatch.mock.calls[0][0].selection.$head;
+    expect($head.parent.type.name).toBe("paragraph");
+    expect($head.node($head.depth - 1).type.name).toBe("tableCell");
+    expect($head.index($head.depth - 2)).toBe(0);
+  });
+
+  it("round-trips every cursor position in the table", () => {
+    for (const [text, len] of [["Head", 4], ["Other", 5], ["alpha", 5], ["beta", 4]] as const) {
+      for (let i = 0; i <= len; i++) {
+        const pos = textPos(doc, text, i);
+        const anchor = getBlockAnchor(doc.resolve(pos));
+        if (anchor?.kind !== "table") throw new Error("expected a table anchor");
+        const view = createMockView(createState(doc));
+        restoreCursorInTable(view as never, 1, anchor);
+        expect(view.dispatch.mock.calls[0][0].selection.head).toBe(pos);
+      }
+    }
   });
 });

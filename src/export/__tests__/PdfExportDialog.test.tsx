@@ -50,16 +50,6 @@ vi.mock("@/stores/settingsStore", () => ({
   },
 }));
 
-// captureThemeCSS + isDarkTheme both touch document.styleSheets — stub them
-vi.mock("../themeSnapshot", () => ({
-  captureThemeCSS: () => "",
-  isDarkTheme: () => false,
-}));
-
-vi.mock("../htmlExportStyles", () => ({
-  getEditorContentCSS: () => "",
-}));
-
 describe("PdfExportContent", () => {
   beforeEach(() => {
     invokeMock.mockReset();

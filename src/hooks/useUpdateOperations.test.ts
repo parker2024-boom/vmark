@@ -5,7 +5,7 @@
  * the main-window operation handler.
  */
 
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 // Mock Tauri updater plugin
 const mockCheck = vi.fn();
@@ -348,6 +348,10 @@ describe("useUpdateOperationHandler", () => {
     mockGetVersion.mockReset().mockResolvedValue("1.0.0");
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("returns doCheckForUpdates, doDownloadAndInstall, and EVENTS", () => {
     const { result } = renderHook(() => useUpdateOperationHandler());
 
@@ -463,15 +467,14 @@ describe("useUpdateOperationHandler", () => {
 
       const { result } = renderHook(() => useUpdateOperationHandler());
 
-      const before = Date.now();
+      // A fixed clock, so the stamp is asserted exactly rather than bracketed.
+      const checkedAt = Date.UTC(2026, 0, 2, 3, 4, 5);
+      vi.setSystemTime(checkedAt);
       await act(async () => {
         await result.current.doCheckForUpdates();
       });
-      const after = Date.now();
 
-      const ts = useSettingsStore.getState().update.lastCheckTimestamp;
-      expect(ts).toBeGreaterThanOrEqual(before);
-      expect(ts).toBeLessThanOrEqual(after);
+      expect(useSettingsStore.getState().update.lastCheckTimestamp).toBe(checkedAt);
     });
   });
 

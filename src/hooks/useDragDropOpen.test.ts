@@ -8,13 +8,14 @@
 
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fileBytes } from "@/test/fileBytes";
 
 // --- Mocks ---
 
 const mockReadTextFile = vi.fn();
 const mockIsWindowEmpty = vi.fn<(windowLabel: string) => boolean>(() => false);
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: (...args: unknown[]) => mockReadTextFile(...args),
+  readFile: (...args: unknown[]) => fileBytes(mockReadTextFile(...args)),
 }));
 
 const mockInvoke = vi.fn();

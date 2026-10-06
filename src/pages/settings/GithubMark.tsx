@@ -1,3 +1,10 @@
+/**
+ * GithubMark — a local GitHub logo icon component for the settings pages,
+ * drop-in compatible with lucide icons.
+ *
+ * @module pages/settings/GithubMark
+ */
+
 import type { SVGProps } from "react";
 
 /**

@@ -1,10 +1,17 @@
+/**
+ * sepia — design tokens for the Sepia light theme and its warm beige
+ * background.
+ *
+ * @module theme/themes/sepia
+ */
+
 import type { ThemeTokens } from "../tokens";
 import { sharedPrimitives, lightShadows, subtleLight, hoverLight } from "../tokens";
 
 /**
  * Sepia theme — warm beige background.
  *
- * WI-UI1.2: semantic/alert/media are AUTHORED per theme against sepia's own
+ * Semantic/alert/media are AUTHORED per theme against sepia's own
  * three backgrounds and the check-theme-contrast floors (the shared light
  * fragments were tuned for #ffffff).
  */

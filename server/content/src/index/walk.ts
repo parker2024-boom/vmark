@@ -1,5 +1,5 @@
 /**
- * Deterministic workspace file walker (Phase 2, WI-2.1).
+ * Deterministic workspace file walker (Phase 2).
  *
  * Rules (review D2.3 — explicit, not "approximate"):
  *   - Honors caller-supplied exclude folders + a built-in always-skip set that

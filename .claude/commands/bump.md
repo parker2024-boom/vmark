@@ -1,11 +1,12 @@
 ---
-description: Bump version across all 5 files, land it via PR, then tag and push
+description: Bump version across all 5 files, write the release notes, land it via PR, then tag and push
 argument-hint: "[version | patch | minor | major]"
 ---
 
 # Version Bump
 
-Bump the version number across all 5 required files, land the commit on `main`
+Bump the version number across all 5 required files, write the release notes in
+`CHANGELOG.md`, land the commit on `main`
 through a pull request, then tag and push.
 
 **`main` cannot be pushed directly** (since 2026-07-27 — `enforce_admins: true`
@@ -74,6 +75,21 @@ it stays behind, leaving `origin/main` dirty and breaking any
 `cargo build --locked` / `--frozen` — which is what the release workflow and CI
 run.
 
+## Phase 3b: Release notes and notices
+
+The release notes are the new version's `CHANGELOG.md` section; `release.yml`
+refuses to release a tag without one, and it becomes both the GitHub release
+body and the in-app update card's "what's new" text.
+
+1. Read `git log v{old}..HEAD --no-merges` and the `## [Unreleased]` entries.
+2. Move them under `## [{version}] - YYYY-MM-DD` (today's date), grouped as
+   Added / Changed / Fixed / Removed / Security, written for users — what
+   changed for them, not commit subjects. Leave an empty `## [Unreleased]`.
+3. Add `[{version}]: https://github.com/xiaolai/vmark/releases/tag/v{version}`
+   to the links at the bottom and point `[Unreleased]` at `v{version}...HEAD`.
+4. Refresh the bundled notices: `node scripts/gen-third-party-licenses.mjs`
+   (needs `cargo about` 0.8.2).
+
 ## Phase 4: Verify
 
 Read back all 5 files, plus the lockfile, and confirm the version matches:
@@ -83,6 +99,7 @@ grep '"version"' package.json src-tauri/tauri.conf.json server/mcp/package.json
 grep '^version' src-tauri/Cargo.toml
 grep 'const VERSION' server/mcp/src/cli.ts
 git diff --stat src-tauri/Cargo.lock     # must show 1 changed line
+node scripts/extract-changelog-section.mjs {version} --plain   # the update card's text; exit 1 = no section
 ```
 
 If any mismatch: fix before proceeding.
@@ -93,7 +110,8 @@ If any mismatch: fix before proceeding.
 git checkout -b bump-v{version}
 git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml \
         src-tauri/Cargo.lock \
-        server/mcp/package.json server/mcp/src/cli.ts
+        server/mcp/package.json server/mcp/src/cli.ts \
+        CHANGELOG.md src-tauri/resources/generated/THIRD_PARTY_LICENSES.txt
 git commit -m "chore: bump version to {version}"
 git push -u origin bump-v{version}
 gh pr create --fill

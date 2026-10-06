@@ -1,4 +1,4 @@
-//! WI-14 — the crate-wide typed error Tauri commands return.
+//! The crate-wide typed error Tauri commands return.
 //!
 //! Purpose: give the frontend something to BRANCH on. Rule 50 §10 used to
 //! canonize `Result<T, String>` for all 161 commands, so every distinction a
@@ -103,7 +103,7 @@ error_codes! {
     Timeout => "timeout", retryable = true;
     /// The user aborted. Not a failure to shout about.
     Cancelled => "cancelled", retryable = false;
-    /// A feature flag is off. WI-19's dark-feature gates return exactly this.
+    /// A feature flag is off. The dark-feature gates return exactly this.
     FeatureDisabled => "feature-disabled", retryable = false;
     /// Not available on this platform or not implemented yet.
     Unsupported => "unsupported", retryable = false;
@@ -180,9 +180,9 @@ impl CommandError {
     /// already at the name — and everything else is the OS refusing, which is
     /// `io`. This exists because two independent call sites had flattened every
     /// filesystem failure into ONE code and each got it wrong in a different
-    /// direction: `dock_recent` reported a permission failure as `not-found`
-    /// (#335), and `genies::read_genie` reported a vanished file as `io` while
-    /// reporting the same file's canonicalize failure as `not-found` (#344),
+    /// direction: `dock_recent` reported a permission failure as `not-found`,
+    /// and `genies::read_genie` reported a vanished file as `io` while
+    /// reporting the same file's canonicalize failure as `not-found`,
     /// contradicting its own documented contract.
     pub fn from_io(error: &std::io::Error, message: impl Into<String>) -> Self {
         let code = match error.kind() {

@@ -1,3 +1,10 @@
+/**
+ * migrations — the one-way migrations run on the raw persisted settings before
+ * they are sanitized and merged, renaming or removing retired keys.
+ *
+ * @module stores/settingsStore/migrations
+ */
+
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -18,8 +25,8 @@ export function migrateParagraphSpacingToBlockSpacing(rawPersisted: Record<strin
 }
 
 /**
- * Remove the retired `terminal.inputGate` flag (WI-4b deleted Channel-Ownership's
- * toggle). `sanitizePersistedSettings` forwards unknown keys, so without this the
+ * Remove the retired `terminal.inputGate` flag (Channel-Ownership's toggle was
+ * deleted). `sanitizePersistedSettings` forwards unknown keys, so without this the
  * stale value would linger in live state and be written back on every persist.
  * Runs before deep-merge.
  */
@@ -50,7 +57,7 @@ export function migrateWorkspaceRailModeToGeneral(
 }
 
 /**
- * WI-FL2.2 (D8) — remove the retired `appearance.autoHideStatusBar` flag.
+ * Remove the retired `appearance.autoHideStatusBar` flag (D8).
  *
  * It had a default, a type, a Settings row and ten translations, and nothing
  * ever read it: the toggle did nothing. `sanitizePersistedSettings` forwards
@@ -66,7 +73,7 @@ export function migrateRemoveAutoHideStatusBar(rawPersisted: Record<string, unkn
 }
 
 /**
- * WI-FL2.1 (D9) — remove the retired `advanced.mcpServer.port` setting.
+ * Remove the retired `advanced.mcpServer.port` setting (D9).
  *
  * The value was forwarded to `mcp_bridge_start`, which always bound
  * `127.0.0.1:0` and ignored it; the OS assigns the port and the bridge reports
@@ -85,7 +92,7 @@ export function migrateRemoveMcpPort(rawPersisted: Record<string, unknown>): voi
 }
 
 /**
- * WI-FL2.6 (D6) — remove the retired `advanced.workflowViewer` flag.
+ * Remove the retired `advanced.workflowViewer` flag (D6).
  *
  * The GitHub Actions viewer has no switch any more: the workbench was always
  * unconditional, the split-pane source aids never consulted the flag, and the
@@ -93,7 +100,7 @@ export function migrateRemoveMcpPort(rawPersisted: Record<string, unknown>): voi
  * persisted value, `true` or `false`, is dead weight that
  * `sanitizePersistedSettings` would forward and write back on every persist.
  *
- * This replaces the WI-19 split migration, which fanned `workflowEngine` out
+ * This replaces the earlier split migration, which fanned `workflowEngine` out
  * into `workflowViewer` on every load of a blob that lacked it — kept alongside
  * this one, the pair would only have been right in one run order. Only the
  * viewer leaf goes; `workflowEngine` is a live setting. Tolerant of a missing
@@ -107,7 +114,7 @@ export function migrateRemoveWorkflowViewer(rawPersisted: Record<string, unknown
 }
 
 /**
- * THE ordered migration pipeline (audit #495). The store's `merge` used to
+ * THE ordered migration pipeline. The store's `merge` used to
  * list the migrations by hand, so a migration exported here but not added to
  * that list silently never ran; `migrations.test.ts` pins that every exported
  * `migrate*` function is in this array, once. Order matters only where two

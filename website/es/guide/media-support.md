@@ -70,6 +70,8 @@ Usa iframes del reproductor de Vimeo:
 
 También puedes pegar una URL de Vimeo directamente (por ejemplo, `https://vimeo.com/123456789`) y VMark la convertirá automáticamente en un embed.
 
+También se admiten los vídeos de Vimeo no listados: pega el enlace para compartir no listado (`https://vimeo.com/123456789/abcdef1234` o una URL con `?h=…`) y VMark conserva el hash de privacidad que el embed necesita para reproducirse.
+
 ### Embeds de Bilibili
 
 Usa el iframe del reproductor de Bilibili con un BV ID:
@@ -117,6 +119,18 @@ En el modo Fuente, escribe las etiquetas HTML directamente. Las etiquetas multim
 - **Vimeo** — borde azul
 - **Bilibili** — borde rosa
 
+### Pegado Inteligente en Modo Fuente
+
+Pegar en el modo Fuente hace lo correcto para Markdown en lugar de volcar texto sin procesar:
+
+- **Una ruta de imagen** — o varias, de una copia de varios archivos en Finder o el Explorador — se valida, se copia a la carpeta de recursos del documento y se inserta como `![](relative-path)`. Cuando un pegado es ambiguo, un pequeño aviso de confirmación pregunta primero
+- **Una captura de pantalla o una imagen copiada** (datos de imagen binarios en el portapapeles) se guarda en la carpeta de recursos y se inserta de la misma forma
+- **Una URL pegada sobre texto seleccionado** se convierte en un enlace: `[selected text](https://…)`
+- **HTML o Markdown copiado desde otra aplicación** se convierte y se limpia antes de insertarse — excepto dentro de un bloque de código delimitado, donde el texto pegado se mantiene literal
+- **Los archivos de imagen arrastrados desde Finder o el Explorador** al editor de código fuente también se copian e insertan
+
+La conversión sigue **Ajustes → Markdown → Manejo del pegado del portapapeles** (`Smart` es el predeterminado; los demás modos lo desactivan), y los archivos se copian a la carpeta de recursos mientras **Ajustes → Archivos e imágenes → Copiar a la carpeta de recursos** esté activado (el valor predeterminado).
+
 ## Editar Medios
 
 Haz doble clic en cualquier elemento multimedia en el modo WYSIWYG para abrir el popup de medios:
@@ -135,13 +149,19 @@ VMark admite tres tipos de rutas de medios:
 | Tipo de Ruta | Ejemplo | Comportamiento |
 |--------------|---------|----------------|
 | Relativa | `./assets/video.mp4` | Resuelta relativa al directorio del documento |
+| Relativa al padre | `../images/photo.png` | Resuelta relativa al directorio del documento, subiendo tantos niveles como indique la ruta |
 | Absoluta | `/Users/me/video.mp4` | Usada directamente a través del protocolo de recursos de Tauri |
 | URL externa | `https://example.com/video.mp4` | Cargada directamente desde la web |
 
 Se recomiendan las rutas relativas — mantienen tus documentos portátiles entre máquinas.
 
+Una carpeta de recursos compartida junto a tus notas funciona tal cual — `notes/report.md`
+puede hacer referencia a `../images/photo.png`. (Antes de la 0.9.79 se mostraban como
+marcadores de posición rotos.)
+
 ## Seguridad
 
-- Las rutas relativas se validan contra ataques de traversal de directorios
-- Los iframes de embeds de vídeo están restringidos a dominios permitidos: `youtube.com`, `youtube-nocookie.com`, `player.vimeo.com` y `player.bilibili.com`
+- Una ruta multimedia no puede llevar un esquema de URI (`javascript:`, `file:` o uno personalizado); esas fuentes se rechazan en lugar de cargarse
+- Una ruta que nombra un directorio en lugar de un archivo se rechaza
+- Los embeds de vídeo se cargan solo desde tres hosts: `www.youtube-nocookie.com` (el reproductor de privacidad mejorada de YouTube), `player.vimeo.com` y `player.bilibili.com`. Un enlace de YouTube, o un iframe escrito con `youtube.com`, se inserta a través del host de privacidad mejorada. La política de seguridad de contenido de VMark permite cargar marcos desde estos hosts y desde ningún otro sitio
 - Otras fuentes de iframe son eliminadas por el saneador

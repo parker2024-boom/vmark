@@ -1,4 +1,9 @@
-/** Synchronize user browser posture settings with Rust's fail-closed policy. */
+/**
+ * Synchronize user browser posture settings with Rust's fail-closed policy.
+ *
+ * @module services/browser/browserAiPolicySync
+ */
+
 import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useTabStore } from "@/stores/tabStore";
@@ -30,8 +35,8 @@ function currentPolicy(): BrowserPolicy {
  * destroys the native view; the explicit destroy here is idempotent and covers a
  * window whose bootstrap has not started that subscriber yet.
  *
- * Switching the browser OFF also revokes every standing grant (audit 2026-09-03
- * #12): "withdraws the AI automation surface" must include the authority it had
+ * Switching the browser OFF also revokes every standing grant (audit 2026-09-03):
+ * "withdraws the AI automation surface" must include the authority it had
  * accumulated, or switching it back on resumes acting with no fresh prompt.
  */
 function destroyBrowserViews(onlyAi = false): void {

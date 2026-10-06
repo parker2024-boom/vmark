@@ -2,12 +2,12 @@
 //!
 //! Purpose: split from `commands.rs` at the file-size gate, and because the
 //! start is the one lifecycle with a race in every step: reuse-or-displace
-//! (a resident server with the other trust value is stopped BY GENERATION,
-//! #116), spawn, wait for the port (a concurrent start's child can win the
-//! shared port file, #120), register (the manager reconciles trust, #120).
+//! (a resident server with the other trust value is stopped BY GENERATION),
+//! spawn, wait for the port (a concurrent start's child can win the
+//! shared port file), register (the manager reconciles trust).
 //! Every exit hands whatever it holds to `cleanup::Detached` — the one
-//! teardown path (#123) — which logs what it could not do (#114) and leaves a
-//! child it could not stop with the manager (#122); a failed start is already
+//! teardown path — which logs what it could not do and leaves a
+//! child it could not stop with the manager; a failed start is already
 //! an error, so the outcome is not surfaced twice.
 //!
 //! @coordinates-with commands.rs — the command that loops over attempts
@@ -140,7 +140,7 @@ pub(super) async fn start_once(
         }
         RegisterOutcome::Registered => {
             // Read the registry BACK rather than describe the child just
-            // handed over (#291). Registration releases the lock before this
+            // handed over. Registration releases the lock before this
             // line, so a concurrent start with the OTHER trust value can
             // already have replaced and killed our child — and a handle built
             // from our own `port` would then name a dead server while the
@@ -167,8 +167,7 @@ pub(super) async fn start_once(
 /// The running server to hand back, or `None` when a spawn is needed. A
 /// resident server enforcing the other trust value is stopped first — by the
 /// generation just observed, so a server that replaced it in the meantime is
-/// left alone rather than killed by a decision made about its predecessor
-/// (#116).
+/// left alone rather than killed by a decision made about its predecessor.
 fn reuse_or_displace(
     mgr: &ContentServerManager,
     root: &str,
@@ -176,7 +175,7 @@ fn reuse_or_displace(
 ) -> Option<ServerHandle> {
     let existing = mgr.get(root)?;
     match start_decision(&existing, trusted) {
-        // A registration is not proof of life (#318). The supervisor polls
+        // A registration is not proof of life. The supervisor polls
         // every two seconds, so a child that crashed since its last tick is
         // still on the books; reusing it hands the caller a port nothing is
         // listening on, and the export/panel then fails against a `Ready`
@@ -188,7 +187,7 @@ fn reuse_or_displace(
         },
         StartDecision::RestartForTrust => {
             log::info!(
-                "[content-server {root}] trust changed to {trusted}; restarting so the CSP follows"
+                "[content-server {root:?}] trust changed to {trusted}; restarting so the CSP follows"
             );
             if let Some(detached) = mgr.take_if_generation(root, existing.generation) {
                 mgr.retain_orphan(root, detached.cleanup(root));
@@ -207,7 +206,7 @@ fn reuse_or_displace(
 /// `await_port`'s token check already prevents, and which made this the one
 /// place an attempt deleted a record it did not own: a CONCURRENT start's
 /// child writes the same path, and clearing it erased that child's readiness
-/// record before its own poll could read it (#277, #323). A genuinely stale
+/// record before its own poll could read it. A genuinely stale
 /// file is skipped by the token check and overwritten when this child binds.
 fn spawn_for(app: &AppHandle, root: &str, trusted: bool) -> Result<Spawned, CommandError> {
     let node = resolve_node().map_err(CommandError::not_found)?;
@@ -232,7 +231,7 @@ fn spawn_for(app: &AppHandle, root: &str, trusted: bool) -> Result<Spawned, Comm
     })
 }
 
-/// The class of a failed spawn, from the OS's own (#321). Every one of them
+/// The class of a failed spawn, from the OS's own. Every one of them
 /// used to be `internal` — a VMark bug — including the two a user can act on:
 /// a `node` that vanished between the resolve and the spawn, and one they are
 /// not allowed to execute.
@@ -257,7 +256,7 @@ async fn await_port(spawned: &mut Spawned) -> PortWait {
 /// won the race — its child wrote the port-file with a different token, which
 /// our token check skipped. Reuse that server when it enforces the trust asked
 /// for; when it enforces the other one it is the wrong server, and this start
-/// goes again rather than handing it back (#120). Nobody else running is a
+/// goes again rather than handing it back. Nobody else running is a
 /// timeout, not an internal fault.
 fn lost_the_port_file(
     mgr: &ContentServerManager,
@@ -273,7 +272,7 @@ fn lost_the_port_file(
             StartDecision::RestartForTrust => StartOutcome::RetryForTrust,
         });
     }
-    // The port file is deliberately left alone (#323). This attempt timed
+    // The port file is deliberately left alone. This attempt timed
     // out, so its child never wrote a record carrying its token: whatever is
     // at that path belongs to a concurrent start, and removing it erased the
     // readiness record that start was still polling for.

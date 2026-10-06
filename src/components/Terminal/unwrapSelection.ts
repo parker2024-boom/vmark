@@ -44,7 +44,7 @@ function joinSeparator(left: string, right: string): string {
 export function unwrapTerminalSelection(text: string): string {
   // Strip only the trailing ASCII space / tab padding that xterm reports
   // for empty cells; meaningful Unicode whitespace such as the CJK
-  // ideographic space (U+3000) is preserved. (Audit finding L1.)
+  // ideographic space (U+3000) is preserved.
   const lines = text.split(/\r?\n/).map((line) => line.replace(/[ \t]+$/, ""));
 
   const paragraphs: string[] = [];

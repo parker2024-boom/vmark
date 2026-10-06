@@ -1,5 +1,5 @@
 /**
- * useOutlineInstanceState (WI-9.3)
+ * useOutlineInstanceState
  *
  * Purpose: outline presentation state — collapsed heading keys, filter query,
  * scroll offset — held PER (workspace instance, tab) so it switches with the

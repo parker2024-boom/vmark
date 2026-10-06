@@ -6,7 +6,7 @@
  * and the manual "Test Restore" button (AdvancedSettings) must use this so a
  * multi-window session is never silently collapsed to its main window (#970).
  *
- * WI-3: this module is also the validated READ boundary — persisted payloads
+ * This module is also the validated READ boundary — persisted payloads
  * pass through `salvageSessionPayload` (Zod, per-item salvage, quarantine of
  * failures) before any restore command is chosen.
  *

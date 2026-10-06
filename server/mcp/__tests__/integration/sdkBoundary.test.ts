@@ -139,7 +139,6 @@ suite('MCP SDK boundary (spawned dist/cli.js)', () => {
       expect(instructions).toContain('needsApproval');
       expect(instructions).toContain('UNTRUSTED');
     },
-    30_000,
   );
 });
 

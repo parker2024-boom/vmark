@@ -132,7 +132,7 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
 
   // === View ===
   // toggleSidebar: no menuId (a Rust accel would clash with `paragraph` Mod-Shift-0 on Win/Linux); owned by the window-scoped KEYBINDINGS registry, never the TipTap keymap, to avoid double-toggle.
-  { id: "toggleSidebar", label: "Toggle Sidebar", category: "view", defaultKey: "Ctrl-Shift-0", defaultKeyOther: "Alt-Shift-0" },  // Alt off macOS: `Mod` IS Ctrl there, so Ctrl-Shift-0 would be the same accelerator as `paragraph`'s Mod-Shift-0 (WI-TNAV0.3). Same resolution the transform* trio already uses.
+  { id: "toggleSidebar", label: "Toggle Sidebar", category: "view", defaultKey: "Ctrl-Shift-0", defaultKeyOther: "Alt-Shift-0" },  // Alt off macOS: `Mod` IS Ctrl there, so Ctrl-Shift-0 would be the same accelerator as `paragraph`'s Mod-Shift-0. Same resolution the transform* trio already uses.
   { id: "toggleOutline", label: "Toggle Outline", category: "view", defaultKey: "Ctrl-Shift-1", menuId: "outline" },
   { id: "fileExplorer", label: "Toggle File Explorer", category: "view", defaultKey: "Ctrl-Shift-2", menuId: "file-explorer" },
   { id: "viewHistory", label: "Toggle History", category: "view", defaultKey: "Ctrl-Shift-3", menuId: "view-history" },
@@ -172,7 +172,7 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
 
   // === File ===
   { id: "newTab", label: "New Tab", category: "file", defaultKey: "Mod-t", description: "Create a new tab" },
-  // Native menu item (WI-S0.5), not just a DOM shortcut: once the browser's WKWebView
+  // Native menu item, not just a DOM shortcut: once the browser's WKWebView
   // is first responder it eats the key event, so a frontend-only binding cannot fire
   // while you are actually browsing. The item is disabled until `browser.enabled` is on.
   { id: "newBrowserTab", label: "New Browser Tab", category: "file", defaultKey: "Alt-Mod-Shift-b", menuId: "new-browser-tab", description: "Open a new embedded browser tab (requires the browser feature enabled)" },
@@ -189,7 +189,7 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
   { id: "saveAs", label: "Save As", category: "file", defaultKey: "Mod-Shift-s", menuId: "save-as" },
   { id: "moveTo", label: "Move to", category: "file", defaultKey: "", menuId: "move-to" },
   { id: "closeFile", label: "Close", category: "file", defaultKey: "Mod-w", menuId: "close" },
-  // Unbound by default (D12, WI-FL3.3): the conventional Mod-Shift-T is
+  // Unbound by default (D12): the conventional Mod-Shift-T is
   // insertTable's, Ctrl-Shift-T is transformTitleCase's and Alt-Mod-Shift-T is
   // insertTip's. The Shortcuts pane lists it as Unassigned so it can be bound.
   { id: "reopenClosedTab", label: "Reopen Closed Tab", category: "file", defaultKey: "", menuId: "reopen-closed-tab", description: "Reopen the most recently closed tab" },
@@ -201,7 +201,7 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
 
   // === Table ===
   // Note: the once-planned cycleEmphasis/cycleList/cycleHeading and
-  // tableColumn*/tableAlign* entries were removed (audit 2026-07): they had
+  // tableColumn*/tableAlign* entries were removed (found by an audit): they had
   // no consumer anywhere (no getShortcut() call, no menuId, no keymap), yet
   // their default bindings reserved keys and surfaced non-functional rows in
   // the Shortcuts settings UI. Re-add an entry only together with its

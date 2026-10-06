@@ -90,7 +90,7 @@ export async function publishTracked(
           throw new Error(messages.notAFileMessage(final));
         }
         // Aside, not away: a `rename` over it would destroy the previous
-        // export's file with nothing left to put back (#334).
+        // export's file with nothing left to put back.
         const backup = `${root}/${REPLACED_DIR}/${relative}`;
         await mkdir(parentOf(backup), { recursive: true });
         await rename(final, backup);
@@ -125,7 +125,7 @@ interface RollbackFailures {
  *
  * A leftover DIRECTORY only gets its own sentence when every file went back:
  * "restored to its previous contents" was said while empty directories this
- * export had created were still standing (audit R2, #675). When a file could
+ * export had created were still standing. When a file could
  * not be restored the message already says the folder is not as it was, and
  * the directory holding that file cannot be removed either — so naming it
  * there would report one failure twice.
@@ -160,14 +160,14 @@ async function rollback(
         files.push(`${final} (${errorMessage(error)})`);
       } else if (await isThere(backup, true)) {
         // Naming the backup is the difference between a recoverable failure
-        // and a lost file, so the stage is told to keep it (#334). Only a
+        // and a lost file, so the stage is told to keep it. Only a
         // CONFIRMED absence takes that away — discarding is irreversible.
         retainedBackups.push(backup);
         files.push(messages.backupKeptAtMessage(final, backup, errorMessage(error)));
       } else {
         // The restore failed BECAUSE the backup is gone — interference, or a
         // duplicate path that moved it. "Kept at <path>" would send the user
-        // to a file that is not there (audit R2, #674).
+        // to a file that is not there.
         files.push(messages.backupGoneMessage(final, backup, errorMessage(error)));
       }
     }
@@ -202,8 +202,8 @@ async function rollback(
  * CONTENTS and needs no delete access at all.
  *
  * Deliberately NOT remove-then-rename, which is the obvious fallback and is
- * wrong: this repository removed precisely that as a data-loss defect (audit
- * 20260906, B1) because it takes the target away first, so a second failure
+ * wrong: this repository removed precisely that as a data-loss defect
+ * because it takes the target away first, so a second failure
  * leaves nothing behind. `copyFile` leaves the backup whole whether it
  * succeeds or fails, so the caller always has a file to name.
  */
@@ -222,11 +222,11 @@ async function restoreBackup(backup: string, final: string): Promise<void> {
  * brought into existence to `created`, shallowest first.
  *
  * `mkdir --recursive` creates missing ANCESTORS too, and a rollback that
- * removed only the leaf would leave them behind (#335), so they are walked
+ * removed only the leaf would leave them behind, so they are walked
  * explicitly. The walk stops at `destination`, which this export does not own.
  *
  * Each level is then created SEPARATELY and recorded only once its own `mkdir`
- * has returned (audit R2, #676). One recursive call recorded the whole chain on
+ * has returned. One recursive call recorded the whole chain on
  * success and nothing on failure, so a call that made two of three levels
  * before failing left both behind untracked — and a level another export
  * created meanwhile was recorded as this one's and removed from under it during
@@ -271,8 +271,8 @@ function parentOf(path: string): string {
 /**
  * Remove `path`, logging rather than failing: no export outcome depends on
  * cleanup succeeding. Answers whether it is gone, so a caller that must not
- * CLAIM it removed something can tell (#675). One wrapper, two call sites —
- * the catch-and-warn shape was written twice (audit R3 #677).
+ * CLAIM it removed something can tell. One wrapper, two call sites —
+ * the catch-and-warn shape was written twice.
  */
 async function removeLogging(path: string, recursive: boolean, warning: string): Promise<boolean> {
   try {
@@ -289,6 +289,6 @@ export async function removeTree(root: string): Promise<void> {
   await removeLogging(root, true, "Could not remove the export staging tree:");
 }
 
-/** Remove one empty directory or file. Answers whether it is gone (#675). */
+/** Remove one empty directory or file. Answers whether it is gone. */
 export const removeQuietly = (path: string): Promise<boolean> =>
   removeLogging(path, false, "Could not remove an export path it created:");

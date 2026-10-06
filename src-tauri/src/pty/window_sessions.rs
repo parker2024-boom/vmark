@@ -7,39 +7,17 @@
 //! shell lived on until quit. Each session records the window that spawned it
 //! (`Session::owner`), and the window's `Destroyed` event terminates whatever
 //! it left behind — the same race, and the same fix, as the window's watcher.
+//! They are ended together by `session::terminate`, so one grace period covers
+//! all of a window's shells.
 //!
 //! @coordinates-with app_setup.rs — calls `close_window_sessions` on `Destroyed`
-//! @coordinates-with pty/session.rs — `Session`, `PtyState`, `kill_all`
+//! @coordinates-with pty/session.rs — `Session`, `PtyState`, `terminate`
 //! @module pty/window_sessions
 
-use super::session::{PtyState, Session};
+use super::session::{terminate, PtyState, Session};
 use std::collections::BTreeMap;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, Runtime};
-
-/// Stop a session that has been removed from the map, whoever owns its child.
-///
-/// Unstarted (`pty_start` never ran): the session still owns the child, so it
-/// is killed and reaped here. Started: the reader thread owns the child — the
-/// kill makes its `read()` return and the reader reaps it, as in `kill_all`.
-///
-/// Blocking (`wait()` + `blocking_lock`) — call from `spawn_blocking` or a
-/// plain thread, never directly on a tokio worker.
-fn terminate(session: &Session) {
-    session.shutdown.store(true, Ordering::Release);
-    session.pause_ctl.resume();
-    if let Some(mut child) = session.child.blocking_lock().take() {
-        let _ = child.kill();
-        let _ = child.wait();
-        return;
-    }
-    if let Ok(mut killer) = session.child_killer.lock() {
-        if let Err(e) = killer.kill() {
-            log::warn!("[pty] Failed to kill PTY owned by '{}': {e}", session.owner);
-        }
-    }
-}
 
 /// Remove every session the window `label` spawned and hand them back.
 /// Blocking (`blocking_write`) — call only from a non-async context.
@@ -63,13 +41,12 @@ pub fn close_window_sessions<R: Runtime>(app: &AppHandle<R>, label: &str) {
         return;
     }
     log::info!(
-        "[pty] Window '{label}' destroyed with {} live PTY session(s); terminating",
+        "[pty] Window {label:?} destroyed with {} live PTY session(s); terminating",
         orphans.len()
     );
     tauri::async_runtime::spawn_blocking(move || {
-        for (_, session) in orphans {
-            terminate(&session);
-        }
+        let sessions: Vec<Arc<Session>> = orphans.into_iter().map(|(_, s)| s).collect();
+        terminate(&sessions);
     });
 }
 

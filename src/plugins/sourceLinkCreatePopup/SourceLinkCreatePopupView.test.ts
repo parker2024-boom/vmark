@@ -71,7 +71,7 @@ vi.mock("@/plugins/shared/popupHostDom", () => ({
   toHostCoordsForDom: (_host: HTMLElement, pos: { top: number; left: number }) => pos,
 }));
 
-vi.mock("@/plugins/sourcePopup/sourcePopupUtils", () => ({
+vi.mock("@/plugins/shared/sourcePopupUtils", () => ({
   getEditorBounds: () => ({ horizontal: { left: 0, right: 800 }, vertical: { top: 0, bottom: 600 } }),
 }));
 

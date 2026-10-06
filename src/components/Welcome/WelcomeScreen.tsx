@@ -108,7 +108,7 @@ export function WelcomeScreen() {
 
   const nothingRecent = recentFiles.length === 0 && recentWorkspaces.length === 0;
 
-  // WI-UA13: the hint quotes the LIVE bindings — a user who rebinds either
+  // The hint quotes the LIVE bindings — a user who rebinds either
   // shortcut must not be taught a chord that no longer works.
   const paletteKey = useShortcutsStore((s) => s.getShortcut("commandPalette"));
   const quickOpenKey = useShortcutsStore((s) => s.getShortcut("quickOpen"));
@@ -116,7 +116,7 @@ export function WelcomeScreen() {
   return (
     <div className="welcome-screen" role="region" aria-label={t("emptyState.welcome")}>
       <div className="welcome-screen__inner">
-        {/* WI-UA13 (audit 20260901): identity moment — the brand name, not
+        {/* Identity moment — the brand name, not
             translated (see utils/appName.ts); the instruction moved into the
             tagline below, keeping its key and every locale's translation. */}
         <h1 className="welcome-screen__title">{APP_NAME}</h1>
@@ -141,7 +141,7 @@ export function WelcomeScreen() {
           </button>
         </div>
 
-        {/* WI-UA13: shortcut education, reusing the commands namespace's own
+        {/* Shortcut education, reusing the commands namespace's own
             labels so the hint can never drift from the palette/finder names. */}
         <p className="welcome-screen__hint">
           <kbd className="vm-chip vm-chip--kbd">{formatKeyForDisplay(paletteKey)}</kbd>

@@ -3,6 +3,8 @@
  *
  * Detects if cursor is inside a formatted range (e.g., **bold**, *italic*).
  * Used by the toolbar shortcut to auto-select formatted content.
+ *
+ * @module plugins/sourceContextDetection/formatRangeDetection
  */
 
 import type { EditorView } from "@codemirror/view";

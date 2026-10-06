@@ -1,8 +1,8 @@
 /**
  * The approval slice's transitions — pure functions over `ApprovalSlice`.
  *
- * Split from `workflowStore.ts` alongside the preview and view slices
- * (audit #1001), which took that file back under the ~300-line rule.
+ * Split from `workflowStore.ts` alongside the preview and view slices,
+ * which took that file back under the ~300-line rule.
  *
  * @coordinates-with src/stores/workflowStore.ts — the only consumer
  * @module stores/workflowApprovalSlice
@@ -30,7 +30,7 @@ export function enqueue(req: ApprovalRequestPayload): ApprovalSlice {
 }
 
 /**
- * Clear the pending approval; `only` scopes it to that request (audit #1009).
+ * Clear the pending approval; `only` scopes it to that request.
  *
  * The runner emits the NEXT step's approval-request while
  * `respond_workflow_approval` is still resolving — a different channel with no

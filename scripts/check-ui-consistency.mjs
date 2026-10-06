@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * WI-UI0.3 — the ui-consistency gate: C3, C4, C5, C7, C8, C9, C10, C11 of
- * dev-docs/plans/20260829-ui-consistency.md, with ONE identity baseline.
+ * The ui-consistency gate: C3, C4, C5, C7, C8, C9, C10, C11 of
+ * the UI-consistency plan, with ONE identity baseline.
  *
  *   C3   chrome font-size is a --font-size-* token (editor em ratios exempt)
  *   C4   overlay/popup shells compose a canonical panel class
@@ -120,11 +120,11 @@ export function runChecks({ cssFiles, tsxFiles, indexCssText, read = (p) => read
     }
   }
 
-  // C6 (WI-UI1.7) — reduced motion has ONE owner: the global duration-collapse
+  // C6 — reduced motion has ONE owner: the global duration-collapse
   // block in index.css (zero-tolerance), and per-file blocks are REPORTED as
   // deletable except the three that restore a resting state.
   const reports = [];
-  // C3's Tailwind half (zero-tolerance since WI-UI2.2): the @theme inline
+  // C3's Tailwind half (zero-tolerance): the @theme inline
   // bridge must exist and cover the namespaces VMark uses — without it,
   // Tailwind's own rem scale re-forks chrome typography invisibly.
   if (!/@theme inline \{[^}]*--text-sm:\s*var\(--font-size-base\)[^}]*--font-sans:\s*var\(--font-ui\)[^}]*--shadow-popup:\s*var\(--shadow-popup\)/.test(indexCssText)) {

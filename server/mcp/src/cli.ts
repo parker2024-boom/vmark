@@ -23,7 +23,7 @@
  * lockstep with the app is the five-file `sed` in the bump procedure
  * (`.claude/rules/40-version-bump.md`). Edit it only through that procedure.
  */
-const VERSION = '0.9.91';
+const VERSION = '0.9.93';
 
 /**
  * WHY `process.exitCode` AND NOT `process.exit()` ON THESE PATHS.
@@ -32,8 +32,8 @@ const VERSION = '0.9.91';
  * and `process.exit()` terminates without flushing pending writes. Every caller
  * of `--version` and `--health-check` reads them through a pipe — the app's
  * `useMcpHealthCheck.ts` spawns the binary and JSON.parses its stdout — so a
- * truncated report is a parse failure the user sees as "the sidecar is broken"
- * (audit R3 #195). Setting the code and returning lets the loop drain and the
+ * truncated report is a parse failure the user sees as "the sidecar is broken".
+ * Setting the code and returning lets the loop drain and the
  * write complete; nothing on either path holds a handle open, and
  * `__tests__/unit/cli.test.ts` asserts both terminate with the full payload.
  */
@@ -70,7 +70,7 @@ import { createShutdownHandler, registerShutdownTriggers } from './utils/shutdow
  * FAILS FAST on a bad `--port`: a missing, unparseable or conflicting value
  * used to be dropped silently, and the bridge then fell back to port-file
  * DISCOVERY — connecting to whichever instance published the port file, i.e.
- * the one the override was steering away from (audit R2 #198).
+ * the one the override was steering away from.
  */
 function parseArgs(argv: string[] = process.argv.slice(2)): { port: number | undefined } {
   let cliPort: number | undefined;
@@ -169,8 +169,8 @@ async function main(): Promise<void> {
   // High-level MCP server. Metadata version is the real sidecar VERSION —
   // clients previously saw a stale hardcoded '0.1.0'.
   // `tools` only. Declaring `resources: {}` advertised resources/list and
-  // resources/read on a server that registers none (audit 20260728 §4).
-  // `instructions` is the initialize-time primer (WI-NB2.1) — the operational
+  // resources/read on a server that registers none.
+  // `instructions` is the initialize-time primer — the operational
   // core loop the model reads before any tool call; pinned by
   // instructions.test.ts and end-to-end by sdkBoundary.test.ts.
   const mcpServer = new McpServer(
@@ -207,8 +207,8 @@ async function main(): Promise<void> {
   // `bridge.connect()` here made MCP initialization wait out the bridge's full
   // connect timeout whenever VMark was not listening (a stale port file, an
   // app that had quit) — and a client that times out on `initialize` drops the
-  // server, so an unreachable editor took the whole tool surface with it
-  // (audit R2 #200). autoReconnect owns the retry, and `sendBridgeRequest`
+  // server, so an unreachable editor took the whole tool surface with it.
+  // autoReconnect owns the retry, and `sendBridgeRequest`
   // reports a disconnected bridge on its own.
   const transport = new StdioServerTransport();
   await mcpServer.connect(transport);

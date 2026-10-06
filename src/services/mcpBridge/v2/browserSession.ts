@@ -1,5 +1,5 @@
 /**
- * MCP v2 session/storage tools (WI-P6.2 / P6.3): `session.save` and
+ * MCP v2 session/storage tools: `session.save` and
  * `session.load`.
  *
  * A saved session is a credential-bearing blob (cookies + localStorage) that the
@@ -26,12 +26,11 @@ import type { BrowserTarget } from "./browserHelpers";
 import { invokeAttached, resolveBrowserTarget } from "./browserAccess";
 import { authorizeOperation } from "./browserApprovalFlow";
 import { requireHumanAttachment } from "./browserReadClass";
-import { readOperationArgs } from "./readOperationArgs";
+import { readOperationArgsChecked } from "./readOperationArgs";
 
 /** A handle is a short label (keychain account + AI-facing token); keep it to the
  *  same safe charset the Rust layer enforces so a rejection is caught up front. */
-function readHandle(operation: "vmark.browser.session.save" | "vmark.browser.session.load", args: Record<string, unknown>): string | null {
-  const wire = readOperationArgs(operation, args);
+function readHandle(wire: { handle?: string }): string | null {
   const h = typeof wire.handle === "string" ? wire.handle.trim() : "";
   if (!h || h.length > 128) return null;
   return /^[A-Za-z0-9._-]+$/.test(h) ? h : null;
@@ -55,9 +54,10 @@ export async function handleBrowserSessionSave(id: string, args: Record<string, 
   return wrapHandler(id, async () => {
     // The attachment prompt is raised AFTER the handle has been validated: a
     // malformed request must fail on its own, not after the user attached for it.
-    const tab = await resolveBrowserTarget(id, args);
+    const read = readOperationArgsChecked("vmark.browser.session.save", args);
+    const tab = await resolveBrowserTarget(id, read);
     if (!tab) return;
-    const handle = readHandle("vmark.browser.session.save", args);
+    const handle = readHandle(read.wire);
     if (!handle) {
       await respond({ id, success: false, error: "session.save requires a 'handle' matching [A-Za-z0-9._-] (1..128)" });
       return;
@@ -82,9 +82,10 @@ export async function handleBrowserSessionSave(id: string, args: Record<string, 
 /** `vmark.browser.session.load` — restore a saved session into the tab by handle. */
 export async function handleBrowserSessionLoad(id: string, args: Record<string, unknown>): Promise<void> {
   return wrapHandler(id, async () => {
-    const tab = await resolveBrowserTarget(id, args);
+    const read = readOperationArgsChecked("vmark.browser.session.load", args);
+    const tab = await resolveBrowserTarget(id, read);
     if (!tab) return;
-    const handle = readHandle("vmark.browser.session.load", args);
+    const handle = readHandle(read.wire);
     if (!handle) {
       await respond({ id, success: false, error: "session.load requires a 'handle' matching [A-Za-z0-9._-] (1..128)" });
       return;

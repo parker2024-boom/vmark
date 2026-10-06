@@ -99,7 +99,7 @@ export function shellSideWidth(state: ShellChromeState): number {
  * `--chrome-height` and reserves it as the primary column's `padding-top`.
  */
 /**
- * The ONE bar height (R11, WI-UI3.5): title bar, status bar, horizontal
+ * The ONE bar height (R11): title bar, status bar, horizontal
  * terminal bar and the chrome strip are all this tall. `shellChromeVars`
  * publishes it as `--bar-height`; `index.css` carries the static default and
  * `barHeight.test.ts` pins the two together.

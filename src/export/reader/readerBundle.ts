@@ -2,6 +2,8 @@
  * VMark Reader Assets
  *
  * Provides inline CSS and JS for the interactive reader in exported HTML.
+ *
+ * @module export/reader/readerBundle
  */
 
 // Import raw CSS and JS as strings

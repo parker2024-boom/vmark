@@ -80,6 +80,6 @@ export function useFormatsUpgradeNudge(): void {
     }, 1500);
 
     return () => window.clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a one-shot nudge scheduled on mount; re-running on a language change would schedule it again
   }, []);
 }

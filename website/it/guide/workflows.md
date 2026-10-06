@@ -198,19 +198,26 @@ La validazione dello schema è volutamente minima — conferma che le chiavi ric
 
 ## Condizioni
 
-Un passaggio può avere una condizione `if:`. Se risulta falsa, il passaggio viene saltato (non fallisce); se risulta vera o è assente, il passaggio viene eseguito. Sono disponibili tre funzioni di stato:
+Un passaggio può avere una condizione `if:`. Se risulta falsa, il passaggio viene saltato (non fallisce). Sono disponibili tre funzioni di stato, che seguono le regole di GitHub Actions:
 
-| Condizione | Significato |
-|-----------|---------|
-| `success()` | Vera quando nessun passaggio precedente è fallito. |
-| `failure()` | Vera quando un passaggio precedente è fallito. |
-| `always()` | Sempre vera. |
+| Condizione | Vera quando |
+|-----------|-----------|
+| `success()` | Nessun passaggio è fallito finora, **e** ogni passaggio indicato in `needs` di questo passaggio è stato completato. |
+| `failure()` | Un qualsiasi passaggio precedente dell'esecuzione è fallito — non solo un passaggio indicato in `needs`. |
+| `always()` | Sempre. |
+
+`success()` è il valore predefinito. Un passaggio senza `if:` viene eseguito solo quando vale `success()`, e lo stesso vale per un passaggio il cui `if:` non nomina nessuna delle tre funzioni — `if: X` significa `success() && (X)`. È questo che impedisce a un passaggio ordinario di essere eseguito dopo un errore.
+
+| Cosa è successo prima | Passaggio semplice o `success()` | Passaggio `failure()` | Passaggio `always()` |
+|---|---|---|---|
+| Tutto ciò che indica in `needs` è riuscito | eseguito | saltato | eseguito |
+| Un passaggio indicato in `needs` è **fallito** (o è scaduto, o la sua approvazione è stata rifiutata) | saltato | eseguito | eseguito |
+| Un passaggio indicato in `needs` è stato **saltato** dal proprio `if:` | saltato | saltato — nulla è fallito | eseguito |
+| L'esecuzione è stata **annullata** | saltato | saltato | saltato |
+
+Un annullamento non è qualcosa che una condizione possa vedere: viene verificato prima dell'`if:`, e ogni passaggio rimanente viene saltato con *Workflow cancelled*, compresi i passaggi `always()`. Un'esecuzione in cui un passaggio è fallito termina comunque come **fallita** e nomina il primo passaggio fallito, anche se in seguito sono stati eseguiti passaggi `failure()` o `always()`.
 
 Puoi combinare riferimenti e confronti, ad es. `${{ steps.classify.outputs.title == "Draft" }}`. Una condizione malformata o non supportata **fa fallire il passaggio in modo esplicito** invece di lasciarlo passare in silenzio — non esiste un ripiego del tipo «in caso di errore considera vero».
-
-::: warning Limitazione attuale: failure() e always() non scattano ancora
-L'esecutore salta tutti i passaggi rimanenti non appena un passaggio fallisce — e lo fa **prima** di valutare la condizione `if:`. Di conseguenza, `success()` funziona come scritto, ma le condizioni `failure()` e `always()` sono per ora latenti: un passaggio protetto da esse viene saltato insieme a tutto il resto quando si verifica un errore, quindi non ha mai l'occasione di essere eseguito sul percorso di errore. Per ora considera `failure()` / `always()` come sintassi riservata. Usa `success()` (o nessuna condizione) per i passaggi che ti aspetti vengano eseguiti nel percorso normale.
-:::
 
 ## Impostazioni per passaggio
 
@@ -227,7 +234,7 @@ L'esecutore salta tutti i passaggi rimanenti non appena un passaggio fallisce �
 
 ### Timeout
 
-Ogni passaggio è racchiuso nel proprio timeout effettivo. Allo scadere, il passaggio fallisce con `Timed out after Xs`: il processo figlio di un provider CLI viene terminato; una richiesta REST in corso viene abbandonata. I passaggi a valle che dipendono da un passaggio scaduto vengono saltati. Esiste inoltre un limite rigido di 5 MB sull'output raccolto da un singolo passaggio — un provider fuori controllo viene annullato con `Provider output exceeded 5 MB cap`.
+Ogni passaggio è racchiuso nel proprio timeout effettivo. Allo scadere, il passaggio fallisce con `Timed out after Xs`: il processo figlio di un provider CLI viene terminato; una richiesta REST in corso viene abbandonata. Un passaggio scaduto conta come fallito: i passaggi che dipendono da esso vengono saltati, a meno che il loro `if:` usi `failure()` o `always()`. Esiste inoltre un limite rigido di 5 MB sull'output raccolto da un singolo passaggio — un provider fuori controllo viene annullato con `Provider output exceeded 5 MB cap`.
 
 ## Approvazioni
 
@@ -251,7 +258,7 @@ Apri un file di workflow `.yml` / `.yaml` in un workspace (i workflow richiedono
 
 Man mano che l'esecuzione procede, ogni nodo si aggiorna dal vivo — in esecuzione, riuscito, saltato o in errore — così puoi seguire l'avanzamento della pipeline e vedere esattamente quale passaggio è fallito, se succede. Al termine, la barra degli strumenti indica se l'esecuzione è stata completata, è fallita o è stata annullata. Se il backend si rifiuta di avviare un'esecuzione — il motore è disattivato, lo YAML non è valido, lo snapshot non è riuscito — una notifica ne spiega il motivo.
 
-Viene eseguito un solo workflow alla volta in tutta l'app, non per finestra: mentre uno è in esecuzione, Esegui è disattivato in ogni altro file di workflow, e un genie del workflow avviato nel frattempo viene rifiutato.
+Viene eseguito un solo workflow alla volta in tutta l'app, non per finestra. Mentre uno è in esecuzione, Esegui è disattivato in ogni altro file di workflow **nella stessa finestra**, e la barra degli strumenti indica *È in esecuzione un altro workflow*. Un file di workflow in un'altra finestra mostra ancora Esegui attivo; facendo clic, la richiesta viene rifiutata con *È già in esecuzione un flusso di lavoro. Attendi che finisca oppure annullalo.* Anche un genie del workflow avviato nel frattempo viene rifiutato.
 
 ### Annullare un'esecuzione
 
@@ -265,15 +272,18 @@ Al termine dell'esecuzione, la barra degli strumenti offre **Ripristina file**. 
 flowchart TD
     A["Click Run on .yml file"] --> B["Topological sort of steps by needs:"]
     B --> C{"Next step"}
-    C --> D{"Dependency failed or workflow failed?"}
+    C --> D{"Run cancelled?"}
     D -->|Yes| E["Skip step"]
-    D -->|No| F{"if: condition present?"}
-    F -->|"Evaluates false"| E
-    F -->|"True or absent"| G{"approval resolves to ask?"}
+    D -->|No| F{"Evaluate if: against the run so far (success() when absent)"}
+    F -->|"False"| E
+    F -->|"Error"| I["Step fails"]
+    F -->|"True"| G{"approval resolves to ask?"}
     G -->|Yes| H["Pause: approval dialog"]
-    H -->|Denied| I["Step fails"]
+    H -->|"Denied or expired"| I
+    H -->|"Cancelled"| E
     H -->|Approved| J["Fill template, call provider"]
     G -->|No| J
+    J -->|"Error or timeout"| I
     J --> K["Store outputs.text and JSON fields"]
     K --> C
     E --> C

@@ -4,7 +4,6 @@ import {
   isSafeStyleValue,
   isSafeStyleAttribute,
   sanitizeDeclarations,
-  sanitizeStylesheetText,
   KATEX_STYLE_PROPS,
 } from "./styleSafety";
 
@@ -91,41 +90,6 @@ describe("sanitizeDeclarations", () => {
     expect(
       sanitizeDeclarations("text-shadow: 0 0 4px url(https://evil.test/p)", KATEX_STYLE_PROPS),
     ).toBe("");
-  });
-});
-
-describe("sanitizeStylesheetText", () => {
-  it("strips a remote @import", () => {
-    expect(sanitizeStylesheetText('@import url("https://evil.test/x.css");')).toBe("");
-  });
-
-  it("strips a rule that fetches an external resource", () => {
-    expect(
-      sanitizeStylesheetText("rect{fill:url(https://evil.test/p.svg)}"),
-    ).not.toContain("evil.test");
-  });
-
-  it("keeps ordinary diagram styling (the Mermaid case)", () => {
-    const css = ".node rect{fill:#eee;stroke:#333}.edgeLabel{color:#111}";
-    expect(sanitizeStylesheetText(css)).toBe(css);
-  });
-
-  it("keeps a same-document paint reference", () => {
-    const css = "path{marker-end:url(#arrowhead)}";
-    expect(sanitizeStylesheetText(css)).toBe(css);
-  });
-
-  it("strips javascript: and expression() anywhere in the sheet", () => {
-    expect(sanitizeStylesheetText("a{background:url(javascript:alert(1))}")).not.toContain(
-      "javascript:",
-    );
-    expect(sanitizeStylesheetText("a{width:expression(alert(1))}")).not.toContain(
-      "expression(",
-    );
-  });
-
-  it("returns empty for an empty sheet", () => {
-    expect(sanitizeStylesheetText("")).toBe("");
   });
 });
 

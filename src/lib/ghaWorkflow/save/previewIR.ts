@@ -1,5 +1,5 @@
 /**
- * Purpose: WI-C0 — apply structural patches (job.create/delete,
+ * Purpose: apply structural patches (job.create/delete,
  *   step.insert/delete/move) to a parsed IR to produce a "preview"
  *   IR that the form layer renders, so freshly-added jobs/steps are
  *   visible before the user clicks Save.
@@ -11,7 +11,7 @@
  *
  *   `applyStructuralPatches` is the same walk with the content patches
  *   left out: it is the IR the edit forms measure their edits AGAINST,
- *   and it must not carry the edit being measured (audit R2, #1020).
+ *   and it must not carry the edit being measured.
  *
  *   Returns the same IR reference when no patch applies, keeping React's
  *   referential-equality short-circuits intact.
@@ -48,7 +48,7 @@ function isStructural(patch: IRPatch): boolean {
 
 /**
  * Patches that change a step's CONTENT (name, run, with, etc.).
- * Codex audit HIGH-3: edits to freshly-created jobs/steps were lost
+ * Edits to freshly-created jobs/steps were lost
  * on form remount because the form's local React state didn't survive
  * the unmount and the IR didn't carry the value yet. Applying these
  * to the preview IR fixes the persistence.
@@ -241,7 +241,7 @@ export function applyPreviewPatches(
  * This is what an edit form compares a field against to decide whether the
  * user has reverted it — so it must not carry that field's own queued edit.
  * Comparing against the preview instead made a second blur on an
- * already-committed field look like a revert, cancelling it (audit R2, #1020).
+ * already-committed field look like a revert, cancelling it.
  *
  * Structural patches ARE applied so that jobs and steps line up with the
  * preview one-for-one: same ids, same step order, so the form's index and id

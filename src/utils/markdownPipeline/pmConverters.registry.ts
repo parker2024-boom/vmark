@@ -1,5 +1,5 @@
 /**
- * Tier-1 PM → mdast converters, expressed as registry entries — Phase 2 WI-2.1.
+ * Tier-1 PM → mdast converters, expressed as registry entries.
  *
  * Purpose: registry 2 for the PM → mdast direction. Owns dispatch for all 23
  * migrated node types; the switch that used to do this is deleted.
@@ -15,7 +15,7 @@
  *
  * Not here, and deliberately:
  *   - Marks — `groupInlineItems` factors mark runs across ALL marks at once and
- *     cannot decompose per mark; that stays central by design (WI-1.6).
+ *     cannot decompose per mark; that stays central by design.
  *   - The mdast → PM direction — 31 arms, and the one that genuinely needs the
  *     claim protocol, since several extensions compete for one mdast type there.
  *
@@ -35,7 +35,6 @@ import {
   convertBlockquote,
   convertCodeBlock,
   convertDefinition,
-  convertDetailsBlock,
   convertFrontmatter,
   convertHeading,
   convertHorizontalRule,
@@ -50,6 +49,7 @@ import {
   type PmToMdastNode,
 } from "./pmBlockConverters";
 import { convertFootnoteDefinition } from "./pmFootnoteConverters";
+import { convertDetailsBlock } from "./pmDetailsConverter";
 
 export type PmToMdastResult = PmToMdastNode | PmToMdastNode[] | null;
 

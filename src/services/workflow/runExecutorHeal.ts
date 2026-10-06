@@ -1,7 +1,7 @@
 /**
- * runExecutorHeal — the self-heal half of the executor (round 3, #106): resolve
+ * runExecutorHeal — the self-heal half of the executor: resolve
  * a role-less locator's role from a fresh snapshot (W10), and retry a not-found
- * act against a near-identical same-role locator (WI-NB6.4 / P-3), each through the
+ * act against a near-identical same-role locator (P-3), each through the
  * shared `ExecutorEnv`.
  *
  * @coordinates-with services/workflow/runExecutorEnv.ts — the env these run through
@@ -14,12 +14,12 @@ import { resolveRoleByName, type SnapshotRead } from "@/lib/browser/workflow/rol
 import type { StepOutcome } from "@/lib/browser/workflow/safety";
 import type { ActOp, ExecutorEnv } from "./runExecutorEnv";
 
-/** WI-NB6.4 — one heal attempt: read a fresh snapshot, propose a same-role
+/** One heal attempt: read a fresh snapshot, propose a same-role
    *  locator whose name is close to the failed one, and retry the act against
    *  it. The healed act re-enters `authorize` (P-3) with `requireFreshApproval`: a
    *  one-shot bound to the old descriptor cannot match the new name, and a standing
    *  grant does not cover a locator the author never wrote — a fresh prompt names
-   *  the healed target (round 3, #162). */
+   *  the healed target. */
 export async function healAndRetry(env: ExecutorEnv, op: ActOp, role: string, name: string, text: string | undefined, url: string, generation: number): Promise<StepOutcome | null> {
   let snapshot: SnapshotRead;
   try {

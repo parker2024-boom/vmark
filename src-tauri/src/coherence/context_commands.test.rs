@@ -68,7 +68,7 @@ fn enforce_unknown_context_fails_loud() {
 // ── WI-3.6: branch-mapped contexts (D3 — explicit acts, no magic) ───────
 
 fn git(dir: &std::path::Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::ai_provider::build_command("git", &[])
         .args(args)
         .current_dir(dir)
         .env("GIT_AUTHOR_NAME", "t")
@@ -127,7 +127,7 @@ fn ambiguous_mappings_are_surfaced_never_guessed() {
 fn detached_head_and_plain_dirs_yield_no_candidate() {
     let (td, mut kernel) = git_workspace();
     perform_context_create_from_branch(&mut kernel).unwrap();
-    let head = std::process::Command::new("git")
+    let head = crate::ai_provider::build_command("git", &[])
         .args(["rev-parse", "HEAD"])
         .current_dir(td.path())
         .output()

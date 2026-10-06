@@ -53,6 +53,19 @@ module.exports = {
       to: { path: "^src/(plugins|components|stores)/" },
     },
 
+    // Rule 3a: the format adapters are exempt from rule 3 because they mount
+    // React components — but only components. A plain `.ts` module under
+    // components/ is a helper, and a helper the format registry needs is
+    // shared logic that belongs in utils/ or lib/, not in a UI folder.
+    {
+      name: "adapters-no-component-helpers",
+      severity: "error",
+      comment:
+        "lib/formats/adapters may mount components (.tsx) but must not import plain .ts helpers from components/; move shared helpers to utils/ or lib/.",
+      from: { path: "^src/lib/formats/adapters/" },
+      to: { path: "^src/components/.+\\.ts$" },
+    },
+
     // Rule 3b: utils/ is leaf-pure — no Tauri, no services, no hooks, no
     // React, no i18n (ADR-013). Audit 20260612 H2/H3: 12 Tauri-dependent
     // files were migrated to services/ domains; this rule keeps utils pure.
@@ -174,8 +187,6 @@ module.exports = {
           // Composes cross-plugin editor commands/keymaps (multiCursor,
           // syntaxReveal, toolbarActions policies) into the WYSIWYG editor.
           "src/plugins/editorPlugins/",
-          // WYSIWYG toolbar surface built on toolbarContext's intent types.
-          "src/plugins/formatToolbar/",
           // Fence-preview hub: dispatches rendering/export to the diagram
           // plugins (mermaid, graphviz, markmap, svg, latex) by design.
           "src/plugins/codePreview/",

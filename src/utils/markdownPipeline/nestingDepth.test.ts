@@ -39,6 +39,7 @@ import {
 } from "./nestingDepth";
 import { parseMarkdown } from "./adapter";
 import { testSchema } from "./testSchema";
+import { growthExponent, measureGrowth } from "@/test/cpuClock";
 
 describe("maxContainerDepth", () => {
   it("is zero for ordinary prose", () => {
@@ -83,11 +84,20 @@ describe("maxContainerDepth", () => {
 
   it("is linear in input size, not in nesting", () => {
     // The guard runs on every parse, so it has to be a scan. 20000 levels is
-    // past every measured ceiling and must still return promptly.
-    const started = Date.now();
+    // past every measured ceiling and must still be scored, not overflow.
     expect(maxContainerDepth(`${"> ".repeat(20000)}a\n`)).toBe(20000);
     expect(maxContainerDepth(`${"- ".repeat(20000)}a\n`)).toBe(20000);
-    expect(Date.now() - started).toBeLessThan(1000);
+
+    // Cost against nesting depth: a scan is an exponent of 1, a per-level
+    // rescan of the line 2. Measured on this thread's CPU clock, so load on
+    // the machine cannot move it.
+    const SMALL = 2500;
+    const LARGE = 20000;
+    for (const marker of ["> ", "- "]) {
+      const nested = (depth: number) => `${marker.repeat(depth)}a\n`;
+      const growth = measureGrowth(maxContainerDepth, nested(SMALL), nested(LARGE));
+      expect(growthExponent(growth, SMALL, LARGE), marker).toBeLessThan(1.5);
+    }
   });
 
   it.each([

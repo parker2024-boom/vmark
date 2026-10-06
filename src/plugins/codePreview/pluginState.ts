@@ -11,7 +11,7 @@
  *     refreshPreviews dispatches into every registered view, so split-pane or
  *     multi-window scenarios refresh consistently.
  *   - previewCache is bounded so editing diagram/latex/svg blocks doesn't grow
- *     the cache unbounded across a session (WI-4.4, R1). Entries are lightweight
+ *     the cache unbounded across a session. Entries are lightweight
  *     (rendered string / pending promise), so LRU eviction needs no disposal.
  *
  * @coordinates-with tiptap.ts — extension entry; re-exports the public constants
@@ -51,7 +51,7 @@ export interface CodePreviewState {
 export const activeEditorViews = new Set<EditorView>();
 
 // Bounded so editing diagram/latex/svg blocks doesn't grow the cache
-// unbounded across a session (WI-4.4, R1). Entries are lightweight
+// unbounded across a session. Entries are lightweight
 // (rendered string / pending promise), so LRU eviction needs no disposal.
 const PREVIEW_CACHE_MAX = 100;
 export const previewCache = new LruCache<string, PreviewCacheEntry>(PREVIEW_CACHE_MAX);

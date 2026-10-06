@@ -5,6 +5,8 @@
  * - Add > prefix to unquoted lines
  * - Remove > prefix from quoted lines
  * - Supports multi-line selection
+ *
+ * @module plugins/sourceContextDetection/blockquoteActions
  */
 
 import type { EditorView } from "@codemirror/view";

@@ -19,7 +19,7 @@
  * `approvalDenied`, the MCP `browser.close` handler, and the DEV-only
  * `__VMARK_DEBUG__.closeBrowserTab` seam the E2E teardown uses instead of a bare
  * `browser_destroy`. Unlike the bus subscriber it AWAITS the teardown and then
- * CONFIRMS it with the driver (round 3, #44): `destroyBrowserNativeView` reports a
+ * CONFIRMS it with the driver: `destroyBrowserNativeView` reports a
  * native failure with a warning and resolves anyway, and `browser_destroy` is
  * idempotent — a second call for a destroyed or unknown tab is a no-op — so one
  * more call is free when the view is gone and a real, observed attempt when it is

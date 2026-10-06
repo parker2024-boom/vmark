@@ -71,7 +71,7 @@ export interface OrphanScanOptions {
    */
   knownContents?: ReadonlyMap<string, string> | undefined;
   /**
-   * Reference keys from OTHER WINDOWS' live buffers (WI-9). `complete: false`
+   * Reference keys from OTHER WINDOWS' live buffers. `complete: false`
    * — any window unheard from — makes the whole scan incomplete, and an
    * incomplete scan protects every candidate. Absent means the caller has no
    * cross-window source (unit tests, single-surface flows): neutral.
@@ -144,7 +144,7 @@ export async function findOrphanedImages(
   }
 
   const siblings = await collectSiblingReferences(docDir, documentPath, knownContents);
-  // WI-9: fold in other windows' live buffers. Their keys only ever protect;
+  // Fold in other windows' live buffers. Their keys only ever protect;
   // their absence (incomplete) poisons completeness, which also protects.
   const external = options.externalRefKeys;
   if (external) {
@@ -188,13 +188,13 @@ interface TrashOutcome {
 }
 
 /**
- * Remove orphaned images by moving them to the SYSTEM TRASH (WI-12), never by
+ * Remove orphaned images by moving them to the SYSTEM TRASH, never by
  * unlinking. This code deletes files on INFERENCE — a scan concluding "nothing
  * references this" — and the trash turns every wrong conclusion from data loss
  * into an undo. A path the OS cannot trash is reported as failed and KEPT;
  * falling back to permanent deletion would defeat the point.
  *
- * Also reconciles the shared image-hash registry (WI-8a): entries for removed
+ * Also reconciles the shared image-hash registry: entries for removed
  * files would otherwise "dedup" a future identical paste onto a path that no
  * longer exists.
  *

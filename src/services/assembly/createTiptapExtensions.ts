@@ -29,7 +29,7 @@ import { buildExtensionList, type TiptapExtensionConfig } from "./tiptapExtensio
  *
  * Each Tiptap extension becomes a descriptor keyed by its own `name` (unique
  * across all 78). Order is pinned by explicit `after` constraints derived from
- * `WYSIWYG_COMPOSITION_ORDER` (WI-3.4), so the descriptors are sorted
+ * `WYSIWYG_COMPOSITION_ORDER`, so the descriptors are sorted
  * alphabetically before resolution and the resolver reproduces the canonical
  * order regardless of array position. Resolution errors throw rather than
  * silently dropping an extension — a missing editor extension is a broken editor.
@@ -39,7 +39,7 @@ export function createTiptapExtensions(config: TiptapExtensionConfig = {}): Exte
   const presentIds = list.map((extension, index) => extension.name || `anonymous-${index}`);
 
   // Fail loud if an extension was added/removed without updating the canonical
-  // order (WI-3.4), then pin each present entry after its canonical predecessor.
+  // order, then pin each present entry after its canonical predecessor.
   assertCanonicalCoverage("wysiwyg", WYSIWYG_COMPOSITION_ORDER, presentIds, WYSIWYG_OPTIONAL_IDS);
   const after = deriveAfterConstraints(WYSIWYG_COMPOSITION_ORDER, presentIds);
 

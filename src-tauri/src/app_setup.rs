@@ -11,7 +11,7 @@
 //!     the frontend: its webview dies without running its own teardown. That
 //!     covers its file watcher, its PTY sessions and its MCP bridge workspace
 //!     registration.
-//!   - Recorded workspace grants (`workspace_grants`) are re-issued during
+//!   - Recorded workspace grants (`workspace::grants`) are re-issued during
 //!     setup. Tauri has already BUILT the configured `main` window by then, but
 //!     its page load and every IPC request are served on the main thread setup
 //!     is running on, so nothing can read before the grants are in. The wait is
@@ -23,7 +23,8 @@
 use sha2::{Digest, Sha256};
 use tauri::{Listener, Manager};
 
-use crate::{menu, menu_events, pty, quit, tab_transfer, window_status, workspace_transfer};
+use crate::peer_text::peer_message;
+use crate::{menu, pty, quit, tab_transfer, window_status, workspace};
 
 /// Compute a stable, anonymous machine identifier hash.
 ///
@@ -56,7 +57,7 @@ pub(crate) fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::
     // WI-LX1.1: re-grant the workspace roots the user chose in earlier
     // sessions. FIRST, and on this thread: the main window exists already, but
     // it cannot load or invoke anything until setup returns (bounded wait).
-    crate::workspace_grants::restore_at_launch(app.handle());
+    crate::workspace::grants::restore_at_launch(app.handle());
 
     // Coherence layer: per-installation writer identity (spec §2.2) +
     // per-workspace kernel registry. A writer-id load failure falls back
@@ -109,44 +110,35 @@ pub(crate) fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::
     #[cfg(not(target_os = "macos"))]
     {
         let file_args = crate::supported_files::filter_supported_args(std::env::args().skip(1));
-
-        if !file_args.is_empty() {
-            if let Ok(mut state) = crate::file_open::FILE_OPEN_STATE.lock() {
-                for path_str in file_args {
-                    crate::allow_fs_read(app.handle(), &path_str);
-                    let workspace_root =
-                        crate::window_manager::get_workspace_root_for_file(&path_str);
-                    state.pending.push(crate::PendingFileOpen {
-                        path: path_str,
-                        workspace_root,
-                    });
-                }
-            }
+        // Grant before queueing, and outside the state lock: the frontend can
+        // only drain the queue after setup returns, so every queued path is
+        // readable by the time it is read.
+        for path_str in &file_args {
+            crate::allow_fs_read(app.handle(), path_str);
         }
+        crate::window_manager::file_open_state(app.handle()).queue_launch_file_args(file_args);
     }
 
     // Record, once per launch, whether the Knowledge Base could start here:
-    // one `content_server runtime: node=… cli=…` log line (WI-FL1.1). A
+    // one `content_server runtime: node=… cli=…` log line. A
     // packaged build's log file is the only place this truth is observable
     // without a user opening the panel; release-smoke reads it from the staged
     // DMG. Detached and blocking-off-thread — setup never waits on `which`.
     crate::content_server::runtime::log_runtime_state(app.handle().clone());
 
-    // Linux without a session bus runs unguarded (WI-FL6.1); say so where a
+    // Linux without a session bus runs unguarded; say so where a
     // user reading the log will look, now that the log plugin exists.
     #[cfg(target_os = "linux")]
     crate::single_instance::warn_if_unguarded();
 
     // Listen for "ready" events from frontend windows
-    // This is used by menu_events to know when it's safe to emit events
+    // This is used by menu::events to know when it's safe to emit events
     // The payload contains the window label as a string
     let app_handle = app.handle().clone();
     app.listen("ready", move |event| {
-        // The payload is the window label
-        if let Ok(label) = serde_json::from_str::<String>(event.payload()) {
-            log::debug!("[Tauri] Window '{}' is ready", label);
-            menu_events::mark_window_ready(&app_handle, &label);
-            crate::file_open::record_ready_document_window(&app_handle, &label);
+        if let Some(label) = crate::window_manager::ready_window_label(event.payload()) {
+            menu::events::mark_window_ready(&app_handle, &label);
+            crate::files::open::record_ready_document_window(&app_handle, &label);
         }
     });
 
@@ -201,18 +193,18 @@ pub(crate) fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
             event: tauri::WindowEvent::Destroyed,
             ..
         } => {
-            crate::file_open::remove_document_window(&label);
+            crate::files::open::remove_document_window(app, &label);
             quit::handle_window_destroyed(app, &label);
-            menu_events::clear_window_ready(&label);
+            menu::events::clear_window_ready(&label);
             tab_transfer::clear_unclaimed_transfer(&label);
-            workspace_transfer::clear_unclaimed_transfer(&label);
+            workspace::transfer::clear_unclaimed_transfer(&label);
             window_status::prune(app, &label);
             // Drop the window's filesystem watcher. The frontend's own
             // `stop_watching` invoke runs in the dying webview and can race
             // its teardown; window labels are never reused, so without this
             // each closed window would leak a recursive watcher (idempotent).
             if let Err(e) = crate::watcher::stop_watching(label.clone()) {
-                log::warn!("[Tauri] Failed to stop watcher for '{}': {}", label, e);
+                log::warn!("[Tauri] Failed to stop watcher for {:?}: {}", label, e);
             }
             // Same race for the window's terminals: its `pty_close` calls die
             // with the webview, so an idle shell would outlive the window.
@@ -229,18 +221,19 @@ pub(crate) fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
             label,
             event: tauri::WindowEvent::Focused(focused),
             ..
-        } => crate::file_open::record_document_window_focus(
+        } => crate::files::open::record_document_window_focus(
+            app,
             &label,
             focused,
-            menu_events::is_window_ready(&label),
+            menu::events::is_window_ready(&label),
         ),
         #[cfg(target_os = "macos")]
         tauri::RunEvent::Reopen {
             has_visible_windows,
             ..
-        } => crate::file_open::handle_reopen(app, has_visible_windows),
+        } => crate::files::open::handle_reopen(app, has_visible_windows),
         #[cfg(target_os = "macos")]
-        tauri::RunEvent::Opened { urls } => crate::file_open::handle_finder_opened(app, urls),
+        tauri::RunEvent::Opened { urls } => crate::files::open::handle_finder_opened(app, urls),
         _ => {}
     }
 }
@@ -249,10 +242,13 @@ pub(crate) fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
 ///
 /// Lives here rather than in `lib.rs` so that file stays a declarative
 /// composition root — the same reason the setup/event handlers were extracted.
+///
+/// Like its two siblings below, the message is whatever a webview sent, so it
+/// is logged escaped and bounded (`peer_text.rs`): one message, one line.
 #[cfg(debug_assertions)]
 #[tauri::command]
 pub fn debug_log(message: String) {
-    log::debug!("[Frontend] {}", message);
+    log::debug!("[Frontend] {}", peer_message(&message));
 }
 
 /// Window-close milestones from the frontend, at INFO (#1253).
@@ -268,7 +264,7 @@ pub fn debug_log(message: String) {
 /// close attempt.
 #[tauri::command]
 pub fn window_close_log(message: String) {
-    log::info!("[WindowClose] {}", message);
+    log::info!("[WindowClose] {}", peer_message(&message));
 }
 
 /// Update-flow milestones from the frontend, at INFO (#1270).
@@ -287,7 +283,7 @@ pub fn window_close_log(message: String) {
 /// Kept to state transitions: download progress events are not logged.
 #[tauri::command]
 pub fn update_log(message: String) {
-    log::info!("[Update] {}", message);
+    log::info!("[Update] {}", peer_message(&message));
 }
 
 #[cfg(test)]

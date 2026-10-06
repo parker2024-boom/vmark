@@ -333,7 +333,6 @@
   "terminal.restarting": "Riavvio della shell...",
   "media.cannotPreview": "Impossibile visualizzare l’anteprima di questo formato",
   "media.openExternally": "Apri con l’app predefinita",
-  "media.revealInFinder": "Mostra nel Finder",
   "preview.surfaceFailed": "L’editor {{format}} ha smesso di funzionare.",
   "splitPane.errorCount_one": "{{count}} errore",
   "splitPane.errorCount_other": "{{count}} errori",

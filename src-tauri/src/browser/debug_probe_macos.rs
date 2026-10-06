@@ -110,6 +110,9 @@ pub fn debug_hit_test(
             if std::ptr::eq(&*v as *const NSView, target as *const NSView) {
                 return Ok((true, class_name(&hit)));
             }
+            // SAFETY: `v` is a retained, live view and this closure runs on the
+            // main thread (`on_main`); `superview` only reads the hierarchy and
+            // returns nil at the top.
             cursor = unsafe { v.superview() };
         }
         Ok((false, class_name(&hit)))

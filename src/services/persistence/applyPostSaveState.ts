@@ -4,7 +4,7 @@
  *
  * Split out of `saveToPath.ts` for the size gate, along the seam that already
  * existed: the write is one concern, deciding whether its result still
- * describes the live document is another (audit 20260906, F3).
+ * describes the live document is another.
  *
  * @coordinates-with saveToPath.ts — the only caller
  * @coordinates-with saveTargetClaim.ts — per-document identity ordering
@@ -17,7 +17,7 @@ import {
   windowLabelForTab,
 } from "@/services/workspaces/reassignTabOwnershipForPath";
 import { useRecentFilesStore } from "@/stores/workspaceStore";
-import { clearPendingSave, type registerPendingSave } from "@/utils/pendingSaves";
+import { clearPendingSaveAfterGrace, type registerPendingSave } from "@/utils/pendingSaves";
 import { normalizePath } from "@/utils/paths";
 import { isCurrentSaveTarget, type SaveTargetClaim } from "./saveTargetClaim";
 import type { SaveType } from "./saveHistorySnapshot";
@@ -27,7 +27,7 @@ import type { NormalizedSaveContent } from "./normalizedSaveContent";
  * Whether a finished write may still update its document's path, tab path and
  * saved snapshots.
  *
- * Two ways to qualify, and BOTH are needed (audit 20260906, F3):
+ * Two ways to qualify, and BOTH are needed:
  *
  *   - **It is the newest save submitted for this document.** This is what lets
  *     a Save As re-point the document at all, and what makes the user's most
@@ -58,7 +58,10 @@ function mayRepointDocument(
 
 /**
  * Update stores after a successful write: file path, line metadata, saved
- * markers, deferred pending-save clear, tab path sync, and recent files.
+ * markers, deferred pending-save clear, tab path sync, workspace ownership and
+ * recent files. An autosave records `lastAutoSave`; a manual save joins the
+ * recent files; an MCP save does neither and never switches the visible
+ * workspace.
  *
  * `editorSnapshot` is the PRE-normalisation content the caller handed to the
  * writer — not a fresh store read, which would defeat the TOCTOU check: an
@@ -79,13 +82,11 @@ export function applyPostSaveState(
 
   // The pending-save token belongs to THIS path's watcher bookkeeping, so it
   // is cleared whether or not this save still owns the document's identity.
-  // Delayed to let late-arriving watcher events still match: the full pipeline
-  // (Rust debounce 200ms → emit → JS event loop → async readTextFile →
-  // comparison) can exceed 500ms under heavy I/O.
-  setTimeout(() => clearPendingSave(path, saveToken), 1000);
+  // After the grace window, so a late-arriving watcher event still matches.
+  clearPendingSaveAfterGrace(path, saveToken);
 
   // Everything below RE-POINTS the document. A completion may only do that
-  // while it still describes where the document lives (audit 20260906, F3).
+  // while it still describes where the document lives.
   if (!mayRepointDocument(tabId, path, claim)) return;
 
   useDocumentStore.getState().setFilePath(tabId, path);
@@ -101,14 +102,21 @@ export function applyPostSaveState(
 
   // Update tab path for title sync
   useTabStore.getState().updateTabPath(tabId, path);
-  // WI-13.4: Save As across a workspace boundary reassigns ownership; the
-  // visible context follows when this is the active tab.
+  // Save As across a workspace boundary reassigns ownership; the
+  // visible context follows when this is the active tab — unless an AI client
+  // asked for the save, which reclassifies ownership but must never yank the
+  // human's visible workspace.
   {
     const ownerWindow = windowLabelForTab(tabId);
-    if (ownerWindow) reassignTabOwnershipForPath(ownerWindow, tabId, path);
+    if (ownerWindow) {
+      reassignTabOwnershipForPath(ownerWindow, tabId, path, {
+        allowVisibleSwitch: saveType !== "mcp",
+      });
+    }
   }
 
-  // Add to recent files (skip for auto-save to avoid noise)
+  // Add to recent files. Only for a save the user asked for: an autosave is
+  // noise, and an AI client's file activity is not the human's history.
   if (saveType === "manual") {
     useRecentFilesStore.getState().addFile(path);
   }

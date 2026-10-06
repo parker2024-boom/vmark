@@ -38,7 +38,7 @@ vi.mock("sonner", () => ({
   },
 }));
 
-vi.mock("@/plugins/markdownPaste/tiptap", () => ({
+vi.mock("@/plugins/shared/markdownPasteSlice", () => ({
   createMarkdownPasteSlice: vi.fn(() => ({ content: [] })),
 }));
 

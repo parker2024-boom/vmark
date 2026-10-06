@@ -4,7 +4,7 @@
  * Styled to match link popup design language
  */
 
-/* Shell chrome comes from `.popup-container` (WI-UI3.2); a hover PREVIEW,
+/* Shell chrome comes from `.popup-container`; a hover PREVIEW,
    so it must not steal the pointer. Compounded with the shared class so the
    residual's 4px gap wins on SPECIFICITY — this chunk (WindowContext) loads
    before the App chunk that carries `.popup-container`, so at equal

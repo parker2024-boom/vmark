@@ -8,7 +8,7 @@ VMark exposes **nine composite MCP tools** to AI assistants: `session`, `workspa
 
 Three of the nine — `session`, `browser_read`, and `coherence` — declare `readOnlyHint: true`, so an MCP client can auto-approve them. That is why `browser`/`browser_read` and `coherence`/`coherence_resolve` are separate tools at all: annotations are **per tool**, not per action, so a tool that bundles an ARIA snapshot with `execute_js` has to advertise the danger of `execute_js`. Splitting along "does this modify anything?" lets each half state the truth, and keeps the surface's genuinely destructive actions conspicuous in the tool list.
 
-The previous 12-tool / 76-action surface was pruned because in-document formatting tools (bold, headings, tables, etc.) duplicate work that AI agents already do trivially via Markdown round-trip. `selection` was kept (per ADR-7 of the pruning plan) because the full-doc round-trip is uneconomical on large files — every edit pays the whole document in input tokens, the whole document in output tokens (~5× input price), and a longer write window that widens the stale-revision retry loop. See [the MCP pruning plan](https://github.com/xiaolai/vmark/blob/main/dev-docs/plans/20260504-mcp-pruning.md) for the full rationale.
+The previous 12-tool / 76-action surface was pruned because in-document formatting tools (bold, headings, tables, etc.) duplicate work that AI agents already do trivially via Markdown round-trip. `selection` was kept (per ADR-7 of the pruning plan) because the full-doc round-trip is uneconomical on large files — every edit pays the whole document in input tokens, the whole document in output tokens (~5× input price), and a longer write window that widens the stale-revision retry loop. See [the MCP pruning plan](https://github.com/xiaolai/vmark/blob/main/.claude/adr/plans/20260504-mcp-pruning.md) for the full rationale.
 
 ::: tip Recommended Workflow
 1. Call `session.get_state` once to see open windows, tabs, and per-tab `{filePath, dirty, revision, kind}`.
@@ -179,14 +179,22 @@ you what was blocked. Saving back to the tab's own path is always allowed.
 
 ### `close`
 
-Close a tab. Refuses to discard unsaved work without `force`.
+Close a document tab. Refuses to discard unsaved work without `force`, and never closes a pinned tab.
 
 | Parameter | Type | Required |
 |-----------|------|----------|
 | `tabId` | string | Yes |
 | `force` | boolean | No |
 
-Returns `{closed: true}` on success, `{closed: false, reason: "DIRTY"}` if the tab is dirty and `force` was not supplied.
+Returns `{closed: true}` on success. Otherwise `{closed: false, reason}`:
+
+| `reason` | Meaning |
+|----------|---------|
+| `DIRTY` | The tab has unsaved changes and `force` was not supplied |
+| `DIVERGENT` | The file changed on disk and the user kept the tab's version; without `force` the close would lose it |
+| `PINNED` | The tab is pinned — refused even with `force`; the user must unpin it |
+
+Keystrokes the editor has not yet passed on are counted as unsaved before the check. A browser tab is refused with an `INVALID_TAB` error — close it with the `browser` tool's `close` action.
 
 ### `switch_tab`
 
@@ -232,16 +240,23 @@ Replace full document content.
 | `tabId` | string | No | Target tab (defaults to focused) |
 | `content` | string | Yes | New full content |
 | `expected_revision` | string | No | Revision token from the most recent read |
+| `save` | boolean | No | Also save to disk (default `true`); `false` changes the tab only |
+
+By default the write is saved: the response carries `saved: true`, or `saved: false` with `save_skipped` (`"untitled"` — the tab has no file yet, use `save_as`; `"opt_out"` — you passed `save: false`) or `save_error` (the disk write failed). When the target is the active WYSIWYG tab of a Markdown document, the text is loaded into the live editor (as one undoable step), and what is saved is the editor's serialization of it — the same Markdown, possibly normalized, not necessarily the exact characters sent. Other tabs save the text as sent, line endings normalized.
+
+Every save an AI client makes — through `write`, `workspace.save` or `workspace.save_as` — is filed in the document's history as an `mcp` snapshot (labelled *(mcp)* in the History sidebar), so the versions an AI wrote stand apart from yours. Like a manual save, it is never merged into a neighbouring autosave or skipped for its size.
 
 If `expected_revision` is supplied and the document has changed since that read, the response is a `STALE` structured-error envelope with the current revision; re-read and retry.
 
 ```json
 // success
-{ "revision": "rev-newAfterWrite" }
+{ "revision": "rev-newAfterWrite", "saved": true }
 
 // stale
 { "error": "STALE", "message": "Document has changed since the last read", "current_revision": "rev-currentNow" }
 ```
+
+While the user is composing text with an input method (IME) in the WYSIWYG editor showing the tab, the write is refused with `BUSY` and nothing changes: the text being composed belongs to the input method until it is committed. Retry shortly. In Source mode the write is accepted, and the editor shows it once the composition ends.
 
 ### `transform`
 
@@ -255,7 +270,7 @@ Apply a deterministic rewrite. Currently supports CJK-specific transforms (full-
 
 `cjk-format` applies the user's CJK formatting settings end-to-end. `cjk-spacing` inserts single spaces between CJK characters and adjacent Latin/digits. `cjk-punctuation` converts ASCII punctuation that sits beside CJK characters to its full-width form.
 
-Returns `{revision}`.
+Returns `{revision}`. Like `write`, it is refused with `BUSY`, changing nothing, while the user is composing with an input method in the WYSIWYG editor showing the tab.
 
 ---
 
@@ -348,6 +363,8 @@ Replaces whatever the editor reports as the current selection. **In WYSIWYG mode
 Returns `{revision, replaced_chars}` on success. `replaced_chars` is the length of the text that was selected before the call — useful for the AI to confirm it edited what it expected.
 
 `STALE` returns `{error: "STALE", message, current_revision}` exactly like `document.write`. The doc-level revision catches keystrokes between `get` and `set`. Pure cursor movement (without a keystroke) is not arbitrated by the server — if the user moved the cursor between `get` and `set`, the edit lands at the new position.
+
+`set` returns `BUSY`, changing nothing, while the user is composing text with an input method in the focused editor, in WYSIWYG or Source mode; retry shortly. `get` is never refused for this.
 
 ---
 
@@ -777,7 +794,7 @@ Two error shapes appear:
 | `INVALID_TAB` | envelope | `tabId` could not be resolved |
 | `INVALID_PATH` | envelope | A `filePath` could not be read, or is outside the open workspace / document scope |
 | `APPROVAL_REQUIRED` | envelope | `save_as` to a new location while **Auto-approve saves to a new location and genie results** is off; or `open_workspace` waiting for the user's approval, or for them to choose the folder in VMark's folder dialog |
-| `BUSY` | envelope | `open_workspace` could not proceed: another folder dialog is open, or a workspace switch is running in that window; the approval is kept — retry |
+| `BUSY` | envelope | `open_workspace` could not proceed: another folder dialog is open, or a workspace switch is running in that window; the approval is kept — retry. Or `document.write`, `document.transform` or `selection.set` arrived while the user was composing text with an input method; nothing was changed — retry shortly |
 | `NOT_WORKFLOW` | envelope | `workflow.*` was called on a non-YAML-workflow tab |
 | `READ_ONLY` | envelope | A mutation was attempted on a read-only document |
 | `NO_EDITOR` | envelope | `selection.*` was called but the focused tab has no live editor |

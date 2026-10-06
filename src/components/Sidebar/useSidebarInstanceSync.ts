@@ -1,5 +1,5 @@
 /**
- * Per-instance sidebar width/view-mode sync (WI-9.1 wiring / plan D2).
+ * Per-instance sidebar width/view-mode sync (plan D2).
  *
  * Purpose: `workspaceInstanceUiStore` stores `sidebarWidth` and
  * `sidebarViewMode` per workspace instance; the live sidebar reads the

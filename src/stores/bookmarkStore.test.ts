@@ -83,7 +83,7 @@ describe("persistence", () => {
       id: "other",
       url: "https://theirs.com/",
       title: "Theirs",
-      addedAt: Date.now(),
+      addedAt: Date.UTC(2026, 0, 2),
     });
     localStorage.setItem("vmark-bookmarks", JSON.stringify(raw));
 

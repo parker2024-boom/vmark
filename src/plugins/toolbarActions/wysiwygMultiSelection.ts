@@ -13,7 +13,7 @@ import { TextSelection } from "@tiptap/pm/state";
 import { Mapping } from "@tiptap/pm/transform";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import type { EditorView } from "@tiptap/pm/view";
-import { MultiSelection } from "@/plugins/multiCursor";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 import { handleBlockquoteNest, handleBlockquoteUnnest, handleRemoveBlockquote, handleListIndent, handleListOutdent, handleRemoveList, handleToBulletList, handleToOrderedList } from "@/plugins/formatToolbar/nodeActions.tiptap";
 import { convertSelectionToTaskList } from "@/plugins/taskToggle/tiptapTaskListUtils";
 

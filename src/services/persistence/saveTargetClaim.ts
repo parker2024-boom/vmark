@@ -5,7 +5,7 @@
  * document's IDENTITY (file path, tab path, saved snapshots), or whether a
  * newer save has since superseded it.
  *
- * The defect this exists for (audit 20260906, F3): `saveToPath` serializes by
+ * The defect this exists for: `saveToPath` serializes by
  * PATH, so a write to `/repo/old.md` and a Save As to `/repo/new.md` belong to
  * different queues and run concurrently. `applyPostSaveState` then changed the
  * document's path unconditionally on completion — so an autosave that started

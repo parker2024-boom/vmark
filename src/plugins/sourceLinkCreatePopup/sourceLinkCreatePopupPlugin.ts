@@ -3,6 +3,8 @@
  *
  * CodeMirror 6 plugin for creating links in Source mode.
  * Shows a popup with text + URL inputs when no clipboard URL available.
+ *
+ * @module plugins/sourceLinkCreatePopup/sourceLinkCreatePopupPlugin
  */
 
 import { ViewPlugin, type EditorView, type ViewUpdate } from "@codemirror/view";

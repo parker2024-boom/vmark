@@ -5,7 +5,7 @@
  * declare a preview. Rendered by SplitPaneEditor only when a preview exists;
  * sets the per-tab `Tab.viewMode`. A `role="radiogroup"` with roving tabindex
  * (arrow / Home / End) — one of three mutually-exclusive view states, so radios
- * fit better than tabs. See dev-docs/plans/20260703-split-pane-view-modes.md.
+ * fit better than tabs. See .claude/adr/plans/20260703-split-pane-view-modes.md.
  *
  * @module components/Editor/SplitPaneEditor/ViewModeToggle
  */

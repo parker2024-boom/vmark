@@ -2,6 +2,34 @@
 
 use super::*;
 
+/// WI-RA7C.1 — the registry is one `Arc` swapped whole, so a panic while it was
+/// held cannot have torn it. Refusing it instead left the bridge comparing
+/// every client against an empty list (every MCP client locked out) and
+/// silently discarded each later install's credential.
+#[test]
+fn a_poisoned_registry_still_publishes_and_answers() {
+    let cell: TokenCell = RwLock::new(Arc::new(Vec::new()));
+    let panicked = std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                let _guard = cell
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                panic!("poisoning the registry (expected by this test)");
+            })
+            .join()
+    });
+    assert!(panicked.is_err() && cell.is_poisoned(), "premise: poisoned");
+    let token = ProviderToken {
+        provider: "claude".into(),
+        token: "t".repeat(64),
+    };
+
+    publish_into(&cell, vec![token.clone()]);
+
+    assert_eq!(*snapshot_of(&cell), vec![token]);
+}
+
 /// Write a JSON provider config carrying `token` (or none when `None`).
 fn json_config(dir: &Path, name: &str, token: Option<&str>) -> PathBuf {
     let path = dir.join(name);

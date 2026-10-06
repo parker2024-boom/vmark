@@ -63,6 +63,7 @@ vi.mock("@/i18n", () => ({ default: { t: (k: string) => k } }));
 vi.mock("@/utils/pendingSaves", () => ({
   registerPendingSave: vi.fn(() => Symbol("token")),
   clearPendingSave: vi.fn(),
+  clearPendingSaveAfterGrace: vi.fn(),
 }));
 vi.mock("@/stores/documentStore", () => ({
   useDocumentStore: {

@@ -10,14 +10,14 @@
  *   - Four interaction layers: basic cycling → prefix filter → ghost text → dropdown
  *   - Ghost text shows the most recent matching history entry as grayed hint
  *   - Tab accepts ghost text; Escape dismisses it until the next edit — any
- *     edit, even one back to the same text, brings the hint back (#388)
+ *     edit, even one back to the same text, brings the hint back
  *   - handleKeyDown walks ordered layer handlers — dropdown toggle, open
  *     dropdown, ghost text, cycling — and the first that claims the key ends
- *     the walk (audit #389)
- *   - Ghost text/dropdown rows derive from a SUBSCRIBED `entries` slice (#386); the selected index is clamped to its rows at BOTH ends — an upper-only clamp let ArrowDown on an empty result pin it at -1 (#387) — and the RAW index is kept inside what the rows can show (#752): an edit resets it and the arrows step the CLAMPED value, because stepping the raw one walked ArrowUp down through positions a shrunk filter no longer has (presses that visibly moved nothing), and re-widening the filter then jumped the highlight back to a row the user had left long ago
+ *     the walk
+ *   - Ghost text/dropdown rows derive from a SUBSCRIBED `entries` slice; the selected index is clamped to its rows at BOTH ends — an upper-only clamp let ArrowDown on an empty result pin it at -1 — and the RAW index is kept inside what the rows can show: an edit resets it and the arrows step the CLAMPED value, because stepping the raw one walked ArrowUp down through positions a shrunk filter no longer has (presses that visibly moved nothing), and re-widening the filter then jumped the highlight back to a row the user had left long ago
  *   - recordAndReset() commits a prompt to history and resets input state
  *   - Cycling and ghost text share ONE match rule, PREFIX, in
- *     `services/promptHistory/promptHistoryCore.ts` (#753). Cycling used to call the store's
+ *     `services/promptHistory/promptHistoryCore.ts`. Cycling used to call the store's
  *     SUBSTRING `getFilteredEntries`, so "bar" cycled to "foo bar" while the
  *     hint for that draft showed nothing; the dropdown is a search box and
  *     keeps substring.
@@ -47,7 +47,7 @@ export interface PromptHistoryResult {
   openDropdown(): void;
   closeDropdown(): void;
   selectDropdownEntry(index: number): void;
-  /** Forget every recorded prompt and close the dropdown (WI-FL3.5). */
+  /** Forget every recorded prompt and close the dropdown. */
   clearHistory(): void;
 }
 
@@ -83,7 +83,7 @@ export function usePromptHistory(isComposing?: () => boolean): PromptHistoryResu
     return ghostSuffix(entries, draft);
   }, [entries, draft, cycleIndex, isDropdownOpen, ghostDismissed]);
 
-  // Dropdown entries (Layer 4): the store owns the filter; `entries` (subscribed, #386) recomputes it.
+  // Dropdown entries (Layer 4): the store owns the filter; `entries` (subscribed) recomputes it.
   const dropdownEntries = useMemo(() => {
     if (!isDropdownOpen || entries.length === 0) return [];
     return usePromptHistoryStore.getState().getFilteredEntries(draft);
@@ -92,8 +92,8 @@ export function usePromptHistory(isComposing?: () => boolean): PromptHistoryResu
 
   const handleChange = useCallback((value: string) => {
     setDraft(value);
-    setDropdownSelectedIndex(0); // the rows changed, so the old row is gone (#752)
-    setGhostDismissed(false); // any edit brings a dismissed hint back (#388)
+    setDropdownSelectedIndex(0); // the rows changed, so the old row is gone
+    setGhostDismissed(false); // any edit brings a dismissed hint back
     setCycleIndex(null); // and exits cycling, dropping its cache
     setFilteredCache([]);
   }, []);
@@ -101,7 +101,7 @@ export function usePromptHistory(isComposing?: () => boolean): PromptHistoryResu
   const startCycling = useCallback(
     (direction: "up" | "down") => {
       if (cycleIndex === null) {
-        // Enter cycling mode. PREFIX matching (#753) — the same rule the ghost
+        // Enter cycling mode. PREFIX matching — the same rule the ghost
         // hint uses, so the hint can never advertise a completion cycling
         // refuses to produce.
         savedDraftRef.current = draft;
@@ -120,7 +120,7 @@ export function usePromptHistory(isComposing?: () => boolean): PromptHistoryResu
         );
       } else {
         if (cycleIndex === 0) {
-          // At the NEWEST entry (#754): the store is MRU, so index 0 is the most
+          // At the NEWEST entry: the store is MRU, so index 0 is the most
           // recent match and ArrowUp walks toward older ones. One more step
           // back leaves history → restore the original draft.
           setCycleIndex(null);
@@ -187,7 +187,7 @@ export function usePromptHistory(isComposing?: () => boolean): PromptHistoryResu
       if (!isDropdownOpen) return false;
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         consume(e);
-        // Clamped index as the step base, never the raw one (#752, header):
+        // Clamped index as the step base, never the raw one (see the header):
         const next = dropdownSelectedIndex + (e.key === "ArrowDown" ? 1 : -1);
         setDropdownSelectedIndex(clampToRows(next, dropdownEntries.length));
       } else if (e.key === "Enter") {
@@ -203,7 +203,7 @@ export function usePromptHistory(isComposing?: () => boolean): PromptHistoryResu
   );
 
   // Layer 3: Tab, or ArrowRight at the end of the text, accepts the ghost
-  // text; Escape dismisses it until the next edit (#388).
+  // text; Escape dismisses it until the next edit.
   const ghostTextLayer = useCallback<KeyLayer>(
     (e) => {
       if (!ghostText) return false;

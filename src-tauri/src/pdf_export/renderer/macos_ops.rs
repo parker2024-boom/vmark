@@ -5,7 +5,7 @@
 //! used: it produces one continuous page with no pagination. The native
 //! print DIALOG lives in `macos_print.rs`; the save job's completion — the
 //! delegate callback, the stale-output check and the PDF verification — in
-//! `macos_save_job.rs` (#212, #213, #214).
+//! `macos_save_job.rs`.
 //!
 //! @coordinates-with macos.rs — the webview plumbing this drives
 //! @coordinates-with macos_print.rs — the dialog path; shares the plumbing
@@ -55,7 +55,7 @@ pub(super) fn render_on_main_thread(
 /// because it spins the run loop itself; the other two platforms cannot.
 ///
 /// Progress goes through the sink at the same three points every platform
-/// reports (WI-FL6.2): before the webview exists, once the document has
+/// reports: before the webview exists, once the document has
 /// loaded, and once the print operation has written the file.
 fn render_inner(
     html_path: &str,
@@ -74,10 +74,10 @@ fn render_inner(
 
     let ov = create_offscreen_webview(mtm);
 
-    log::debug!("[PDF] loading file: {}", html_path);
+    log::debug!("[PDF] loading file: {:?}", html_path);
     load_html_and_wait(mtm, &ov.webview, html_path, read_access_dir)?;
 
-    // The caller's bounded wait may have ended during the load (#227). A
+    // The caller's bounded wait may have ended during the load. A
     // print for a caller that has given up would only fill a staging file
     // the sink then deletes; the claim is the atomic check.
     if !sink.claim() {
@@ -145,7 +145,7 @@ fn print_to_pdf(
     }
 
     // A stale file at the destination would be read back as this export's
-    // result; failing to remove it is a failure, not a shrug (#212).
+    // result; failing to remove it is a failure, not a shrug.
     clear_stale_output(output_path)?;
 
     log::debug!("[PDF] creating print operation...");
@@ -161,6 +161,6 @@ fn print_to_pdf(
     log::debug!("[PDF] running print operation (modal for hidden window)...");
     // Completion comes from AppKit's delegate callback, and the file is then
     // verified to be a PDF — no more inferring "done" from a size that
-    // stopped changing (#213, #214).
+    // stopped changing.
     run_save_job(mtm, &print_op, window, output_path)
 }

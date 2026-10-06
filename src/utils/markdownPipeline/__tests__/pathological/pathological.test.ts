@@ -20,6 +20,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pathologicalCases, pathologicalScale } from "./pathologicalCases";
@@ -81,8 +82,15 @@ interface CaseReport {
  *  `res.signal` becomes null and the hang detector below silently stops
  *  detecting hangs. Removing the launcher keeps SIGKILL honest — the direct
  *  child IS the runner, so killing it kills the code under test. */
+/** A token on THIS run's child command lines, so the leak check below finds
+ *  only runners this file started. Matching on `ENTRY` alone also matched a
+ *  concurrent run of this same file (a full-suite run beside a focused one)
+ *  and reported its healthy, still-working child as a leak. The child ignores
+ *  its argv; a reparented runner keeps the token, so a real leak still shows. */
+const RUN_TAG = `pathological-run-${randomUUID()}`;
+
 function runChild(env: Record<string, string>, timeoutMs: number) {
-  const res = spawnSync(process.execPath, ["--import", "tsx", ENTRY], {
+  const res = spawnSync(process.execPath, ["--import", "tsx", ENTRY, RUN_TAG], {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: timeoutMs,
@@ -96,20 +104,22 @@ function runChild(env: Record<string, string>, timeoutMs: number) {
   return { res, lines };
 }
 
-/** PIDs still running the child entry. `pgrep -f` matches the whole command
- *  line, so it finds a runner abandoned at ANY depth — which is the only way
- *  to observe the leak from in here. */
+/** PIDs still running this run's child entry. `pgrep -f` matches the whole
+ *  command line, so it finds a runner abandoned at ANY depth — which is the
+ *  only way to observe the leak from in here. */
 function survivingRunners(): string[] {
-  const res = spawnSync("pgrep", ["-f", ENTRY], { encoding: "utf8" });
+  const res = spawnSync("pgrep", ["-f", RUN_TAG], { encoding: "utf8" });
   return (res.stdout ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
 }
 
-/** Poll until the kill is reaped, or give up. A leaked runner NEVER clears, so
- *  a real regression cannot buy a pass by waiting longer. */
-function waitForNoRunners(budgetMs: number): string[] {
-  const deadline = Date.now() + budgetMs;
+/** Poll until the kill is reaped, or give up after `attempts` checks spaced a
+ *  quarter second apart. A leaked runner NEVER clears, so a real regression
+ *  cannot buy a pass by polling longer. Bounded by a count of checks, not by
+ *  reading the clock: `spawnSync` has already reaped the direct child, so a
+ *  healthy run is clear on the first check. */
+function waitForNoRunners(attempts: number): string[] {
   let alive = survivingRunners();
-  while (alive.length > 0 && Date.now() < deadline) {
+  for (let i = 1; i < attempts && alive.length > 0; i += 1) {
     spawnSync("sleep", ["0.25"]);
     alive = survivingRunners();
   }
@@ -164,10 +174,10 @@ describe("pathological inputs (killable child process)", () => {
     // every run — while every assertion above still passes.
     if (process.platform !== "win32") {
       expect(
-        waitForNoRunners(5_000),
+        waitForNoRunners(20),
         "the killed probe left a process running the child entry: it was " +
           "reparented to PID 1 and is now spinning on a core forever",
       ).toEqual([]);
     }
-  }, HANG_PROBE_WINDOW_MS + 30_000);
+  });
 });

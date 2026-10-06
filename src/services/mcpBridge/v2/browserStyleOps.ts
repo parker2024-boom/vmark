@@ -7,28 +7,35 @@
  * @module services/mcpBridge/v2/browserStyleOps
  */
 import type { StyleOps } from "@/lib/browser/agent/powerScript";
+import type { CheckedOperationArgs } from "./readOperationArgs";
 
 /**
  * Strict parse of the style operations. Returns an error string for anything
  * invalid — a non-string `set` value, an empty/whitespace class token (those
  * throw inside `classList` mid-mutation), or `injectCss` combined with
  * element ops (the generated script would silently skip the element ops).
+ * A field of the wrong shape is refused by name, never read as absent: that
+ * would apply the rest of a request the caller did not send.
  */
-export function readStyleOps(args: Record<string, unknown>): { ops: StyleOps } | { error: string } {
+export function readStyleOps({
+  wire,
+  malformed,
+}: CheckedOperationArgs<"vmark.browser.style">): { ops: StyleOps } | { error: string } {
   const ops: StyleOps = {};
-  if (args.set !== undefined) {
-    if (typeof args.set !== "object" || args.set === null) return { error: "style 'set' must be an object" };
+  if (malformed.has("set")) return { error: "style 'set' must be an object" };
+  if (wire.set !== undefined) {
     ops.set = {};
-    for (const [k, v] of Object.entries(args.set as Record<string, unknown>)) {
+    for (const [k, v] of Object.entries(wire.set as Record<string, unknown>)) {
       if (typeof v !== "string") return { error: `style set['${k}'] must be a string` };
       ops.set[k] = v;
     }
   }
   const readClassList = (key: "addClasses" | "removeClasses"): string | null => {
-    if (args[key] === undefined) return null;
-    if (!Array.isArray(args[key])) return `style '${key}' must be an array of class names`;
+    if (malformed.has(key)) return `style '${key}' must be an array of class names`;
+    const entries: unknown[] | undefined = wire[key];
+    if (entries === undefined) return null;
     const list: string[] = [];
-    for (const c of args[key] as unknown[]) {
+    for (const c of entries) {
       if (typeof c !== "string" || !c.trim() || /\s/.test(c)) {
         return `style '${key}' entries must be non-empty single class tokens`;
       }
@@ -41,7 +48,8 @@ export function readStyleOps(args: Record<string, unknown>): { ops: StyleOps } |
   if (addErr) return { error: addErr };
   const removeErr = readClassList("removeClasses");
   if (removeErr) return { error: removeErr };
-  if (typeof args.injectCss === "string" && args.injectCss.length > 0) ops.injectCss = args.injectCss;
+  if (malformed.has("injectCss")) return { error: "style 'injectCss' must be a string" };
+  if (wire.injectCss !== undefined && wire.injectCss.length > 0) ops.injectCss = wire.injectCss;
 
   const hasElementOps =
     (ops.set && Object.keys(ops.set).length > 0) || ops.addClasses?.length || ops.removeClasses?.length;

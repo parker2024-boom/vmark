@@ -4,6 +4,9 @@
  *
  * Covers: isImeKeyEvent, composition state checks, grace period logic,
  * command guarding, action queuing/flushing, and cleanup prefix detection.
+ *
+ * WI-RA18.2 — a composition that ended at clock time 0 (the time origin, or a
+ * mocked clock) still opens the grace period; 0 is a time, not "never".
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -136,6 +139,20 @@ describe("ProseMirror composition grace period", () => {
     expect(isProseMirrorInCompositionGrace(view)).toBe(true);
   });
 
+  it("opens the grace period for a composition that ended at clock time 0", () => {
+    const view = { composing: false } as never;
+    const now = vi.spyOn(performance, "now").mockReturnValue(0);
+    try {
+      markProseMirrorCompositionEnd(view);
+      now.mockReturnValue(IME_GRACE_PERIOD_MS - 1);
+      expect(isProseMirrorInCompositionGrace(view)).toBe(true);
+      now.mockReturnValue(IME_GRACE_PERIOD_MS);
+      expect(isProseMirrorInCompositionGrace(view)).toBe(false);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
   it("returns false for null view", () => {
     expect(isProseMirrorInCompositionGrace(null)).toBe(false);
   });
@@ -155,6 +172,20 @@ describe("CodeMirror composition grace period", () => {
     const view = { composing: false, compositionStarted: false } as never;
     markCodeMirrorCompositionEnd(view);
     expect(isCodeMirrorInCompositionGrace(view)).toBe(true);
+  });
+
+  it("opens the grace period for a composition that ended at clock time 0", () => {
+    const view = { composing: false, compositionStarted: false } as never;
+    const now = vi.spyOn(performance, "now").mockReturnValue(0);
+    try {
+      markCodeMirrorCompositionEnd(view);
+      now.mockReturnValue(IME_GRACE_PERIOD_MS - 1);
+      expect(isCodeMirrorInCompositionGrace(view)).toBe(true);
+      now.mockReturnValue(IME_GRACE_PERIOD_MS);
+      expect(isCodeMirrorInCompositionGrace(view)).toBe(false);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("returns false for null view", () => {

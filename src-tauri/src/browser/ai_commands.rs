@@ -3,7 +3,7 @@
 //! Kept separate from the human browser lifecycle commands so an AI caller
 //! cannot opt into a weaker path with an untrusted boolean argument.
 //!
-//! WI-14: every refusal here is a [`CommandError`] with a `code`, not a bare
+//! Every refusal here is a [`CommandError`] with a `code`, not a bare
 //! `"APPROVAL_REQUIRED"`-style string. The MCP bridge used to recover the class
 //! with `String(error).includes("APPROVAL_REQUIRED")` at four call sites — a
 //! substring match that any URL carrying that token would have triggered, and
@@ -11,12 +11,11 @@
 //! bearing distinction is `approval-required` (raise a prompt, then retry)
 //! versus `permission-denied` (no approval can unblock it).
 //!
-//! The commands are COMPOSITION only. The refusal guards live in `ai_guards.rs`
-//! and the state transactions — reservation, ticketing, profile authorization,
-//! the native call with its compensation — in `ai_transactions.rs` (audit
-//! 20260903 round 3, #2), so each policy decision and each guard-holding step is
-//! unit-testable without a mock Tauri app, and the order they run in is the one
-//! thing left to read here.
+//! The commands are COMPOSITION only. The refusal guards live in `ai_guards.rs` and
+//! the state transactions — reservation, ticketing, profile authorization, the
+//! native call with its compensation — in `ai_transactions.rs`, so each policy
+//! decision and each guard-holding step is unit-testable without a mock Tauri app,
+//! and the order they run in is the one thing left to read here.
 
 use super::ai_guards::{
     ai_policy, authorize_shared_navigation, invalid_profile_name, lock_failure, parse_session_mode,
@@ -57,7 +56,7 @@ pub struct AiBrowserState {
 }
 
 impl AiBrowserState {
-    /// One registry read → the wire shape (audit round 3, #5). Every field comes
+    /// One registry read → the wire shape. Every field comes
     /// from the same entry, so there is nothing to default: the old per-field
     /// reads fell back to generation 0 and "Destroyed" for a tab whose mode had
     /// just been read under the same guard — fallbacks that could only ever hide
@@ -89,7 +88,7 @@ pub async fn browser_ai_policy(
             || policy.session != session
             || policy.allow_loopback != allow_loopback
     };
-    // The reset runs BEFORE the new posture is published (audit round 2, #1): a
+    // The reset runs BEFORE the new posture is published: a
     // sandbox tab created between a published posture and its reset would reuse
     // storage from the previous one. While the reset runs the OLD policy is still
     // the one in force, so a concurrent creation is consistent with the store it
@@ -113,9 +112,9 @@ pub async fn browser_ai_policy(
 }
 
 /// Create an AI-owned tab and start its first navigation. Steps, in order:
-/// policy and destination validation (pure); the reservation (#3 — an existing
+/// policy and destination validation (pure); the reservation (an existing
 /// id is honoured only as the SAME request); shared-posture authorization; the
-/// ticket; the profile grant (WI-P6.1 H1, consumed BEFORE the profile is
+/// ticket; the profile grant (consumed BEFORE the profile is
 /// applied); the native creation, which forgets the tab if it fails.
 #[tauri::command]
 pub async fn browser_ai_create(
@@ -124,7 +123,7 @@ pub async fn browser_ai_create(
     state: State<'_, BrowserSurface>,
     tab_id: String,
     url: String,
-    // Optional named profile (WI-P6.1): an AiSandbox tab opened against a `profile`
+    // Optional named profile: an AiSandbox tab opened against a `profile`
     // uses an isolated persistent store so a login persists for reuse. Opening a
     // profile is per-use user-approved — `authorize_profile` consumes the grant.
     profile: Option<String>,
@@ -214,7 +213,7 @@ pub async fn browser_ai_navigate(
     if mode == AutomationMode::AiShared {
         authorize_shared_navigation(&state, &tab_id, generation, &url)?;
     }
-    // Snapshot and begin under ONE guard (#4): a native failure below restores
+    // Snapshot and begin under ONE guard: a native failure below restores
     // exactly the state this navigation replaced, and only while its ticket is
     // still the active one.
     let (ticket, replaced) = begin_ai_navigation(&state, &tab_id, &url, mode)?;

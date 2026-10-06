@@ -3,41 +3,52 @@
 // createTerminalInstance acquires a DOM container, an xterm instance, an IME
 // gate, a WebGL renderer and several handlers, one at a time. Any of those
 // steps can throw (a missing helper textarea in dev, an addon rejecting the
-// terminal, a WebGL context failure). Before this, a throw left the container
+// terminal, an xterm call failing). Before this, a throw left the container
 // in the DOM and the xterm instance alive — one leak per failed session.
+//
+// The construction steps run for real — helper-textarea resolution, the IME
+// gate, the WebGL renderer. Faults are injected at the xterm boundary: a
+// terminal method that throws part-way through setup, and a dispose that
+// throws during rollback.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const { mockSetupWebgl, mockSetupIme, mockDispose } = vi.hoisted(() => ({
-  mockSetupWebgl: vi.fn(),
-  mockSetupIme: vi.fn(),
-  mockDispose: vi.fn(),
+const xterm = vi.hoisted(() => ({
+  failAt: null as null | "attachCustomKeyEventHandler" | "onBell",
+  failDispose: false,
+  dispose: vi.fn(),
+  opened: [] as Array<{ container: HTMLElement; textarea: HTMLTextAreaElement }>,
 }));
 
-vi.mock("./setupWebglRenderer", () => ({
-  setupWebglRenderer: mockSetupWebgl,
-}));
-vi.mock("./setupImeCompositionGate", () => ({
-  setupImeCompositionGate: mockSetupIme,
-  createNoopImeHandle: () => ({
-    composing: false,
-    onCompositionCommit: null,
-    cleanup: vi.fn(),
-  }),
-}));
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
     element = document.createElement("div");
+    textarea: HTMLTextAreaElement | undefined = undefined;
     parser = { registerOscHandler: vi.fn(), registerEscHandler: vi.fn() };
     unicode = { activeVersion: "11" };
     buffer = { active: { viewportY: 0, length: 0, getLine: () => null } };
     modes = { bracketedPasteMode: false };
-    dispose = mockDispose;
+    rows = 24;
+    dispose = () => {
+      xterm.dispose();
+      if (xterm.failDispose) throw new Error("cleanup also failed");
+    };
     loadAddon = vi.fn();
-    open = vi.fn();
-    onBell = vi.fn();
+    // Real xterm creates its helper textarea inside the container on open().
+    open = vi.fn((container: HTMLElement) => {
+      const textarea = document.createElement("textarea");
+      container.appendChild(textarea);
+      this.textarea = textarea;
+      xterm.opened.push({ container, textarea });
+    });
+    refresh = vi.fn();
+    onBell = vi.fn(() => {
+      if (xterm.failAt === "onBell") throw new Error("the real failure");
+    });
     onTitleChange = vi.fn();
     onSelectionChange = vi.fn(() => ({ dispose: vi.fn() }));
-    attachCustomKeyEventHandler = vi.fn();
+    attachCustomKeyEventHandler = vi.fn(() => {
+      if (xterm.failAt === "attachCustomKeyEventHandler") throw new Error("the real failure");
+    });
     registerMarker = vi.fn(() => null);
     write = vi.fn();
   },
@@ -54,20 +65,8 @@ vi.mock("@xterm/addon-search", () => ({
   },
 }));
 vi.mock("@xterm/addon-unicode11", () => ({ Unicode11Addon: class {} }));
-vi.mock("./resolveHelperTextarea", () => ({
-  resolveHelperTextarea: () => document.createElement("textarea"),
-}));
 vi.mock("./setupWebLinks", () => ({ setupWebLinks: vi.fn() }));
 vi.mock("./setupFileLinks", () => ({ setupFileLinks: vi.fn() }));
-vi.mock("./setupOsc", () => ({
-  setupOsc7: () => ({ getCwd: () => null }),
-  setupOsc133: () => ({
-    getCommands: () => [],
-    isRunning: () => false,
-    setOnIdle: vi.fn(),
-  }),
-  scrollToAdjacentCommand: vi.fn(),
-}));
 vi.mock("@/theme", () => ({ buildXtermThemeForId: () => ({}), drawBoldTextInBrightColorsForId: () => true }));
 
 import { createTerminalInstance } from "./createTerminalInstance";
@@ -86,13 +85,33 @@ const SETTINGS = {
   themeId: "paper" as never,
 };
 
-function build(parentEl: HTMLElement) {
+function build(parentEl: HTMLElement, onBell?: () => void) {
   return createTerminalInstance({
     parentEl,
     settings: SETTINGS,
     ptyRef: { current: null },
     onSearch: vi.fn(),
+    ...(onBell ? { onBell } : {}),
   });
+}
+
+/** Listeners added to and removed from the terminal's container, by identity. */
+function trackContainerListeners() {
+  const add = vi.spyOn(EventTarget.prototype, "addEventListener");
+  const remove = vi.spyOn(EventTarget.prototype, "removeEventListener");
+  return {
+    /** Event types still listened for on the last-opened container. */
+    live(): string[] {
+      const container = xterm.opened.at(-1)?.container;
+      const added = add.mock.contexts.flatMap((ctx, i) =>
+        ctx === container ? [{ type: String(add.mock.calls[i][0]), fn: add.mock.calls[i][1] }] : [],
+      );
+      const removed = remove.mock.contexts.flatMap((ctx, i) =>
+        ctx === container ? [remove.mock.calls[i][1]] : [],
+      );
+      return added.filter((e) => !removed.includes(e.fn)).map((e) => e.type);
+    },
+  };
 }
 
 describe("createTerminalInstance rollback (audit fix)", () => {
@@ -100,87 +119,74 @@ describe("createTerminalInstance rollback (audit fix)", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    xterm.failAt = null;
+    xterm.failDispose = false;
+    xterm.opened.length = 0;
     parent = document.createElement("div");
     document.body.appendChild(parent);
-    mockSetupIme.mockReturnValue({
-      composing: false,
-      onCompositionCommit: null,
-      cleanup: vi.fn(),
-    });
-    mockSetupWebgl.mockReturnValue({ cleanup: vi.fn(), resetDisplay: vi.fn() });
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     parent.remove();
   });
 
-  it("leaves the container mounted on success", () => {
+  it("leaves the container mounted on success, with the IME gate attached", () => {
+    const listeners = trackContainerListeners();
     const instance = build(parent);
     expect(parent.children).toHaveLength(1);
+    expect(listeners.live()).toEqual(
+      expect.arrayContaining(["compositionstart", "compositionend", "input"]),
+    );
     instance.dispose();
     expect(parent.children).toHaveLength(0);
+    expect(listeners.live()).toEqual([]);
   });
 
   it("removes the container when a later setup step throws", () => {
-    mockSetupWebgl.mockImplementation(() => {
-      throw new Error("WebGL context creation failed");
-    });
+    xterm.failAt = "attachCustomKeyEventHandler";
 
-    expect(() => build(parent)).toThrow("WebGL context creation failed");
+    expect(() => build(parent)).toThrow("the real failure");
     expect(parent.children).toHaveLength(0);
   });
 
   it("disposes the terminal when a later setup step throws", () => {
-    mockSetupWebgl.mockImplementation(() => {
-      throw new Error("WebGL context creation failed");
-    });
+    xterm.failAt = "attachCustomKeyEventHandler";
 
     expect(() => build(parent)).toThrow();
-    expect(mockDispose).toHaveBeenCalled();
+    expect(xterm.dispose).toHaveBeenCalledTimes(1);
   });
 
   it("releases an EARLIER resource when a LATER one throws", () => {
-    // The IME gate is acquired before the WebGL renderer; its cleanup must run.
-    const imeCleanup = vi.fn();
-    mockSetupIme.mockReturnValue({
-      composing: false,
-      onCompositionCommit: null,
-      cleanup: imeCleanup,
-    });
-    mockSetupWebgl.mockImplementation(() => {
-      throw new Error("boom");
-    });
+    // The IME gate is acquired before the key handler is attached; its
+    // container listeners must come off again.
+    const listeners = trackContainerListeners();
+    xterm.failAt = "attachCustomKeyEventHandler";
 
     expect(() => build(parent)).toThrow();
-    expect(imeCleanup).toHaveBeenCalled();
+    expect(xterm.opened).toHaveLength(1);
+    expect(listeners.live()).toEqual([]);
   });
 
   it("propagates the original error rather than a rollback error", () => {
-    mockSetupIme.mockReturnValue({
-      composing: false,
-      onCompositionCommit: null,
-      cleanup: () => {
-        throw new Error("cleanup also failed");
-      },
-    });
-    mockSetupWebgl.mockImplementation(() => {
-      throw new Error("the real failure");
-    });
+    xterm.failAt = "onBell";
+    xterm.failDispose = true;
 
     // A throwing release step must not mask what actually went wrong…
-    expect(() => build(parent)).toThrow("the real failure");
+    expect(() => build(parent, vi.fn())).toThrow("the real failure");
     // …and must not stop the remaining releases.
     expect(parent.children).toHaveLength(0);
   });
 
   it("does not leak across repeated failures", () => {
-    mockSetupWebgl.mockImplementation(() => {
-      throw new Error("boom");
-    });
+    const listeners = trackContainerListeners();
+    xterm.failAt = "attachCustomKeyEventHandler";
     for (let i = 0; i < 5; i++) {
       expect(() => build(parent)).toThrow();
+      expect(listeners.live()).toEqual([]);
     }
     expect(parent.children).toHaveLength(0);
+    expect(xterm.dispose).toHaveBeenCalledTimes(5);
   });
 
   it("dispose is idempotent", () => {
@@ -188,5 +194,6 @@ describe("createTerminalInstance rollback (audit fix)", () => {
     instance.dispose();
     expect(() => instance.dispose()).not.toThrow();
     expect(parent.children).toHaveLength(0);
+    expect(xterm.dispose).toHaveBeenCalledTimes(1);
   });
 });

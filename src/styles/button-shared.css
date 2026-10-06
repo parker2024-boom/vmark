@@ -37,10 +37,10 @@
      from the primitive layer (rule 31 sanctions that when no semantic token
      covers the case). 4px/8px reads as cramped at this font size. */
   padding: var(--space-1-5) var(--space-3);
-  /* Elevated base (WI-UB1, re-audit 20260901): findability by ELEVATION —
+  /* Elevated base: findability by ELEVATION —
      a raised --surface-raised face, an 8%-text-ink hairline and --shadow-sm —
-     replacing the outline-on-grey recipe the audit flagged. Ratified for the
-     welcome front door first (WI-UA13), then rolled out to every .vm-btn. */
+     replacing the outline-on-grey recipe, which read as hard to find. Ratified
+     for the welcome front door first, then rolled out to every .vm-btn. */
   border: var(--border-thin) solid color-mix(in srgb, var(--text-color) 8%, transparent);
   border-radius: var(--radius-sm);
   background: var(--surface-raised);
@@ -49,7 +49,7 @@
   font-family: var(--font-ui);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-base);
-  cursor: var(--cursor-interactive, default); /* D7, platform-scoped (WI-UA15) */
+  cursor: var(--cursor-interactive, default); /* D7, platform-scoped */
   transition:
     background var(--duration-fast),
     color var(--duration-fast);
@@ -86,7 +86,7 @@
   font-size: var(--font-size-xs);
 }
 
-/* Capsule shape (maintainer direction, 2026-08-31 — the welcome front door).
+/* Capsule shape (maintainer direction — the welcome front door).
    Promoted onto the primitive (rule 32's middle path) so a pill-shaped action
    exists exactly once: a per-wrapper border-radius override would register as
    shape drift in check-bespoke-buttons' maxShapeDriftClasses, and rightly so. */
@@ -140,7 +140,7 @@
   padding: var(--spacing-1) 0;
   border: none;
   background: transparent;
-  box-shadow: none; /* the chromeless variant must not float (WI-UB1) */
+  box-shadow: none; /* the chromeless variant must not float */
   color: var(--text-secondary);
 }
 

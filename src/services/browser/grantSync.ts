@@ -1,5 +1,5 @@
 /**
- * Grant sync — mirror the user's standing grants into the Rust driver (WI-2.1).
+ * Grant sync — mirror the user's standing grants into the Rust driver.
  *
  * Purpose: the driver (`src-tauri/src/browser/origin_guard.rs`) is the
  * **authoritative** enforcement point for R4/R5/R7a — it refuses any `browser_eval`
@@ -16,7 +16,7 @@
  *
  * Default-deny holds if this never runs: the driver starts with an empty set.
  *
- * Grant sends are ordered across sync sessions, not only within one (round 2, #91):
+ * Grant sends are ordered across sync sessions, not only within one:
  * a restarted session's first push is chained behind whatever the previous session
  * still has in flight, so a revocation can never be overtaken by an older,
  * more permissive snapshot.
@@ -65,7 +65,7 @@ let grantSendsInFlight = 0;
 let grantSendTail: Promise<unknown> = Promise.resolve();
 
 /**
- * One grant send, ordered ACROSS sessions as well as within one (#91): a disposed
+ * One grant send, ordered ACROSS sessions as well as within one: a disposed
  * session cannot cancel a send already in flight, and Tauri does not promise
  * call-order completion — so a restarted session's first push (possibly a
  * revocation) is chained behind whatever the previous session still has in the
@@ -84,7 +84,7 @@ function sendGrants(grants: StandingGrant[]): Promise<void> {
   return run.then(() => undefined);
 }
 
-/** Send a newly minted profile-open grant (WI-P6.1 H1) to the driver, which is the
+/** Send a newly minted profile-open grant to the driver, which is the
  *  authority: `browser_ai_create` consumes a matching (profile, origin) before it
  *  applies a named profile. Without this leg, an approved profile-open authorizes the
  *  frontend and is then refused by the driver. */

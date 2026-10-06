@@ -15,6 +15,7 @@
  *   - `*.example.com` covers strict subdomains at any depth, NOT the apex, NOT look-alikes
  *
  * @coordinates-with src-tauri/src/browser/origin_guard.rs (must mirror these rules)
+ * @module lib/browser/origin/originGuard
  */
 
 import { parseNavigableUrl } from "../url";

@@ -6,7 +6,7 @@
  * preview, F6 toggles Source⇄Split and Shift+F6 toggles Preview⇄Split
  * (toggle-against-base, base = Split); markdown/media/preview-less tabs fall
  * through to the existing markdown handlers. See ADR-8 in
- * dev-docs/plans/20260703-split-pane-view-modes.md.
+ * .claude/adr/plans/20260703-split-pane-view-modes.md.
  *
  * @coordinates-with services/commands/viewCommands.ts — sole caller (view.toggleSourceMode / view.toggleMarkdownSplit)
  * @module services/keybinding/splitPaneViewShortcut

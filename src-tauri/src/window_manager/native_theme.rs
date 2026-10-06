@@ -81,7 +81,7 @@ fn apply_to_all_windows(app: &AppHandle) {
             // Best-effort per window: one failing window (e.g. one closing
             // mid-iteration) must not stop the rest from being themed.
             if let Err(e) = window.set_theme(Some(theme)) {
-                log::warn!("[native_theme] could not theme window `{label}`: {e}");
+                log::warn!("[native_theme] could not theme window {label:?}: {e}");
             }
         }
     }

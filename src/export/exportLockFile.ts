@@ -80,7 +80,7 @@ export async function removeQuietly(path: string): Promise<void> {
  * exists (os error 17)" on Unix and "Cannot create a file when that file
  * already exists. (os error 183)" on Windows.
  *
- * Matched on the WHOLE phrase, never on "exist" alone (round 5, #667). "does
+ * Matched on the WHOLE phrase, never on "exist" alone. "does
  * not exist" contains that substring, so a missing parent directory — a real,
  * immediate failure — was classified as contention: the acquire loop then spent
  * its entire 30-second wait on it and blamed a second export that never
@@ -99,7 +99,7 @@ export function isAlreadyExists(error: unknown): boolean {
  * Lives beside the lock because the lock's CORRECTNESS rests on it — an owner
  * two exports could both produce is not an owner. `exportStaging` names its
  * staging root with the same primitive and had a byte-identical copy, which is
- * one filesystem-safety primitive with two places to get wrong (round 5, #684).
+ * one filesystem-safety primitive with two places to get wrong.
  */
 export function nonce(): string {
   const c = globalThis.crypto as { randomUUID?: () => string } | undefined;

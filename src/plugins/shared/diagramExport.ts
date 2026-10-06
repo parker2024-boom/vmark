@@ -7,6 +7,8 @@
  * The caller provides only the async `doExport(theme)` callback;
  * everything else (button, menu, positioning, event handling, cleanup)
  * is handled here.
+ *
+ * @module plugins/shared/diagramExport
  */
 
 import i18n from "@/i18n";

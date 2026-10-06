@@ -60,8 +60,8 @@ Conformance: `extension` (deliberate dialect structure) / `defect`
 corruption — currently the leading-`---` frontmatter trap, bracket-escape
 growth, entity-newline injection, bare-list-marker escape, caret escape
 asymmetry), `model-limit` (the ProseMirror model cannot represent the
-construct: nested same-type emphasis, marks across hard breaks, list
-looseness, empty-text links, code-fence meta), `normalization` (markdown
+construct: nested same-type emphasis, marks across hard breaks, list-ITEM
+looseness, empty-text links), `normalization` (markdown
 changes, rendered document does not), `policy` (deliberate `isSafeUrl`
 rewriting — note it edits the author's file on save; render-time
 sanitization is an open design question).

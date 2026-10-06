@@ -10,7 +10,7 @@
  *   - Adaptive debounce (100ms–5s) scales with document size: larger docs get longer
  *     delays to reduce serialization frequency without losing keystrokes on unmount.
  *   - Initial parse is deferred via setTimeout(0) so the shell renders first; a parse that
- *     fails goes to services/editor/unparseableDocument.ts (Source mode + message, #1407).
+ *     fails goes to services/editor/unparseableDocument.ts (Source mode + message).
  *   - shouldRerenderOnTransaction: false — Tiptap's default full-React-rerender per
  *     transaction is wasted work here since state flows through Zustand selectors.
  *   - content-visibility only on large docs and never on macOS: .cv-enabled marks those
@@ -65,11 +65,10 @@ import {
   applySpellcheckForDocSize,
   buildTiptapEditorProps,
   CURSOR_TRACKING_DELAY_MS,
-  setContentWithoutHistory,
   spellcheckAttrForDocSize,
   suppressCvIdleDuringEdit,
-  syncMarkdownToEditor,
 } from "./tiptapEditorHelpers";
+import { setContentWithoutHistory, syncMarkdownToEditor } from "./tiptapContentLoad";
 
 interface TiptapEditorInnerProps {
   hidden?: boolean;
@@ -109,7 +108,7 @@ export function TiptapEditorInner({ hidden = false, readOnly = false, preview = 
   const contentRef = useRef(content);
   const editorRef = useRef<TiptapEditor | null>(null);
   // Latest-value refs synced during render: a deferred init parse (setTimeout) + the unmount-flush read these and need the latest committed value before effects run (#1063).
-  /* eslint-disable react-hooks/refs */
+  /* eslint-disable react-hooks/refs -- latest-value refs read by the deferred init parse and the unmount flush before effects run */
   cursorInfoRef.current = cursorInfo;
   preserveLineBreaksRef.current = preserveLineBreaks;
   hardBreakStyleOnSaveRef.current = hardBreakStyleOnSave;
@@ -123,7 +122,7 @@ export function TiptapEditorInner({ hidden = false, readOnly = false, preview = 
     // tabId is captured at mount time — editor remounts per tab. The lint
     // toggle is handled LIVE inside the lint extension (settings-store
     // subscription), so it is deliberately not a dependency here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- built once per mount (the editor remounts per tab); the lint toggle is applied live inside the extension
     []
   );
 
@@ -147,7 +146,7 @@ export function TiptapEditorInner({ hidden = false, readOnly = false, preview = 
   });
   // Synced during render so the unmount-flush cleanup below sees the latest flusher
   // even if a passive effect hasn't run yet (#755).
-  // eslint-disable-next-line react-hooks/refs
+  // eslint-disable-next-line react-hooks/refs -- the unmount-flush cleanup must see the latest flusher even before a passive effect runs
   flushToStoreRef.current = flushToStore;
 
   const flushCursorInfo = useCallback(() => {
@@ -184,7 +183,7 @@ export function TiptapEditorInner({ hidden = false, readOnly = false, preview = 
       // Wire MCP revision tracking so user edits bump the revision token that
       // optimistic-concurrency (STALE) checks in the MCP bridge depend on. The
       // transaction listener is bound to this editor and torn down with it.
-      // Revision is keyed per tab (WI-0.10); this editor owns the active tab.
+      // Revision is keyed per tab; this editor owns the active tab.
       if (activeTabId) initializeRevisionTracking(editor, activeTabId);
 
       // Capture content at mount time — the closure value is stable for this editor instance.
@@ -205,7 +204,7 @@ export function TiptapEditorInner({ hidden = false, readOnly = false, preview = 
             preserveLineBreaks: preserveLineBreaksRef.current,
           });
           // Use helper to avoid polluting undo history with initial content load
-          setContentWithoutHistory(editor, doc);
+          setContentWithoutHistory(editor, doc, () => lastExternalContent.current === contentSnapshot);
           lastExternalContent.current = contentSnapshot;
           editorInitialized.current = true;
 
@@ -218,7 +217,7 @@ export function TiptapEditorInner({ hidden = false, readOnly = false, preview = 
           }
         } catch (error) {
           editorInitialized.current = true; // Unblock external sync even on parse error
-          if (hiddenRef.current) { /* #1407: a hidden editor re-syncs, and reports, when shown */ }
+          if (hiddenRef.current) { /* A hidden editor re-syncs, and reports, when shown */ }
           else if (contentRef.current !== contentSnapshot) syncMarkdownToEditor(editor, contentRef.current, lastExternalContent, preserveLineBreaksRef.current, activeTabId); // report the LATEST content
           else reportUnparseableDocument(activeTabId, error);
         } finally {
@@ -299,7 +298,7 @@ export function TiptapEditorInner({ hidden = false, readOnly = false, preview = 
   // Keep editorRef aligned with the live editor for the unmount-flush cleanup.
   // Synced during render (not an effect) so it is set even if a passive effect
   // hasn't run, and so it survives the reverse-order cleanup race (#755).
-  // eslint-disable-next-line react-hooks/refs
+  // eslint-disable-next-line react-hooks/refs -- editorRef must track the live editor for the unmount flush despite reverse-order cleanup
   editorRef.current = editor ?? null;
 
   // Settings → editor sync (invisibles, CJK spacing, read-only) — extracted

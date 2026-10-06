@@ -1,5 +1,5 @@
 //! How the two callers wait for the platform — and what a timeout means to
-//! each (#220, #221, #225).
+//! each.
 //!
 //! Purpose: `render_pdf` and `print_document` each carried a copy of the
 //! bounded wait, the closed-channel mapping and the timeout error, and each
@@ -7,9 +7,9 @@
 //! two policies named:
 //!   - a **render** is bounded end to end; past the bound the caller reports
 //!     a timeout, the platform's window comes down at once, and its late
-//!     result, if any, is discarded rather than published (#224);
-//!   - a **dialog** is bounded only until it is SHOWN (WI-FL6.3); past that
-//!     bound the caller asks the sink who won (#227) — a platform that
+//!     result, if any, is discarded rather than published;
+//!   - a **dialog** is bounded only until it is SHOWN; past that
+//!     bound the caller asks the sink who won — a platform that
 //!     claimed the dialog first has it on screen, and a timeout reported over
 //!     a live sheet would be a lie the user then disproves by clicking Print;
 //!     a platform that had NOT claimed gets its window closed now.
@@ -41,7 +41,7 @@ type OutcomeRx<T> = oneshot::Receiver<Result<T, CommandError>>;
 
 /// The bound as a WHOLE number of seconds for the message a timeout carries.
 ///
-/// `Duration::as_secs()` truncates (#452), so every sub-second bound reported
+/// `Duration::as_secs()` truncates, so every sub-second bound reported
 /// "0 seconds" — a message that names no bound at all, and the one a test
 /// driving a 200 ms wait prints. Rounding UP keeps the number an upper bound on
 /// what was actually waited, which is what the sentence claims; only a bound of
@@ -90,7 +90,7 @@ pub(super) async fn settle_render(
             match sink.abandon() {
                 Abandoned::Settled => remove_temp(staging),
                 // Still loading, or printing into a file nobody will read:
-                // the window comes down NOW (#224), not at the platform's
+                // the window comes down NOW, not at the platform's
                 // own pace — and not never, when its callback never comes.
                 Abandoned::Marked | Abandoned::Claimed => sink.teardown.run(),
             }
@@ -106,7 +106,7 @@ pub(super) async fn settle_render(
     }
 }
 
-/// `publish`, on the blocking pool (#451).
+/// `publish`, on the blocking pool.
 ///
 /// The rename's destination is the path the USER picked in a save dialog, which
 /// can be a network mount or an external disk; a `rename` there can block for
@@ -132,7 +132,7 @@ async fn publish_off_thread(staging: &Path, output: &Path) -> Result<(), Command
 /// ends when the platform settles first — a failed load, a COM error,
 /// Windows's immediate settle — because settling closes `shown`.
 ///
-/// When the bound elapses, the sink says who won (#227): `Marked` means the
+/// When the bound elapses, the sink says who won: `Marked` means the
 /// platform had not reached its dialog — its window is closed here and now,
 /// and a claim it makes after this is refused and tears down too, either
 /// close a no-op after the other — so this is a real timeout; `Claimed`

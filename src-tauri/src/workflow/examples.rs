@@ -1,12 +1,12 @@
 // RW-8 (L1) — bundled sample workflow + integration test
 
 //! Integration test for the bundled sample workflow
-//! (`resources/workflows/examples/triage-and-translate.yml`, WI-6.1).
+//! (`resources/workflows/examples/triage-and-translate.yml`).
 //!
 //! Proves the v0-genie -> workflow path end-to-end at the parse/resolve layer:
 //!   1. The bundled YAML parses into a `RawWorkflow`.
-//!   2. Its structure is valid, judged by the runner's OWN `topological_sort`
-//!      (#542): declared `id`s, `needs:` references that resolve, an acyclic
+//!   2. Its structure is valid, judged by the runner's OWN `topological_sort`:
+//!      declared `id`s, `needs:` references that resolve, an acyclic
 //!      graph. The Kahn sort this file used to carry was a second copy of that
 //!      rule, so the sample could agree with the copy and not with production.
 //!   3. Every `uses: genie/<name>` step references a genie that is actually
@@ -16,7 +16,7 @@
 //!      template relies on `{{content}}` — exercising the ADR-2 aliasing that
 //!      lets the sample supply `with: { input: ... }` and still bind the
 //!      template.
-//!   5. The sample is EXECUTED (`examples.test.rs`, #271): through the real
+//!   5. The sample is EXECUTED (`examples.test.rs`): through the real
 //!      runner on a mock runtime, against a fake OpenAI-compatible endpoint
 //!      answering on loopback, in a temp workspace — and the file the last
 //!      step saves is read back. Structure is not a run; this is the run.
@@ -45,7 +45,7 @@ const GENIE_TRANSLATE: &str = include_str!("../../resources/genies/tools/transla
 ///
 /// The runner falls back to the last `/`-segment of `uses` when a step omits
 /// `id:`; re-deriving that here was a second copy of production behaviour a
-/// test could pass against while the runner did something else (#542), so the
+/// test could pass against while the runner did something else, so the
 /// fallback is not reproduced — `sample_workflow_structure_is_valid` asserts
 /// instead that every sample step declares its id explicitly, which is what
 /// makes this total.
@@ -74,7 +74,7 @@ fn sample_workflow_structure_is_valid() {
     let ids: Vec<&str> = workflow.steps.iter().map(declared_id).collect();
     assert_eq!(ids, vec!["rewrite", "translate", "save"]);
 
-    // Judged by the PRODUCTION resolver (#542), not by a Kahn sort copied into
+    // Judged by the PRODUCTION resolver, not by a Kahn sort copied into
     // this file: a copy can only prove the sample agrees with the copy.
     let resolved = topological_sort(workflow.steps.clone())
         .expect("sample workflow must be acyclic and resolvable by the runner's own sort");
@@ -119,14 +119,14 @@ fn sample_workflow_genie_refs_resolve_against_bundled_catalog() {
         }
     }
     // The sample must exercise the genie->workflow path; the exact count is
-    // the assertion, since it subsumes "at least one" (#544).
+    // the assertion, since it subsumes "at least one".
     assert_eq!(genie_steps, 2, "sample chains two bundled v0 genies");
 }
 
 /// The genie assets embedded above, by the name a `uses: genie/<name>` step
 /// writes. `include_str!` takes a literal path and nothing else, so this list
 /// cannot be derived from the parsed sample — which is exactly why the test
-/// below asserts the two agree (#541). Without that, changing the sample to
+/// below asserts the two agree. Without that, changing the sample to
 /// chain a different genie leaves these tests silently checking the old pair.
 const EMBEDDED_GENIES: [(&str, &str, &str); 2] = [
     (
@@ -175,7 +175,7 @@ fn referenced_genies_are_v0_and_use_content_alias() {
 
 #[test]
 fn sample_action_steps_supply_every_parameter_the_executor_requires() {
-    // 2026-09-07: the shipped sample passed `content:` to action/save-file, whose
+    // Regression: the shipped sample passed `content:` to action/save-file, whose
     // executor demands `input`, so the sample's last step failed at run time
     // while every structural test here stayed green. Structure is not a run.
     let workflow: RawWorkflow = serde_yaml_ng::from_str(SAMPLE_WORKFLOW).unwrap();

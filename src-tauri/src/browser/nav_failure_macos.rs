@@ -7,6 +7,7 @@ use tauri::Manager;
 
 use super::super::payloads::FailedPayload;
 use super::NavDelegate;
+use crate::browser::locks;
 use crate::browser::registry::Lifecycle;
 use crate::browser::surface::BrowserSurface;
 
@@ -31,7 +32,7 @@ impl NavDelegate {
         let Some(state) = ivars.app.try_state::<BrowserSurface>() else {
             return;
         };
-        let Ok(mut reg) = state.registry.lock() else {
+        let Some(mut reg) = locks::registry(&state) else {
             return;
         };
         if matches!(
@@ -40,14 +41,14 @@ impl NavDelegate {
         ) {
             if let Err(e) = reg.transition(&ivars.tab_id, Lifecycle::Live) {
                 log::warn!(
-                    "[browser] failed-load settle refused for {}: {e:?}",
+                    "[browser] failed-load settle refused for {:?}: {e:?}",
                     ivars.tab_id
                 );
             }
         }
         if let Err(e) = reg.clear_navigation(&ivars.tab_id) {
             log::warn!(
-                "[browser] failed-load ticket clear refused for {}: {e:?}",
+                "[browser] failed-load ticket clear refused for {:?}: {e:?}",
                 ivars.tab_id
             );
         }
@@ -64,7 +65,11 @@ impl NavDelegate {
         }
         ivars.loading.set(false);
         let message = error.localizedDescription().to_string();
-        log::debug!("[browser] load failed for {}: {message}", ivars.tab_id);
+        log::debug!(
+            "[browser] load failed for {:?}: {message}",
+            ivars.tab_id,
+            message = crate::peer_text::peer_message(&message)
+        );
         self.settle_after_failure();
         let _ = self.emit_owned(
             "browser://load-failed",

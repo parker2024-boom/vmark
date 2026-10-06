@@ -3,7 +3,7 @@
  * Matches link-popup design: compact, borderless inputs, U-shaped focus indicator
  */
 
-/* Shell chrome comes from `.popup-container` (WI-UI3.2). */
+/* Shell chrome comes from `.popup-container`. */
 .footnote-popup {
   flex-direction: column;
   align-items: stretch;

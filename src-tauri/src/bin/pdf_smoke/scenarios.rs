@@ -12,25 +12,24 @@
 //!
 //! @coordinates-with main.rs — the coordinator that calls these
 //! @coordinates-with verify.rs — every assertion lands there
+//! @coordinates-with window_check.rs — the window-leak baseline and check
 //! @module bin/pdf_smoke/scenarios
 
-use std::collections::BTreeSet;
 use std::path::Path;
-use std::time::Duration;
 
-use tauri::Manager;
 use vmark_lib::pdf_export::page_spec::PageSpec;
 
 use super::fixtures::{doc_for, expected_pt, large_doc, A3, A4, A5, LEGAL, LETTER};
 use super::missing_path::{missing_parent, refusal_verdict};
 use super::render;
 use super::verify::{check, contains_text, lacks_text, pages_at_least};
+use super::window_check::{settled_baseline, windows_returned_to};
 
 /// Every size × orientation the dialog offers.
 ///
 /// Until WI-PDF1.4 every one of them produced the system default paper on
 /// macOS, so this asserts the whole surface rather than a sample. The sizes
-/// are the fixtures' (#108); landscape is the swap, never a flag (ADR-PDF1a).
+/// are the fixtures'; landscape is the swap, never a flag (ADR-PDF1a).
 pub async fn geometry_matrix(app: &tauri::AppHandle, out: &Path) -> usize {
     const SIZES: [(&str, PageSpec); 4] =
         [("A4", A4), ("letter", LETTER), ("A3", A3), ("legal", LEGAL)];
@@ -123,7 +122,7 @@ pub async fn pagination(app: &tauri::AppHandle, out: &Path) -> usize {
 /// four blank pages through a real one.
 pub async fn bad_path(app: &tauri::AppHandle) -> usize {
     // The fixture and the refusal rule are `missing_path`'s, shared with
-    // `progress_case::refused` (#251, #253).
+    // `progress_case::refused`.
     let fixture = match missing_parent() {
         Ok(fixture) => fixture,
         Err(e) => {
@@ -152,56 +151,10 @@ pub async fn bad_path(app: &tauri::AppHandle) -> usize {
     }
 }
 
-/// The set of window labels the app currently holds.
-///
-/// A COUNT cannot see the failure this is here for. The old check compared
-/// `after > before`, so a renderer that closed one of the baseline windows
-/// while leaking a replacement of its own reported `after == before` and
-/// passed — and a renderer that simply destroyed a pre-existing window made
-/// `after < before` and passed too. Identity distinguishes all three.
-fn window_labels(app: &tauri::AppHandle) -> BTreeSet<String> {
-    app.webview_windows().into_keys().collect()
-}
-
-/// Wait for the window set to return to `before`, then report the difference.
-///
-/// The renderer settles the sink and THEN closes its window, so the caller
-/// resumes before the close has been processed — comparing immediately
-/// measures a close in flight, not a leak. The contract is that windows return
-/// to the baseline promptly, so poll for that with a bound: if they never do,
-/// it is a real leak and this still fails.
-async fn windows_returned_to(
-    name: &str,
-    app: &tauri::AppHandle,
-    before: &BTreeSet<String>,
-) -> usize {
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
-    let mut after = window_labels(app);
-    while after != *before && std::time::Instant::now() < deadline {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        after = window_labels(app);
-    }
-    if after == *before {
-        // Printed, not silent: the transcript is what a caller asserts on, and
-        // a check that says nothing when it passes is indistinguishable from
-        // one that never ran.
-        println!(
-            "SMOKE {name} windows PASS back to the {} at the start",
-            before.len()
-        );
-        return 0;
-    }
-    let added: Vec<&String> = after.difference(before).collect();
-    let removed: Vec<&String> = before.difference(&after).collect();
-    println!("SMOKE {name} FAIL windows after 10s: leaked {added:?}, lost {removed:?}");
-    1
-}
-
 /// 20 exports in a row leak no window.
 pub async fn sequential(app: &tauri::AppHandle, out: &Path) -> usize {
-    let before = window_labels(app);
+    let (before, mut failures) = settled_baseline("sequential", app).await;
     let mut completed = 0usize;
-    let mut failures = 0usize;
     for i in 0..20 {
         let p = out.join(format!("seq-{i}.pdf"));
         if render(app, &doc_for("A4", "<p>seq</p>"), &p, A4)
@@ -253,8 +206,7 @@ pub async fn concurrent(app: &tauri::AppHandle, out: &Path) -> usize {
     const S1: &str = "CONCURRENT-SENTINEL-ONE";
     const S2: &str = "CONCURRENT-SENTINEL-TWO";
 
-    let before = window_labels(app);
-    let mut failures = 0usize;
+    let (before, mut failures) = settled_baseline("concurrent", app).await;
     for round in 0..CONCURRENT_ROUNDS {
         // The docs and paths are bound first: `tokio::join!` borrows across an
         // await point, so temporaries created inside it do not live long enough.

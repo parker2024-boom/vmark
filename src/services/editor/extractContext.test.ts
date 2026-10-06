@@ -1,14 +1,7 @@
 // @vitest-environment node
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { Schema } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
-import type { SourcePeekRange } from "@/stores/sourcePeekStore";
-
-vi.mock("@/services/editor/sourcePeek", () => ({
-  serializeSourcePeekRange: (state: EditorState, range: SourcePeekRange) =>
-    state.doc.textBetween(range.from, range.to, "\n"),
-}));
-
 import { extractSurroundingContext } from "./extractContext";
 
 const schema = new Schema({

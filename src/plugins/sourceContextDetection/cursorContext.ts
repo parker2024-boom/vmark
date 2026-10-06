@@ -3,6 +3,8 @@
  *
  * Computes the full cursor context by calling all detection functions.
  * Called on every selection change, result is cached in store.
+ *
+ * @module plugins/sourceContextDetection/cursorContext
  */
 
 import type { EditorView } from "@codemirror/view";

@@ -10,7 +10,7 @@
  * receives the chosen language id. The dropdown tracks no state of its own
  * besides the open/closed lifecycle and listener registrations.
  *
- * @coordinates-with sourcePopup — uses getPopupHostForDom/toHostCoordsForDom for popup-host detection
+ * @coordinates-with shared/popupHostDom.ts — uses getPopupHostForDom/toHostCoordsForDom for popup-host detection
  * @module plugins/codeBlockLineNumbers/dropdown
  */
 import { getPopupHostForDom, toHostCoordsForDom } from "@/plugins/shared/popupHostDom";

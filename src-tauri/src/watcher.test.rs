@@ -1,40 +1,168 @@
-//! Tests for `watcher.rs` (moved from the inline `#[cfg(test)]` module;
-//! included via `#[path]`).
+//! Tests for `watcher.rs` (included via `#[path]`).
+//!
+//! WI-RA11.1 — a watcher that lost track of the tree says so (an error or the
+//! OS's overflow report becomes a rescan), and its batches reach only the
+//! window that owns it.
 
 use super::*;
+use notify::event::{AccessKind, CreateKind, DataChange, Flag, ModifyKind, RemoveKind, RenameMode};
 use notify::EventKind;
+use std::path::PathBuf;
+
+fn scope(root: &str) -> WatchScope {
+    WatchScope {
+        watch_id: "main".to_string(),
+        root_path: root.to_string(),
+        canonical_root: root.to_string(),
+    }
+}
+
+fn event(kind: EventKind, paths: &[&str]) -> Event {
+    paths.iter().fold(Event::new(kind), |event, path| {
+        event.add_path(PathBuf::from(path))
+    })
+}
+
+fn change(kind: FsChangeKind, paths: &[&str]) -> Signal {
+    Signal::Change(FsChange {
+        kind,
+        paths: paths.iter().map(|p| p.to_string()).collect(),
+    })
+}
+
+// ── classification ───────────────────────────────────────────────────────────
 
 #[test]
 fn test_event_kind_create() {
-    let kind = EventKind::Create(notify::event::CreateKind::File);
-    assert_eq!(event_kind_to_string(&kind), Some("create"));
+    let kind = EventKind::Create(CreateKind::File);
+    assert_eq!(
+        classify_kind(&kind),
+        KindClass::Change(FsChangeKind::Create)
+    );
 }
 
 #[test]
 fn test_event_kind_modify() {
-    let kind = EventKind::Modify(notify::event::ModifyKind::Data(
-        notify::event::DataChange::Content,
-    ));
-    assert_eq!(event_kind_to_string(&kind), Some("modify"));
+    let kind = EventKind::Modify(ModifyKind::Data(DataChange::Content));
+    assert_eq!(
+        classify_kind(&kind),
+        KindClass::Change(FsChangeKind::Modify)
+    );
+}
+
+#[test]
+fn test_event_kind_rename() {
+    let kind = EventKind::Modify(ModifyKind::Name(RenameMode::Both));
+    assert_eq!(
+        classify_kind(&kind),
+        KindClass::Change(FsChangeKind::Rename)
+    );
 }
 
 #[test]
 fn test_event_kind_remove() {
-    let kind = EventKind::Remove(notify::event::RemoveKind::File);
-    assert_eq!(event_kind_to_string(&kind), Some("remove"));
+    let kind = EventKind::Remove(RemoveKind::File);
+    assert_eq!(
+        classify_kind(&kind),
+        KindClass::Change(FsChangeKind::Remove)
+    );
 }
 
 #[test]
 fn test_event_kind_access_ignored() {
-    let kind = EventKind::Access(notify::event::AccessKind::Read);
-    assert_eq!(event_kind_to_string(&kind), None);
+    let kind = EventKind::Access(AccessKind::Read);
+    assert_eq!(classify_kind(&kind), KindClass::Ignore);
 }
 
 #[test]
-fn test_event_kind_other_ignored() {
-    let kind = EventKind::Other;
-    assert_eq!(event_kind_to_string(&kind), None);
+fn an_event_about_the_watch_itself_asks_for_a_rescan() {
+    // `Other` is how notify reports a dropped-events / must-rescan condition.
+    // Ignoring it left the explorer stale after a burst.
+    assert_eq!(classify_kind(&EventKind::Other), KindClass::Rescan);
+    // `Any` is an event notify could not classify: unknown is not "nothing".
+    assert_eq!(classify_kind(&EventKind::Any), KindClass::Rescan);
 }
+
+// ── notify result → signal ───────────────────────────────────────────────────
+
+#[test]
+fn a_watcher_error_asks_for_a_rescan() {
+    let error = notify::Error::generic("FSEvents stream failed");
+    assert_eq!(signal_for(Err(error), &scope("/ws")), Some(Signal::Rescan));
+}
+
+#[test]
+fn the_os_overflow_report_asks_for_a_rescan() {
+    // What notify emits for FSEvents `MustScanSubDirs` and an inotify queue
+    // overflow: kind `Other`, flag `Rescan`, no paths.
+    let overflow = Event::new(EventKind::Other).set_flag(Flag::Rescan);
+    assert_eq!(
+        signal_for(Ok(overflow), &scope("/ws")),
+        Some(Signal::Rescan)
+    );
+}
+
+#[test]
+fn a_rescan_flag_wins_over_the_event_kind() {
+    let flagged = event(EventKind::Create(CreateKind::File), &["/ws/a.md"]).set_flag(Flag::Rescan);
+    assert_eq!(signal_for(Ok(flagged), &scope("/ws")), Some(Signal::Rescan));
+}
+
+#[test]
+fn a_change_carries_its_kind_and_paths() {
+    let created = event(EventKind::Create(CreateKind::File), &["/ws/笔记.md"]);
+    assert_eq!(
+        signal_for(Ok(created), &scope("/ws")),
+        Some(change(FsChangeKind::Create, &["/ws/笔记.md"]))
+    );
+}
+
+#[test]
+fn a_read_is_not_a_signal() {
+    let read = event(EventKind::Access(AccessKind::Read), &["/ws/a.md"]);
+    assert_eq!(signal_for(Ok(read), &scope("/ws")), None);
+}
+
+#[test]
+fn a_change_with_only_ignored_paths_is_not_a_signal() {
+    let noise = event(
+        EventKind::Modify(ModifyKind::Data(DataChange::Content)),
+        &["/ws/.git/index", "/ws/node_modules/pkg/index.js"],
+    );
+    assert_eq!(signal_for(Ok(noise), &scope("/ws")), None);
+}
+
+#[test]
+fn an_atomic_write_rename_keeps_only_its_visible_target() {
+    // temp → target: the temp half is noise, the target half is the change.
+    let rename = event(
+        EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
+        &["/ws/.tmpAb12Cd", "/ws/note.md"],
+    );
+    assert_eq!(
+        signal_for(Ok(rename), &scope("/ws")),
+        Some(change(FsChangeKind::Rename, &["/ws/note.md"]))
+    );
+}
+
+#[test]
+fn signal_paths_are_spelled_under_the_requested_root() {
+    let scope = WatchScope {
+        watch_id: "main".to_string(),
+        root_path: "/var/ws".to_string(),
+        canonical_root: "/private/var/ws".to_string(),
+    };
+    let modified = event(
+        EventKind::Modify(ModifyKind::Data(DataChange::Content)),
+        &["/private/var/ws/a.md"],
+    );
+    assert_eq!(
+        signal_for(Ok(modified), &scope),
+        Some(change(FsChangeKind::Modify, &["/var/ws/a.md"]))
+    );
+}
+
+// ── ignore list ──────────────────────────────────────────────────────────────
 
 #[test]
 fn test_ignore_git_dir() {
@@ -119,81 +247,6 @@ fn test_allow_normal_tmp_extension() {
     assert!(!should_ignore_path(Path::new("/workspace/data.txt")));
 }
 
-// --- debounce keying -------------------------------------------------
-
-#[test]
-fn test_debounce_suppresses_same_kind_within_window() {
-    let mut map = HashMap::new();
-    let now = Instant::now();
-    assert!(should_emit_and_record(
-        &mut map, "main", "/ws/a.md", "modify", now
-    ));
-    // Same kind, 50ms later — inside the 200ms window, suppressed.
-    let later = now + Duration::from_millis(50);
-    assert!(!should_emit_and_record(
-        &mut map, "main", "/ws/a.md", "modify", later
-    ));
-}
-
-#[test]
-fn test_debounce_does_not_swallow_different_kind() {
-    // A `create` followed by a `remove` within the window must both emit —
-    // suppressing the remove would leave a phantom file in the frontend.
-    let mut map = HashMap::new();
-    let now = Instant::now();
-    assert!(should_emit_and_record(
-        &mut map, "main", "/ws/a.md", "create", now
-    ));
-    let later = now + Duration::from_millis(50);
-    assert!(should_emit_and_record(
-        &mut map, "main", "/ws/a.md", "remove", later
-    ));
-}
-
-#[test]
-fn test_debounce_emits_same_kind_after_window() {
-    let mut map = HashMap::new();
-    let now = Instant::now();
-    assert!(should_emit_and_record(
-        &mut map, "main", "/ws/a.md", "modify", now
-    ));
-    let after = now + DEBOUNCE_INTERVAL + Duration::from_millis(1);
-    assert!(should_emit_and_record(
-        &mut map, "main", "/ws/a.md", "modify", after
-    ));
-}
-
-#[test]
-fn test_debounce_is_scoped_per_watch_id_and_path() {
-    let mut map = HashMap::new();
-    let now = Instant::now();
-    assert!(should_emit_and_record(
-        &mut map, "main", "/ws/a.md", "modify", now
-    ));
-    // Different watcher and different path are independent keys.
-    assert!(should_emit_and_record(
-        &mut map, "doc-1", "/ws/a.md", "modify", now
-    ));
-    assert!(should_emit_and_record(
-        &mut map, "main", "/ws/b.md", "modify", now
-    ));
-}
-
-#[test]
-fn test_fs_change_event_serialization() {
-    let event = FsChangeEvent {
-        watch_id: "main".to_string(),
-        root_path: "/Users/test".to_string(),
-        paths: vec!["/Users/test/file.md".to_string()],
-        kind: "modify".to_string(),
-    };
-
-    let json = serde_json::to_string(&event).unwrap();
-    assert!(json.contains("\"watchId\":\"main\""));
-    assert!(json.contains("\"rootPath\":\"/Users/test\""));
-    assert!(json.contains("\"kind\":\"modify\""));
-}
-
 // ── #1357 live check: events under a symlinked root must stay in scope ────────
 
 #[test]
@@ -250,4 +303,133 @@ fn a_root_reached_through_a_real_symlink_rebases_the_os_spelling() {
         rebase_onto_root(&reported, &requested, &canonical),
         format!("{requested}/note.md")
     );
+}
+
+// ── delivery and lifecycle, on a mock runtime ────────────────────────────────
+//
+// `tauri::test::MockRuntime` does not exist on Windows (Cargo.toml scopes the
+// `test` feature off it), so these are gated like every mock-runtime suite.
+
+#[cfg(not(target_os = "windows"))]
+mod on_a_mock_app {
+    use super::super::*;
+    use crate::command_error::ErrorCode;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use tauri::Listener;
+
+    type MockApp = tauri::App<tauri::test::MockRuntime>;
+    type MockWindow = tauri::WebviewWindow<tauri::test::MockRuntime>;
+
+    fn mock_app() -> MockApp {
+        tauri::test::mock_builder()
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .expect("build mock app")
+    }
+
+    fn window(app: &MockApp, label: &str) -> MockWindow {
+        tauri::webview::WebviewWindowBuilder::new(app, label, tauri::WebviewUrl::default())
+            .visible(false)
+            .build()
+            .expect("build mock window")
+    }
+
+    /// Count `fs:changed` deliveries to one window. Rust listeners run inside
+    /// the emit, so a count read after it is final.
+    fn deliveries(window: &MockWindow) -> Arc<AtomicUsize> {
+        let seen = Arc::new(AtomicUsize::new(0));
+        let sink = Arc::clone(&seen);
+        window.listen(FS_CHANGED_EVENT, move |_| {
+            sink.fetch_add(1, Ordering::SeqCst);
+        });
+        seen
+    }
+
+    fn is_registered(watch_id: &str) -> bool {
+        lock_watchers()
+            .as_ref()
+            .is_some_and(|watchers| watchers.contains_key(watch_id))
+    }
+
+    #[test]
+    fn a_batch_is_delivered_only_to_the_window_that_owns_the_watcher() {
+        let app = mock_app();
+        let owner = deliveries(&window(&app, "ra11-owner"));
+        let bystander = deliveries(&window(&app, "ra11-bystander"));
+
+        emit_batch(
+            app.handle(),
+            &FsChangeBatch {
+                watch_id: "ra11-owner".to_string(),
+                root_path: "/ws".to_string(),
+                changes: vec![],
+                rescan: true,
+            },
+        );
+
+        assert_eq!(owner.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            bystander.load(Ordering::SeqCst),
+            0,
+            "another window must not be woken by this window's watcher"
+        );
+    }
+
+    #[test]
+    fn starting_registers_the_watcher_and_stopping_removes_it() {
+        let app = mock_app();
+        let _window = window(&app, "ra11-lifecycle");
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_string_lossy().to_string();
+
+        start_watching_blocking(app.handle(), "ra11-lifecycle".to_string(), root.clone())
+            .expect("watcher starts");
+        assert!(is_registered("ra11-lifecycle"));
+
+        // Starting again replaces the watcher rather than adding a second.
+        start_watching_blocking(app.handle(), "ra11-lifecycle".to_string(), root)
+            .expect("watcher restarts");
+        assert!(is_registered("ra11-lifecycle"));
+
+        stop_watching("ra11-lifecycle".to_string()).expect("stop is infallible");
+        assert!(!is_registered("ra11-lifecycle"));
+        // Idempotent: the window-destroyed cleanup and the frontend both stop.
+        stop_watching("ra11-lifecycle".to_string()).expect("stopping twice is fine");
+    }
+
+    #[test]
+    fn a_watcher_started_for_a_window_that_is_gone_is_not_left_behind() {
+        // The window-destroyed cleanup already ran: nobody else will ever stop
+        // a watcher registered under this label.
+        let app = mock_app();
+        let dir = tempfile::tempdir().unwrap();
+
+        let error = start_watching_blocking(
+            app.handle(),
+            "ra11-closed".to_string(),
+            dir.path().to_string_lossy().to_string(),
+        )
+        .expect_err("a closed window cannot own a watcher");
+
+        assert_eq!(error.code(), ErrorCode::Conflict);
+        assert!(!is_registered("ra11-closed"));
+    }
+
+    #[test]
+    fn a_missing_path_is_reported_as_not_found() {
+        let app = mock_app();
+        let _window = window(&app, "ra11-missing");
+        let dir = tempfile::tempdir().unwrap();
+        let gone = dir.path().join("no-such-dir");
+
+        let error = start_watching_blocking(
+            app.handle(),
+            "ra11-missing".to_string(),
+            gone.to_string_lossy().to_string(),
+        )
+        .expect_err("a missing root cannot be watched");
+
+        assert_eq!(error.code(), ErrorCode::NotFound);
+        assert!(!is_registered("ra11-missing"));
+    }
 }

@@ -9,22 +9,12 @@
  */
 
 import { EditorView } from "@codemirror/view";
-import { exists } from "@tauri-apps/plugin-fs";
-import { homeDir, join } from "@tauri-apps/api/path";
 import { getWindowLabel } from "@/services/navigation/windowFocus";
 import { hostDocument } from "@/plugins/shared/hostDocument";
+import { isViewConnected } from "@/plugins/shared/imagePasteResolve";
 
-/**
- * Check if a CodeMirror view is still connected and valid.
- */
-export function isViewConnected(view: EditorView | null | undefined): boolean {
-  if (!view) return false;
-  try {
-    return view.dom?.isConnected ?? false;
-  } catch {
-    return false;
-  }
-}
+// The connectivity check is shared with WYSIWYG; re-exported for this cluster.
+export { isViewConnected };
 
 /**
  * Check if a string looks like a valid URL.
@@ -44,31 +34,6 @@ export function getActiveFilePath(): string | null {
     return hostDocument.activeFilePath(windowLabel);
   } catch {
     return null;
-  }
-}
-
-/**
- * Expand home path (~/) to absolute path.
- */
-export async function expandHomePath(path: string): Promise<string | null> {
-  if (!path.startsWith("~/")) return path;
-
-  try {
-    const home = await homeDir();
-    return await join(home, path.slice(2));
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Validate a local image path exists.
- */
-export async function validateLocalPath(path: string): Promise<boolean> {
-  try {
-    return await exists(path);
-  } catch {
-    return false;
   }
 }
 

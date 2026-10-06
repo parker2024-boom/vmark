@@ -129,13 +129,13 @@
 .terminal-container {
   width: 100%;
   height: 100%;
-  padding: var(--space-1) 0 0 var(--space-4); /* was 1em of the body basis (WI-UI2.1/3.6) */
+  padding: var(--space-1) 0 0 var(--space-4); /* was 1em of the body basis */
 }
 
 /* Tighter horizontal padding when terminal is on a side (left/right) */
 .terminal-panel--right .terminal-container,
 .terminal-panel--left .terminal-container {
-  padding: var(--space-1) var(--space-4) 0 var(--space-4); /* was 1em of the body basis (WI-UI2.1/3.6) */
+  padding: var(--space-1) var(--space-4) 0 var(--space-4); /* was 1em of the body basis */
 }
 
 /* xterm.js v6 uses a custom DOM scrollbar (.xterm-scrollable-element > .scrollbar).
@@ -146,12 +146,12 @@
 
 /* The viewport keeps a stale canvas-black underlay between theme repaints on
    some GPUs — pin it to the page colour so a light theme never flashes a
-   black strip behind the cells (WI-UI1.4). */
+   black strip behind the cells. */
 .terminal-panel .xterm-viewport {
   background: var(--bg-color);
 }
 
-/* Exit-status gutter decorations (WI-3.4). xterm positions the decoration
+/* Exit-status gutter decorations. xterm positions the decoration
    element on the command's prompt line; we render a thin left bar colored by
    exit code — green for success, red for failure. Non-intrusive: 2px wide,
    does not obscure cell text. */

@@ -7,17 +7,13 @@
 
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
-vi.mock("@/plugins/shared/diagramCleanup", () => ({
-  registerCleanup: vi.fn(),
-}));
-
 import {
   setupDiagramExport,
   LIGHT_BG,
   DARK_BG,
   type ExportTheme,
 } from "./diagramExport";
-import { registerCleanup } from "@/plugins/shared/diagramCleanup";
+import { _registrySize, cleanupDescendants, sweepDetached } from "./diagramCleanup";
 
 let container: HTMLElement;
 
@@ -32,6 +28,9 @@ afterEach(() => {
   while (document.body.firstChild) {
     document.body.removeChild(document.body.firstChild);
   }
+  // Every container is now detached: run their registered destroys, which
+  // also drops each test's document listeners and empties the registry.
+  sweepDetached();
 });
 
 // ---------------------------------------------------------------------------
@@ -326,9 +325,27 @@ describe("setupDiagramExport - destroy", () => {
     expect(document.querySelector(".mermaid-export-menu")).toBeNull();
   });
 
-  it("registers cleanup with diagramCleanup module", () => {
+  it("registers its cleanup under the container itself", () => {
     setupDiagramExport(container, vi.fn());
-    expect(registerCleanup).toHaveBeenCalledWith(container, expect.any(Function));
+    expect(_registrySize()).toBe(1);
+
+    // With the button gone the container has no descendants, so only an
+    // entry keyed on the container itself can match.
+    container.querySelector(".mermaid-export-btn")!.remove();
+    cleanupDescendants(container);
+
+    expect(_registrySize()).toBe(0);
+  });
+
+  it("the registered cleanup is a full destroy of the export UI", () => {
+    setupDiagramExport(container, vi.fn());
+    container.querySelector<HTMLElement>(".mermaid-export-btn")!.click();
+    expect(document.querySelector(".mermaid-export-menu")).not.toBeNull();
+
+    cleanupDescendants(container);
+
+    expect(container.querySelector(".mermaid-export-btn")).toBeNull();
+    expect(document.querySelector(".mermaid-export-menu")).toBeNull();
   });
 
   it("cleans up document event listeners on destroy", () => {

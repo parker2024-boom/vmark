@@ -5,15 +5,15 @@
 //! other document window can reject the broadcast.
 //!
 //! Reached from macOS `RunEvent::Opened` and from the Windows/Linux
-//! single-instance callback, both via `file_open::route_file_opens` — so this
+//! single-instance callback, both via `files::open::route_file_opens` — so this
 //! module is NOT macOS-only, whatever the `[Finder]` log prefixes suggest.
 
 use serde::Serialize;
 use tauri::{Emitter, Manager};
 
-use crate::{file_open::FILE_OPEN_STATE, PendingFileOpen};
+use crate::PendingFileOpen;
 
-use super::create_main_window;
+use super::{ensure_main_window, file_open_state, Ensured, QueueOwner};
 
 #[derive(Clone, Serialize)]
 struct TargetedFileOpen {
@@ -32,33 +32,54 @@ fn live_target_excluding<R: tauri::Runtime>(
         .filter(|label| excluded != Some(label.as_str()))
         .cloned()
         .collect();
-    let state = FILE_OPEN_STATE.lock().unwrap_or_else(|p| p.into_inner());
-    state.finder_window_target(&live_labels)
+    file_open_state(app)
+        .lock()
+        .finder_window_target(&live_labels)
 }
 
 fn live_target<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<String> {
     live_target_excluding(app, None)
 }
 
-fn queue_for_new_main(app: &tauri::AppHandle, payloads: Vec<PendingFileOpen>) {
+fn queue_for_new_main<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    payloads: Vec<PendingFileOpen>,
+) {
     {
-        let mut state = FILE_OPEN_STATE.lock().unwrap_or_else(|p| p.into_inner());
-        state.frontend_ready = false;
+        let store = file_open_state(app);
+        let mut state = store.lock();
+        state.owner = QueueOwner::Booting;
         state.pending.extend(payloads);
     }
-    if app.get_webview_window("main").is_none() {
-        if let Err(error) = create_main_window(app, None) {
-            log::error!(
-                "[Finder] Failed to create main window for re-queued opens: {}",
-                error
-            );
+    bring_up_queue_owner(app);
+}
+
+/// Make sure a `main` window exists to drain the cold-start queue: the one
+/// that is already up or being built, or a new one. The caller has queued its
+/// opens and marked the owner booting.
+///
+/// Check-and-build is one step (`ensure_main_window`), so two opens arriving
+/// together cannot each build a `main`.
+pub(crate) fn bring_up_queue_owner<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    match ensure_main_window(app, None) {
+        Ok(Ensured::Created(_)) => {
+            log::info!("[FileOpen] Created the main window for queued opens");
+        }
+        Ok(Ensured::Existing(_) | Ensured::Pending) => {
+            log::info!("[FileOpen] Queued opens wait for the main window");
+        }
+        Err(error) => {
+            log::error!("[FileOpen] Failed to create main window for queued opens: {error}");
+            // No window is booting after all. The queue is kept; settling the
+            // owner lets the next open try again instead of waiting forever.
+            file_open_state(app).lock().owner = QueueOwner::Settled;
         }
     }
 }
 
 /// Bring `window` to the front, whatever state it is in.
 ///
-/// The ONE copy of the reveal sequence (#480). `single_instance::surface_a_window`
+/// The ONE copy of the reveal sequence. `single_instance::surface_a_window`
 /// carried a second one — same three calls, same order, and its own three log
 /// lines — so a fix to either was a divergence from the other, on the two
 /// paths a user reaches by the same gesture: double-clicking a file, and
@@ -94,7 +115,7 @@ fn focus_and_emit<R: tauri::Runtime>(
 
     reveal_window(&window, target_label);
 
-    log::info!("[Finder] Emitting to window '{}'", target_label);
+    log::info!("[Finder] Emitting to window {:?}", target_label);
     let mut failed = Vec::new();
     for payload in payloads {
         let event = TargetedFileOpen {
@@ -135,7 +156,7 @@ where
     }
 
     log::info!(
-        "[Finder] retrying delivery after '{}' vanished using '{}'",
+        "[Finder] retrying delivery after {:?} vanished using {:?}",
         target_label,
         fallback_label
     );
@@ -145,7 +166,10 @@ where
 /// Reveal the selected native window and broadcast target-tagged open events.
 /// Re-check the ready-window set at delivery time. If no listener-ready
 /// document window remains, return the payloads to the cold-start queue.
-pub(crate) fn emit_finder_opens_to_window(app: &tauri::AppHandle, payloads: Vec<PendingFileOpen>) {
+pub(crate) fn emit_finder_opens_to_window<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    payloads: Vec<PendingFileOpen>,
+) {
     let Some(target_label) = live_target(app) else {
         log::info!("[Finder] no ready target window before emit — re-queueing");
         queue_for_new_main(app, payloads);

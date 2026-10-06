@@ -102,7 +102,7 @@ export class CopyFeedback {
  * controllers) and the language chip in one non-editable container. Copy
  * comes first: it is the older, more-used action, and existing tests select
  * the copy button as the first `.code-copy-btn` in the container. Run is
- * only meaningful for a shell fence (WI-4.3) — the node view toggles its
+ * only meaningful for a shell fence — the node view toggles its
  * `hidden` from the language attribute.
  */
 export function buildCodeBlockActions(handlers: {

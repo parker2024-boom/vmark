@@ -65,7 +65,7 @@ fn attaches_an_empty_menu_off_macos_and_only_off_macos() {
     // window uses to open bare; without it the window inherits the application
     // menu on Linux and Windows.
     assert!(
-        SOURCE.contains("tauri::menu::Menu::new(&app)"),
+        SOURCE.contains("tauri::menu::Menu::new(app)"),
         "no empty-menu attachment — #1377 returns"
     );
 
@@ -73,7 +73,7 @@ fn attaches_an_empty_menu_off_macos_and_only_off_macos() {
     // app-global menu bar, so attaching an empty menu there would blank the
     // application menu rather than tidy a dialog.
     let menu_at = SOURCE
-        .find("tauri::menu::Menu::new(&app)")
+        .find("tauri::menu::Menu::new(app)")
         .expect("checked above");
     let guard_at = SOURCE
         .find("#[cfg(not(target_os = \"macos\"))]")
@@ -96,4 +96,114 @@ fn creates_the_window_asynchronously() {
         SOURCE.contains("#[tauri::command(async)]"),
         "window creation must be async"
     );
+}
+
+// -- WI-RA7.2: replacing the previous export window --------------------------
+//
+// The command closes any previous export window and rebuilds under the same
+// label. `close()` only posts a request, so the rebuild used to run while the
+// old label was still registered and failed with `WindowLabelAlreadyExists` —
+// an export that sometimes did not open. It now waits for the old window to
+// be destroyed, and says so plainly when the label is still held.
+
+// `tauri::test` does not exist on Windows (see Cargo.toml's target-specific
+// dev-dependency); every mock-runtime test in this crate is gated to match.
+#[cfg(not(target_os = "windows"))]
+mod replacing_the_previous_window {
+    use std::time::Duration;
+
+    use tauri::Manager;
+
+    use super::super::{open_export_window, pdf_export_url, PDF_EXPORT_LABEL};
+    use crate::command_error::ErrorCode;
+
+    fn mock_app() -> tauri::App<tauri::test::MockRuntime> {
+        tauri::test::mock_builder()
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .expect("build mock app")
+    }
+
+    #[test]
+    fn with_no_previous_window_the_export_window_opens_on_its_page() {
+        let app = mock_app();
+        let url = pdf_export_url("/tmp/导出 a&b.html", Some("Doc"));
+
+        let label = open_export_window(app.handle(), url, None, Duration::ZERO)
+            .expect("nothing to replace, so nothing to wait for");
+
+        assert_eq!(label, PDF_EXPORT_LABEL);
+        let window = app
+            .get_webview_window(PDF_EXPORT_LABEL)
+            .expect("the export window exists");
+        let url = window.url().expect("url");
+        assert_eq!(url.path(), "/pdf-export");
+        assert!(
+            url.query().is_some_and(|q| q.contains("htmlPath=")),
+            "{url}"
+        );
+    }
+
+    /// The mock runtime never reports a closed window destroyed, so its label
+    /// stays registered — exactly the state the rebuild used to race into.
+    #[test]
+    fn a_previous_window_whose_label_is_still_held_is_a_conflict_not_a_failed_build() {
+        let app = mock_app();
+        tauri::webview::WebviewWindowBuilder::new(
+            app.handle(),
+            PDF_EXPORT_LABEL,
+            tauri::WebviewUrl::default(),
+        )
+        .visible(false)
+        .build()
+        .expect("the previous export window");
+
+        let error = open_export_window(
+            app.handle(),
+            pdf_export_url("/tmp/next.html", None),
+            Some((10.0, 20.0)),
+            Duration::ZERO,
+        )
+        .expect_err("the label is still held, so no window may be built over it");
+
+        assert_eq!(
+            error.code(),
+            ErrorCode::Conflict,
+            "the builder must not be run against a label that is still registered: {}",
+            error.message()
+        );
+        assert_eq!(app.webview_windows().len(), 1, "no second export window");
+    }
+}
+
+// The wait itself, driven by the channel the `Destroyed` listener writes to.
+// No clock is involved: a zero limit asks "has it happened already?".
+
+#[test]
+fn a_destroyed_window_ends_the_wait() {
+    let (destroyed, gone) = std::sync::mpsc::channel();
+    destroyed.send(()).expect("receiver alive");
+    assert!(await_destroyed(&gone, std::time::Duration::ZERO).is_ok());
+}
+
+#[test]
+fn a_window_that_has_not_closed_within_the_limit_is_a_timeout_that_says_so() {
+    let (_still_listening, gone) = std::sync::mpsc::channel::<()>();
+    let error = await_destroyed(&gone, std::time::Duration::ZERO)
+        .expect_err("nothing was destroyed, so the rebuild must not proceed");
+    assert_eq!(error.code(), ErrorCode::Timeout);
+    assert_eq!(error.i18n_key(), Some("errors.window.pdfExportCreate"));
+    assert!(
+        error.message().contains("did not close within 0 ms"),
+        "the reason reaches the user: {}",
+        error.message()
+    );
+}
+
+#[test]
+fn listeners_dropped_without_the_event_end_the_wait_for_the_label_check_to_decide() {
+    // A window that is already gone drops its listeners; waiting out the limit
+    // for an event that can no longer come would only delay the answer.
+    let (destroyed, gone) = std::sync::mpsc::channel::<()>();
+    drop(destroyed);
+    assert!(await_destroyed(&gone, std::time::Duration::from_secs(3600)).is_ok());
 }

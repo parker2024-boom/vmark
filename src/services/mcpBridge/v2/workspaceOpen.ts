@@ -1,5 +1,5 @@
 /**
- * Purpose: `vmark.workspace.open` — background file open (WI-14 / plan D10).
+ * Purpose: `vmark.workspace.open` — background file open.
  *
  * Split from workspace.ts (file-size gate). MCP opens are BACKGROUND: the
  * user's visible tab and workspace do not change; only the explicit
@@ -7,11 +7,19 @@
  * `{tabId, workspaceInstanceId, activationChanged, workspaceSwitched}` so the
  * AI client can chain the tabId into document calls and disclose state.
  *
+ * Key decisions:
+ *   - An already-open tab that holds local content is never reloaded. The
+ *     mounted editors are flushed before that is decided, so typing that has
+ *     not reached the store yet counts as local content too.
+ *
  * @coordinates-with workspace.ts — the rest of the vmark.workspace.* surface
+ * @coordinates-with tabGuard.ts — structuredError
+ * @coordinates-with liveEditor.ts — the flush before the open tab's state is read
+ * @coordinates-with readOperationArgs.ts — the one payload parse
  * @coordinates-with services/workspaces/workspaceContextOwnership.ts — claim
  * @module services/mcpBridge/v2/workspaceOpen
  */
-import { readTextFile } from "@tauri-apps/plugin-fs";
+import { readDocumentText } from "@/services/files/readDocumentText";
 import { useTabStore } from "@/stores/tabStore";
 import { useDocumentStore } from "@/stores/documentStore";
 import { getCurrentWindowLabel } from "@/services/persistence/workspaceStorage";
@@ -19,20 +27,11 @@ import { checkBridgePath } from "@/services/mcpBridge/bridgePathGuard";
 import { claimTabForWorkspaceContext } from "@/services/workspaces/workspaceContextOwnership";
 import { respond } from "@/services/mcpBridge/utils";
 import { wrapHandler } from "./wrapHandler";
-import { v2ErrorString } from "./types";
-import type { V2Error } from "./types";
+import { flushLiveEditors } from "./liveEditor";
+import { readOperationArgs } from "./readOperationArgs";
+import { structuredError } from "./tabGuard";
 import { errorMessage } from "@/utils/errorMessage";
 import { withActivationOrigin } from "@/stores/tabActivationBus";
-
-function structuredError(id: string, err: V2Error): Promise<void> {
-  return respond({ id, success: false, error: v2ErrorString(err) });
-}
-
-function getWindowLabel(args: Record<string, unknown>): string {
-  const explicit = args.windowLabel;
-  if (typeof explicit === "string" && explicit.length > 0) return explicit;
-  return getCurrentWindowLabel();
-}
 
 /**
  * Handle `vmark.workspace.open`. Reads `filePath` from disk and opens
@@ -43,8 +42,9 @@ export async function handleWorkspaceOpen(
   args: Record<string, unknown>,
 ): Promise<void> {
   return wrapHandler(id, async () => {
-    const filePath = args.filePath;
-    if (typeof filePath !== "string" || filePath.length === 0) {
+    const wire = readOperationArgs("vmark.workspace.open", args);
+    const filePath = wire.filePath;
+    if (!filePath) {
       await structuredError(id, {
         error: "INVALID_PATH",
         message: "filePath must be a non-empty string",
@@ -64,7 +64,7 @@ export async function handleWorkspaceOpen(
     }
     let content: string;
     try {
-      content = await readTextFile(filePath);
+      content = await readDocumentText(filePath);
     } catch (e) {
       await structuredError(id, {
         error: "INVALID_PATH",
@@ -72,10 +72,14 @@ export async function handleWorkspaceOpen(
       });
       return;
     }
+    // Before the stores are read: the tab may already be open with keystrokes
+    // its editor has not handed over yet, and without them it reads as clean
+    // and is reloaded from disk over them.
+    flushLiveEditors();
     const tabStore = useTabStore.getState();
     const docStore = useDocumentStore.getState();
-    const windowLabel = getWindowLabel(args);
-    // WI-14 (plan D10): MCP opens are BACKGROUND. Remember what the human had
+    const windowLabel = wire.windowLabel || getCurrentWindowLabel();
+    // MCP opens are BACKGROUND. Remember what the human had
     // focused; `createTab` activates, so we restore afterwards. Only the
     // explicit `switch_tab` action may change the visible context.
     const prevActiveTabId = tabStore.activeTabId[windowLabel] ?? null;
@@ -99,7 +103,7 @@ export async function handleWorkspaceOpen(
         (useTabStore.getState().activeTabId[windowLabel] ?? null) !== prevActiveTabId,
     };
 
-    // WI-3: re-initialising an already-open tab replaces the whole document
+    // Re-initialising an already-open tab replaces the whole document
     // entry (savedContent, isDirty, documentId), so an open file with local
     // content would be silently reset to disk content with no checkpoint.
     // Focus it instead and tell the caller why nothing was reloaded.
@@ -141,7 +145,7 @@ export async function handleWorkspaceOpen(
     // `loadContent` itself is gone: it duplicated this door's baseline branch
     // and had drifted, retaining stale line metadata.
     //
-    // WI-2.6 — registry handles YAML routing; the force-source bandaid is
+    // The registry handles YAML routing; the force-source bandaid is
     // retired. .yaml/.yml route to the YAML adapter (kind: split-pane).
     docStore.ingestExternalContent(tabId, content, "disk-open", { filePath });
     if (existing) {
@@ -162,7 +166,7 @@ export async function handleWorkspaceOpen(
 
 /**
  * D10: undo `createTab`'s focus steal so an MCP open stays in the background.
- * Pane-aware through `setActiveTab` itself (WI-2 seam, ADR-1): under a split
+ * Pane-aware through `setActiveTab` itself (ADR-1): under a split
  * the previous document returns to the focused pane.
  */
 function restoreBackgroundActivation(

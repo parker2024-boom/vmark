@@ -1,5 +1,5 @@
 /**
- * BreakdownRow (WI-1.9b, extended WI-2b.5) — one stale/diverged edge:
+ * BreakdownRow — one stale/diverged edge:
  * upstream + state badge, the axis-2 Check action (pull-only, D5.1),
  * an optional waiver expiry (D3.2), and the "previously waived ×N"
  * info badge (D3.4), plus the per-edge actions. Accept-newer and Waive are disabled for
@@ -46,7 +46,7 @@ export function BreakdownRow({ row, workspaceRoot, annotation }: BreakdownRowPro
   const [waiving, setWaiving] = useState(false);
   const [reason, setReason] = useState("");
   const [expiry, setExpiry] = useState("");
-  // Audit T14: actions disable while a resolution is in flight — rapid
+  // Actions disable while a resolution is in flight — rapid
   // clicks must not append duplicate ratifications/waivers.
   const [resolving, setResolving] = useState(false);
 

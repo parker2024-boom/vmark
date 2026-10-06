@@ -1,6 +1,6 @@
 /**
  * Semantic-layer acts split from breakdownService for the file-size
- * gate (WI-3.2/3.4): provenance recovery and delegation lifecycle over
+ * gate: provenance recovery and delegation lifecycle over
  * the coherence IPC. Same error posture — failures land in the
  * breakdown store, never thrown past the seam.
  *
@@ -26,9 +26,9 @@ import {
 // and silently missed the provenance/delegation surfaces.
 import { messageOf } from "./breakdownShared";
 
-/** WI-3.2: refresh the orphaned-but-recoverable candidates (pull-only). */
+/** Refresh the orphaned-but-recoverable candidates (pull-only). */
 export async function refreshProvenance(workspaceRoot: string): Promise<void> {
-  if (!isActiveWorkspace(workspaceRoot)) return; // audit #4/#5: no ticket for a left workspace
+  if (!isActiveWorkspace(workspaceRoot)) return; // no ticket for a left workspace
   const ticket = takeRefreshTicket("provenance");
   try {
     const candidates = await invoke<ProvenanceCandidate[]>(
@@ -84,9 +84,9 @@ export async function confirmInputs(
   await refreshBreakdown(workspaceRoot);
 }
 
-/** WI-3.4: live agent delegations. */
+/** Live agent delegations. */
 export async function refreshDelegations(workspaceRoot: string): Promise<void> {
-  if (!isActiveWorkspace(workspaceRoot)) return; // audit #4/#5: no ticket for a left workspace
+  if (!isActiveWorkspace(workspaceRoot)) return; // no ticket for a left workspace
   const ticket = takeRefreshTicket("delegations");
   try {
     const rows = await invoke<DelegationRow[]>("coherence_delegations", {

@@ -14,6 +14,11 @@ vi.mock("@/services/persistence/workspaceStorage", () => ({
 import { respond } from "@/services/mcpBridge/utils";
 import { requireHumanAttachment, runReadClass } from "@/services/mcpBridge/v2/browserReadClass";
 import { resolveBrowserTab } from "@/services/mcpBridge/v2/browserHelpers";
+import { readOperationArgsChecked } from "@/services/mcpBridge/v2/readOperationArgs";
+
+/** Run as a handler does: from the request's checked payload read. */
+const runRead = (id: string, args: Record<string, unknown>, op: Parameters<typeof runReadClass>[2]) =>
+  runReadClass(id, readOperationArgsChecked("vmark.browser.read", args), op);
 import { useTabStore } from "@/stores/tabStore";
 import { useBrowserApprovalStore } from "@/stores/browserApprovalStore";
 import { useSettingsStore } from "@/stores/settingsStore";
@@ -86,7 +91,7 @@ describe("runReadClass", () => {
   it("fails closed when the browser is disabled", async () => {
     useSettingsStore.getState().updateBrowserSetting("enabled", false);
     seed();
-    await runReadClass("d", {}, echoOp);
+    await runRead("d", {}, echoOp);
     expect(invoke).not.toHaveBeenCalled();
     expect(lastResponse()).toMatchObject({ success: false, error: "BROWSER_DISABLED" });
   });
@@ -94,14 +99,14 @@ describe("runReadClass", () => {
   it("runs the op on an AI tab and responds with its data", async () => {
     const id = seed();
     invoke.mockResolvedValue("RESULT");
-    await runReadClass("r1", { tabId: id }, echoOp);
+    await runRead("r1", { tabId: id }, echoOp);
     expect(invoke).toHaveBeenCalledWith("op_invoke");
     expect(lastResponse()).toMatchObject({ id: "r1", success: true, data: { echo: "RESULT" } });
   });
 
   it("rejects an empty tabId instead of using the active tab", async () => {
     seed();
-    await runReadClass("e", { tabId: "" }, echoOp);
+    await runRead("e", { tabId: "" }, echoOp);
     expect(invoke).not.toHaveBeenCalled();
     expect(lastResponse()).toMatchObject({ success: false });
   });
@@ -109,14 +114,14 @@ describe("runReadClass", () => {
   it("errors when the tab is not a browser tab", async () => {
     useTabStore.setState({ tabs: {}, activeTabId: {}, untitledCounter: 0, closedTabs: {} });
     const docId = useTabStore.getState().createTab("main", "/a.md");
-    await runReadClass("doc", { tabId: docId }, echoOp);
+    await runRead("doc", { tabId: docId }, echoOp);
     expect(invoke).not.toHaveBeenCalled();
     expect(lastResponse()).toMatchObject({ success: false });
   });
 
   it("requires attachment on a human tab and does not run the op", async () => {
     const id = seed("human");
-    await runReadClass("h", { tabId: id }, echoOp);
+    await runRead("h", { tabId: id }, echoOp);
     expect(invoke).not.toHaveBeenCalled();
     expect(lastResponse()).toMatchObject({ error: "ATTACHMENT_REQUIRED" });
   });
@@ -128,7 +133,7 @@ describe("runReadClass", () => {
       attachments: [{ tabId: id, generation: 0, once: true }],
     });
     invoke.mockResolvedValue("OK");
-    await runReadClass("h2", { tabId: id }, echoOp);
+    await runRead("h2", { tabId: id }, echoOp);
     expect(lastResponse()).toMatchObject({ id: "h2", success: true });
     expect(useBrowserApprovalStore.getState().attachments).toEqual([]);
   });

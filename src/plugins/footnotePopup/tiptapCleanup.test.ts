@@ -506,6 +506,26 @@ describe("createCleanupAndRenumberTransaction", () => {
     const newDefs = getDefinitionInfo(tr!.doc);
     expect(newDefs).toHaveLength(1);
     expect(newDefs[0].label).toBe("1");
+    expect(tr!.doc.nodeAt(newDefs[0].pos)?.textContent).toBe("");
+  });
+
+  // WI-RA9A.6 — keepLabels is the one difference between cleanup and renumber.
+  it("keeps content only for definitions whose label is in the remaining set", () => {
+    const doc = createDoc([
+      pWithRef("A ", "x"),
+      pWithRef("B ", "脚注"),
+      fnDef("x", "kept"),
+      fnDef("脚注", "dropped"),
+      fnDef("orphan", "gone"),
+    ]);
+    const defTexts = (d: typeof doc) => getDefinitionInfo(d).map((def) => [def.label, d.nodeAt(def.pos)?.textContent]);
+
+    const cleaned = createCleanupAndRenumberTransaction(stateFrom(doc), new Set(["x"]), refType, defType);
+    expect(defTexts(cleaned!.doc)).toEqual([["1", "kept"], ["2", ""]]);
+
+    // The renumber path has no such filter: every referenced definition keeps its content.
+    const renumbered = createRenumberTransaction(stateFrom(doc), refType, defType);
+    expect(defTexts(renumbered!.doc)).toEqual([["1", "kept"], ["2", "dropped"]]);
   });
 
   it("skips renumber when new label equals old label (line 168 false branch)", () => {

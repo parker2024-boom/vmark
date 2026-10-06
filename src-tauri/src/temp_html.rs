@@ -54,11 +54,15 @@ pub(crate) fn write_temp_html_to_dir(dir: &Path, html: &str) -> Result<PathBuf, 
         .tempfile_in(dir)
         .map_err(|e| format!("Failed to create temp file: {}", e))?;
 
-    // Write content first, then persist (keep on disk after handle drops)
+    // Write the content, then keep the file past its handle. Kept, not
+    // published: the name does not change, so there is no rename to make
+    // durable — and nothing is synced, because the file is a hand-off the
+    // export reads back within seconds and that `STALE_AFTER` deletes; a
+    // crash ends the export it belonged to.
     temp.write_all(html.as_bytes())
         .map_err(|e| format!("Failed to write temp HTML file: {}", e))?;
-    let path = temp.path().to_path_buf();
-    temp.persist(&path)
+    let (_file, path) = temp
+        .keep()
         .map_err(|e| format!("Failed to persist temp file: {}", e))?;
     Ok(path)
 }

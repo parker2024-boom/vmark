@@ -1,5 +1,5 @@
 /**
- * commandError — the TypeScript twin of Rust's `CommandError` (WI-14).
+ * commandError — the TypeScript twin of Rust's `CommandError`.
  *
  * Purpose: let a caller BRANCH on why a Tauri command failed. Rule 50 §10 used
  * to canonize `Result<T, String>`, so the only thing that crossed the boundary

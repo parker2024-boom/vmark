@@ -1,11 +1,11 @@
 /**
- * Generic page reader — DOM → clean Markdown (WI-2.4, `browser.read`).
+ * Generic page reader — DOM → clean Markdown (`browser.read`).
  *
  * Purpose: extract the main readable content of an arbitrary web page and render
  * it as Markdown, discarding navigation/aside/footer boilerplate. Leaf-pure:
  * given an HTML string and the page URL it parses with `DOMParser`, selects the
  * main-content container with a Readability-style density heuristic, and
- * serializes it with a Turndown-style converter. Site-specific readers (WI-3.x)
+ * serializes it with a Turndown-style converter. Site-specific readers
  * harden this against a fixture corpus.
  *
  * The page is untrusted input, so text nodes are Markdown-escaped: a paragraph

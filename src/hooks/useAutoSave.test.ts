@@ -3,7 +3,7 @@
  *
  * @module hooks/useAutoSave.test
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, onTestFinished } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 
 // Mock dependencies before importing the hook
@@ -50,6 +50,7 @@ import { useTabStore } from "@/stores/tabStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { saveToPath } from "@/services/persistence/saveToPath";
 import { flushActiveWysiwygNow } from "@/utils/wysiwygFlush";
+import { setWysiwygEditPending } from "@/utils/wysiwygEditPending";
 
 describe("useAutoSave", () => {
   beforeEach(() => {
@@ -103,8 +104,11 @@ describe("useAutoSave", () => {
     );
   });
 
-  it("flushes WYSIWYG content before reading document state", async () => {
+  it("flushes a pending WYSIWYG edit before reading document state", async () => {
     const mockFlush = vi.mocked(flushActiveWysiwygNow);
+    const editor = {};
+    setWysiwygEditPending(editor, true);
+    onTestFinished(() => setWysiwygEditPending(editor, false));
     const getDocMock = vi.fn().mockReturnValue({
       isDirty: true,
       filePath: "/tmp/doc.md",

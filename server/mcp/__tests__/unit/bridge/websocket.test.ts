@@ -51,6 +51,7 @@ describe('WebSocketBridge', () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     await bridge.disconnect();
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
@@ -344,12 +345,15 @@ describe('WebSocketBridge', () => {
 
       const callback = vi.fn();
       reconnectBridge.onConnectionChange(callback);
+      const connectSpy = vi.spyOn(reconnectBridge, 'connect');
 
+      // Fake the timers the reconnect loop would arm, then drive the clock far
+      // past every backoff step: an armed retry would call connect().
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       await reconnectBridge.disconnect();
+      await vi.advanceTimersByTimeAsync(50 * 2 ** 10);
 
-      // Wait a bit to ensure no reconnection attempt
-      await new Promise((resolve) => setTimeout(resolve, 200));
-
+      expect(connectSpy).not.toHaveBeenCalled();
       // Should only be called once for disconnect, not for reconnect
       expect(callback).toHaveBeenCalledTimes(1);
       expect(callback).toHaveBeenCalledWith(false);
@@ -437,21 +441,23 @@ describe('WebSocketBridge', () => {
         maxReconnectAttempts: 5,
       });
 
+      // The retry timer is armed inside connect(), so the clock is faked first.
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+
       // connect() will throw (port unavailable) but scheduleReconnect() will
       // have been called, setting an internal reconnectTimer.
-      try {
-        await portUnavailableBridge.connect();
-      } catch {
-        // Expected
-      }
+      await expect(portUnavailableBridge.connect()).rejects.toThrow('Cannot determine VMark port');
+      expect(vi.getTimerCount()).toBe(1);
 
       // disconnect() should cancel the pending timer and set intentionalDisconnect.
       await portUnavailableBridge.disconnect();
+      const connectSpy = vi.spyOn(portUnavailableBridge, 'connect');
 
-      // After disconnect, no further reconnection should occur.
-      // We verify by checking the bridge stays disconnected after the would-be
-      // reconnect delay.
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // Drive the clock well past the would-be retry: a surviving timer would
+      // call connect() again.
+      await vi.advanceTimersByTimeAsync(200 * 10);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(connectSpy).not.toHaveBeenCalled();
       expect(portUnavailableBridge.isConnected()).toBe(false);
     });
   });
@@ -705,6 +711,17 @@ describe('WebSocketBridge', () => {
   });
 
   describe('disconnect during CONNECTING (MCP-6)', () => {
+    /**
+     * Close the server and wait for its 'close', which fires only once every
+     * client TCP connection is gone — so any event the orphaned socket could
+     * still deliver has been delivered. A fresh server replaces it for
+     * afterEach.
+     */
+    async function drainServer(): Promise<void> {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      server = new WebSocketServer({ port: TEST_PORT });
+    }
+
     it('detaches listeners so a late open cannot crash the process (auth token path)', async () => {
       const authBridge = new WebSocketBridge({
         port: TEST_PORT,
@@ -723,9 +740,9 @@ describe('WebSocketBridge', () => {
       // then crashed on `this.ws!.send` with ws === null).
       await expect(connectPromise).rejects.toThrow();
 
-      // Give the server-side handshake time to complete; the stale 'open'
-      // must not fire into the bridge.
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      // Wait until the orphaned socket's whole lifecycle is over: the stale
+      // 'open', if any, must not have fired into the bridge.
+      await drainServer();
 
       expect(authBridge.isConnected()).toBe(false);
       expect((authBridge as unknown as { connected: boolean }).connected).toBe(false);
@@ -743,7 +760,7 @@ describe('WebSocketBridge', () => {
 
       await expect(connectPromise).rejects.toThrow();
 
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await drainServer();
 
       expect(plainBridge.isConnected()).toBe(false);
       expect((plainBridge as unknown as { connected: boolean }).connected).toBe(false);
@@ -757,16 +774,22 @@ describe('WebSocketBridge', () => {
       // fires. Pre-fix, timer #1 closed `this.ws` — the CURRENT socket, i.e.
       // attempt #2's socket — so attempt #2 died with "Connection closed
       // during authentication" long before its own timeout.
-      // Timing: timer #1 fires at t=CONNECT_TIMEOUT. Attempt #2 sends auth at
-      // t≈RECONNECT_AT and gets auth_result at t≈RECONNECT_AT+AUTH_REPLY_DELAY
-      // (~200ms AFTER timer #1 — mid-handshake), while its own auth timeout
-      // would only fire at t≈RECONNECT_AT+CONNECT_TIMEOUT (~200ms margin).
+      // Timing, on a fake clock (only the timers are faked; socket I/O is
+      // real): timer #1 fires at t=CONNECT_TIMEOUT. Attempt #2 starts at
+      // t=RECONNECT_AT and gets auth_result at t=RECONNECT_AT+AUTH_REPLY_DELAY
+      // — AFTER timer #1, i.e. mid-handshake — while its own auth timeout
+      // would only fire at t=RECONNECT_AT+CONNECT_TIMEOUT.
       const CONNECT_TIMEOUT = 1000;
       const RECONNECT_AT = 400;
       const AUTH_REPLY_DELAY = 800;
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 
       // Server: complete the auth handshake only after a delay, so attempt #2
       // is still connecting (connected === false) when timer #1 fires.
+      let authArrived!: () => void;
+      const authReceived = new Promise<void>((resolve) => {
+        authArrived = resolve;
+      });
       server.on('connection', (ws) => {
         ws.on('message', (data) => {
           const message = JSON.parse(data.toString()) as { type?: string };
@@ -780,6 +803,7 @@ describe('WebSocketBridge', () => {
                 })
               );
             }, AUTH_REPLY_DELAY);
+            authArrived();
           }
         });
       });
@@ -791,16 +815,18 @@ describe('WebSocketBridge', () => {
         authTokenResolver: () => 'test-token',
       });
 
-      // Attempt #1: timer armed at t=0 (fires at t=600). Supersede immediately.
+      // Attempt #1: timer #1 armed at t=0. Supersede immediately.
       const attempt1 = staleBridge.connect();
       attempt1.catch(() => {}); // settles later — must not be unhandled
       await staleBridge.disconnect();
 
-      // Attempt #2 starts at t≈200; auth_result arrives at t≈800; its own
-      // auth timer would fire at t≈800+... — timer #1 fires at t=600, in the
-      // middle of attempt #2's handshake.
-      await new Promise((resolve) => setTimeout(resolve, RECONNECT_AT));
+      await vi.advanceTimersByTimeAsync(RECONNECT_AT);
       const attempt2 = staleBridge.connect();
+      // Attempt #2 has opened and sent auth; the server's reply is armed.
+      await authReceived;
+
+      // Fires timer #1 (t=CONNECT_TIMEOUT), then the auth reply.
+      await vi.advanceTimersByTimeAsync(AUTH_REPLY_DELAY);
 
       // Attempt #2 must survive timer #1 and complete.
       await expect(attempt2).resolves.toBeUndefined();
@@ -810,7 +836,7 @@ describe('WebSocketBridge', () => {
       await expect(attempt1).rejects.toThrow();
 
       await staleBridge.disconnect();
-    }, 10000);
+    });
   });
 
   describe('auth handshake', () => {
@@ -844,23 +870,138 @@ describe('WebSocketBridge', () => {
       // WebSocket and the auth message but never replies with auth_result
       // (e.g., serialization failure, sender-task hang). Without a bounded wait,
       // connect() would hang forever and block the reconnect loop.
+      const AUTH_TIMEOUT = 200;
       const authBridge = new WebSocketBridge({
         port: TEST_PORT,
-        timeout: 200,
+        timeout: AUTH_TIMEOUT,
         autoReconnect: false,
         authTokenResolver: () => 'test-token',
       });
 
-      // Server accepts connection but never responds to the auth message.
-      // beforeEach already registers a listener that just tracks connections;
-      // we don't add any message handler, so auth goes unanswered.
+      // Server accepts the connection and the auth message but never replies.
+      const authReceived = new Promise<void>((resolve) => {
+        server.once('connection', (ws) => ws.once('message', () => resolve()));
+      });
 
-      const start = Date.now();
-      await expect(authBridge.connect()).rejects.toThrow('Auth handshake timeout');
-      const elapsed = Date.now() - start;
-      // Should reject around `timeout` ms — allow generous slack for timer jitter.
-      expect(elapsed).toBeGreaterThanOrEqual(150);
-      expect(elapsed).toBeLessThan(700);
+      // Only the timers are faked; the socket handshake is real I/O. The auth
+      // deadline is armed in the same synchronous step that writes the auth
+      // frame, so once the server holds the frame the deadline is armed.
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      let outcome: unknown = 'pending';
+      const connecting = authBridge.connect().then(
+        () => (outcome = 'resolved'),
+        (error: unknown) => (outcome = error)
+      );
+      await authReceived;
+
+      await vi.advanceTimersByTimeAsync(AUTH_TIMEOUT - 1);
+      expect(outcome).toBe('pending');
+
+      await vi.advanceTimersByTimeAsync(1);
+      await connecting;
+      expect(outcome).toBeInstanceOf(Error);
+      expect((outcome as Error).message).toContain('Auth handshake timeout');
+    });
+  });
+
+  describe('connect() while an attempt is already in flight', () => {
+    /** Settle state of a promise, readable without awaiting it. */
+    function watch(promise: Promise<void>): { outcome: () => unknown } {
+      let outcome: unknown = 'pending';
+      promise.then(
+        () => (outcome = 'resolved'),
+        (error: unknown) => (outcome = error)
+      );
+      return { outcome: () => outcome };
+    }
+
+    it('resolves once the in-flight attempt connects, on its next poll', async () => {
+      // The second caller polls the bridge every 100ms; only that timer is faked.
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const first = bridge.connect();
+      const second = watch(bridge.connect());
+
+      await first;
+      expect(bridge.isConnected()).toBe(true);
+      expect(second.outcome()).toBe('pending');
+
+      await vi.advanceTimersByTimeAsync(99);
+      expect(second.outcome()).toBe('pending');
+      await vi.advanceTimersByTimeAsync(1);
+      expect(second.outcome()).toBe('resolved');
+    });
+
+    it('rejects when the in-flight attempt fails', async () => {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+
+      // Nothing listens on the port: the attempt fails with a socket error.
+      const first = bridge.connect();
+      const second = watch(bridge.connect());
+      await expect(first).rejects.toThrow('WebSocket error');
+      expect(second.outcome()).toBe('pending');
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(second.outcome()).toBeInstanceOf(Error);
+      expect((second.outcome() as Error).message).toBe('Connection failed');
+
+      // afterEach closes `server`; give it a live one to close.
+      vi.useRealTimers();
+      server = new WebSocketServer({ port: TEST_PORT });
+    });
+
+    it('gives up after the configured timeout while the attempt is still authenticating', async () => {
+      const TIMEOUT = 200;
+      const HOLD_PORT = TEST_PORT + 1;
+      // A server that holds the upgrade until released, then never answers auth.
+      let release!: () => void;
+      const upgradeHeld = new Promise<void>((held) => {
+        release = () => held();
+      });
+      let allowUpgrade!: () => void;
+      const holdServer = new WebSocketServer({
+        port: HOLD_PORT,
+        verifyClient: (_info, done) => {
+          allowUpgrade = () => done(true);
+          release();
+        },
+      });
+      const authReceived = new Promise<void>((resolve) => {
+        holdServer.once('connection', (ws) => ws.once('message', () => resolve()));
+      });
+      const slowBridge = new WebSocketBridge({
+        port: HOLD_PORT,
+        timeout: TIMEOUT,
+        autoReconnect: false,
+        authTokenResolver: () => 'test-token',
+      });
+
+      try {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        const first = watch(slowBridge.connect());
+        const second = watch(slowBridge.connect());
+
+        // Open the socket 50ms in, so the attempt's own auth deadline (armed at
+        // open) lands at 250ms — after the waiting caller's 200ms budget.
+        await upgradeHeld;
+        await vi.advanceTimersByTimeAsync(50);
+        allowUpgrade();
+        await authReceived;
+
+        await vi.advanceTimersByTimeAsync(149);
+        expect(second.outcome()).toBe('pending');
+        await vi.advanceTimersByTimeAsync(1);
+        expect(second.outcome()).toBeInstanceOf(Error);
+        expect((second.outcome() as Error).message).toBe('Timed out waiting for existing connection attempt');
+        expect(first.outcome()).toBe('pending');
+
+        await vi.advanceTimersByTimeAsync(50);
+        expect((first.outcome() as Error).message).toContain('Auth handshake timeout');
+      } finally {
+        vi.useRealTimers();
+        await slowBridge.disconnect();
+        await new Promise<void>((resolve) => holdServer.close(() => resolve()));
+      }
     });
   });
 
@@ -878,6 +1019,12 @@ describe('WebSocketBridge', () => {
   });
 
   describe('rate limiting', () => {
+    // The bucket refills on Date.now(); a frozen clock means a slow machine
+    // cannot cross the one-second window between sends and refill it.
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-01-01T00:00:00Z') });
+    });
+
     it('should reject requests when rate limit exceeded', async () => {
       const rateLimitedBridge = new WebSocketBridge({
         port: TEST_PORT,
@@ -910,26 +1057,15 @@ describe('WebSocketBridge', () => {
       await rateLimitedBridge.disconnect();
     });
 
-    // Generous timeout: this exercises a real ~1s rate-limit refill window plus
-    // real socket round-trips, which slows down under the full parallel suite.
-    it('should allow requests after rate limit window passes', { timeout: 20000 }, async () => {
+    it('should allow requests after rate limit window passes', async () => {
       const rateLimitedBridge = new WebSocketBridge({
         port: TEST_PORT,
         autoReconnect: false,
         maxRequestsPerSecond: 2,
       });
+      const windowStart = Date.now();
 
-      // Capture the SERVER-side socket deterministically. `await connect()`
-      // resolves on the CLIENT 'open', which can beat the server's 'connection'
-      // event under load — so reading `serverConnections[0]` (populated by that
-      // event) raced, attaching the responder to the wrong/missing socket and
-      // leaving test3 with no reply (the ~11s hang this de-flakes).
-      const serverConn = await new Promise<WsWebSocket>((resolve) => {
-        server.once('connection', (ws) => resolve(ws));
-        void rateLimitedBridge.connect();
-      });
-      await rateLimitedBridge.connect(); // ensure the client side is also open
-
+      const serverConn = await connectAndServerSocket(rateLimitedBridge);
       serverConn.on('message', (data) => {
         const message = JSON.parse(data.toString()) as WsMessage;
         const response: WsMessage = {
@@ -944,10 +1080,12 @@ describe('WebSocketBridge', () => {
       await rateLimitedBridge.send(probe('test1'));
       await rateLimitedBridge.send(probe('test2'));
 
-      // Wait for token refill (real ~1s window + margin)
-      await new Promise((resolve) => setTimeout(resolve, 1100));
+      // One millisecond short of the window: still limited.
+      vi.setSystemTime(windowStart + 999);
+      await expect(rateLimitedBridge.send(probe('early'))).rejects.toThrow('Rate limit exceeded');
 
-      // Should work again
+      // The full window has passed: the bucket refills.
+      vi.setSystemTime(windowStart + 1000);
       const result = await rateLimitedBridge.send(probe('test3'));
       expect(result.success).toBe(true);
 
@@ -984,6 +1122,20 @@ describe('WebSocketBridge', () => {
   });
 
   describe('request queueing', () => {
+    /** Close the server side and resolve once the bridge has noticed. */
+    async function dropFromServer(b: WebSocketBridge): Promise<void> {
+      const noticed = new Promise<void>((resolve) => {
+        const unsubscribe = b.onConnectionChange((connected) => {
+          if (!connected) {
+            unsubscribe();
+            resolve();
+          }
+        });
+      });
+      serverConnections[0].close();
+      await noticed;
+    }
+
     it('should queue requests when disconnected and queueing enabled', async () => {
       const queueBridge = new WebSocketBridge({
         port: TEST_PORT,
@@ -1008,11 +1160,7 @@ describe('WebSocketBridge', () => {
 
       await queueBridge.connect();
 
-      // Force disconnect
-      serverConnections[0].close();
-
-      // Wait for bridge to notice disconnect
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await dropFromServer(queueBridge);
 
       // Send while disconnected - should queue
       const sendPromise = queueBridge.send<string>(probe('queued.request'));
@@ -1023,7 +1171,7 @@ describe('WebSocketBridge', () => {
       expect(result.data).toBe('queued-response');
 
       await queueBridge.disconnect();
-    }, 10000);
+    });
 
     it('should drop the oldest queued request when the queue is full', async () => {
       // Overflow policy is drop-oldest (bounded memory, newest-wins): when the
@@ -1039,9 +1187,7 @@ describe('WebSocketBridge', () => {
 
       await queueBridge.connect();
 
-      // Force disconnect
-      serverConnections[0].close();
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await dropFromServer(queueBridge);
 
       // Fill the queue to capacity (maxQueueSize = 2).
       const p1 = queueBridge.send(probe('queued1'));
@@ -1069,15 +1215,10 @@ describe('WebSocketBridge', () => {
 
       await queueBridge.connect();
 
-      // Force disconnect from server side
-      serverConnections[0].close();
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await dropFromServer(queueBridge);
 
-      // Queue a request (don't await)
+      // Queue a request (don't await). send() enqueues synchronously.
       const sendPromise = queueBridge.send(probe('queued.request'));
-
-      // Give it a moment to queue
-      await new Promise((resolve) => setTimeout(resolve, 10));
 
       // Intentionally disconnect - should reject queued request
       await queueBridge.disconnect();
@@ -1094,9 +1235,7 @@ describe('WebSocketBridge', () => {
 
       await noQueueBridge.connect();
 
-      // Force disconnect
-      serverConnections[0].close();
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await dropFromServer(noQueueBridge);
 
       // Should reject immediately
       await expect(noQueueBridge.send(probe('test'))).rejects.toThrow('Not connected');
@@ -1106,11 +1245,10 @@ describe('WebSocketBridge', () => {
   });
 
   describe('queue-wait timer / flush race (#959)', () => {
-    const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
     it('resolves a queued request that flush completes after the queue timer fires', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       // Short queue-wait timeout so the timer fires while sendImmediate is
-      // still in flight (sendImmediate is stubbed to resolve later).
+      // still in flight (sendImmediate is stubbed to resolve on demand).
       const raceBridge = new WebSocketBridge({ requestTimeout: 20 });
       const internal = raceBridge as unknown as {
         queueRequest: (r: BridgeRequest) => Promise<BridgeResponse>;
@@ -1119,17 +1257,23 @@ describe('WebSocketBridge', () => {
       };
 
       const success: BridgeResponse = { success: true, data: 'flushed' };
-      // Resolves AFTER the 20ms queue-wait timeout has elapsed.
-      internal.sendImmediate = async () => {
-        await delay(60);
-        return success;
-      };
+      let deliver!: (response: BridgeResponse) => void;
+      internal.sendImmediate = () =>
+        new Promise<BridgeResponse>((resolve) => {
+          deliver = resolve;
+        });
 
       const pending = internal.queueRequest({ type: 'vmark.session.get_state' });
-      await internal.flushRequestQueue();
+      const flushed = internal.flushRequestQueue();
 
-      // The queue-wait timer fired at ~20ms (queue already drained by flush);
-      // the request must still resolve with the success value, not reject.
+      // The queue-wait timer fires while the request is in flight (the queue
+      // was already drained by flush) ...
+      await vi.advanceTimersByTimeAsync(20);
+      // ... and only then does the send complete.
+      deliver(success);
+      await flushed;
+
+      // The request must still resolve with the success value, not reject.
       await expect(pending).resolves.toMatchObject({ success: true, data: 'flushed' });
     });
 

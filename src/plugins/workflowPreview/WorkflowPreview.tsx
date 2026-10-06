@@ -33,7 +33,7 @@ import type { StepStatusEntry } from "@/lib/workflow/types";
 interface WorkflowPreviewProps {
   graph: WorkflowGraph;
   activeStepId?: string | null;
-  /** Live execution status keyed by step id (WI-4.3). Optional — when omitted,
+  /** Live execution status keyed by step id. Optional — when omitted,
    * nodes show static layout-time data only. */
   stepStatuses?: Record<string, StepStatusEntry>;
   onNodeClick?: (stepId: string, yamlLine?: number) => void;

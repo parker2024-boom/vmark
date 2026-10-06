@@ -226,7 +226,7 @@ export function TerminalSearchBar({ getSearchAddon, onClose }: TerminalSearchBar
         }
         type="text"
         placeholder={t("terminal.search.placeholder")}
-        // WI-2.4 (a11y) — explicit accessible name.
+        // A11y — explicit accessible name.
         aria-label={t("terminal.search.label")}
         value={query}
         onChange={handleChange}
@@ -235,7 +235,7 @@ export function TerminalSearchBar({ getSearchAddon, onClose }: TerminalSearchBar
         onCompositionEnd={handleCompositionEnd}
       />
       {/* Announced politely so a screen-reader user hears the count change
-          without the typing being interrupted (WI-3.1). */}
+          without the typing being interrupted. */}
       <span className="terminal-search-results" aria-live="polite">
         {resultText}
       </span>

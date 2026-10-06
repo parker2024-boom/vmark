@@ -2,10 +2,10 @@
 /**
  * Gate liveness — does every scheduled gate still produce verdicts? (WI-AF2.4)
  *
- * THE DEFECT THIS EXISTS FOR. `tier0-e2e.yml` was merged 2026-08-04 and had run
- * ZERO times when it was examined five days later. It reviewed clean, it was
+ * THE DEFECT THIS EXISTS FOR. `tier0-e2e.yml` had run ZERO
+ * times when it was examined five days after it merged. It reviewed clean, it was
  * wired correctly, and it protected nothing — the six Tier-0 journeys it was
- * supposed to guard had in fact been broken since 2026-08-07 and nothing said
+ * supposed to guard had in fact already been broken, and nothing said
  * so. `mutation.yml` is the same defect with a longer history: seven scheduled
  * runs killed by their own 60-minute timeout, which GitHub reports as
  * `cancelled` — a word that reads like an operator action and went unexamined

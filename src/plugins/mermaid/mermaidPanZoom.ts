@@ -5,6 +5,8 @@
  * in WYSIWYG mode. Uses @panzoom/panzoom on the SVG element directly
  * (CSS transforms), with noBind to coexist with double-click-to-edit.
  * Plain scroll passes through to the document.
+ *
+ * @module plugins/mermaid/mermaidPanZoom
  */
 
 import i18n from "@/i18n";
@@ -39,7 +41,7 @@ export function setupMermaidPanZoom(
 
   // Apply panzoom directly to the SVG element (CSS transform).
   // This scales the entire SVG as a visual block within the container.
-  const pz: PanzoomObject = Panzoom(svg as unknown as HTMLElement, {
+  const pz: PanzoomObject = Panzoom(svg, {
     startScale: 1,
     minScale: 0.5,
     maxScale: 5,

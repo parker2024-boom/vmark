@@ -6,8 +6,8 @@
  *
  * Reads every production .rs file under src-tauri/src/menu/ RECURSIVELY — see
  * isMenuSourceFile for why sibling *.test.rs sources are excluded (the menu was
- * split into submodules in 2026-02, and into localized/ section builders in
- * 2026-07; audit 20260612 H1 found this script still reading the deleted
+ * split into submodules, later into localized/ section builders, and an
+ * audit found this script still reading the deleted
  * menu.rs — the recursive scan makes future reshuffles a no-op). Extraction
  * and the exclusion list live in src/shared/menuIdExtraction.ts so the
  * contract test can reuse them; menuIdExtraction.test.ts mirrors this scan.

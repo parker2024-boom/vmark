@@ -25,7 +25,7 @@ import { bench, describe } from "vitest";
 import {
   computeTextMetrics,
   stripMarkdown,
-} from "@/components/StatusBar/statusTextMetrics";
+} from "@/utils/markdownTextMetrics";
 import { createMetricsCache } from "@/components/StatusBar/incrementalTextMetrics";
 import { generateCjkMarkdown, generateMarkdown } from "./helpers";
 

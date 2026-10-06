@@ -39,6 +39,7 @@ import { showError, FileErrors } from "@/services/dialogs/errorDialog";
 import { emitOpenFileInCurrentWindow } from "@/services/navigation/openFileEvent";
 import { openWithDefaultApp as openWithDefaultAppCore } from "@/services/navigation/openWithDefaultApp";
 import { fileExplorerError } from "@/utils/debug";
+import { revealFailedKey } from "@/utils/revealFailedKey";
 import { fileExtensionOf, renameFile, type RenameOptions } from "@/services/persistence/renameFile";
 import { captureExplorerNewFile } from "@/services/coherence/captureFunnel";
 import { confirmAction } from "@/services/dialogs/confirmAction";
@@ -65,7 +66,7 @@ export function useExplorerOperations() {
         }
 
         await writeTextFile(filePath, "");
-        captureExplorerNewFile(filePath); // coherence WI-1.6
+        captureExplorerNewFile(filePath); // register the new file with coherence from birth
         return filePath;
       } catch (error) {
         fileExplorerError(" Failed to create file:", error);
@@ -292,21 +293,13 @@ export function useExplorerOperations() {
     try {
       await revealItemInDir(path);
     } catch (error) {
-      fileExplorerError(" Failed to reveal in Finder:", error);
-      toast.error(i18n.t("dialog:toast.revealInFinderFailed"));
+      fileExplorerError(" Failed to reveal in file manager:", error);
+      toast.error(i18n.t(revealFailedKey()));
     }
   }, []);
 
   return {
-    createFile,
-    createFolder,
-    renameItem,
-    deleteItem,
-    moveItem,
-    openFile,
-    openWithDefaultApp,
-    duplicateFile,
-    copyPath,
-    revealInFinder,
+    createFile, createFolder, renameItem, deleteItem, moveItem,
+    openFile, openWithDefaultApp, duplicateFile, copyPath, revealInFinder,
   };
 }

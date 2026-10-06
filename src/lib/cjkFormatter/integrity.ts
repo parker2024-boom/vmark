@@ -5,10 +5,10 @@
  * formatting. If it changed, formatting corrupted something — the caller
  * discards the result and returns the original text.
  *
- * Key decision: the check is a content SKELETON, not a list of substrings
- * (WI-CJKF6.1). It used to count occurrences of seven literals — `[^`, `<!--`,
+ * Key decision: the check is a content SKELETON, not a list of substrings.
+ * It used to count occurrences of seven literals — `[^`, `<!--`,
  * ```` ``` ````, `~~~`, `$$`, `[[`, `` ` `` — which would not have caught a
- * single one of the ten defects the 2026-08-21 investigation found, while the
+ * single one of the ten defects a later investigation found, while the
  * published guide claimed it "compares the visible text content … guarantees
  * that CJK formatting never silently loses content".
  *

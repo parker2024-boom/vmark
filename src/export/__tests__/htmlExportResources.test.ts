@@ -1,4 +1,3 @@
-// @vitest-environment node
 // Audit 20260907 — two things exportHtml got wrong around resources:
 //   #340: both templates kept their default `includeKaTeX = true`, so a
 //         document with no math still shipped a CDN stylesheet in index.html
@@ -6,10 +5,12 @@
 //   #336: the images `resolveResources` copies into assets/images/ were not in
 //         `createdPaths`, so the failure cleanup that claims to remove what the
 //         export created left them behind.
-import { describe, it, expect, vi, beforeEach } from "vitest";
+// The content pipeline (sanitizer, templates, styles, reader, theme, font
+// embedder) is real; the Tauri fs plugin, the resource resolver and `fetch`
+// are the faked boundaries, and jsdom supplies the DOM the sanitizer needs.
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const state = vi.hoisted(() => ({
-  hasMath: false,
   failStandalone: false,
   /** Sources the STANDALONE (embedding) pass reports missing (audit #337). */
   standaloneMissing: [] as string[],
@@ -18,8 +19,8 @@ const state = vi.hoisted(() => ({
   /** The lock's own bytes: release reads them back to check it is still ours. */
   lockText: null as string | null,
   renameCalls: [] as [string, string][],
-  indexOptions: [] as Record<string, unknown>[],
-  standaloneOptions: [] as Record<string, unknown>[],
+  /** Text written per path — the published documents are read back from here. */
+  written: new Map<string, string>(),
 }));
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
@@ -36,6 +37,7 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
       throw new Error("Simulated write failure");
     }
     if (path.endsWith(".vmark-export.lock")) state.lockText = text;
+    state.written.set(path, text);
   }),
   writeFile: vi.fn(),
   rename: vi.fn(async (from: string, to: string) => {
@@ -56,10 +58,12 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
 
 vi.mock("@/utils/debug", () => ({ exportWarn: vi.fn() }));
 
-vi.mock("../themeSnapshot", () => ({
-  captureThemeCSS: () => "",
-  isDarkTheme: () => false,
-}));
+// Vitest's CSS handling turns the `?raw` stylesheet asset into an empty string
+// (see pdfHtmlTemplate.test.ts), so the KaTeX asset itself — the boundary — is
+// supplied with a recognisable rule the standalone document must (not) carry.
+const KATEX_RULE = ".katex{font:normal 1.21em KaTeX_Main}";
+vi.mock("katex/dist/katex.min.css?raw", () => ({ default: ".katex{font:normal 1.21em KaTeX_Main}" }));
+const KATEX_CDN = "cdn.jsdelivr.net/npm/katex";
 
 vi.mock("../resourceResolver", () => ({
   resolveResources: async (_html: string, options: { mode: string }) => ({
@@ -89,73 +93,53 @@ vi.mock("../resourcePaths", () => ({
   getExportContainmentRoot: async () => "/docs",
 }));
 
-vi.mock("../fontEmbedder", () => ({
-  contentHasMath: () => state.hasMath,
-  getKaTeXFontFiles: () => [],
-  // Every web-font family resolves to ONE file, so two settings naming the
-  // same family yield the same FontFile (audit #339).
-  getUserFontFile: (family: string) =>
-    family === "Inter" ? { filename: "Inter.woff2", url: "https://fonts.example/Inter.woff2" } : null,
-  downloadFont: async (url: string) => {
-    state.fontDownloads.push(url);
-    return new Uint8Array([1, 2, 3]);
-  },
-  generateLocalFontCSS: () => "",
-  generateEmbeddedFontCSS: () => "",
-  fontDataToDataUri: () => "",
-}));
-
-vi.mock("../htmlSanitizer", () => ({
-  sanitizeExportHtml: (html: string) => html,
-}));
-
-vi.mock("../htmlTemplates", () => ({
-  generateIndexHtml: (_content: string, options: Record<string, unknown>) => {
-    state.indexOptions.push(options);
-    return "<html>index</html>";
-  },
-  generateStandaloneHtml: (_content: string, options: Record<string, unknown>) => {
-    state.standaloneOptions.push(options);
-    return "<html>standalone</html>";
-  },
-}));
-
-vi.mock("../htmlExportStyles", () => ({
-  getEditorContentCSS: () => "",
-}));
-
-vi.mock("../reader", () => ({
-  getReaderCSS: () => "",
-  getReaderJS: () => "",
-}));
-
 import { exportHtml } from "../htmlExport";
+import { getUserFontFile } from "../fontEmbedder";
+
+const JETBRAINS = getUserFontFile("jetbrains")!;
+
+/** The network under the real font embedder: every font downloads. */
+function fakeFetch(input: string | URL | Request): Promise<Response> {
+  state.fontDownloads.push(String(input));
+  return Promise.resolve(new Response(new Uint8Array([1, 2, 3])));
+}
+
+/** The text exportHtml wrote for a staged file, by its file name. */
+function stagedText(name: string): string {
+  const hits = [...state.written].filter(([path]) => path.endsWith(`/${name}`));
+  expect(hits).toHaveLength(1);
+  return hits[0][1];
+}
 
 beforeEach(() => {
-  state.hasMath = false;
+  vi.stubGlobal("fetch", vi.fn(fakeFetch));
   state.failStandalone = false;
   state.standaloneMissing.length = 0;
   state.fontDownloads.length = 0;
   state.removeCalls.length = 0;
   state.lockText = null;
   state.renameCalls.length = 0;
-  state.indexOptions.length = 0;
-  state.standaloneOptions.length = 0;
+  state.written.clear();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe("exportHtml — KaTeX ships only when the document has math (#340)", () => {
-  it("a document without math gets includeKaTeX: false in BOTH templates", async () => {
+  it("a document without math ships KaTeX in NEITHER document", async () => {
     const result = await exportHtml("<p>no math</p>", { outputPath: "/out/Doc" });
     expect(result.success).toBe(true);
-    expect(state.indexOptions[0]).toMatchObject({ includeKaTeX: false });
-    expect(state.standaloneOptions[0]).toMatchObject({ includeKaTeX: false });
+    expect(stagedText("index.html")).not.toContain(KATEX_CDN);
+    expect(stagedText("standalone.html")).not.toContain(KATEX_RULE);
+    expect(state.fontDownloads).toEqual([]);
   });
 
   it("a document with math keeps KaTeX in both", async () => {
-    state.hasMath = true;
-    await exportHtml('<span class="katex">x</span>', { outputPath: "/out/Doc" });
-    expect(state.indexOptions[0]).toMatchObject({ includeKaTeX: true });
-    expect(state.standaloneOptions[0]).toMatchObject({ includeKaTeX: true });
+    const result = await exportHtml('<span class="katex">x</span>', { outputPath: "/out/Doc" });
+    expect(result.success).toBe(true);
+    expect(stagedText("index.html")).toContain(KATEX_CDN);
+    expect(stagedText("standalone.html")).toContain(KATEX_RULE);
   });
 });
 
@@ -218,12 +202,13 @@ describe("exportHtml — diagnostics from both resolution passes (#337)", () => 
 describe("exportHtml — a font shared by both settings is exported once (#339)", () => {
   it("downloads one file when fontFamily and monoFontFamily coincide", async () => {
     const { writeFile } = await import("@tauri-apps/plugin-fs");
+    vi.mocked(writeFile).mockClear();
     const result = await exportHtml("<p>test</p>", {
       outputPath: "/out/Doc",
-      fontSettings: { fontFamily: "Inter", monoFontFamily: "Inter" },
+      fontSettings: { fontFamily: "jetbrains", monoFontFamily: "jetbrains" },
     });
     expect(result.success).toBe(true);
-    expect(state.fontDownloads).toEqual(["https://fonts.example/Inter.woff2"]);
+    expect(state.fontDownloads).toEqual([JETBRAINS.url]);
     expect(vi.mocked(writeFile)).toHaveBeenCalledTimes(1);
   });
 });

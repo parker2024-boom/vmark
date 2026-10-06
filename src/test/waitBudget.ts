@@ -6,8 +6,8 @@
  * general budget `setup.ts` feeds to Testing Library's
  * `configure({ asyncUtilTimeout })`, covering every `waitFor`/`findBy*` in the
  * codebase (`vi.waitFor` has no global equivalent, so those call sites pass it
- * explicitly). `SURFACE_IMPORT_WAIT` and its paired test timeout cover the much
- * more expensive wait on the real Tiptap editor surface — see their own note.
+ * explicitly). `SURFACE_IMPORT_WAIT` covers the much more expensive wait on
+ * the real Tiptap editor surface — see its own note.
  *
  * Why any of them exist: 1000ms (vitest's default) is a WALL-CLOCK budget, and
  * the full suite runs ~1450 files across every core at once. A wait on a
@@ -48,30 +48,32 @@ export const ASYNC_IMPORT_WAIT = { timeout: 5000 } as const;
  * at the DEFAULT pool width; raised to 15s it still failed in a full-suite run
  * at 16 workers. Numbers were being nudged instead of sized.
  *
- * Both constants are LIVENESS bounds, never performance assertions — the same
- * distinction `vitest.config.ts` draws for `testTimeout`. A surface that never
- * arrives still fails; a wrong module still fails instantly on its assertion.
- * A bigger number only stops a busy machine being reported as a hang.
+ * It is a LIVENESS bound, never a performance assertion — the same distinction
+ * `vitest.config.ts` draws for `testTimeout`. A surface that never arrives
+ * still fails; a wrong module still fails instantly on its assertion. A bigger
+ * number only stops a busy machine being reported as a hang.
  *
- * They come in a PAIR, and the test timeout must be the larger of the two. A
- * `waitFor` budget above its enclosing test's timeout is dead: the test is
- * killed first and reports a bare "timed out in 20000ms" instead of the
- * `waitFor` message naming what never appeared.
+ * A wait budget must stay BELOW the timeout of the test that encloses it, or
+ * the test is killed first and reports a bare "timed out" instead of the
+ * `waitFor` message naming what never appeared. No test sets a timeout of its
+ * own (`perTestTimeouts.test.ts`), so that timeout is the tier's liveness
+ * bound, `LIVENESS_TIMEOUT_MS`; the same file asserts every budget here sits
+ * below it.
  */
 export const SURFACE_IMPORT_WAIT = { timeout: 45_000 } as const;
 
-/** Headroom between the wait budget and the test timeout that encloses it, so
- *  the `waitFor` message (which names what never appeared) wins the race
- *  against the bare "test timed out" one. */
-const SURFACE_IMPORT_HEADROOM_MS = 15_000;
-
 /**
- * Per-test timeout for a test that awaits the real editor surface.
+ * The budget for waiting on the WHOLE App module graph — `import("./App")`
+ * via the real `main.tsx` entry.
  *
- * DERIVED, not declared. As two independent literals the ordering invariant
- * lived only in the prose above, and a later edit to either could invert it —
- * at which point every test in this class reports "timed out in Ns" instead of
- * naming the element that never arrived, and the useful diagnostic is gone.
+ * A third class, because it costs about twice the editor surface: the App
+ * graph contains that surface and every store, service and shell around it.
+ * `main.test.tsx` and `main.bootFailure.test.tsx` measured ~21s each, run
+ * together, at a load average of ~30. Borrowing `SURFACE_IMPORT_WAIT` left
+ * them ~2x headroom, and both failed together in a `vitest related` run on a
+ * saturated machine while passing alone — the descheduled-worker failure this
+ * file exists to absorb.
+ *
+ * Same contract as above: a LIVENESS bound, below `LIVENESS_TIMEOUT_MS`.
  */
-export const SURFACE_IMPORT_TEST_TIMEOUT_MS =
-  SURFACE_IMPORT_WAIT.timeout + SURFACE_IMPORT_HEADROOM_MS;
+export const APP_GRAPH_IMPORT_WAIT = { timeout: 120_000 } as const;

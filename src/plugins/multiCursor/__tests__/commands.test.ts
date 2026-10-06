@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Schema, type Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { EditorState, TextSelection, SelectionRange } from "@tiptap/pm/state";
 import { multiCursorPlugin } from "../multiCursorPlugin";
-import { MultiSelection } from "../MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 import {
   selectNextOccurrence,
   selectAllOccurrences,

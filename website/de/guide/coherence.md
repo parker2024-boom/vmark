@@ -1,6 +1,6 @@
 # Kohärenz und die Aufschlüsselungsansicht
 
-VMarks Kohärenzschicht hält rekursiv entwickelte Schreibprojekte ehrlich:
+Die Kohärenzschicht von VMark hält rekursiv entwickelte Schreibprojekte ehrlich:
 Sie zeichnet auf, **welche Dokumente jede KI-Generierung tatsächlich
 gelesen hat**, bemerkt, wenn sich diese Upstream-Dokumente später ändern,
 und zeigt Ihnen — auf Abruf — genau, welche Downstream-Artefakte jetzt
@@ -170,7 +170,7 @@ sich der Aussagenbestand ändert.
 ist Linkshänderin“). Wählen Sie Text in einem Dokument aus und führen
 Sie *Aussage aus Auswahl extrahieren* aus: Die Aussage wird als
 **Entwurf** geboren, mit Provenienz (welches Dokument, welche
-Revision). Stufen Sie sie zu **etabliert** hoch, wenn sie Kanon wird —
+Revision). Um Ihre Aussagen zu sehen und zu verwalten, führen Sie **Kanon-Aussagen** aus der Befehlspalette aus — das Panel hat weder einen Menüeintrag noch ein Tastaturkürzel, und *Aussage aus Auswahl extrahieren* öffnet es für Sie mit dem neuen Entwurf. Stufen Sie eine Aussage zu **etabliert** hoch, wenn sie Kanon wird —
 nur etablierte Aussagen fließen in semantische Prüfungen ein. Das
 Korrigieren oder Beenden einer Aussage hängt Historie an; nichts wird
 je gelöscht. Eine Aussage in einem Kontext auszublenden ist umkehrbare

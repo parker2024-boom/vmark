@@ -11,9 +11,10 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { measureGrowth, growthExponent } from "@/test/cpuClock";
 import { Schema, Node as PMNode } from "@tiptap/pm/model";
 import { EditorState, Selection, SelectionRange, TextSelection, Transaction } from "@tiptap/pm/state";
-import { MultiSelection } from "../MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 import {
   handleMultiCursorInput,
   handleMultiCursorBackspace,
@@ -287,14 +288,6 @@ function moveCursors(
 
 function getDocText(state: EditorState): string {
   return state.doc.textContent;
-}
-
-// Performance measurement helper
-function measurePerformance(fn: () => void): number {
-  const start = performance.now();
-  fn();
-  const end = performance.now();
-  return end - start;
 }
 
 // ============================================================================
@@ -1735,63 +1728,41 @@ describe("Edge Cases & Corner Cases", () => {
   });
 
   describe("Performance", () => {
-    // TC-MC-500
-    it("TC-MC-500: should handle 10 cursors efficiently", () => {
-      const testDoc = doc(p(txt("0123456789")));
-      const state = createState(testDoc);
+    /** A fixed 2,000-character paragraph with `cursorCount` evenly spaced cursors. */
+    function cursorsAcross(cursorCount: number) {
+      const length = 2000;
+      const state = createState(doc(p(txt("0".repeat(length)))));
+      const step = Math.floor(length / cursorCount);
+      const positions = Array.from({ length: cursorCount }, (_, i) => 1 + i * step);
+      return { state, multiSel: createMultiSelection(state, positions) };
+    }
 
-      const positions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-      const multiSel = createMultiSelection(state, positions);
+    // TC-MC-500 / TC-MC-501: typing at many cursors inserts at every one of them.
+    it.each([PERF_THRESHOLDS.EXCELLENT, PERF_THRESHOLDS.GOOD, PERF_THRESHOLDS.SOFT_LIMIT])(
+      "TC-MC-500/501/502: inserts at all %i cursors",
+      (cursorCount) => {
+        const { state, multiSel } = cursorsAcross(cursorCount);
+        expect(multiSel.ranges).toHaveLength(cursorCount);
+        const tr = insertTextAtCursors(state, multiSel, "X");
+        expect(tr?.doc.textContent.split("X")).toHaveLength(cursorCount + 1);
+      },
+    );
 
-      expect(multiSel.ranges).toHaveLength(PERF_THRESHOLDS.EXCELLENT);
-
-      const time = measurePerformance(() => {
-        insertTextAtCursors(state, multiSel, "X");
-      });
-
-      expect(time).toBeLessThan(100); // Should be very fast
-    });
-
-    // TC-MC-501
-    it("TC-MC-501: should handle 50 cursors with good performance", () => {
-      const text = "0".repeat(100);
-      const testDoc = doc(p(txt(text)));
-      const state = createState(testDoc);
-
-      const positions = Array.from({ length: PERF_THRESHOLDS.GOOD }, (_, i) => i + 1);
-      const multiSel = createMultiSelection(state, positions);
-
-      expect(multiSel.ranges).toHaveLength(PERF_THRESHOLDS.GOOD);
-
-      const time = measurePerformance(() => {
-        insertTextAtCursors(state, multiSel, "X");
-      });
-
-      expect(time).toBeLessThan(500); // Still acceptable
-    });
-
-    // TC-MC-502
-    it("TC-MC-502: should handle 100 cursors (soft limit)", () => {
-      const text = "0".repeat(200);
-      const testDoc = doc(p(txt(text)));
-      const state = createState(testDoc);
-
-      const positions = Array.from(
-        { length: PERF_THRESHOLDS.SOFT_LIMIT },
-        (_, i) => i + 1
+    // Cost is judged as growth on the test thread's CPU clock, not a wall-clock
+    // budget: an absolute millisecond limit measured the machine's load (it
+    // failed only under parallel suites), not this code.
+    it("typing at N cursors costs no worse than linear in N", () => {
+      const small = cursorsAcross(PERF_THRESHOLDS.GOOD);
+      const large = cursorsAcross(PERF_THRESHOLDS.DEGRADED);
+      const growth = measureGrowth(
+        ({ state, multiSel }: ReturnType<typeof cursorsAcross>) => {
+          insertTextAtCursors(state, multiSel, "X");
+        },
+        small,
+        large,
       );
-      const multiSel = createMultiSelection(state, positions);
-
-      expect(multiSel.ranges).toHaveLength(PERF_THRESHOLDS.SOFT_LIMIT);
-      // Warning would be shown
-    });
-
-    it("should prevent creation beyond hard limit", () => {
-      const hardLimit = PERF_THRESHOLDS.HARD_LIMIT;
-      const attemptedCount = 1500;
-
-      expect(attemptedCount).toBeGreaterThan(hardLimit);
-      // Would block at 1000
+      const exponent = growthExponent(growth, PERF_THRESHOLDS.GOOD, PERF_THRESHOLDS.DEGRADED);
+      expect(exponent).toBeLessThan(1.5);
     });
   });
 

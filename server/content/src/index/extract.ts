@@ -1,5 +1,5 @@
 /**
- * Per-document reference extraction (Phase 2, WI-2.3/2.2).
+ * Per-document reference extraction (Phase 2).
  *
  * Parses a markdown string with VMark's pipeline plugins and collects the
  * references that feed the relationship graph: wiki-links, local markdown

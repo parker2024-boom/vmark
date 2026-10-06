@@ -220,7 +220,7 @@ Comprehensive image support:
 - Paste from clipboard
 - Auto-copy to project assets folder
 - Double-click to edit the source path and alt text — the image's dimensions are shown read-only
-- Right-click for Change Image, Delete Image, Copy Path and Reveal in Finder
+- Right-click for Change Image, Delete Image, Copy Path and Reveal in Finder (Show in Explorer on Windows, Show in File Manager on Linux)
 - Toggle between inline and block display
 
 ## Video & Audio
@@ -472,9 +472,36 @@ When VMark restarts to install an update, or exits unexpectedly, your work is pr
 - On relaunch, tabs are restored exactly as you left them, with dirty (unsaved) documents marked accordingly
 - Unsaved changes are also written to recovery snapshots every 10 seconds. After an unexpected exit, VMark restores them on the next launch as unsaved tabs
 - Recovery snapshots older than 7 days are cleaned up automatically
-- An ordinary quit does not capture the session: VMark asks you to save unsaved documents first. A workspace's open tabs still come back the next time you open it (see [Session Restore](/guide/workspace-management#session-restore))
+- An ordinary quit does not capture the session: VMark asks you to save unsaved documents first (see [Closing tabs and windows](/guide/tab-navigation#closing-tabs-and-windows)). A workspace's open tabs still come back the next time you open it (see [Session Restore](/guide/workspace-management#session-restore))
 
 No configuration needed. Session recovery is always active.
+
+## Status Bar
+
+The status bar runs along the bottom of the window (`F7` hides it). The left side holds the tab strip — see [Switching between open tabs](/guide/tab-navigation#switching-between-open-tabs) — and short notices such as *"Opened in Source mode (large file)."* The right side, from left to right:
+
+| Indicator | What it shows | Click |
+|---|---|---|
+| Auto-save | A save icon and how long ago the document was auto-saved; fades after a few seconds | — |
+| Counts | Words and characters (spaces not counted); with a selection, *selected / total* | Opens a **Word Count** popover: words, characters, characters without spaces, CJK characters, characters without punctuation |
+| Lint | ⊗ errors or ⚠ warnings found by the last [lint](#markdown-lint) run; hidden when there are none | Jumps to the next issue |
+| AI | While a genie runs, *Thinking…* with the elapsed seconds and a × to cancel; then *Done*, or the error with **Retry**, which runs the failed request again, and **Dismiss**; Retry is absent when the failure has nothing to re-run, such as a missing provider | — |
+| MCP | A satellite icon, tinted when an AI client is connected; the word *off*, *…* or *error* when it is not running normally. The tooltip names the connected clients | Opens **Settings → Integrations** |
+| MCP history | The AI writes to this tab, newest first, each with **Restore to before this write**; a trash button clears the tab's history without asking | Opens the list |
+| Terminal | — | Shows or hides the terminal |
+| Mode | The current mode — Source or WYSIWYG (hidden for GitHub Actions workflow files) | Switches mode |
+| Lock | Whether the document is read-only | Toggles read-only |
+
+The right side is hidden while a browser tab is active. A hidden status bar comes back on its own while an AI genie reports progress or a browser tab is active.
+
+## Editing Details
+
+A few behaviours that work without any setting:
+
+- **The selection stays visible when the editor loses focus.** Click into the terminal, the sidebar or a popup and the selected text keeps a dimmer highlight, so you can see what a command or an AI tool will act on. Source mode shows every range of a multi-cursor selection.
+- **Typing at the left edge of inline code goes inside it.** With the cursor just before an inline code span in WYSIWYG mode — however you got there — the next character joins the code rather than landing outside it.
+- **Input methods (IME) are safe.** While you compose with a Chinese, Japanese or Korean input method, and for 50 ms after the composition ends, editor shortcuts and automatic conversions do not fire, so pressing Enter to accept a candidate does not also split the paragraph. Undo and redo still work. A Korean syllable confirmed with Enter also starts the new line. Leftover romanization in front of committed text is removed, and a character committed into an empty table cell stays as typed. Informational toasts wait until the composition ends; errors and warnings show at once. An edit from an AI client over MCP is refused (the client retries) or held until the composition ends, and a change to the file on disk waits too, so neither overwrites text you are still composing.
+- **Reduced motion is honoured.** When your operating system's *reduce motion* accessibility setting is on, VMark turns its animations and transitions off and scrolls instantly instead of smoothly (typewriter mode included). There is no separate setting in VMark. The system's *reduce transparency* setting likewise turns off background blur.
 
 ## View & Focus
 
@@ -588,6 +615,8 @@ Configure separate fonts for:
 - Monospace (code)
 
 Each picker offers a short list of recommended fonts, the fonts installed on your computer, and a **Custom…** entry where you type any font family name. [Details →](/guide/settings#typography)
+
+The monospace font is checked before it is used, in Source mode, code and the terminal: if the font you picked is not installed, or turns out not to be monospaced, VMark falls back along the stack to the next one that is. This matters most on Linux with a CJK locale, where a missing font name can otherwise resolve to a proportional CJK font and break the terminal's grid.
 
 ### Layout
 

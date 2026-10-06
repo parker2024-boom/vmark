@@ -1,3 +1,10 @@
+/**
+ * ExportSurface — read-only Tiptap rendering of markdown for export and
+ * print, which reports when the rendered output is stable.
+ *
+ * @module export/ExportSurface
+ */
+
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { parseMarkdown } from "@/utils/markdownPipeline";

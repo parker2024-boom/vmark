@@ -7,7 +7,7 @@
  * iframe and offers "open in browser". Actions are injected so the panel stays
  * free of store/service wiring (the `useContentServer` hook supplies them).
  *
- * The one exception is deliberate (WI-FL1.1): on open the panel probes
+ * The one exception is deliberate: on open the panel probes
  * `content_server_runtime` through `useContentServerRuntime` and, while
  * stopped, renders `KnowledgeBaseRuntimeState` — the Start button only when
  * `node` and the content-server CLI are both present, otherwise an alert naming
@@ -19,7 +19,7 @@
  * `sidePanel` prop — an in-flow right dock, not an overlay. ADR-007 describes a
  * slot-registration mechanism; none exists, so this mount is an edit to App.tsx
  * like every other surface, and `scripts/check-shell-slots.mjs` is what keeps
- * that set from growing unnoticed (WI-12).
+ * that set from growing unnoticed.
  *
  * The graph view is behind `React.lazy`: `@xyflow/react` chunks with
  * `@dagrejs/dagre`, and xyflow's d3 dependencies chunk with mermaid, so a static
@@ -32,7 +32,7 @@
  * placement is what makes lazy safe here; moving the boundary up to
  * KnowledgeBaseOverlay would reproduce the shape that broke.
  *
- * Audit 20260804-F4: it used to be a bare `Suspense`, which handles the
+ * It used to be a bare `Suspense`, which handles the
  * PENDING half and nothing else — a rejected 3.2 MB chunk propagated past the
  * panel to the root boundary and took the whole window down over a graph the
  * user could simply have retried. `RetryableLazy` catches it here and mounts a
@@ -41,7 +41,7 @@
  * The lifecycle views (provisioning/starting, error, running) are one component
  * each in `KnowledgeBasePanelViews.tsx`; this file dispatches on `status` — as a
  * SWITCH, so every status has exactly one answer and none can fall through to
- * an empty body (audit round 3, #625).
+ * an empty body.
  *
  * @coordinates-with ./KnowledgeBasePanelViews.tsx — the per-state views
  * @coordinates-with ./KnowledgeBaseRuntimeState.tsx — the stopped state
@@ -98,8 +98,8 @@ export function KnowledgeBasePanel({
   // The probe answers "what would a start find on this machine", and a run
   // CHANGES that answer: provisioning installs the very CLI a mount-time probe
   // may have found missing. Returning to the stopped view with that stale
-  // answer hides Start behind an alert about a runtime that now exists (audit
-  // R2, #626). Re-asked on the way INTO stopped only — the arrival at mount is
+  // answer hides Start behind an alert about a runtime that now exists.
+  // Re-asked on the way INTO stopped only — the arrival at mount is
   // the hook's own probe, and re-running it there would double every open.
   const previousStatus = useRef(status);
   useEffect(() => {
@@ -115,8 +115,8 @@ export function KnowledgeBasePanel({
    * condition: `provisioning && provision` and `running && url`. A status whose
    * companion value had not arrived (or had been cleared) therefore matched
    * NOTHING, and the panel rendered its header over an empty body — a dead
-   * surface saying "Running" with no frame, no message and no way out (audit
-   * round 3, #625). A missing companion is now a PROGRESS state, which is what
+   * surface saying "Running" with no frame, no message and no way out.
+   * A missing companion is now a PROGRESS state, which is what
    * "the status says so but the detail has not landed" actually is.
    */
   function renderBody() {

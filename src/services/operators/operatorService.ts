@@ -1,5 +1,5 @@
 /**
- * Operator service (Phase 3, WI-3.5/3.6 frontend) — ADR-013 services tier.
+ * Operator service (Phase 3 frontend) — ADR-013 services tier.
  *
  * Thin `invoke` wrappers over the Rust forward-operator commands
  * (`coherence_operator_propose` / `_preview` / `_accept`). `propose` and

@@ -31,7 +31,6 @@ import i18n from "@/i18n";
 import { orphanCleanupError } from "@/utils/debug";
 import { withoutWorkspaceReferenced } from "@/services/media/workspaceReferenceCheck";
 import { collectRemoteLiveRefs } from "@/services/media/crossWindowRefs";
-import { getCurrentWindowLabel } from "@/services/persistence/workspaceStorage";
 import { confirmAction } from "@/services/dialogs/confirmAction";
 import {
   deleteOrphanedImages,
@@ -130,7 +129,7 @@ async function rescanStillOrphaned(
   try {
     const fresh = await findOrphanedImages(documentPath, freshSubject, {
       knownContents: liveContents?.(),
-      externalRefKeys: await collectRemoteLiveRefs(getCurrentWindowLabel()),
+      externalRefKeys: await collectRemoteLiveRefs(),
     });
     if (!fresh.scanComplete) return null;
     const live = new Set(fresh.orphanedImages.map((img) => img.fullPath));
@@ -175,7 +174,7 @@ export async function runOrphanCleanup(
   try {
     result = await findOrphanedImages(documentPath, documentContent, {
       knownContents: liveContents?.(),
-      externalRefKeys: await collectRemoteLiveRefs(getCurrentWindowLabel()),
+      externalRefKeys: await collectRemoteLiveRefs(),
     });
   } catch (error) {
     // The menu dispatcher only logs a rejection, leaving the user staring at a
@@ -224,7 +223,7 @@ export async function runOrphanCleanup(
     return { status: "failed" };
   }
 
-  // WI-11: cross-directory references live in documents the sibling scan
+  // Cross-directory references live in documents the sibling scan
   // never reads — the workspace content search is the wider net.
   const clearedForDeletion = await withoutWorkspaceReferenced(stillOrphaned);
   const { deleted, failed } = await deleteOrphanedImages(clearedForDeletion);

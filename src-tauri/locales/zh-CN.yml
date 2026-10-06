@@ -307,7 +307,7 @@ errors:
   workflow.restoreWhileRunning: "有工作流正在运行。请等待其完成或取消后再恢复文件。"
   workflow.restoreSuperseded: "此快照之后又运行了其他工作流，恢复它可能会撤销该运行的更改。未恢复任何内容。"
 
-  # === 保存路径（file_write.rs，WI-14 CommandError）===
+  # === 保存路径（files/write.rs，WI-14 CommandError）===
   save.parentMissing: "该文件所在的文件夹已不存在：%{dir}"
   save.noParentDirectory: "文件路径没有上级文件夹"
   save.symlinkLoop: "此文件的替身指向形成循环，因此找不到真正的文件"
@@ -357,7 +357,13 @@ errors:
 
   # === CLI install ===
   cli.noFile: "安装似乎成功，但文件未能创建。"
-  cli.mismatch: "安装完成，但文件内容与预期脚本不符。"
+  cli.mismatch: "已安装的命令与预期脚本不符，已将其移除。"
+  cli.mismatchNotRemoved: "“%{path}”处的文件与预期脚本不符，且无法移除。请手动删除该文件。"
+
+  # === External editor ===
+  externalEditor.unknownName: "VMark 无法按名称识别编辑器“%{name}”，请改为填写该编辑器的完整路径"
+  externalEditor.notAnEditor: "“%{name}”会直接运行传给它的文件，而不是打开文件，因此不能用作外部编辑器"
+  externalEditor.notPlainPath: "外部编辑器必须是编辑器名称或完整路径，路径中不能包含“..”，也不能以斜杠结尾"
 
   # === Genies ===
   genie.pathBlocked: "Genie 路径位于允许的目录之外"
@@ -412,7 +418,7 @@ errors:
   # === Secure store (secure_store.rs) ===
   secureStore.keychainDenied: "钥匙串访问被拒绝。请在钥匙串提示中允许 VMark，或在“钥匙串访问”中授予访问权限，然后重试。"
 
-  # === 工作区访问授权 (workspace_grants/commands.rs, WI-LX1.1) ===
+  # === 工作区访问授权 (workspace/grants/commands.rs, WI-LX1.1) ===
   workspaceAccess.notGranted: "VMark 尚未获得访问“%{path}”的权限。请通过 文件 → 打开工作区... 选择该文件夹以授予权限。"
   workspaceAccess.pickerBusy: "已有一个文件夹对话框处于打开状态"
   workspaceAccess.checkBusy: "VMark 仍在检查对该文件夹的访问权限，请稍后再试"

@@ -1,4 +1,4 @@
-//! Tauri commands for the embedded browser surface (WI-1.2).
+//! Tauri commands for the embedded browser surface.
 //!
 //! Thin coordinators. They own the *edges* of a tab's life — registering it,
 //! reserving its terminal state, and dropping its state — and nothing in between:
@@ -132,7 +132,7 @@ pub async fn browser_stop(app: AppHandle, tab_id: String) -> Result<(), CommandE
     surface::stop(&app, tab_id).map_err(|e| surface_failure(&e))
 }
 
-/// Answer a page `confirm()` dialog surfaced via `browser://dialog` (WI-1.7).
+/// Answer a page `confirm()` dialog surfaced via `browser://dialog`.
 ///
 /// Only the window that OWNS the dialog's tab may answer it (audit 20260903): the
 /// window is the invoking one, taken from Tauri, and the native layer refuses
@@ -281,7 +281,7 @@ pub async fn browser_debug_hit_test(
 }
 
 /// Freeze the browser tab — hide the native view so a DOM overlay paints over
-/// the rect instead of the live page (R2/WI-1.4 occlusion).
+/// the rect instead of the live page (R2 occlusion).
 #[tauri::command]
 pub async fn browser_freeze(app: AppHandle, tab_id: String) -> Result<(), CommandError> {
     surface::set_hidden(&app, tab_id, true).map_err(|e| surface_failure(&e))

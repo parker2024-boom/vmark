@@ -16,27 +16,22 @@
  *     (lib/extensions/claim.ts) applies, not here.
  *   - Uses a class (MdastToPMConverter) to hold per-document state like usedSlugs
  *     for heading ID uniqueness, but converter functions are pure/stateless
- *   - Inline HTML tags are merged (mergeInlineHtmlTags) so that paired open/close
- *     tags like `<kbd>...</kbd>` become a single html_inline node — but only when
- *     inner content has no formatting marks (otherwise marks would be lost)
+ *   - Inline HTML pairs like `<kbd>...</kbd>` are merged into a single
+ *     html_inline node where the merged source reads back as the same content
+ *     (inlineHtmlMerge.ts)
  *   - Schema is passed in (not imported) to keep this layer framework-free
  *
  * @coordinates-with mdastConverters.registry.ts — registry 2, which owns dispatch
  * @coordinates-with mdastBlockConverters.ts — block node conversion functions
  * @coordinates-with mdastInlineConverters.ts — inline node conversion functions
  * @coordinates-with proseMirrorToMdast.ts — reverse direction
+ * @coordinates-with inlineHtmlMerge.ts — merges inline HTML pairs
  * @module utils/markdownPipeline/mdastToProseMirror
  */
 
 import type { Schema, Node as PMNode, Mark } from "@tiptap/pm/model";
-import type {
-  Root,
-  Content,
-  Html,
-  Text,
-} from "mdast";
+import type { Root, Content } from "mdast";
 import { perfStart, perfEnd } from "@/utils/perfLog";
-import { escapeHtml } from "@/utils/sanitize";
 import {
   type ContentContext,
   type MdastToPmContext,
@@ -49,6 +44,7 @@ import {
   type MdastRegistry,
 } from "./mdastConverters.registry";
 import { convertTopLevelWithBlankLines } from "./blankLineCapture";
+import { mergeInlineHtmlTags } from "./inlineHtmlMerge";
 
 /**
  * Convert MDAST root to ProseMirror document.
@@ -158,129 +154,5 @@ class MdastToPMConverter {
 
     mdPipelineWarn(`[MdastToPM] Unknown node type: ${nodeType}`);
     return null;
-  }
-}
-
-const INLINE_HTML_OPEN_RE = /^<([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*>$/;
-const INLINE_HTML_CLOSE_RE = /^<\/([a-zA-Z][a-zA-Z0-9-]*)\s*>$/;
-
-/**
- * Check if inner nodes contain only text, html, and break nodes.
- * If there are formatting nodes (emphasis, strong, link, etc.), we should not merge
- * as merging would lose their marks.
- */
-function canSafelyMerge(nodes: Content[]): boolean {
-  for (const node of nodes) {
-    if (node.type !== "text" && node.type !== "html" && node.type !== "break") {
-      return false;
-    }
-  }
-  return true;
-}
-
-function mergeInlineHtmlTags(children: readonly Content[]): Content[] {
-  const result: Content[] = [];
-
-  for (let index = 0; index < children.length; index += 1) {
-    const node = children[index];
-    if (node.type !== "html") {
-      result.push(node);
-      continue;
-    }
-
-    const openTag = parseInlineHtmlOpen(node.value ?? "");
-    if (!openTag) {
-      result.push(node);
-      continue;
-    }
-
-    let depth = 1;
-    const innerNodes: Content[] = [];
-    let closeIndex = -1;
-
-    for (let cursor = index + 1; cursor < children.length; cursor += 1) {
-      const next = children[cursor];
-      if (next.type === "html") {
-        const nextValue = String(next.value ?? "");
-        if (isInlineHtmlOpen(nextValue, openTag)) {
-          depth += 1;
-          innerNodes.push(next);
-          continue;
-        }
-        if (isInlineHtmlClose(nextValue, openTag)) {
-          depth -= 1;
-          if (depth === 0) {
-            closeIndex = cursor;
-            break;
-          }
-          innerNodes.push(next);
-          continue;
-        }
-      }
-      innerNodes.push(next);
-    }
-
-    if (closeIndex !== -1) {
-      // Only merge if inner nodes don't contain formatting marks
-      // Otherwise, merging would lose emphasis, links, etc.
-      if (!canSafelyMerge(innerNodes)) {
-        result.push(node);
-        continue;
-      }
-      const closeNode = children[closeIndex] as Html;
-      // v8 ignore next -- @preserve reason: node.value and closeNode.value are always strings here — parseInlineHtmlOpen and isInlineHtmlClose require non-null values to match; the ?? "" branches are structurally unreachable
-      const mergedValue = `${String(node.value ?? "")}${serializeInlineHtmlNodes(innerNodes)}${String(closeNode.value ?? "")}`;
-      result.push({ type: "html", value: mergedValue } as Html);
-      index = closeIndex;
-      continue;
-    }
-
-    result.push(node);
-  }
-
-  return result;
-}
-
-function parseInlineHtmlOpen(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed.startsWith("<") || trimmed.startsWith("</") || trimmed.endsWith("/>")) {
-    return null;
-  }
-  const match = trimmed.match(INLINE_HTML_OPEN_RE);
-  return match ? match[1].toLowerCase() : null;
-}
-
-function isInlineHtmlOpen(value: string, tagName: string): boolean {
-  const openTag = parseInlineHtmlOpen(value);
-  return openTag === tagName.toLowerCase();
-}
-
-function isInlineHtmlClose(value: string, tagName: string): boolean {
-  const match = value.trim().match(INLINE_HTML_CLOSE_RE);
-  return match ? match[1].toLowerCase() === tagName.toLowerCase() : false;
-}
-
-function serializeInlineHtmlNodes(nodes: Content[]): string {
-  let value = "";
-  for (const node of nodes) {
-    value += serializeInlineHtmlNode(node);
-  }
-  return value;
-}
-
-function serializeInlineHtmlNode(node: Content): string {
-  switch (node.type) {
-    case "text":
-      return escapeHtml((node as Text).value ?? "");
-    case "html":
-      return String((node as Html).value ?? "");
-    case "break":
-      return "<br>";
-    // v8 ignore next 5 -- @preserve reason: canSafelyMerge() only allows text/html/break into the merge path; a non-text/html/break node (with or without children) can never reach serializeInlineHtmlNode
-    default:
-      if ("children" in node && Array.isArray(node.children)) {
-        return serializeInlineHtmlNodes(node.children as Content[]);
-      }
-      return "";
   }
 }

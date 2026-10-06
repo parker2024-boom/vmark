@@ -7,6 +7,7 @@ import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { Slice } from "@tiptap/pm/model";
 import { htmlPasteExtension } from "./tiptap";
+import { DEFAULT_PASTE_SETTINGS } from "@/plugins/shared/pasteSettings";
 
 // Mock paste utils — passthrough by default, overridable per test
 const { mockIsViewMultiSelection, mockCreateMdPasteTx } = vi.hoisted(() => ({
@@ -22,8 +23,8 @@ vi.mock("@/utils/pasteUtils", async (importOriginal) => {
   };
 });
 
-vi.mock("@/plugins/markdownPaste/tiptap", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/plugins/markdownPaste/tiptap")>();
+vi.mock("@/plugins/shared/markdownPasteSlice", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/plugins/shared/markdownPasteSlice")>();
   mockCreateMdPasteTx._real = actual.createMarkdownPasteTransaction as unknown as (...args: unknown[]) => unknown;
   mockCreateMdPasteTx.mockImplementation((...args: unknown[]) => mockCreateMdPasteTx._real?.(...args));
   return {
@@ -393,5 +394,16 @@ describe("htmlPaste extension", () => {
       // Should reach line 116 without error — preserveLineBreaks defaults to false
       expect(typeof handled).toBe("boolean");
     });
+  });
+});
+
+describe("htmlPaste with no host configuration", () => {
+  it("falls back to the default paste settings rather than shipping dead", () => {
+    // A plugin lifted out of this repo has no settings store to read. The
+    // default is what makes it a working extension rather than a no-op.
+    const options = htmlPasteExtension.config.addOptions!.call({} as never) as {
+      getPasteSettings: () => unknown;
+    };
+    expect(options.getPasteSettings()).toEqual(DEFAULT_PASTE_SETTINGS);
   });
 });

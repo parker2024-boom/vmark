@@ -14,7 +14,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Schema } from "@tiptap/pm/model";
-import { EditorState } from "@tiptap/pm/state";
+import { EditorState, type Plugin } from "@tiptap/pm/state";
 
 // Mock CSS
 vi.mock("../ai-suggestion.css", () => ({}));
@@ -24,17 +24,12 @@ vi.mock("@/utils/imeGuard", () => ({
   runOrQueueProseMirrorAction: vi.fn((_view, action) => action()),
 }));
 
-// Mock markdownPaste
-vi.mock("@/plugins/markdownPaste/tiptap", () => ({
+// Mock the markdown slice builder
+vi.mock("@/plugins/shared/markdownPasteSlice", () => ({
   createMarkdownPasteSlice: vi.fn((state, _content) => {
     // Return a simple text slice
     return state.schema.text ? state.doc.slice(0, 0) : null;
   }),
-}));
-
-// Mock markdownCopy
-vi.mock("@/plugins/markdownCopy/tiptap", () => ({
-  cleanMarkdownForClipboard: vi.fn((text) => text),
 }));
 
 // The suggestion registry is the plugin's PORT — passed as an option, not
@@ -78,11 +73,12 @@ const schema = new Schema({
   },
 });
 
+let pluginUnderTest: Plugin | undefined; // decorations are plugin state: a state under test carries it
 function createState(text: string) {
   const doc = schema.node("doc", null, [
     schema.node("paragraph", null, text ? [schema.text(text)] : []),
   ]);
-  return EditorState.create({ doc, schema });
+  return EditorState.create({ doc, schema, plugins: pluginUnderTest ? [pluginUnderTest] : [] });
 }
 
 function makeSuggestion(overrides: Partial<AiSuggestion> = {}): AiSuggestion {
@@ -92,7 +88,7 @@ function makeSuggestion(overrides: Partial<AiSuggestion> = {}): AiSuggestion {
     type: "insert",
     from: 0,
     to: 0,
-    createdAt: Date.now(),
+    createdAt: Date.UTC(2026, 0, 1), // fixed: the plugin never reads it
     ...overrides,
   };
 }
@@ -638,7 +634,7 @@ describe("aiSuggestion plugin integration", () => {
       parent: undefined,
     };
     const plugins = aiSuggestionExtension.config.addProseMirrorPlugins?.call(extensionContext) ?? [];
-    plugin = plugins[0];
+    plugin = pluginUnderTest = plugins[0];
   });
 
   describe("keyboard shortcut handlers", () => {
@@ -905,7 +901,6 @@ describe("aiSuggestion plugin integration", () => {
 
       // Get the widget spec and call toDOM
       const widget = found[0];
-      const _spec = (widget as { spec?: { toDOM?: () => HTMLElement } }).spec;
       // Widget decorations have a toDOM in their type
       const widgetType = (widget as { type?: { toDOM?: () => HTMLElement } }).type;
       if (widgetType?.toDOM) {

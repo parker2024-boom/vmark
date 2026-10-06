@@ -1,5 +1,5 @@
 /**
- * The `browser` tool's action table (WI-NB6.3; audit row #175).
+ * The `browser` tool's action table.
  *
  * Purpose: map each advertised action to the one function that validates its
  * arguments and sends its bridge request. The schema + registration stay in

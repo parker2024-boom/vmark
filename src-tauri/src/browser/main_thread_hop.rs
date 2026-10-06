@@ -75,7 +75,7 @@ impl HopState {
 /// Hand `job` to `schedule` (the main-thread executor) and wait up to `deadline`
 /// for its result, under the protocol above.
 ///
-/// Every outcome is a typed [`NativeSurfaceError`] (round 4, #31): `schedule`
+/// Every outcome is a typed [`NativeSurfaceError`]: `schedule`
 /// failing is reported as its own error; a deadline the body never started before
 /// is `MainThreadTimeout`; a body that started is awaited to its result; a body
 /// that ended without one (it panicked, or the executor dropped it unrun) is an

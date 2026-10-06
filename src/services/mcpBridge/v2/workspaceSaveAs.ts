@@ -7,57 +7,46 @@
  * Key decision: `autoApproveEdits` authorises saving to a NEW location, never
  * destroying an existing one. The allowed roots include the parent directory
  * of every open document, so without that split an auto-approved save_as
- * could silently overwrite any sibling of any open file (audit 20260728 §1.5).
+ * could silently overwrite any sibling of any open file.
  *
- * A successful write is handed to `captureMcpWrite` like every other MCP write
- * (audit #152), so it records provenance and obeys the capture-on-save setting.
+ * Key decision: the write itself is the app's own save (`bridgeSave.ts`). The
+ * save pipeline re-points the document and its tab at the new path, and only
+ * when this save is still the newest one requested for the document — so an
+ * autosave to the old path that lands later cannot pull the tab back, and of
+ * two Save As requests the one asked for last wins. It also keeps the
+ * document's line endings and byte-order mark, records history, and captures
+ * provenance under the capture-on-save setting like every other MCP write.
  *
- * @coordinates-with services/coherence/mcpCapture.ts — inferred MCP capture under the capture policy (WI-1.6, WI-LX1.4)
+ * @coordinates-with tabGuard.ts — tab resolution, the flush, INVALID_TAB
+ * @coordinates-with bridgeSave.ts — the path guard and the save pipeline
+ * @coordinates-with liveEditor.ts — flushes pending keystrokes into the buffer first
+ * @coordinates-with services/persistence/applyPostSaveState.ts — re-points the document and tab
+ * @module services/mcpBridge/v2/workspaceSaveAs
  */
 
-import {
-  reassignTabOwnershipForPath,
-  windowLabelForTab,
-} from "@/services/workspaces/reassignTabOwnershipForPath";
-import { exists, writeTextFile } from "@tauri-apps/plugin-fs";
-import { useTabStore } from "@/stores/tabStore";
+import { exists } from "@tauri-apps/plugin-fs";
 import { useDocumentStore, useRevisionStore } from "@/stores/documentStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { getFileName, normalizePath } from "@/utils/paths";
-import { registerPendingSave, clearPendingSave } from "@/utils/pendingSaves";
-import { getCurrentWindowLabel } from "@/services/persistence/workspaceStorage";
 import { checkBridgePath } from "@/services/mcpBridge/bridgePathGuard";
-import { captureMcpWrite } from "@/services/coherence/mcpCapture";
 import { imeToast } from "@/services/ime/imeToast";
 import i18n from "@/i18n";
 import { respond } from "@/services/mcpBridge/utils";
 import { wrapHandler } from "./wrapHandler";
-import { v2ErrorString } from "./types";
-import type { V2Error } from "./types";
-
-function structuredError(id: string, err: V2Error): Promise<void> {
-  return respond({ id, success: false, error: v2ErrorString(err) });
-}
-
-function resolveTab(tabIdArg: string | undefined): string | V2Error {
-  const tabState = useTabStore.getState();
-  if (tabIdArg) {
-    const exists = Object.values(tabState.tabs).some((list) =>
-      list.some((t) => t.id === tabIdArg),
-    );
-    return exists ? tabIdArg : { error: "INVALID_TAB", message: "Unknown tabId" };
-  }
-  const active = tabState.activeTabId[getCurrentWindowLabel()];
-  return active ?? { error: "INVALID_TAB", message: "No focused tab" };
-}
+import { respondSaveFailed, saveTabForBridge } from "./bridgeSave";
+import { flushLiveEditors } from "./liveEditor";
+import { readOperationArgs } from "./readOperationArgs";
+import { requireTab, structuredError } from "./tabGuard";
 
 export async function handleWorkspaceSaveAs(
   id: string,
   args: Record<string, unknown>,
 ): Promise<void> {
   return wrapHandler(id, async () => {
-    const filePath = args.filePath;
-    if (typeof filePath !== "string" || filePath.length === 0) {
+    const wire = readOperationArgs("vmark.workspace.save_as", args);
+    const filePath = wire.filePath;
+    // A value of the wrong type reads as absent; an empty path names nothing.
+    if (!filePath) {
       await structuredError(id, {
         error: "INVALID_PATH",
         message: "filePath must be a non-empty string",
@@ -74,28 +63,15 @@ export async function handleWorkspaceSaveAs(
       return;
     }
 
-    const tabId = resolveTab(typeof args.tabId === "string" ? args.tabId : undefined);
-    if (typeof tabId !== "string") {
-      await structuredError(id, tabId);
-      return;
-    }
-
-    const tabState = useTabStore.getState();
-    const docState = useDocumentStore.getState();
-    const doc = docState.documents[tabId];
-    if (!doc) {
-      await structuredError(id, {
-        error: "INVALID_TAB",
-        message: "No document for tab",
-      });
-      return;
-    }
+    const tab = await requireTab(id, wire.tabId);
+    if (!tab) return;
+    const { tabId } = tab;
 
     const autoApprove =
       useSettingsStore.getState().advanced.mcpServer.autoApproveEdits;
     const sameOpenPath =
-      doc.filePath != null &&
-      normalizePath(doc.filePath) === normalizePath(filePath);
+      tab.filePath != null &&
+      normalizePath(tab.filePath) === normalizePath(filePath);
     if (!autoApprove && !sameOpenPath) {
       imeToast.warning(
         i18n.t("dialog:toast.mcpApprovalRequired", {
@@ -110,7 +86,7 @@ export async function handleWorkspaceSaveAs(
       return;
     }
 
-    // WI-5: `autoApproveEdits` authorises saving to a NEW location — it does
+    // `autoApproveEdits` authorises saving to a NEW location — it does
     // not authorise destroying an existing one. The bridge's allowed roots
     // include the parent directory of every open document, so without this an
     // auto-approved save_as could silently overwrite any sibling of any open
@@ -130,32 +106,21 @@ export async function handleWorkspaceSaveAs(
       return;
     }
 
-    const saveToken = registerPendingSave(filePath, doc.content);
-    try {
-      await writeTextFile(filePath, doc.content);
-    } finally {
-      clearPendingSave(filePath, saveToken);
+    // Read the buffer NOW, after flushing pending keystrokes into it: the
+    // approval checks above awaited, and the user may have kept typing — or
+    // closed the tab, in which case there is nothing left to save and the
+    // copy resolved earlier must not be written out in its place.
+    flushLiveEditors();
+    const live = useDocumentStore.getState().documents[tabId];
+    if (!live) {
+      await structuredError(id, { error: "INVALID_TAB", message: "No document for tab" });
+      return;
     }
-    tabState.updateTabPath(tabId, filePath);
-    // WI-13.4/D10: AI-driven Save As reclassifies ownership but never yanks
-    // the human's visible workspace.
-    {
-      const ownerWindow = windowLabelForTab(tabId);
-      if (ownerWindow) {
-        reassignTabOwnershipForPath(ownerWindow, tabId, filePath, { allowVisibleSwitch: false });
-      }
+    const outcome = await saveTabForBridge(tabId, filePath, live.content, "workspace.save_as");
+    if (!outcome.saved) {
+      await respondSaveFailed(id, outcome);
+      return;
     }
-    tabState.updateTabTitle(tabId, getFileName(filePath) || "Untitled");
-    docState.setFilePath(tabId, filePath);
-    // Verbatim write: both snapshots are the same string here.
-    docState.markSaved(tabId, { editorSnapshot: doc.content, diskSnapshot: doc.content });
-    // Coherence (WI-1.6): inferred capture, session-read inputs. Fire-and-forget:
-    // a failed capture never fails the save (the scan heals the gap).
-    void captureMcpWrite({
-      absolutePath: filePath,
-      content: doc.content,
-      toolName: "workspace.save_as",
-    }).catch(() => {});
     const revision = useRevisionStore.getState().getRevision(tabId);
     await respond({ id, success: true, data: { revision } });
   });

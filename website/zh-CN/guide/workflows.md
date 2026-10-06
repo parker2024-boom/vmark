@@ -198,19 +198,26 @@ output:
 
 ## 条件
 
-步骤可以带有 `if:` 条件。如果它求值为假，该步骤会被跳过（而不是失败）；如果它求值为真或不存在，该步骤就会运行。可用的状态函数有三个：
+步骤可以带有 `if:` 条件。如果它求值为假，该步骤会被跳过（而不是失败）。可用的状态函数有三个，它们遵循 GitHub Actions 的规则：
 
-| 条件 | 含义 |
-|-----------|---------|
-| `success()` | 没有任何前序步骤失败时为真。 |
-| `failure()` | 有前序步骤失败时为真。 |
-| `always()` | 始终为真。 |
+| 条件 | 何时为真 |
+|-----------|-----------|
+| `success()` | 到目前为止没有任何步骤失败，**并且**本步骤 `needs` 的每个步骤都已完成。 |
+| `failure()` | 本次运行中任何更早的步骤失败——不仅限于本步骤 `needs` 的步骤。 |
+| `always()` | 始终。 |
+
+`success()` 是默认值。没有 `if:` 的步骤只在 `success()` 成立时运行；`if:` 中没有提到这三个函数中任何一个的步骤也是如此——`if: X` 的含义是 `success() && (X)`。正是这一点让普通步骤不会在失败之后运行。
+
+| 之前发生了什么 | 普通步骤或 `success()` 步骤 | `failure()` 步骤 | `always()` 步骤 |
+|---|---|---|---|
+| 它所需的步骤全部成功 | 运行 | 跳过 | 运行 |
+| 它所需的某个步骤**失败**（或超时，或其审批被拒绝） | 跳过 | 运行 | 运行 |
+| 它所需的某个步骤因自身的 `if:` 而被**跳过** | 跳过 | 跳过——没有任何失败 | 运行 |
+| 运行被**取消** | 跳过 | 跳过 | 跳过 |
+
+取消不是条件能够感知到的：它在 `if:` 之前检查，所有剩余步骤都会以 *工作流已取消* 被跳过，`always()` 步骤也不例外。如果某次运行中有步骤失败，即使之后运行了 `failure()` 或 `always()` 步骤，这次运行仍然以**失败**结束，并指出第一个失败的步骤。
 
 你可以组合引用与比较，例如 `${{ steps.classify.outputs.title == "Draft" }}`。格式错误或不受支持的条件会**让该步骤明确失败**，而不是悄悄放行——不存在“出错时视为真”的回退。
-
-::: warning 当前限制：failure() 和 always() 尚不会触发
-一旦有任何步骤失败，运行器就会跳过所有剩余步骤——这一跳过发生在 `if:` 条件求值**之前**。因此，`success()` 按预期工作，而 `failure()` 和 `always()` 条件目前处于潜伏状态：一旦发生失败，由它们守护的步骤会和其他步骤一起被跳过，根本没有机会在失败路径上运行。暂时请把 `failure()` / `always()` 视为保留语法。对于你希望在正常路径上运行的步骤，请使用 `success()`（或不加条件）。
-:::
 
 ## 按步骤设置
 
@@ -227,7 +234,7 @@ output:
 
 ### 超时
 
-每个步骤都包裹在其有效超时之内。超时后，该步骤以 `Timed out after Xs` 失败：CLI 提供商的子进程会被杀死，在途的 REST 请求会被丢弃。依赖于超时步骤的下游步骤会被跳过。此外，单个步骤收集的输出还有 5 MB 的硬性上限——失控的提供商会被取消，并报 `Provider output exceeded 5 MB cap`。
+每个步骤都包裹在其有效超时之内。超时后，该步骤以 `Timed out after Xs` 失败：CLI 提供商的子进程会被杀死，在途的 REST 请求会被丢弃。超时的步骤视为失败：依赖它的步骤会被跳过，除非它们的 `if:` 使用了 `failure()` 或 `always()`。此外，单个步骤收集的输出还有 5 MB 的硬性上限——失控的提供商会被取消，并报 `Provider output exceeded 5 MB cap`。
 
 ## 审批
 
@@ -251,7 +258,7 @@ output:
 
 随着运行推进，每个节点都会实时更新——运行中、成功、跳过或出错——因此你可以看着流水线前进，并在出错时准确看到是哪一步失败。运行结束时，工具栏会说明它是已完成、失败还是被取消。如果后端拒绝启动运行——引擎已关闭、YAML 校验未通过、快照失败——会有通知说明原因。
 
-整个应用同一时间只能运行一个工作流，而不是每个窗口一个：一个工作流运行期间，其他所有工作流文件中的“运行”都会被禁用，期间启动的工作流精灵也会被拒绝。
+整个应用同一时间只能运行一个工作流，而不是每个窗口一个。一个工作流运行期间，**同一窗口中**其他所有工作流文件里的“运行”都会被禁用，工具栏会显示 *另一个工作流正在运行*。另一个窗口中的工作流文件仍显示“运行”可用；点击它会被拒绝，并提示 *已有工作流正在运行。请等待其完成或取消后再试。* 期间启动的工作流精灵同样会被拒绝。
 
 ### 撤销一次运行
 
@@ -265,15 +272,18 @@ output:
 flowchart TD
     A["Click Run on .yml file"] --> B["Topological sort of steps by needs:"]
     B --> C{"Next step"}
-    C --> D{"Dependency failed or workflow failed?"}
+    C --> D{"Run cancelled?"}
     D -->|Yes| E["Skip step"]
-    D -->|No| F{"if: condition present?"}
-    F -->|"Evaluates false"| E
-    F -->|"True or absent"| G{"approval resolves to ask?"}
+    D -->|No| F{"Evaluate if: against the run so far (success() when absent)"}
+    F -->|"False"| E
+    F -->|"Error"| I["Step fails"]
+    F -->|"True"| G{"approval resolves to ask?"}
     G -->|Yes| H["Pause: approval dialog"]
-    H -->|Denied| I["Step fails"]
+    H -->|"Denied or expired"| I
+    H -->|"Cancelled"| E
     H -->|Approved| J["Fill template, call provider"]
     G -->|No| J
+    J -->|"Error or timeout"| I
     J --> K["Store outputs.text and JSON fields"]
     K --> C
     E --> C

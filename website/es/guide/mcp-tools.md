@@ -4,7 +4,7 @@ VMark expone **nueve herramientas MCP compuestas** a los asistentes de IA: `sess
 
 Tres de las nueve — `session`, `browser_read` y `coherence` — declaran `readOnlyHint: true`, de modo que un cliente MCP puede aprobarlas automáticamente. Esa es la razón por la que `browser`/`browser_read` y `coherence`/`coherence_resolve` son herramientas separadas: las anotaciones son **por herramienta**, no por acción, así que una herramienta que combina una instantánea ARIA con `execute_js` tiene que advertir del peligro de `execute_js`. Dividir según la pregunta «¿esto modifica algo?» permite que cada mitad diga la verdad y mantiene visibles en la lista de herramientas las acciones genuinamente destructivas de la superficie.
 
-La superficie anterior de 12 herramientas / 76 acciones se podó porque las herramientas de formato dentro del documento (negrita, encabezados, tablas, etc.) duplican un trabajo que los agentes de IA ya hacen trivialmente mediante el viaje de ida y vuelta de Markdown. Se conservó `selection` (según el ADR-7 del plan de poda) porque el viaje de ida y vuelta del documento completo resulta poco económico en archivos grandes — cada edición paga el documento entero en tokens de entrada, el documento entero en tokens de salida (~5× el precio de entrada) y una ventana de escritura más larga que amplía el bucle de reintentos por revisión obsoleta. Consulta [el plan de poda de MCP](https://github.com/xiaolai/vmark/blob/main/dev-docs/plans/20260504-mcp-pruning.md) para la justificación completa.
+La superficie anterior de 12 herramientas / 76 acciones se podó porque las herramientas de formato dentro del documento (negrita, encabezados, tablas, etc.) duplican un trabajo que los agentes de IA ya hacen trivialmente mediante el viaje de ida y vuelta de Markdown. Se conservó `selection` (según el ADR-7 del plan de poda) porque el viaje de ida y vuelta del documento completo resulta poco económico en archivos grandes — cada edición paga el documento entero en tokens de entrada, el documento entero en tokens de salida (~5× el precio de entrada) y una ventana de escritura más larga que amplía el bucle de reintentos por revisión obsoleta. Consulta [el plan de poda de MCP](https://github.com/xiaolai/vmark/blob/main/.claude/adr/plans/20260504-mcp-pruning.md) para la justificación completa.
 
 ::: tip Flujo de trabajo recomendado
 1. Llama a `session.get_state` una vez para ver las ventanas abiertas, las pestañas y, por pestaña, `{filePath, dirty, revision, kind}`.
@@ -15,7 +15,7 @@ La superficie anterior de 12 herramientas / 76 acciones se podó porque las herr
 :::
 
 ::: tip Diagramas Mermaid
-Cuando uses IA para generar Mermaid mediante MCP, considera instalar el [servidor MCP mermaid-validator](/guide/mermaid#mermaid-validator-mcp-server-syntax-checking) — detecta errores de sintaxis usando los mismos parsers de Mermaid v11 antes de que los diagramas lleguen a tu documento.
+Cuando uses IA para generar Mermaid mediante MCP, considera instalar el [servidor MCP mermaid-validator](/es/guide/mermaid#mermaid-validator-mcp-server-syntax-checking) — detecta errores de sintaxis usando los mismos parsers de Mermaid v11 antes de que los diagramas lleguen a tu documento.
 :::
 
 ---
@@ -77,7 +77,7 @@ Una pestaña puede existir, ser direccionable y aun así no estar mostrándose. 
 |---|---|
 | `tab.active` | Esta pestaña es la pestaña actual de su ventana. |
 | `tab.visible` | Esta pestaña se renderiza en este momento. Es `false` cuando la pestaña pertenece a una instancia del espacio de trabajo que la ventana no está mostrando actualmente. |
-| `window.activeWorkspaceInstanceId` | La instancia del espacio de trabajo que la ventana está mostrando, o `null` cuando el riel de espacios de trabajo está desactivado (entonces todas las pestañas son visibles). |
+| `window.activeWorkspaceInstanceId` | La instancia del espacio de trabajo que la ventana está mostrando, o `null` cuando la barra de espacios de trabajo está desactivada (entonces todas las pestañas son visibles). |
 
 `window.focused` es la ventana que el **usuario** está mirando, leída del sistema operativo. No es «la ventana que respondió a esta solicitud» — VMark enruta una solicitud a la ventana que posee el espacio de trabajo pertinente, que en una sesión con varias ventanas suele ser otra distinta.
 
@@ -169,24 +169,32 @@ Guarda una pestaña en una ruta nueva.
 Devuelve `{revision}`.
 
 Guardar en una ruta distinta del archivo actual de la propia pestaña se trata como una
-escritura nueva. Cuando **Aprobar ediciones automáticamente** (Ajustes → Integraciones) está
+escritura nueva. Cuando **Aprobar automáticamente guardados en una ubicación nueva y resultados de genios** (Configuración → Integraciones) está
 desactivado (lo predeterminado), una solicitud así se rechaza con `APPROVAL_REQUIRED` y un aviso
 te indica qué se bloqueó. Guardar de vuelta en la ruta propia de la pestaña siempre está permitido.
 
 ### `close`
 
-Cierra una pestaña. Se niega a descartar trabajo no guardado sin `force`.
+Cierra una pestaña de documento. Se niega a descartar trabajo no guardado sin `force` y nunca cierra una pestaña fijada.
 
 | Parámetro | Tipo | Requerido |
 |-----------|------|-----------|
 | `tabId` | string | Sí |
 | `force` | boolean | No |
 
-Devuelve `{closed: true}` en caso de éxito, o `{closed: false, reason: "DIRTY"}` si la pestaña está sucia y no se proporcionó `force`.
+Devuelve `{closed: true}` en caso de éxito. En otro caso, `{closed: false, reason}`:
+
+| `reason` | Significado |
+|----------|-------------|
+| `DIRTY` | La pestaña tiene cambios sin guardar y no se proporcionó `force` |
+| `DIVERGENT` | El archivo cambió en el disco y el usuario conservó la versión de la pestaña; sin `force`, el cierre la perdería |
+| `PINNED` | La pestaña está fijada — se rechaza incluso con `force`; el usuario debe desfijarla |
+
+Las pulsaciones que el editor aún no ha transmitido se cuentan como no guardadas antes de la comprobación. Una pestaña del navegador se rechaza con un error `INVALID_TAB` — ciérrala con la acción `close` de la herramienta `browser`.
 
 ### `switch_tab`
 
-Activa una pestaña y la hace **visible**. Con el [riel de espacios de trabajo](/guide/workspace-rail)
+Activa una pestaña y la hace **visible**. Con el [barra de espacios de trabajo](/es/guide/workspace-rail)
 activado, esto puede cambiar el contexto de espacio de trabajo activo del usuario — la respuesta
 informa `workspaceSwitched: true` cuando lo hace, así que el asistente debería avisar al usuario.
 
@@ -227,16 +235,23 @@ Reemplaza por completo el contenido del documento.
 | `tabId` | string | No | Pestaña de destino (por defecto, la enfocada) |
 | `content` | string | Sí | Nuevo contenido completo |
 | `expected_revision` | string | No | Token de revisión de la última lectura |
+| `save` | boolean | No | Guardar también en el disco (predeterminado `true`); `false` solo cambia la pestaña |
+
+De forma predeterminada la escritura se guarda: la respuesta lleva `saved: true`, o `saved: false` con `save_skipped` (`"untitled"` — la pestaña aún no tiene archivo, usa `save_as`; `"opt_out"` — pasaste `save: false`) o `save_error` (la escritura en disco falló). Cuando el destino es la pestaña WYSIWYG activa de un documento Markdown, el texto se carga en el editor en vivo (como un único paso que se puede deshacer), y lo que se guarda es la serialización del editor — el mismo Markdown, posiblemente normalizado, no necesariamente los caracteres exactos enviados. Las demás pestañas guardan el texto tal como se envió, con los finales de línea normalizados.
+
+Cada guardado que hace un cliente de IA — mediante `write`, `workspace.save` o `workspace.save_as` — se registra en el historial del documento como una instantánea `mcp` (marcada como *(mcp)* en la barra lateral de Historial), de modo que las versiones escritas por una IA se distinguen de las tuyas. Igual que un guardado manual, nunca se fusiona con un autoguardado vecino ni se omite por su tamaño.
 
 Si se proporciona `expected_revision` y el documento ha cambiado desde esa lectura, la respuesta es un sobre de error estructurado `STALE` con la revisión actual; vuelve a leer y reintenta.
 
 ```json
 // success
-{ "revision": "rev-newAfterWrite" }
+{ "revision": "rev-newAfterWrite", "saved": true }
 
 // stale
 { "error": "STALE", "message": "Document has changed since the last read", "current_revision": "rev-currentNow" }
 ```
+
+Mientras el usuario compone texto con un método de entrada (IME) en el editor WYSIWYG que muestra la pestaña, la escritura se rechaza con `BUSY` y no cambia nada: el texto en composición pertenece al método de entrada hasta que se confirma. Reintenta en breve. En modo Fuente la escritura se acepta, y el editor la muestra en cuanto termina la composición.
 
 ### `transform`
 
@@ -250,7 +265,7 @@ Aplica una reescritura determinista. Actualmente admite transformaciones especí
 
 `cjk-format` aplica de extremo a extremo la configuración de formato CJK del usuario. `cjk-spacing` inserta un espacio único entre los caracteres CJK y los caracteres latinos o dígitos adyacentes. `cjk-punctuation` convierte la puntuación ASCII contigua a caracteres CJK a su forma de ancho completo.
 
-Devuelve `{revision}`.
+Devuelve `{revision}`. Igual que `write`, se rechaza con `BUSY`, sin cambiar nada, mientras el usuario compone con un método de entrada en el editor WYSIWYG que muestra la pestaña.
 
 ---
 
@@ -344,6 +359,8 @@ Devuelve `{revision, replaced_chars}` en caso de éxito. `replaced_chars` es la 
 
 `STALE` devuelve `{error: "STALE", message, current_revision}` exactamente como `document.write`. La revisión a nivel de documento detecta las pulsaciones de tecla entre `get` y `set`. El puro movimiento del cursor (sin una pulsación) no lo arbitra el servidor — si el usuario movió el cursor entre `get` y `set`, la edición se aplica en la nueva posición.
 
+`set` devuelve `BUSY`, sin cambiar nada, mientras el usuario compone texto con un método de entrada en el editor enfocado, ya sea en modo WYSIWYG o en modo Fuente; reintenta en breve. `get` nunca se rechaza por esto.
+
 ---
 
 ## `browser`
@@ -352,7 +369,7 @@ El **lado mutante** de la superficie del navegador integrado — todo lo que cam
 la pestaña o un inicio de sesión guardado. Lee primero la página con [`browser_read`](#browser-read):
 cada modo de destino aquí se refiere a lo que devolvió una lectura.
 
-Las herramientas del navegador siguen **Ajustes → Avanzado → macOS → Navegador integrado**, que está
+Las herramientas del navegador siguen **Configuración → Avanzado → macOS → Navegador integrado**, que está
 **activado de forma predeterminada** en macOS — así que estas herramientas están disponibles para un
 cliente de IA conectado a menos que lo desactives. Cada acción falla con `BROWSER_DISABLED` mientras
 está desactivado. Las URL devueltas a MCP se ocultan a través del mismo límite que usa el estado de
@@ -360,6 +377,16 @@ sesión del navegador de la aplicación.
 
 Anotada como `readOnlyHint: false, destructiveHint: true` — precisa en lugar de meramente
 conservadora, porque cada acción aquí muta algo.
+
+**Los errores tienen tipo.** Un rechazo llega como `TOKEN: message` (`STALE_COMMAND`,
+`NOT_GRANTED`, `EVAL_TIMEOUT`, `TAB_LIMIT`, …) con el mismo token — y cualquier dato
+estructurado que adjuntó la aplicación (un ticket de navegación, el `reason` de un act, el verbo de reintento) — en
+`structuredContent`. Compara con el token, no con el texto.
+
+Un `EVAL_TIMEOUT` es **indeterminado**, no un fallo limpio: el script enviado puede
+haberse ejecutado hasta el final después de que el driver dejara de esperar, así que lleva
+`data.detail.indeterminate: true` y no debe reintentarse como si no hubiera pasado nada —
+lee la página (`browser_read`) para saber en qué estado está antes de volver a actuar.
 
 ### `act`
 
@@ -378,41 +405,63 @@ operación:
 así que un sitio que se basa en `event.isTrusted` puede ignorarlos. Las operaciones mutantes requieren
 una aprobación acotada al origen; las subidas elegidas por la IA nunca se permiten.
 
-**Un clic verifica su efecto antes de informar de éxito.** El objetivo se desplaza hasta quedar a la
-vista, debe estar renderizado de forma visible (se comprueban los estilos calculados y los ancestros
-colapsados, de modo que un botón duplicado dentro de un paso de acordeón cerrado se omite, no se pulsa)
-y el punto del clic se comprueba por hit-test — un objetivo cubierto por una superposición se rechaza
-nombrando al elemento que lo tapa (`covered by div.cmp-overlay`) en lugar de pulsarse a través de él.
-Los resultados de rol + nombre llevan contadores `matchedTotal` / `matchedVisible` para que la
-ambigüedad sea visible, y cada respuesta de act incluye la `url` y la `generation` actuales de la
-pestaña. `type` gestiona campos de texto, controles `<select>` (pasa la etiqueta o el valor de la
-opción; una opción inexistente se rechaza como `no-such-option`) y regiones `contenteditable`.
+**Un clic verifica su efecto antes de informar de éxito, y se niega en lugar de
+adivinar.** El objetivo se desplaza hasta quedar a la vista, debe estar renderizado de forma visible (se comprueban los
+estilos calculados y los ancestros colapsados o transparentes, de modo que un botón duplicado dentro de un paso
+de acordeón cerrado se omite, no se pulsa) y el punto del clic se comprueba por hit-test — un objetivo
+cubierto por una superposición se rechaza nombrando al elemento que lo tapa (`covered by div.cmp-overlay`,
+datos de la página) en lugar de pulsarse a través de él. Cuando varios elementos visibles comparten el rol y el
+nombre, el act se rechaza como `ambiguous` y `candidates` enumera sus refs — nunca elige
+uno por orden en el documento. Otros motivos de rechazo: `hidden`, `offscreen` (no se puede desplazar
+hasta el área visible), `disabled` (incluidos `pointer-events: none` y los subárboles inertes),
+`upload` (los campos de archivo nunca se automatizan) y `rejected-value` (el campo saneó el
+texto). Se recorren las shadow roots abiertas; la respuesta incluye los contadores `matchedTotal` /
+`matchedVisible`, la `url` y la `generation` actuales de la pestaña tanto en caso de éxito **como** de
+fallo, y `popup: {url}` cuando la página intentó abrir una ventana durante el act (VMark
+bloquea las ventanas emergentes; la URL es la que quería abrir). `type` gestiona campos de texto, controles `<select>`
+(pasa la etiqueta o el valor de la opción; una opción inexistente se rechaza como
+`no-such-option`) y regiones `contenteditable`. `key` emula las acciones predeterminadas que
+les faltan a los eventos sintéticos — Enter dentro de un formulario lo envía, Tab mueve el foco — e informa de
+`defaultAction`.
+
+**Qué vincula una aprobación.** Una aprobación de `click` vincula el elemento (rol + nombre). Una
+aprobación de `type`, `key` o `scroll` también vincula el texto, la tecla (con modificadores) o el
+delta exactos que pediste — el aviso lo muestra —, así que un reintento con un contenido distinto vuelve a preguntar.
 
 ### `workflow_run` / `workflow_cancel`
 
 `workflow_run` ejecuta un flujo de trabajo que proporcionas como texto `source` en una pestaña
 propiedad de la IA. Argumentos: `tabId?`, `source` (el texto del flujo de trabajo — una pequeña
 gramática orientada a líneas; lo escribes tú, lo hace la IA, o [`workflow_record`](#workflow-record) lo
-captura a partir de tus propias acciones), `inputs?` (un mapa
-`{name: value}` sustituido en las referencias `{name}`), `allowRepeat?`. Devuelve `{runId, steps}`
-**de inmediato** — la ejecución se realiza de forma **asíncrona**, porque una ejecución de varios
-pasos puede sobrevivir a una sola solicitud. Sondea el `workflow_status` de
-[`browser_read`](#browser-read) para ver el progreso.
+captura a partir de tus propias acciones), `inputs?` (un mapa `{name: value}` sustituido en las
+referencias `{name}`; hay que proporcionar todas las entradas declaradas y las no declaradas se rechazan),
+`allowRepeat?` y `resumeRunId?` (ver más abajo).
+Devuelve `{runId, steps, firstStep}` **de inmediato** — la ejecución se realiza de forma
+**asíncrona**, porque una ejecución de varios pasos puede sobrevivir a una sola solicitud. Sondea el
+`workflow_status` de [`browser_read`](#browser-read) para ver el progreso; mientras la ejecución te espera,
+informa de `pendingApproval`.
 
 Los pasos deterministas — `click` / `type` / `navigate` en esa gramática, y `extract` — se ejecutan
 dentro de VMark y están **sujetos a aprobación individualmente**, exactamente como un `act` emitido a
 mano: la ejecución autoriza cada uno por separado, de modo que un flujo de trabajo no es una manera de
 eludir los avisos de aprobación. `goal`, `confirm`, `api` y cualquier paso en prosa libre **pausan** la
-ejecución para que la IA los gestione a mano. Una nueva ejecución **omite los pasos de escritura que ya
-tuvieron éxito** en esta sesión (el registro de escrituras completadas), a menos que se establezca
-`allowRepeat` — de modo que volver a ejecutar tras una pausa no envía nada dos veces.
+ejecución para que la IA los gestione a mano. **Reanudar tras una pausa:** haz el paso pausado (o pide a la IA
+que te ayude) y luego inicia una ejecución nueva con `resumeRunId` apuntando a la ejecución pausada — hereda los
+pasos completados y trata el paso pausado como hecho, así que no se envía nada dos veces. Volver a
+ejecutar **el mismo source con las mismas entradas** también omite los pasos de escritura que ya tuvieron
+éxito en esta sesión (el registro de escrituras completadas; los pasos omitidos se informan como
+`skipped`), a menos que se establezca `allowRepeat`. Unas entradas distintas son otro trabajo y se ejecutan
+completas.
 
 `workflow_cancel {tabId?, runId}` detiene una ejecución. **Nunca está sujeta a aprobación** — detener
-siempre está permitido — y retira los avisos pendientes de la ejecución y te devuelve la pestaña. La
-ejecución también se detiene en cuanto tomas el control del navegador (cualquier interacción con la
-página o su interfaz recupera el control).
+siempre está permitido — y retira los avisos pendientes de la ejecución, aborta un paso que está esperando
+tu aprobación y te devuelve la pestaña. Una ejecución terminada informa `already-terminal`
+y se deja como estaba; un `runId` desconocido es `RUN_NOT_FOUND`. La ejecución también se detiene en
+cuanto tomas el control del navegador (cualquier interacción con la página o su interfaz recupera
+el control) — incluso mientras espera un aviso.
 
-Las ejecuciones están acotadas (≤ 25 pasos, ≤ 120 s, source ≤ 64 KiB) y son de una en una por pestaña.
+Las ejecuciones están acotadas (≤ 25 pasos, source ≤ 64 KiB y 120 s de tiempo **en ejecución** — el tiempo
+que pasa esperándote no cuenta) y son de una en una por pestaña.
 
 ### `workflow_record`
 
@@ -438,15 +487,30 @@ través de las navegaciones de página y está acotada (200 eventos por página,
 
 ### `open`
 
-Argumentos: `url` y `timeoutMs` opcional (1–12 000 ms). Crea una pestaña propiedad de la IA usando la
-postura actual Sandbox o Compartida y devuelve su `tabId`, `navigationId`, URL, título y generación una
-vez completada la carga.
+Argumentos: `url`, `timeoutMs` opcional (1–9000 ms) y `profile` opcional
+(`[A-Za-z0-9._-]`, macOS 14+, postura sandbox): un **contexto persistente con nombre** para que un inicio de sesión
+pueda reutilizarse por nombre — abrir uno necesita una aprobación nueva para cada uso, y la IA nunca ve
+las credenciales. Crea una pestaña propiedad de la IA usando la postura actual Sandbox o Compartida,
+la trae al frente y devuelve su `tabId`, `navigationId`, URL, título y generación
+una vez completada la carga. Puede haber como máximo **8 pestañas propiedad de la IA** abiertas (`TAB_LIMIT`); la IA
+cierra las que ya no necesita. En la postura Compartida, un `open` que necesita tu aprobación de destino
+conserva su pestaña e indica a la IA que reintente con `navigate` sobre ese `tabId`
+(`data.retry`) — un `open` nuevo crearía una pestaña que la aprobación no puede cubrir.
 
 ### `navigate`
 
-Argumentos: `tabId?`, `url` y `timeoutMs` opcional. Navega una pestaña propiedad de la IA y devuelve el
-resultado del ticket de navegación. Un tiempo de espera agotado aún devuelve el ticket, de modo que un
-`wait` posterior pueda recuperar el resultado final.
+Argumentos: `tabId?`, `url` y `timeoutMs` opcional. Navega una pestaña propiedad de la IA (trayéndola
+al frente) y devuelve el resultado del ticket de navegación. Un `TIMEOUT` aún lleva el
+ticket, de modo que un `wait` posterior pueda recuperar el resultado final.
+
+### `close`
+
+Argumentos: `tabId`. Cierra una pestaña propiedad de la IA que abrió la IA. **Nunca está sujeta a aprobación** —
+detener siempre está permitido. Una pestaña humana se rechaza (`TAB_NOT_AI_OWNED`). El resultado es
+`{tabId, closed: true, destroyed: true}` una vez confirmado que la vista nativa ha desaparecido; un
+desmontaje que el driver no pudo confirmar tras sus reintentos se informa como
+`TAB_TEARDOWN_FAILED` con `data.destroyed: false` — el registro de la pestaña ya no existe,
+así que no reintentes el cierre; dile al usuario que puede que una vista nativa siga en ejecución.
 
 **Detección de barreras.** Un resultado de `open` / `navigate` / `wait` cargado puede llevar
 `gate: {kind, hint}` cuando la página a la que se llegó se interpreta como un **muro de inicio de
@@ -466,12 +530,14 @@ objetivo, etc. **Clase Actuar** (sujeta a aprobación, op `style`). Mundo de con
 
 ### `execute_js`
 
-Argumentos: `tabId?`, `script` (debe hacer `return` de un valor serializable como JSON). La vía de
-escape para lo que los verbos estructurados no pueden expresar. Se ejecuta en el **mundo de contenido
-aislado** — comparte el DOM (así que `querySelector`, `element.style` funcionan) pero **no puede** ver
-el heap/globales de JS propios de la página. Se aprueba **solo por llamada** (nunca un permiso
-permanente, impuesto en el driver de Rust), la aprobación muestra el script, y el valor de retorno se
-marca como **no confiable** y nunca se introduce automáticamente en un `act` posterior. Prefiere
+Argumentos: `tabId?`, `script` — el cuerpo de una función async que hace `return` (o await) de un
+valor serializable como JSON. La vía de escape para lo que los verbos estructurados no pueden expresar.
+Se ejecuta en el **mundo de contenido aislado** — comparte el DOM (así que `querySelector`,
+`element.style` funcionan) pero **no puede** ver el heap/globales de JS propios de la página. El valor vuelve
+como `result` (`undefined` se convierte en `null`); una excepción, o un valor que JSON no puede codificar, es un
+**fallo que nombra el error**, nunca un resultado. Se aprueba **solo por llamada** (nunca un permiso
+permanente, impuesto en el driver de Rust), la aprobación muestra el script, y el
+valor de retorno se marca como **no confiable** y nunca se introduce automáticamente en un `act` posterior. Prefiere
 `query`/`style` primero.
 
 ### `session_save` / `session_load`
@@ -483,8 +549,9 @@ por `handle` y devuelve un resumen sin valores (recuentos); `session_load` la re
 Un `session_load` solo se aplica a una página con el **mismo origen** desde el que se guardó la sesión.
 Esto es credencial **por referencia** (ADR-A7): la IA nombra una sesión guardada y nunca recibe los
 valores de cookies/tokens, que nunca se registran. Ambas son el permiso `session` — **nunca un permiso
-permanente** (aprobado por llamada), y una aprobación para un handle no puede gastarse en otro. *Hoy
-esto cubre `localStorage`; la captura de cookies es un seguimiento pendiente de pruebas en vivo.*
+permanente** (aprobado por llamada), y una aprobación para un handle no puede gastarse en otro. Una sesión
+guardada cubre `localStorage` **y las cookies**, ambos acotados al origen en el que estaba la página
+cuando la guardaste.
 
 ### `console_clear`
 
@@ -514,9 +581,13 @@ nunca reintroduzcas un resultado directamente como objetivo de un act de `browse
 
 ### `read`
 
-Devuelve `{url, snapshot}` para la pestaña del navegador enfocada, o la pestaña nombrada por `tabId`.
-`snapshot` es una lista orientada a ARIA de `{role, name, ref}` — cada `ref` (p. ej. `"e5"`) es un
-handle estable para ese elemento, válido durante la vida de la vista actual.
+Devuelve `{url, snapshot, truncated?, unreachable?}` para la pestaña del navegador enfocada, o la
+pestaña nombrada por `tabId`. `snapshot` es una lista orientada a ARIA de nodos `{role, name, ref}` —
+más `level` para los encabezados, `checked`, `disabled` y `upload: true` para un campo de archivo que la
+IA nunca puede operar —, y cada `ref` (p. ej. `"e5"`) es un handle estable para ese elemento, válido durante
+la vida de la vista actual. El recorrido entra en las shadow roots abiertas; `unreachable` cuenta las
+shadow roots cerradas y los marcos en los que no pudo entrar, y `truncated: true` significa que se alcanzó el límite de nodos
+(2000) o el de nombres (200 caracteres).
 
 ### `screenshot`
 
@@ -526,12 +597,15 @@ visual hacia la disposición y el estado renderizado que la instantánea ARIA no
 captura de forma nativa (`takeSnapshot`) y no lee ningún DOM ni JavaScript de la página. Clase Leer:
 autorizada exactamente como `read` (permitida en una pestaña propiedad de la IA; una pestaña humana
 necesita una vinculación, que se consume al capturar).
+Una pestaña que no es la página visible puede renderizarse en blanco — `open` y `navigate` traen una pestaña
+al frente.
 
 ### `query`
 
 Argumentos: `tabId?`, `selector` (CSS), y `fields: {attributes, box, styles:[...]}` opcional. Devuelve
-`{count, elements: [{ref, tag, text, …}]}` — datos estructurados del DOM que la instantánea ARIA no
-puede nombrar (tablas, valores calculados). **Clase Leer.** Se ejecuta en el mundo de contenido aislado.
+`{count, elements: [{ref, tag, text, …}], truncated?}` — datos estructurados del DOM que la instantánea ARIA no
+puede nombrar (tablas, valores calculados) —, con un máximo de 50 elementos y 500
+caracteres de texto cada uno (`truncated: true` cuando el selector coincidió con más). **Clase Leer.** Se ejecuta en el mundo de contenido aislado.
 
 ### `extract`
 
@@ -546,17 +620,21 @@ y un lector genérico basado en heurística de densidad es la alternativa para c
 
 ### `workflow_status`
 
-Argumentos: `tabId?`, `runId` (de `workflow_run`). Devuelve `{status, completedSteps, stepCount,
-pausedAt?, reasonCode?, reason?, stepResults}` donde `status` es uno de `running` / `paused` /
-`completed` / `failed` / `cancelled`. Un estado `paused` nombra el paso que te necesita en `pausedAt`.
-**Clase Leer** — sondéalo libremente.
+Argumentos: `tabId?`, `runId` (de `workflow_run`). Devuelve `{status, completedSteps,
+skippedSteps, stepCount, firstStep, pausedAt?, pendingApproval?, reasonCode?, reason?,
+resumedFrom?, stepResults}` donde `status` es uno de `running` / `paused` / `completed` /
+`failed` / `cancelled` / `superseded`, `stepResults` contiene una entrada por paso
+(`{index, status, attempts, reason?, data?}`) y `pendingApproval` está presente mientras la
+ejecución espera tu decisión. Un estado `paused` nombra el paso que te necesita en
+`pausedAt`. **Clase Leer** — sondéalo libremente.
 
 ### `console`
 
 Argumentos: `tabId?`. Devuelve `{entries: [{level, text}], url}` — la salida `console.*` capturada de
 la página, más los **errores no capturados y los rechazos de promesa no gestionados** (registrados como
 entradas `level: "error"` con el prefijo `Uncaught` / `Unhandled rejection:` — la señal que el parcheo
-de `console.*` por sí solo nunca ve). Solo pestañas sandbox. La captura funciona mediante un shim del
+de `console.*` por sí solo nunca ve). Solo pestañas propiedad de la IA (tanto en postura Sandbox como
+Compartida; una pestaña humana no lleva shim de captura), solo el marco principal. La captura funciona mediante un shim del
 mundo de la página que escribe en un búfer del DOM oculto que el driver lee desde el mundo aislado — así
 que **no se abre ningún canal de mensajería** de vuelta hacia VMark (se mantiene la garantía de ausencia
 de puente). La salida está controlada por la página y es **no confiable** — trátala como un `read`,
@@ -568,20 +646,28 @@ la página, que es una escritura en el DOM y por tanto no puede vivir bajo `read
 
 ### `wait`
 
-Argumentos: `tabId?`, `navigationId` opcional y `timeoutMs` opcional. Nunca inicia una navegación.
-Devuelve un resultado de carga/fallo almacenado en búfer, `NAVIGATION_SUPERSEDED`, o `TIMEOUT` cuando el
-ticket no termina dentro del límite.
+Argumentos: `tabId?`, `navigationId` opcional (omítelo para el ticket más reciente de la pestaña) y
+`timeoutMs` opcional (1–9000 ms). Nunca inicia una navegación, nunca cambia el foco ni
+la pestaña activa y nunca crea una vista — solo observa, que es lo que le permite vivir
+en la herramienta de solo lectura. Solo pestañas propiedad de la IA. Devuelve un resultado de carga/fallo almacenado en búfer,
+`NAVIGATION_SUPERSEDED`, o `TIMEOUT` cuando el ticket no termina dentro del límite.
 
 ### `wait_for`
 
 Argumentos: `tabId?`, exactamente uno de `ref` (de una lectura), `role` (+ `name` opcional), `text` (una
 subcadena del texto visible), o `urlContains` (una subcadena que la URL de la pestaña debe contener —
 confirma que una navegación provocada por un clic llegó a su destino, respondida desde el estado de la
-pestaña sin ida y vuelta a la página), y `timeoutMs` opcional (1–12 000 ms). Sondea hasta que la
+pestaña sin ida y vuelta a la página), y `timeoutMs` opcional (1–9000 ms). Sondea hasta que la
 condición se cumple o transcurre el tiempo de espera y devuelve `{matched: true|false}` (más la `ref`
 del elemento coincidente para una condición ref/role) — de modo que puedes distinguir «encontrado» de
 «se agotó el tiempo». Clase Leer. Úsalo para hacer un flujo determinista: actúa, espera el resultado con
 `wait_for`, luego lee.
+
+De lo que puede ver se derivan dos reglas. `urlContains` compara con la URL **ocultada** — la
+cadena de consulta y el fragmento se eliminan, porque un token que una redirección haya dejado ahí no debe
+poder sondearse —, así que una aguja que contenga `?` o `#` se rechaza de entrada. Y en una pestaña humana
+vinculada con **Permitir una vez** se rechaza (`ATTACHMENT_ONCE_INSUFFICIENT`): sondear son muchas
+lecturas, y una vinculación de una sola lectura no puede cubrirlo — pide **Permitir hasta la navegación**.
 
 ---
 
@@ -707,7 +793,7 @@ Aparecen dos formas de error:
 | `INVALID_TAB` | sobre | No se pudo resolver `tabId` |
 | `INVALID_PATH` | sobre | No se pudo leer un `filePath`, o está fuera del alcance del espacio de trabajo abierto / del documento |
 | `APPROVAL_REQUIRED` | sobre | `save_as` a una ubicación nueva mientras **Aprobar automáticamente guardados en una ubicación nueva y resultados de genios** está desactivado; o `open_workspace` espera la aprobación del usuario, o que elija la carpeta en el diálogo de carpetas de VMark |
-| `BUSY` | sobre | `open_workspace` no pudo continuar: hay otro diálogo de carpetas abierto o un cambio de espacio de trabajo en curso en esa ventana; la aprobación se conserva — reintenta |
+| `BUSY` | sobre | `open_workspace` no pudo continuar: hay otro diálogo de carpetas abierto o un cambio de espacio de trabajo en curso en esa ventana; la aprobación se conserva — reintenta. O bien `document.write`, `document.transform` o `selection.set` llegó mientras el usuario componía texto con un método de entrada; no se cambió nada — reintenta en breve |
 | `NOT_WORKFLOW` | sobre | Se invocó `workflow.*` en una pestaña que no es YAML de flujo de trabajo |
 | `READ_ONLY` | sobre | Se intentó una mutación en un documento de solo lectura |
 | `NO_EDITOR` | sobre | Se invocó `selection.*` pero la pestaña enfocada no tiene un editor activo |

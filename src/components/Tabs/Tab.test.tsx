@@ -7,7 +7,7 @@ const { docState, renameState } = vi.hoisted(() => ({
   docState: {
     documents: {} as Record<string, Record<string, unknown>>,
   },
-  renameState: { renamingTabId: null as string | null },
+  renameState: { renamingTabId: null as string | null, stopRename: vi.fn() },
 }));
 
 function zustandMock<T extends object>(state: T) {
@@ -40,16 +40,9 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-// Stand-in for the real inline rename editor: a nested <input> that, like the
-// real one, does NOT stop keydown propagation. That is exactly the condition the
-// tab's key guard has to survive.
-const renameProps = vi.fn();
-vi.mock("./TabRenameInput", () => ({
-  TabRenameInput: (props: { filePath: string; fileName: string }) => {
-    renameProps(props);
-    return <input data-testid="rename-input" defaultValue={props.fileName} />;
-  },
-}));
+// The real inline rename editor is a nested <input> that does NOT stop keydown
+// propagation. That is exactly the condition the tab's key guard has to survive.
+const renameInput = () => screen.getByRole("textbox", { name: "tabMenu.rename" });
 
 import { Tab } from "./Tab";
 import { useSettingsStore } from "@/stores/settingsStore";
@@ -143,7 +136,7 @@ describe("Tab", () => {
       const user = userEvent.setup();
       const { onKeyDown, onActivate } = renderTab();
 
-      const input = screen.getByTestId("rename-input");
+      const input = renameInput();
       input.focus();
       await user.keyboard("{ArrowLeft}{ArrowRight}{Home}{End}{Enter}");
 
@@ -152,6 +145,8 @@ describe("Tab", () => {
       // committing a half-typed rename.
       expect(onKeyDown).not.toHaveBeenCalled();
       expect(onActivate).not.toHaveBeenCalled();
+      // Enter reached the rename editor itself: an unchanged name ends the rename.
+      expect(renameState.stopRename).toHaveBeenCalled();
     });
 
     it("passes the basename of a Windows path to the rename editor", () => {
@@ -159,9 +154,7 @@ describe("Tab", () => {
         tab: { ...baseTab, filePath: "C:\\docs\\note.md" } as TabType,
       });
 
-      expect(renameProps).toHaveBeenCalledWith(
-        expect.objectContaining({ fileName: "note.md" }),
-      );
+      expect(renameInput()).toHaveValue("note.md");
     });
   });
 

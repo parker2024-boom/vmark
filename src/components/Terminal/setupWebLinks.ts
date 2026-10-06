@@ -3,7 +3,7 @@
  *
  * Purpose: Wires URL opening for the terminal — both the WebLinksAddon
  * (regex-detected URLs) and OSC 8 hyperlinks (explicit `\e]8;;URL\e\\` links
- * emitted by `ls --hyperlink`, gcc, gh, etc., WI-4.2). Both routes share one
+ * emitted by `ls --hyperlink`, gcc, gh, etc.). Both routes share one
  * allowlisted, lazily-loaded opener so only safe schemes are launched.
  *
  * Key decisions:
@@ -31,7 +31,7 @@ export function setupWebLinks(term: Terminal): void {
   /** Open a URI iff its scheme is allowlisted, via the cached opener plugin. */
   const openSafeUri = (uri: string): void => {
     // Reject control chars (terminal output can smuggle them) before parsing.
-    // eslint-disable-next-line no-control-regex
+    // eslint-disable-next-line no-control-regex -- terminal output can smuggle control characters into a URI; detecting them is the check
     if (/[\u0000-\u001f\u007f]/.test(uri)) {
       terminalLog("Blocked URL with control characters");
       return;
@@ -74,7 +74,7 @@ export function setupWebLinks(term: Terminal): void {
   // Regex-detected URLs.
   term.loadAddon(new WebLinksAddon((_event, uri) => openSafeUri(uri)));
 
-  // OSC 8 explicit hyperlinks (WI-4.2) — xterm renders them; route activation
+  // OSC 8 explicit hyperlinks — xterm renders them; route activation
   // through the same allowlisted opener.
   term.options.linkHandler = {
     activate: (_event, uri) => openSafeUri(uri),

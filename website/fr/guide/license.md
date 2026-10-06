@@ -48,6 +48,14 @@ Elle a été choisie pour VMark parce que :
 - **Permissivité** — aucune restriction sur la façon dont vous utilisez le logiciel
 - **Compatibilité** — fonctionne avec pratiquement toutes les autres licences open source
 
+## Logiciels tiers
+
+VMark repose sur des logiciels open source de nombreux auteurs : des crates Rust, des paquets npm et des composants compilés à l’intérieur, comme Graphviz et l’environnement d’exécution Node.js du serveur MCP. Leurs licences (MIT, Apache-2.0, BSD, ISC, MPL-2.0, EPL-2.0 et d’autres) demandent que leurs mentions accompagnent chaque copie de VMark.
+
+Chaque build de VMark inclut le texte complet de ces mentions. Pour les lire, ouvrez **Paramètres → À propos** et cliquez sur **Mentions de tiers** — le fichier s’ouvre dans votre visionneuse de texte par défaut.
+
+Les mentions sont générées à partir des dépendances exactes de chaque version ; elles correspondent donc à la version que vous avez installée.
+
 ## En savoir plus
 
 - [Licence ISC sur OSI](https://opensource.org/licenses/ISC)

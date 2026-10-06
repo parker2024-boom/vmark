@@ -4,7 +4,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Terminal } from "@xterm/xterm";
 import { createTerminalKeyHandler } from "./terminalKeyHandler";
-import { resetTerminalSessionStore, useUIStore } from "@/stores/uiStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
 import {
@@ -77,35 +77,35 @@ afterEach(() => {
 
 describe("terminalKeyHandler — Cmd+N over the visible population (WI-TS3.1)", () => {
   it("Cmd+2 activates the SECOND VISIBLE session, skipping a hidden scope's", () => {
-    const a1 = useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" })!;
-    const b1 = useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-b" })!;
-    const a2 = useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" })!;
-    useUIStore.getState().terminalSetActiveSession(a1.id);
+    const a1 = useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" })!;
+    const b1 = useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-b" })!;
+    const a2 = useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" })!;
+    useTerminalStore.getState().terminalSetActiveSession(a1.id);
 
     pressCmd(makeHandler(), "2");
 
     // Visible order is [a1, a2]; b1 (store position 2) is not addressable.
-    expect(useUIStore.getState().terminal.activeSessionId).toBe(a2.id);
-    expect(useUIStore.getState().terminal.activeSessionId).not.toBe(b1.id);
+    expect(useTerminalStore.getState().activeSessionId).toBe(a2.id);
+    expect(useTerminalStore.getState().activeSessionId).not.toBe(b1.id);
   });
 
   it("an index past the visible population is a no-op even when the store has more", () => {
-    const a1 = useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" })!;
-    useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-b" });
-    useUIStore.getState().terminalSetActiveSession(a1.id);
+    const a1 = useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" })!;
+    useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-b" });
+    useTerminalStore.getState().terminalSetActiveSession(a1.id);
 
     pressCmd(makeHandler(), "2"); // visible has 1 entry; store has 2
 
-    expect(useUIStore.getState().terminal.activeSessionId).toBe(a1.id);
+    expect(useTerminalStore.getState().activeSessionId).toBe(a1.id);
   });
 
   it("rail OFF addresses every session by store order (invariant 4)", () => {
-    useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" });
-    const b1 = useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-b" })!;
+    useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" });
+    const b1 = useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-b" })!;
     setRail(false);
 
     pressCmd(makeHandler(), "2");
 
-    expect(useUIStore.getState().terminal.activeSessionId).toBe(b1.id);
+    expect(useTerminalStore.getState().activeSessionId).toBe(b1.id);
   });
 });

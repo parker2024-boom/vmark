@@ -29,7 +29,7 @@ import { z } from 'zod';
  *
  * Lived in `server.ts` alongside a set of `getStringArg`/`requireNumberArg`
  * extractors that no tool ever called (they were deleted with the `windowId`
- * surface, audit 20260728 §4). The type itself is still used, so it moved to
+ * surface). The type itself is still used, so it moved to
  * the module that actually owns argument handling.
  */
 export type ToolArgs = Record<string, unknown>;
@@ -84,7 +84,7 @@ export function readRequiredId(value: unknown, field: string): ArgCheck<string> 
  * undefined`, which converts a caller's mistake — a number, a null, an object,
  * a blank string — into exactly the value that DISABLES stale-write
  * protection. A guarded write silently became an unconditional one, and only
- * for callers that got it wrong (audit R2 #226/#231/#237). `callTool` is
+ * for callers that got it wrong. `callTool` is
  * reachable without schema validation, so the guard, not the schema, is what
  * holds.
  */
@@ -106,7 +106,7 @@ export function readOptionalRevision(value: unknown, field = 'expected_revision'
  * `args.save === false ? false : undefined` read every non-boolean as "use the
  * default", so a caller passing the STRING `"false"` — the natural mistake
  * from a shell or a JSON-ish client — got the disk write it was trying to
- * prevent (audit R2 #227).
+ * prevent.
  */
 export function readOptionalBoolean(value: unknown, field: string): ArgCheck<boolean | undefined> {
   if (value === undefined) return { ok: true, value: undefined };

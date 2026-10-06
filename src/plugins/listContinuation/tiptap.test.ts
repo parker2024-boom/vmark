@@ -402,9 +402,7 @@ describe("listContinuation — direct ProseMirror tests", () => {
 
   it("handleListEnter returns false when schema has no listItem type (line 76)", () => {
     // Schema without listItem or list_item → findListItemType returns undefined → return false
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Schema: PmSchema } = require("@tiptap/pm/model");
-    const bareSchema = new PmSchema({
+    const bareSchema = new Schema({
       nodes: {
         doc: { content: "paragraph+" },
         paragraph: { group: "block", content: "text*" },

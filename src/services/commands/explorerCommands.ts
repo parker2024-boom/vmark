@@ -3,6 +3,8 @@
  * viewCommands.ts for the file-size gate. Registered by
  * `registerViewCommands()`, so callers and tests keep a single entry point
  * (the same arrangement as paneCommands.ts and lintCommands.ts).
+ *
+ * @module services/commands/explorerCommands
  */
 
 import { registerCommands, type CommandDefinition } from "./CommandBus";
@@ -14,7 +16,7 @@ import i18n from "@/i18n";
 const EXPLORER_COMMANDS_OWNER = "explorer-commands";
 
 /**
- * Whether a workspace is open enough for its config to be writable (audit #944).
+ * Whether a workspace is open enough for its config to be writable.
  *
  * `updateWorkspaceConfig` refuses without all three and returns `false` with no
  * message — deliberately, because a write that FAILED already toasts there.
@@ -52,7 +54,7 @@ function buildExplorerCommandSpecs(): CommandDefinition[] {
   ];
 }
 
-/** Register the explorer command set as one owner batch (audit #459). */
+/** Register the explorer command set as one owner batch. */
 export function registerExplorerCommands(): void {
   registerCommands(EXPLORER_COMMANDS_OWNER, buildExplorerCommandSpecs());
 }

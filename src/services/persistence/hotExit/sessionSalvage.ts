@@ -1,5 +1,5 @@
 /**
- * Per-item salvage of persisted hot-exit session payloads (WI-3).
+ * Per-item salvage of persisted hot-exit session payloads.
  *
  * Purpose: turn an untrusted payload into either a restorable session, a
  * clean "nothing to restore", or an "invalid" verdict — WITHOUT ever throwing

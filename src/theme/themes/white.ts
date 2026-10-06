@@ -1,10 +1,16 @@
+/**
+ * white — design tokens for the White theme, the pure-white light theme.
+ *
+ * @module theme/themes/white
+ */
+
 import type { ThemeTokens } from "../tokens";
 import { sharedPrimitives, lightShadows, subtleLight, hoverLight } from "../tokens";
 
 /**
  * White theme — pure-white background. Highest contrast.
  *
- * WI-UI1.2: semantic/alert/media are AUTHORED per theme (the shared light
+ * Semantic/alert/media are AUTHORED per theme (the shared light
  * fragments were tuned for #ffffff and failed on the tinted papers — and even
  * here `success` measured 3.30:1). Every colour below clears the
  * check-theme-contrast floors on this theme's own three backgrounds; the gate

@@ -40,7 +40,7 @@ import {
   type SyncableSessionEntry,
 } from "./terminalSessionStoreSync";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
-import { resetTerminalSessionStore, useUIStore } from "@/stores/uiStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 
 // The cd-follow predicate resolves each session in the STORE before writing
 // (a session missing from the store is mid-teardown and never followed —
@@ -48,15 +48,13 @@ import { resetTerminalSessionStore, useUIStore } from "@/stores/uiStore";
 // sessionsRef maps use. Rail mode stays off here: the legacy behavior.
 beforeEach(() => {
   resetTerminalSessionStore();
-  useUIStore.setState({
-    terminal: {
-      sessions: [
-        { id: "s1", label: "s1", ordinal: 1, isAlive: true },
-        { id: "s2", label: "s2", ordinal: 2, isAlive: true },
-      ],
-      activeSessionId: "s1",
-      lastActiveByScope: {},
-    },
+  useTerminalStore.setState({
+    sessions: [
+      { id: "s1", label: "s1", ordinal: 1, isAlive: true },
+      { id: "s2", label: "s2", ordinal: 2, isAlive: true },
+    ],
+    activeSessionId: "s1",
+    lastActiveByScope: {},
   });
 });
 

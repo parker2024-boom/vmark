@@ -35,7 +35,7 @@ const nullLogger: Logger = {
  * logs; it reaches no authorization decision there. Authorization binds to the
  * verified credential from `clientTokenResolver` instead — `name` is a guess
  * (see `utils/clientIdentity.ts`) and used to be forgeable by anyone holding
- * the shared bridge token (audit 20260728 §2.1).
+ * the shared bridge token.
  */
 export interface ClientIdentity {
   /** Client name (e.g., "claude-code", "codex-cli", "cursor") */
@@ -70,7 +70,7 @@ export interface WebSocketBridgeConfig {
    * bridge's worst case of 20s (10s initial wait + 10s wake-and-retry,
    * server.rs) — a shorter value discards retry results that the bridge
    * successfully recovered, so the AI client sees a timeout even though
-   * the write WAS applied (audit H21).
+   * the write WAS applied.
    */
   requestTimeout?: number;
   /** Whether to auto-reconnect on disconnect (default: true) */
@@ -139,7 +139,7 @@ export function resolveBridgeConfig(
     port: config.port, // May be undefined - will use portResolver
     portResolver: config.portResolver,
     timeout: config.timeout ?? 10000,
-    // Must exceed the Rust bridge's 20s wake-and-retry worst case (audit H21).
+    // Must exceed the Rust bridge's 20s wake-and-retry worst case.
     requestTimeout: config.requestTimeout ?? 25000,
     autoReconnect: config.autoReconnect ?? true,
     maxReconnectAttempts: config.maxReconnectAttempts ?? 10,

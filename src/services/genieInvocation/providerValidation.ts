@@ -8,7 +8,7 @@
  *
  * It toasts and returns null rather than throwing: a missing key is a
  * configuration state the user fixes in Settings, not an error the invocation
- * pipeline should carry as an exception. EVERY refusal toasts (audit #960) —
+ * pipeline should carry as an exception. EVERY refusal toasts —
  * the "no active provider" case used to return null in silence, which is the
  * one outcome a user cannot act on.
  *
@@ -33,7 +33,7 @@ export function validateProvider(providerState: ProviderState): ValidatedProvide
   const provider = providerState.activeProvider;
   if (!provider) {
     // The caller DOES check first — `ensureProvider()` runs before this — but
-    // it awaits, and the store can be cleared in that window (audit #960).
+    // it awaits, and the store can be cleared in that window.
     // Returning null silently then refused the invocation with no toast, no
     // log and no picker state: the user clicks a genie and nothing whatsoever
     // happens. Same message the caller's own check uses, because it is the
@@ -53,7 +53,7 @@ export function validateProvider(providerState: ProviderState): ValidatedProvide
   const restConfig = providerState.restProviders.find((p) => p.type === provider);
 
   // Validate REST provider has an API key before calling Rust. TRIMMED for the
-  // emptiness test (audit #962): a whitespace-only key is no key, and passing
+  // emptiness test: a whitespace-only key is no key, and passing
   // it through turned the actionable "add an API key in Settings" refusal into
   // a provider-side 401 several seconds later. What is SENT is untouched — only
   // the "is there one" question is asked of the trimmed value.

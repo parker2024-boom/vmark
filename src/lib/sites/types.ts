@@ -1,21 +1,22 @@
 /**
- * Purpose: Type contracts for the site plugin system (ADR-S1/S2/S3; wiring plan
- * dev-docs/plans/20260819-browser-wire-and-borrows.md, which supersedes the
- * deleted 20260712 plan these files used to cite).
+ * Purpose: Type contracts for the site plugin system (ADR-S2/S3 of
+ * `.claude/adr/plans/20260712-0610-embedded-browser-sites-workflows.md`).
  *
  * A site plugin dispatches on ORIGIN (mirroring how the format registry dispatches
  * on extension). The manifest is the declarative, validated half; its `origins` are
  * the security boundary — the driver may only reach an origin a plugin declared
- * (R4). Registration is atomic with the plugin's reader (WI-NB4.2), so a
+ * (R4). Registration is atomic with the plugin's reader, so a
  * registered-but-unreadable site is unrepresentable.
  *
  * The vocabulary is `read`-only: `publish` was removed with `SitePublisher`
  * (WI-DP1.2, "a promise the compiler cannot keep") and its capability token
- * followed in WI-NB4.4 — an unbacked token invited manifests claiming a
+ * followed — an unbacked token invited manifests claiming a
  * capability nothing could deliver. `health.ts` went with it: its probe contract
  * (auth + fixture extraction) had no possible honest consumer without
  * credentialed site flows, and neither a listSites surface nor a status panel
  * exists. Re-introduce both together if ADR-S4 is ever revisited.
+ *
+ * @module lib/sites/types
  */
 
 /** Current agent API version the host exposes to in-page plugin modules. */

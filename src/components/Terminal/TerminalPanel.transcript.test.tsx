@@ -4,88 +4,172 @@
  * The audit flagged the path from `terminal.transcriptPreview` through hook
  * configuration and following to the tab-bar toggle and the region as an
  * untested critical path: each piece is tested alone, so broken wiring here
- * would pass them all. The hooks are mocked at their boundary; the panel's
- * job is only to connect them.
+ * would pass them all.
+ *
+ * The panel's collaborators run for real: the session hook (which spawns the
+ * shell and prepares its transcript binding), the transcript follower, the
+ * tab bar and its toggle. The boundaries are xterm.js, the PTY and Tauri
+ * `invoke` — the transcript arrives as `terminal_transcript_read` deltas.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, fireEvent, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { act, render, fireEvent } from "@testing-library/react";
 
-const mocks = vi.hoisted(() => ({
-  rendered: vi.fn(),
-  toggle: vi.fn(),
-  state: { expanded: false, failed: false, messages: [] as { id: string; text: string }[] },
+const tauri = vi.hoisted(() => ({
+  transcript: "",
+  reads: [] as Array<{ token: string }>,
 }));
 
-vi.mock("./useTerminalSessions", () => ({
-  useTerminalSessions: () => ({ fit: vi.fn(), getActiveTerminal: () => null, getActiveSearchAddon: () => null, restartActiveSession: vi.fn() }),
-}));
-vi.mock("./useTerminalResize", () => ({ useTerminalResize: () => ({ isResizing: false, handleResizeStart: vi.fn() }) }));
-vi.mock("./TerminalSearchBar", () => ({ TerminalSearchBar: () => null }));
-vi.mock("@/plugins/mermaid", () => ({ renderMermaid: vi.fn().mockResolvedValue(null) }));
-vi.mock("./useTranscriptConfiguration", () => ({ useTranscriptConfiguration: (enabled: boolean) => (enabled ? "ready" : "pending") }));
-vi.mock("./useRenderedTranscript", () => ({
-  useRenderedTranscript: (...args: unknown[]) => {
-    mocks.rendered(...args);
-    return { ...mocks.state, toggle: mocks.toggle };
+vi.mock("@xterm/xterm", () => ({
+  Terminal: class {
+    element = document.createElement("div");
+    textarea: HTMLTextAreaElement | undefined = undefined;
+    parser = { registerOscHandler: vi.fn(), registerEscHandler: vi.fn() };
+    unicode = { activeVersion: "6" };
+    buffer = { active: { viewportY: 0, length: 0, getLine: () => undefined } };
+    modes = { bracketedPasteMode: false };
+    options = {};
+    cols = 80;
+    rows = 24;
+    open = vi.fn((container: HTMLElement) => {
+      const textarea = document.createElement("textarea");
+      container.appendChild(textarea);
+      this.textarea = textarea;
+    });
+    refresh = vi.fn();
+    loadAddon = vi.fn();
+    dispose = vi.fn();
+    focus = vi.fn();
+    // xterm parses asynchronously and reports completion; the shell waits on it.
+    write = vi.fn((_data: string, parsed?: () => void) => parsed?.());
+    writeln = vi.fn();
+    clear = vi.fn();
+    reset = vi.fn();
+    resize = vi.fn();
+    scrollToBottom = vi.fn();
+    clearSelection = vi.fn();
+    selectAll = vi.fn();
+    hasSelection = vi.fn(() => false);
+    getSelection = vi.fn(() => "");
+    onData = vi.fn(() => ({ dispose: vi.fn() }));
+    onBell = vi.fn(() => ({ dispose: vi.fn() }));
+    onTitleChange = vi.fn(() => ({ dispose: vi.fn() }));
+    onSelectionChange = vi.fn(() => ({ dispose: vi.fn() }));
+    attachCustomKeyEventHandler = vi.fn();
+    registerLinkProvider = vi.fn();
+    registerMarker = vi.fn(() => undefined);
   },
 }));
-vi.mock("./TerminalTabBar", () => ({
-  TerminalTabBar: (props: { transcript?: { expanded: boolean; controls: string; onToggle: () => void } }) =>
-    props.transcript ? (
-      <button data-testid="toggle" data-expanded={String(props.transcript.expanded)} data-controls={props.transcript.controls} onClick={props.transcript.onToggle} />
-    ) : (
-      <div data-testid="no-toggle" />
-    ),
+vi.mock("@xterm/addon-fit", () => ({
+  FitAddon: class {
+    fit = vi.fn();
+    proposeDimensions = vi.fn(() => ({ cols: 80, rows: 24 }));
+  },
 }));
+vi.mock("@xterm/addon-search", () => ({
+  SearchAddon: class {
+    findNext = vi.fn();
+    findPrevious = vi.fn();
+    clearDecorations = vi.fn();
+  },
+}));
+vi.mock("@xterm/addon-unicode11", () => ({ Unicode11Addon: class {} }));
+vi.mock("@xterm/addon-webgl", () => ({
+  WebglAddon: class {
+    onContextLoss = vi.fn();
+    clearTextureAtlas = vi.fn();
+    dispose = vi.fn();
+  },
+}));
+vi.mock("@xterm/addon-web-links", () => ({ WebLinksAddon: class {} }));
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn((cmd: string, args?: { token: string; cursor: unknown }) => {
+    if (cmd === "get_default_shell") return Promise.resolve("/bin/zsh");
+    if (cmd === "terminal_transcript_prepare") return Promise.resolve("tok-1");
+    if (cmd === "terminal_transcript_read") {
+      tauri.reads.push({ token: args!.token });
+      const cursor = { identity: "t", offset: tauri.transcript.length, size: tauri.transcript.length, modified: "m" };
+      return Promise.resolve(args!.cursor ? { cursor, reset: false, data: "" } : { cursor, reset: true, data: tauri.transcript });
+    }
+    return Promise.resolve(null);
+  }),
+}));
+vi.mock("@/plugins/mermaid", () => ({ renderMermaid: vi.fn().mockResolvedValue(null) }));
+vi.mock("./useTranscriptConfiguration", () => ({ useTranscriptConfiguration: (enabled: boolean) => (enabled ? "ready" : "pending") }));
 
 import { TerminalPanel } from "./TerminalPanel";
-import { useUIStore, resetTerminalSessionStore } from "@/stores/uiStore";
+import { useUIStore } from "@/stores/uiStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 
+const TABLE_REPLY =
+  JSON.stringify({
+    type: "assistant",
+    uuid: "m",
+    message: { role: "assistant", content: [{ type: "text", text: "| A |\n| - |\n| 1 |" }] },
+  }) + "\n";
+
+const toggle = () => document.querySelector<HTMLButtonElement>('[data-terminal-action="transcript"]');
+const region = () => document.querySelector(".terminal-transcript");
+
+/** Let the shell spawn, bind its transcript, and the follower poll once more. */
+async function followOnePoll() {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+}
+
 beforeEach(() => {
+  vi.useFakeTimers();
   vi.clearAllMocks();
-  mocks.state = { expanded: false, failed: false, messages: [] };
+  tauri.transcript = "";
+  tauri.reads.length = 0;
   useUIStore.setState({ terminalVisible: true, terminalHeight: 200, terminalWidth: 300, effectiveTerminalPosition: "bottom" } as never);
-  // A real, visible session: the panel realigns a stale active id to null.
   resetTerminalSessionStore();
-  useUIStore.getState().terminalCreateSession();
+  useTerminalStore.getState().terminalCreateSession();
   useSettingsStore.getState().updateTerminalSetting("transcriptPreview", false);
 });
 
-const activeId = () => {
-  const id = useUIStore.getState().terminal.activeSessionId;
-  expect(id).toEqual(expect.any(String));
-  return id;
-};
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("TerminalPanel — rendered transcript wiring", () => {
-  it("offers no toggle and no region while the setting is off, and follows nothing", () => {
+  it("offers no toggle and no region while the setting is off, and follows nothing", async () => {
     render(<TerminalPanel />);
-    expect(screen.getByTestId("no-toggle")).toBeInTheDocument();
-    expect(document.querySelector(".terminal-transcript")).toBeNull();
-    expect(mocks.rendered).toHaveBeenLastCalledWith(activeId(), false, true, "pending");
+    await followOnePoll();
+
+    expect(toggle()).toBeNull();
+    expect(region()).toBeNull();
+    expect(tauri.reads).toEqual([]);
   });
 
-  it("follows the active session and offers a collapsed toggle once enabled", () => {
+  it("follows the active session's transcript and offers a collapsed toggle once enabled", async () => {
     useSettingsStore.getState().updateTerminalSetting("transcriptPreview", true);
     render(<TerminalPanel />);
-    expect(mocks.rendered).toHaveBeenLastCalledWith(activeId(), true, true, "ready");
-    expect(screen.getByTestId("toggle")).toHaveAttribute("data-expanded", "false");
-    expect(document.querySelector(".terminal-transcript")).toBeNull();
-    fireEvent.click(screen.getByTestId("toggle"));
-    expect(mocks.toggle).toHaveBeenCalledOnce();
+    await followOnePoll();
+
+    expect(tauri.reads.length).toBeGreaterThan(0);
+    expect(tauri.reads.every((r) => r.token === "tok-1")).toBe(true);
+    expect(toggle()).toHaveAttribute("aria-pressed", "false");
+    expect(region()).toBeNull();
+
+    fireEvent.click(toggle()!);
+    expect(toggle()).toHaveAttribute("aria-pressed", "true");
+    expect(region()).not.toBeNull();
   });
 
-  it("renders the region the toggle controls, with the followed messages, while expanded", () => {
+  it("renders the region the toggle controls, with the followed messages, while expanded", async () => {
     useSettingsStore.getState().updateTerminalSetting("transcriptPreview", true);
-    mocks.state = { expanded: true, failed: false, messages: [{ id: "m", text: "| A |\n| - |\n| 1 |" }] };
+    tauri.transcript = TABLE_REPLY;
     render(<TerminalPanel />);
-    const toggle = screen.getByTestId("toggle");
-    const region = document.querySelector(".terminal-transcript");
-    expect(toggle).toHaveAttribute("data-expanded", "true");
-    expect(region).not.toBeNull();
-    expect(region).toHaveAttribute("id", toggle.getAttribute("data-controls"));
-    expect(screen.getByRole("table")).toHaveTextContent("1");
+    await followOnePoll();
+
+    fireEvent.click(toggle()!);
+
+    const shown = region();
+    expect(shown).not.toBeNull();
+    expect(toggle()).toHaveAttribute("aria-controls", shown!.getAttribute("id"));
+    expect(shown!.querySelector("table")).toHaveTextContent("1");
     // Beside the CLI for a bottom panel.
     expect(document.querySelector(".terminal-sessions-container")).toHaveClass("terminal-sessions-container--row");
   });

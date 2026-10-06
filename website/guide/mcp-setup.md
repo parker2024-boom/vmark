@@ -43,6 +43,8 @@ Supported AI assistants:
 - **Grok CLI** - xAI's coding agent
 - **opencode** - the open-source, provider-agnostic terminal agent
 
+**Install writes a per-client credential.** Besides the path to VMark's MCP server, Install puts a secret token in the client's own config file, under `env.VMARK_MCP_TOKEN` (`environment.VMARK_MCP_TOKEN` for opencode). Each client gets its own token, and it is stored nowhere else. It tells VMark which client is connecting, rather than trusting the name the client reports. Today only delegated actions need it — answering a coherence question on your behalf with `coherence_resolve`; every other tool works without it. Install and **Repair** keep a token that is still valid; to issue a fresh one, Uninstall and Install again. Restart the AI client after either. Treat the token like a password: don't paste the config file into an issue or a chat.
+
 ::: info Gemini CLI is discontinued
 Google replaced Gemini CLI with Antigravity. If an earlier VMark install left a
 `vmark` entry in `~/.gemini/settings.json`, the Integrations panel shows a
@@ -334,6 +336,7 @@ Checkpoints are kept per file — 50 per file and 5 MiB in total — and persist
 - AI file operations are confined to the open workspace root and the folders of open documents — see [Privacy](/guide/privacy#what-an-ai-assistant-can-reach)
 - All processing happens on your machine
 - The WebSocket bridge is only accessible locally
+- Each installed client carries its own `VMARK_MCP_TOKEN`. A client with no token, an unknown one, or one shared with another client still connects, but its delegated actions are refused with a message telling you to run Install for it in **Settings → Integrations** and restart it
 
 ## Next Steps
 

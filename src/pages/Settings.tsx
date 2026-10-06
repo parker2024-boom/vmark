@@ -2,7 +2,10 @@
  * Settings Page
  *
  * Main settings window with navigation sidebar.
- * Sections sorted alphabetically.
+ * Sections sorted alphabetically. Each section's panel loads when it is first
+ * shown (settings/SettingsContent.tsx), so the window paints with one.
+ *
+ * @module pages/Settings
  */
 
 import { useState, useEffect, type CSSProperties } from "react";
@@ -33,9 +36,9 @@ import { safeUnlistenAsync } from "@/utils/safeUnlisten";
 import { isMacPlatform } from "@/utils/platform";
 import { shellChromeVars } from "@/shell/shellChrome";
 import { SettingsSearchContext } from "./settings/SettingsSearchContext";
-import { SettingsSearchResults, type SearchablePanel } from "./settings/SettingsSearchResults";
+import { SettingsContent } from "./settings/SettingsContent";
 import { SettingsNav } from "./settings/SettingsNav";
-import { SETTINGS_PANELS, SEARCHABLE_PANEL_IDS, type Section } from "./settings/panels";
+import { SEARCHABLE_PANEL_IDS, type Section } from "./settings/panels";
 import "./settings/settings-search.css";
 import { appError } from "@/utils/debug";
 import { voidAsync } from "@/utils/voidAsync";
@@ -192,13 +195,6 @@ export function SettingsPage() {
   const searchableIds: Section[] = showDevSection
     ? [...SEARCHABLE_PANEL_IDS, "advanced"]
     : SEARCHABLE_PANEL_IDS;
-  const searchablePanels: SearchablePanel[] = searchableIds.map((id) => ({
-    id,
-    label: t(`nav.${id}`),
-    Component: SETTINGS_PANELS[id],
-  }));
-
-  const ActivePanel = SETTINGS_PANELS[section];
 
   return (
     // The settings window has its own root, not AppShell's, so it has to publish
@@ -237,11 +233,11 @@ export function SettingsPage() {
             className="vm-scroll--thin flex-1 overflow-auto p-6"
             data-settings-searching={searching ? "" : undefined}
           >
-            {searching ? (
-              <SettingsSearchResults panels={searchablePanels} query={normalizedQuery} />
-            ) : (
-              <ActivePanel />
-            )}
+            <SettingsContent
+              section={section}
+              query={normalizedQuery}
+              searchableIds={searchableIds}
+            />
           </div>
         </SettingsSearchContext.Provider>
       </div>

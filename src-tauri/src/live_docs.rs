@@ -1,4 +1,4 @@
-//! # Live Document References (WI-9)
+//! # Live Document References
 //!
 //! Purpose: let one window ask every OTHER document window for the image
 //! references held in its live buffers. Zustand state is per-webview, so
@@ -8,9 +8,9 @@
 //!
 //! Pipeline: requester invokes `collect_live_document_refs` → Rust emit_to's
 //! `live-docs:request {requestId}` to each other document window → each
-//! window's responder invokes `live_docs_response` with its LABEL and its
-//! reference keys → Rust checks the label off the expected set, unions the
-//! keys, and resolves when the set empties — or times out.
+//! window's responder invokes `live_docs_response` with its reference keys →
+//! Rust checks the ANSWERING window off the expected set, unions the keys,
+//! and resolves when the set empties — or times out.
 //!
 //! Key decisions:
 //!   - FAIL CLOSED. `complete` is true only when every targeted window
@@ -23,6 +23,11 @@
 //!   - 800 ms deadline. A responder does no IO — it reads its own store and
 //!     extracts references — so a healthy window answers in milliseconds;
 //!     the deadline only bounds a wedged or busy one.
+//!   - Who asked and who answered are the windows Tauri says the calls came
+//!     from, never labels in the arguments. A responder that could name
+//!     another window could answer for it with no references, the request
+//!     would read as complete, and an image that window's unsaved buffer
+//!     still uses would be deleted.
 
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
@@ -117,10 +122,11 @@ fn register_request(
 
 /// Ask every OTHER document window for its live image-reference keys.
 #[tauri::command]
-pub async fn collect_live_document_refs(
-    app: AppHandle,
-    requesting_label: String,
+pub async fn collect_live_document_refs<R: tauri::Runtime>(
+    app: AppHandle<R>,
+    window: tauri::Window<R>,
 ) -> Result<LiveDocRefs, String> {
+    let requesting_label = window.label().to_string();
     let targets: std::collections::HashSet<String> = app
         .webview_windows()
         .keys()
@@ -146,14 +152,15 @@ pub async fn collect_live_document_refs(
     Ok(LiveDocRefs { complete, refs })
 }
 
-/// A window's answer to `live-docs:request`.
+/// A window's answer to `live-docs:request`, counted for the window it came
+/// from.
 #[tauri::command]
-pub async fn live_docs_response(
+pub async fn live_docs_response<R: tauri::Runtime>(
+    window: tauri::Window<R>,
     request_id: String,
-    label: String,
     refs: Vec<String>,
 ) -> Result<(), String> {
-    apply_response(&request_id, &label, refs);
+    apply_response(&request_id, window.label(), refs);
     Ok(())
 }
 

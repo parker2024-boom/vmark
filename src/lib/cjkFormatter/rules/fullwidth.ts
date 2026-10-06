@@ -5,16 +5,18 @@
  * Protects enumerator periods ("1."), ellipses ("..."), and technical
  * subspans (URLs, versions, times) from over-conversion.
  *
- * A mark must be IMMEDIATELY adjacent to its CJK neighbour to convert
- * (WI-CJKF3.1); see `getLeftNeighbor` in ./shared.ts for why.
+ * A mark must be IMMEDIATELY adjacent to its CJK neighbour to convert;
+ * see `getLeftNeighbor` in ./shared.ts for why.
  *
  * @coordinates-with latinSpanScanner — technical subspan protection
+ * @coordinates-with paragraphBreaks — brackets pair inside one paragraph
  * @module lib/cjkFormatter/rules/fullwidth
  */
 
 import { scanLatinSpans, isInTechnicalSubspan, isCJKLetter } from "../latinSpanScanner";
+import { perParagraph } from "../paragraphBreaks";
 import {
-  CJK_NO_KOREAN,
+  CJK_LETTER_CLASS,
   CJK_CLOSING_BRACKETS,
   CJK_OPENING_BRACKETS,
   CJK_TERMINAL_PUNCTUATION,
@@ -53,7 +55,7 @@ export function normalizeFullwidthAlphanumeric(text: string): string {
  * Whether the period at `dotPos` is an ENUMERATOR — the dot of `1.`, `10.` —
  * rather than a sentence period.
  *
- * Adjacency (WI-CJKF3.1) already spares `1. 中文`, because the space after the
+ * Adjacency already spares `1. 中文`, because the space after the
  * dot means neither neighbour is adjacent CJK. This still carries the
  * SPACE-LESS form `1.中文`, which is common in Chinese text and which adjacency
  * would convert to `1。中文`.
@@ -101,7 +103,7 @@ function isPartOfEllipsis(text: string, pos: number): boolean {
  * semantics, and repeated formatting passes each converted one more char
  * (中,, → 中，, → 中，，).
  *
- * That propagation is resolved INSIDE one scan now (audit 20260804-F5): the
+ * That propagation is resolved INSIDE one scan now: the
  * scan converts into a working copy and reads the left neighbor from it. The
  * old shape — rescan the whole document, convert one more char, rescan — was
  * Θ(N²) on a long punctuation run: `中` followed by 10k commas took 10k full
@@ -169,7 +171,7 @@ function normalizeFullwidthPunctuationOnce(text: string): string {
     // Check if inside a technical subspan (URL, version, time, etc.)
     if (isInTechnicalSubspan(i, latinSpans)) continue;
 
-    // Get context: the IMMEDIATELY adjacent neighbours (WI-CJKF3.1). LEFT comes
+    // Get context: the IMMEDIATELY adjacent neighbours. LEFT comes
     // from the working copy — that is the propagation. RIGHT comes from the
     // original, and may: no conversion produces a CJK letter or an opening
     // bracket, the only two things the right-hand test accepts.
@@ -196,11 +198,13 @@ function normalizeFullwidthPunctuationOnce(text: string): string {
   return out.join("");
 }
 
-/** Convert half-width parentheses to full-width when content is CJK. */
+/**
+ * Convert half-width parentheses to full-width when content is CJK. A pair
+ * never spans a paragraph break.
+ */
 export function normalizeFullwidthParentheses(text: string): string {
-  return text.replace(
-    new RegExp(`\\(([${CJK_NO_KOREAN}][^()]*)\\)`, "g"),
-    "（$1）"
+  return perParagraph(text, (paragraph) =>
+    paragraph.replace(new RegExp(`\\(([${CJK_LETTER_CLASS}][^()]*)\\)`, "gu"), "（$1）")
   );
 }
 
@@ -216,13 +220,16 @@ export function normalizeFullwidthParentheses(text: string): string {
  * Backslash-escaped brackets inside a label (`[中文\]文](url)`) are label
  * content, not delimiters: the content pattern consumes `\x` pairs whole, so
  * an escaped `]` can never close the label and defeat the link lookarounds.
+ * A pair never spans a paragraph break.
  */
 export function normalizeFullwidthBrackets(text: string): string {
-  return text.replace(
-    new RegExp(
-      `(?<![\\]!])\\[([${CJK_NO_KOREAN}](?:\\\\.|[^\\[\\]\\\\])*)\\](?![([:])`,
-      "g"
-    ),
-    "【$1】"
+  return perParagraph(text, (paragraph) =>
+    paragraph.replace(
+      new RegExp(
+        `(?<![\\]!])\\[([${CJK_LETTER_CLASS}](?:\\\\.|[^\\[\\]\\\\])*)\\](?![([:])`,
+        "gu"
+      ),
+      "【$1】"
+    )
   );
 }

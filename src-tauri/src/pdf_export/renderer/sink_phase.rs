@@ -1,4 +1,4 @@
-//! The one WORD a claim and an abandonment race on (#227, #443, #444).
+//! The one WORD a claim and an abandonment race on.
 //!
 //! Split from `sink.rs` at the file-size gate, and it is a real seam: this
 //! half is three states and two compare-and-swaps, with no channel, no file

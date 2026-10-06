@@ -6,7 +6,7 @@
  * so any image `resolveResources` cannot inline is swapped for the "Image not
  * found" placeholder. That substitution used to be silent (dev-only
  * `exportWarn`); we log every offending path and raise a single count toast so
- * the user knows the output is missing images (issue #1086, fix #3).
+ * the user knows the output is missing images (issue #1086).
  *
  * @module export/exportResourceWarnings
  */

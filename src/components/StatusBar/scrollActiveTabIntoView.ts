@@ -1,5 +1,5 @@
 /**
- * Scroll the active tab pill into view (WI-TNAV1.3).
+ * Scroll the active tab pill into view.
  *
  * Purpose: F2 — activating a tab never scrolled its pill into view, so
  * `Mod-Shift-]` past the visible region switched the document while the active

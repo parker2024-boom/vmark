@@ -7,7 +7,7 @@
  *
  * Behavior the class is responsible for:
  *   - Mounting the gutter, copy button, run button, and language chip.
- *   - Showing the run button ONLY for shell-language fences (WI-4.3), and
+ *   - Showing the run button ONLY for shell-language fences, and
  *     re-evaluating that on every language change.
  *   - Recounting line numbers on every relevant mutation.
  *   - Driving the copy button: async writeText with success/error feedback.
@@ -155,7 +155,7 @@ export class CodeBlockNodeView implements NodeView {
     this.runBtn.removeEventListener("click", this.handleRunClick);
   }
 
-  /** Show the run button only for shell fences (WI-4.3). */
+  /** Show the run button only for shell fences. */
   private updateRunButton(): void {
     const isShell = isShellLanguage(this.node.attrs.language);
     // The stylesheet's `.code-copy-btn[hidden] { display: none; }` rule makes

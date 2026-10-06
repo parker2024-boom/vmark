@@ -10,7 +10,7 @@
  * | `list_windows` | the window object exists | the window was created |
  * | `execute_js "1+1"` | the webview has a JS context | `index.html` parsed |
  *
- * None of those is what a journey needs. Run 32701401717 (2026-08-24) is the
+ * None of those is what a journey needs. Run 32701401717 is the
  * bill for the third one: `wait-ready` reported the app drivable at 07:30:35,
  * the app logged `Window 'main' is ready` at 07:30:41, and the first journey —
  * `multi-doc-save-integrity` — spent its whole 8s budget watching an EMPTY tab
@@ -66,7 +66,7 @@ export const READY_ATTRIBUTE = "data-vmark-window-ready";
  * DIAGNOSTIC ONLY — the attribute is what gates.
  *
  * That distinction is the whole point of this module and was violated by its
- * first version, which gated on `.app-shell` too (audit finding #3). A CSS
+ * first version, which gated on `.app-shell` too. A CSS
  * class is a proxy: rename it in a refactor and readiness becomes permanently
  * unreachable, against an app that is running perfectly. The attribute cannot
  * be true before the shell exists — `WindowProvider` renders `null` until it

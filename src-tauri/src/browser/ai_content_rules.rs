@@ -167,7 +167,7 @@ pub fn url_filters(allow_loopback: bool) -> Vec<String> {
     // `ffff` in the compatible list would. Found by the policy-parity test.
     filters.push(ipv6_embedded(false, "ffff", "[0-9a-f]+"));
     // The NATIVE v6 ranges, DERIVED from the navigation policy's table exactly as
-    // the dotted-decimal rules are derived from its IPv4 one (round 3, #9): the
+    // the dotted-decimal rules are derived from its IPv4 one: the
     // unspecified address, the ULA / link-local / site-local / multicast blocks,
     // and the documentation, Teredo, benchmarking and ORCHID prefixes all come
     // from `BLOCKED_IPV6_RANGES`, so a range added to the policy is blocked for

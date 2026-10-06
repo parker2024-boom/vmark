@@ -71,9 +71,9 @@ const orderedItemText = (l: string): string | null => {
  * the gate fails on a rule nothing uses, so dead classifiers cannot accumulate.
  */
 export const RULES: Record<RuleName, (hunk: Hunk) => boolean> = {
-  /** Blank-line preservation is opt-in; runs of blank lines collapse. */
+  /** Blank-line preservation is opt-in; runs of blank lines collapse (lines REMOVED). */
   blankLineCollapse: (h) =>
-    h.before.every(isBlank) && h.after.every(isBlank) && h.before.length !== h.after.length,
+    h.before.every(isBlank) && h.after.every(isBlank) && h.after.length < h.before.length,
 
   /** Cell padding and delimiter-run width are re-laid-out; cell text is kept. */
   tableFormatting: (h) =>

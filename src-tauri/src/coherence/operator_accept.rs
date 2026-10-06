@@ -107,7 +107,7 @@ pub fn operator_accept_idem(
     }
 
     // list(inputs in DECLARED order) — object, revision, role, KIND each. The
-    // edge kind is part of the identity (G-B group-commit review #6): a
+    // edge kind is part of the identity: a
     // Dependency and a Conformance input over the same object/revision are
     // distinct commits and must not collide.
     buf.extend_from_slice(&(txf.inputs.len() as u32).to_be_bytes());

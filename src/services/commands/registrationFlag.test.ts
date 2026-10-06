@@ -15,36 +15,14 @@
 //      registers the whole set again.
 // Each case loads a FRESH module graph (`vi.resetModules`), so a flag that
 // survived one case cannot leak into the next.
+//
+// The bus runs real, and so does the failure: a foreign registration that holds
+// the module's FIRST command id makes the module's first registration throw —
+// `registerCommand` on the duplicate id, `registerCommands` in its collision
+// preflight — exactly as a real id clash would, before anything is registered.
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 type Bus = typeof import("./CommandBus");
-type Command = Parameters<Bus["registerCommand"]>[0];
-
-const h = vi.hoisted(() => ({ failNext: false }));
-
-// The bus runs real; the two registration entry points gain a one-shot failure
-// switch. BOTH are needed: since #459 the view/pane/lint sets register as owner
-// batches through `registerCommands`, and a switch on `registerCommand` alone
-// would never fire for them — the case would pass without injecting anything.
-vi.mock("./CommandBus", async (importOriginal) => {
-  const actual = await importOriginal<Bus>();
-  const failOnce = () => {
-    if (!h.failNext) return;
-    h.failNext = false;
-    throw new Error("registerCommand: injected failure");
-  };
-  return {
-    ...actual,
-    registerCommand: (command: Command) => {
-      failOnce();
-      actual.registerCommand(command);
-    },
-    registerCommands: (owner: string, commands: readonly Command[]) => {
-      failOnce();
-      return actual.registerCommands(owner, commands);
-    },
-  };
-});
 
 interface Case {
   name: string;
@@ -114,7 +92,6 @@ async function fresh(c: Case): Promise<{ bus: Bus; register: () => void }> {
   vi.resetModules();
   const bus = await import("./CommandBus");
   bus._resetCommandBus();
-  h.failNext = false;
   return { bus, register: await c.load() };
 }
 
@@ -135,6 +112,9 @@ function inBatch(bus: Bus, run: () => void): void {
 // command is covered the day it is added. Non-empty and sentinel-bearing, so a
 // module that registers nothing cannot pass vacuously.
 const expected = new Map<string, string[]>();
+// The id each module registers FIRST (the registry keeps insertion order) — the
+// one a foreign registration must hold to make the module's first call throw.
+const firstId = new Map<string, string>();
 beforeAll(async () => {
   for (const c of CASES) {
     const { bus, register } = await fresh(c);
@@ -143,6 +123,7 @@ beforeAll(async () => {
     expect(set.length, c.name).toBeGreaterThan(0);
     expect(set, c.name).toContain(c.sentinel);
     expected.set(c.name, set);
+    firstId.set(c.name, bus.listCommands()[0]!.id);
   }
 });
 
@@ -151,11 +132,13 @@ describe("registrars are retryable after the registerAllCommands rollback (#514)
     "$name: a batch whose own first registerCommand threw registers the full set on retry",
     async (c) => {
       const { bus, register } = await fresh(c);
+      const blocker = firstId.get(c.name) ?? "";
+      bus.registerCommand({ id: blocker, title: "Foreign registrar", run: () => {} });
 
-      h.failNext = true;
-      expect(() => inBatch(bus, register)).toThrow("injected failure");
-      // The rollback left nothing behind …
-      expect(ids(bus)).toEqual([]);
+      expect(() => inBatch(bus, register)).toThrow(/already registered/);
+      // The rollback left nothing of the module behind …
+      expect(ids(bus)).toEqual([blocker]);
+      bus.unregisterCommand(blocker);
 
       // … so the retry the bootstrap effect makes on remount must register
       // everything, not return early on a flag set before the throw.

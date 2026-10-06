@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import { getToolbarButtonState, getToolbarItemState } from "../enableRules";
 import type { ToolbarGroupButton, ToolbarActionItem } from "@/components/Editor/UniversalToolbar/toolbarGroups";
 import type { WysiwygToolbarContext, SourceToolbarContext } from "../types";
-import type { CursorContext as WysiwygCursorContext } from "@/plugins/toolbarContext/types";
+import type { CursorContext as WysiwygCursorContext } from "@/plugins/shared/toolbarContextTypes";
 import type { CursorContext as SourceCursorContext } from "@/types/cursorContext";
 import type { ContextMode } from "@/types/cursorContext";
 

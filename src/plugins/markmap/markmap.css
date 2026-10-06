@@ -39,7 +39,7 @@
   min-height: 200px;
 }
 
-/* Fit button — canonical `.vm-icon-btn--sm` (WI-UI2.3); the residual owns
+/* Fit button — canonical `.vm-icon-btn--sm`; the residual owns
    overlay placement and reveal-on-hover only. */
 .markmap-fit-overlay {
   position: absolute;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { WordCountPopover } from "./WordCountPopover";
-import type { TextMetrics } from "./statusTextMetrics";
+import type { TextMetrics } from "@/utils/markdownTextMetrics";
 
 function metrics(overrides: Partial<TextMetrics> = {}): TextMetrics {
   return {

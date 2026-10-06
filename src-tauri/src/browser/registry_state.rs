@@ -121,8 +121,8 @@ impl BrowserRegistry {
 
     /// Re-stamp a tab's posture epoch. Production stamps it at reservation
     /// (`reserve_ai_tab`), so this is an observation seam for the tests that build
-    /// AI tabs through `create_with_mode` — compiled only for them (audit round 3,
-    /// #29: a production method with no production caller is dead code wearing an
+    /// AI tabs through `create_with_mode` — compiled only for them (a
+    /// production method with no production caller is dead code wearing an
     /// allowance).
     #[cfg(test)]
     pub fn set_policy_epoch(&mut self, tab_id: &str, epoch: u64) -> Result<(), BrowserError> {
@@ -164,7 +164,7 @@ impl BrowserRegistry {
     }
 
     /// Observation seam for the lifecycle tests; production reads go through the
-    /// typed queries above, so this is compiled only for tests (audit round 3, #29).
+    /// typed queries above, so this is compiled only for tests.
     #[cfg(test)]
     pub fn contains(&self, tab_id: &str) -> bool {
         self.tabs.contains_key(tab_id)

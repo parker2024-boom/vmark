@@ -48,7 +48,7 @@ pub(super) fn build(app: &tauri::AppHandle, accel: &AccelFn) -> tauri::Result<Su
                 accel("markdown-split", "Shift+F6"),
             )?,
             &PredefinedMenuItem::separator(app)?,
-            // WI-DSPL1.2 — the four pane commands. Three were reachable only
+            // The four pane commands. Three were reachable only
             // through the command palette; the #1081 plan deferred this menu.
             &MenuItem::with_id(
                 app,

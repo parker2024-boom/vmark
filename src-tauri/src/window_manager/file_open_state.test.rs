@@ -36,7 +36,7 @@ fn workspace_root_empty_string() {
 #[test]
 fn action_ready_with_window() {
     assert_eq!(
-        determine_file_open_action(true, true),
+        determine_file_open_action(QueueOwner::Settled, true),
         FileOpenAction::EmitToDocumentWindow,
     );
 }
@@ -44,7 +44,7 @@ fn action_ready_with_window() {
 #[test]
 fn action_ready_without_window() {
     assert_eq!(
-        determine_file_open_action(true, false),
+        determine_file_open_action(QueueOwner::Settled, false),
         FileOpenAction::QueueAndCreateWindow,
     );
 }
@@ -52,7 +52,7 @@ fn action_ready_without_window() {
 #[test]
 fn action_not_ready_with_window() {
     assert_eq!(
-        determine_file_open_action(false, true),
+        determine_file_open_action(QueueOwner::Booting, true),
         FileOpenAction::QueueOnly,
     );
 }
@@ -60,7 +60,7 @@ fn action_not_ready_with_window() {
 #[test]
 fn action_not_ready_without_window() {
     assert_eq!(
-        determine_file_open_action(false, false),
+        determine_file_open_action(QueueOwner::Booting, false),
         FileOpenAction::QueueOnly,
     );
 }
@@ -74,7 +74,7 @@ fn paths(v: &[&str]) -> Vec<String> {
 #[test]
 fn decide_emits_when_ready_with_window() {
     let mut state = FileOpenState::new();
-    state.frontend_ready = true;
+    state.owner = QueueOwner::Settled;
     let outcome = decide_file_open_locked(&mut state, true, paths(&["/a.md"]), None);
     match outcome {
         FileOpenOutcome::Emit(p) => assert_eq!(p.len(), 1),
@@ -87,7 +87,7 @@ fn decide_emits_when_ready_with_window() {
 #[test]
 fn decide_queues_and_requests_window_when_ready_without_window() {
     let mut state = FileOpenState::new();
-    state.frontend_ready = true;
+    state.owner = QueueOwner::Settled;
     let outcome = decide_file_open_locked(&mut state, false, paths(&["/a.md"]), Some("/ws"));
     assert!(matches!(
         outcome,
@@ -99,7 +99,7 @@ fn decide_queues_and_requests_window_when_ready_without_window() {
     assert_eq!(state.pending[0].workspace_root.as_deref(), Some("/ws"));
     // The replacement window has not mounted yet. Keeping readiness true
     // would let a rapid second Finder open emit into a window with no listener.
-    assert!(!state.frontend_ready);
+    assert_eq!(state.owner, QueueOwner::Booting);
 }
 
 #[test]
@@ -129,10 +129,10 @@ fn drain_during_cold_start_then_emit_after_ready_no_drop_no_double() {
     assert_eq!(state.pending.len(), 1);
 
     // Frontend becomes ready and drains atomically → receives A exactly once.
-    let drained = mark_ready_and_drain(&mut state);
+    let drained = mark_ready_and_drain(&mut state, "main");
     assert_eq!(drained.len(), 1);
     assert_eq!(drained[0].path, "/A.md");
-    assert!(state.frontend_ready);
+    assert_eq!(state.owner, QueueOwner::Settled);
     assert!(state.pending.is_empty());
 
     // Open B after ready → emitted (not re-queued), so not dropped.
@@ -142,6 +142,96 @@ fn drain_during_cold_start_then_emit_after_ready_no_drop_no_double() {
         _ => panic!("expected Emit"),
     }
     assert!(state.pending.is_empty());
+}
+
+// -- the queue's owner can die (WI-RA7.4) -----------------------------------
+//
+// Only `main` drains the queue, once, when its frontend mounts. "Not drained
+// yet" therefore only means "wait" while that window is alive: a `main` that
+// is destroyed before it drains leaves nobody to wait for, and every later
+// open used to be queued behind it for the rest of the session.
+
+#[test]
+fn an_open_after_main_died_undrained_asks_for_a_new_main_instead_of_waiting() {
+    let mut state = FileOpenState::new();
+    // Cold start: an open is queued for the booting main window.
+    let cold = decide_file_open_locked(&mut state, false, paths(&["/cold.md"]), None);
+    assert!(matches!(
+        cold,
+        FileOpenOutcome::Queued {
+            create_window: false
+        }
+    ));
+
+    // The window is destroyed before its frontend ever drained the queue.
+    state.remove_window("main");
+
+    let next = decide_file_open_locked(&mut state, false, paths(&["/next.md"]), None);
+    assert!(
+        matches!(
+            next,
+            FileOpenOutcome::Queued {
+                create_window: true
+            }
+        ),
+        "nobody is left to drain the queue, so a new main window must be created"
+    );
+    // The new window drains everything that was waiting, in order.
+    let queued: Vec<&str> = state.pending.iter().map(|o| o.path.as_str()).collect();
+    assert_eq!(queued, vec!["/cold.md", "/next.md"]);
+    // And it is the one being waited for now: a third open joins the queue.
+    assert_eq!(state.owner, QueueOwner::Booting);
+}
+
+#[test]
+fn an_open_after_main_died_undrained_goes_to_a_listening_document_window() {
+    let mut state = FileOpenState::new();
+    state.record_window_focus("doc-2", true, true);
+    state.remove_window("main");
+
+    let outcome = decide_file_open_locked(&mut state, true, paths(&["/a.md"]), None);
+    assert!(
+        matches!(outcome, FileOpenOutcome::Emit(_)),
+        "a listening window exists and nothing is booting, so the open is delivered"
+    );
+    assert!(state.pending.is_empty());
+}
+
+#[test]
+fn another_window_being_destroyed_does_not_end_the_wait_for_main() {
+    let mut state = FileOpenState::new();
+    state.remove_window("doc-3");
+    state.remove_window("settings");
+    state.remove_window("");
+    state.remove_window("main-2");
+    assert_eq!(state.owner, QueueOwner::Booting);
+}
+
+#[test]
+fn the_window_that_drained_is_a_target_before_its_ready_event_arrives() {
+    // `main` registers its open-file listener, then drains; its separate
+    // `ready` event comes later. An open landing in between used to find no
+    // target, be queued for a window that had already drained, and stay there.
+    let mut state = FileOpenState::new();
+    assert_eq!(state.finder_window_target(&labels(&["main"])), None);
+
+    let drained = mark_ready_and_drain(&mut state, "main");
+    assert!(drained.is_empty());
+
+    assert_eq!(
+        state.finder_window_target(&labels(&["main"])),
+        Some("main".to_string())
+    );
+    let outcome = decide_file_open_locked(&mut state, true, paths(&["/hot.md"]), None);
+    assert!(matches!(outcome, FileOpenOutcome::Emit(_)));
+}
+
+#[test]
+fn a_drain_by_a_window_that_is_not_a_document_window_marks_no_target() {
+    let mut state = FileOpenState::new();
+    mark_ready_and_drain(&mut state, "settings");
+    assert_eq!(state.owner, QueueOwner::Settled);
+    assert_eq!(state.finder_window_target(&labels(&["settings"])), None);
 }
 
 // -- Finder hot-open target tracking ---------------------------------------
@@ -347,4 +437,77 @@ fn queue_empty_file_paths_is_noop() {
     let mut pending = Vec::new();
     queue_pending_file_opens(&mut pending, vec![], Some("/a"));
     assert!(pending.is_empty());
+}
+
+// -- queue_launch_file_args (WI-RA7.6) ---------------------------------------
+
+use std::sync::Mutex;
+
+/// A mutex some earlier holder panicked under. `std::sync::Mutex` marks it
+/// poisoned and every later `lock()` returns `Err` — the state a launch must
+/// still queue its files in.
+fn poisoned_state() -> Mutex<FileOpenState> {
+    let state = Mutex::new(FileOpenState::new());
+    let outcome = std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                let _guard = state.lock().expect("fresh mutex");
+                panic!("poison the file-open state (expected by this test)");
+            })
+            .join()
+    });
+    assert!(outcome.is_err(), "the holder must have panicked");
+    assert!(state.is_poisoned(), "premise: the mutex is poisoned");
+    state
+}
+
+fn queued(state: &Mutex<FileOpenState>) -> Vec<(String, Option<String>)> {
+    state
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .pending
+        .iter()
+        .map(|open| (open.path.clone(), open.workspace_root.clone()))
+        .collect()
+}
+
+#[test]
+fn launch_file_args_are_queued_with_their_workspace_roots() {
+    let state = Mutex::new(FileOpenState::new());
+    queue_launch_file_args(
+        &state,
+        vec!["/docs/notes/a.md".to_string(), "/b.md".to_string()],
+    );
+    assert_eq!(
+        queued(&state),
+        vec![
+            (
+                "/docs/notes/a.md".to_string(),
+                Some("/docs/notes".to_string())
+            ),
+            // Root-level file: no workspace, so `/` is never opened as one.
+            ("/b.md".to_string(), None),
+        ]
+    );
+}
+
+#[test]
+fn launch_file_args_survive_a_poisoned_state_mutex() {
+    let state = poisoned_state();
+    queue_launch_file_args(&state, vec!["/docs/笔记/日记.md".to_string()]);
+    assert_eq!(
+        queued(&state),
+        vec![(
+            "/docs/笔记/日记.md".to_string(),
+            Some("/docs/笔记".to_string())
+        )],
+        "a poisoned mutex must not drop the file the app was launched to open"
+    );
+}
+
+#[test]
+fn no_launch_file_args_queue_nothing() {
+    let state = Mutex::new(FileOpenState::new());
+    queue_launch_file_args(&state, Vec::new());
+    assert!(queued(&state).is_empty());
 }

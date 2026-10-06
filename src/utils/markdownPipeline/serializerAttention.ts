@@ -19,7 +19,7 @@
  *   - Emphasis beside a `strong` sibling is written with `_`. Flush `*`
  *     delimiters merge into one run — `**a***b*` — whose flanking is decided by
  *     characters neither node looked at, and italic typed next to bold was lost
- *     on save (#1407 soak: seeds 20260805, 5, 6). `_` and `*` never merge.
+ *     on save (found by the #1407 soak). `_` and `*` never merge.
  *     Everywhere else emphasis stays `*`, the house style; a parent/child edge
  *     such as `***x***` is fine as it is and keeps its spelling.
  *   - A character reference always covers a whole CODE POINT. Encoding one half
@@ -143,11 +143,27 @@ function serializeAttention(
 }
 
 /**
+ * The node types `serializeAttention` writes — the ones whose closing
+ * delimiter can ask for the character after it to be encoded. A handler for
+ * the node that follows needs to know (serializerBreak.ts); a type added to
+ * the handlers below belongs here too.
+ */
+export const ATTENTION_NODE_TYPES: ReadonlySet<string> = new Set(["emphasis", "strong", "delete"]);
+
+/**
  * The position of `node` among its siblings. `containerPhrasing` records the
  * current child in `indexStack` — the node itself when handling it, the node
  * before it when peeking — so the common case is O(1).
+ *
+ * Exported for the other handlers that decide by a node's neighbours
+ * (serializerBreak.ts); a search from the front in each would make a
+ * paragraph of n such nodes cost n².
  */
-function siblingIndex(node: unknown, parent: PhrasingParent | undefined, state: AttentionState): number {
+export function siblingIndex(
+  node: unknown,
+  parent: PhrasingParent | undefined,
+  state: Pick<AttentionState, "indexStack">,
+): number {
   const siblings = parent?.children ?? [];
   const current = state.indexStack[state.indexStack.length - 1] ?? -1;
   if (siblings[current] === node) return current;

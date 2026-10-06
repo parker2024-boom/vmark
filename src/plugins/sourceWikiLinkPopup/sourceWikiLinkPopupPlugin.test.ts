@@ -10,7 +10,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
 // Mock dependencies
-vi.mock("@/plugins/sourcePopup", () => ({
+vi.mock("@/plugins/shared/createSourcePopupPlugin", () => ({
   createSourcePopupPlugin: vi.fn((config) => {
     (createSourcePopupPlugin as ReturnType<typeof vi.fn>).__lastConfig = config;
     return {};
@@ -37,7 +37,7 @@ vi.mock("./SourceWikiLinkPopupView", () => ({
   })),
 }));
 
-import { createSourcePopupPlugin } from "@/plugins/sourcePopup";
+import { createSourcePopupPlugin } from "@/plugins/shared/createSourcePopupPlugin";
 import { createSourceWikiLinkPopupPlugin } from "./sourceWikiLinkPopupPlugin";
 
 // Helper to create a CM6 view

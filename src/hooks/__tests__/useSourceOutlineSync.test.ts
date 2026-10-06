@@ -12,7 +12,7 @@ vi.mock("@/utils/safeUnlisten", () => ({
   safeUnlisten: vi.fn(),
 }));
 
-vi.mock("@/components/Sidebar/outlineUtils", () => ({
+vi.mock("@/utils/markdownOutline", () => ({
   parseFenceDelimiter: vi.fn(() => null),
 }));
 

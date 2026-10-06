@@ -8,6 +8,8 @@
  *
  * IDs are generated during MDAST → ProseMirror conversion and
  * rendered to DOM for fragment link support.
+ *
+ * @module plugins/shared/headingIdAttr
  */
 
 /**

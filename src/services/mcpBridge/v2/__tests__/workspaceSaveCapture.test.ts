@@ -1,119 +1,99 @@
-// @vitest-environment node
-// vmark.workspace.save → coherence capture seam (WI-1.6, WI-LX1.4). The
-// capture itself is pinned in services/coherence; this file pins that the
-// handler hands a SUCCESSFUL write to `captureMcpWrite` with the exact bytes
-// written, and never hands it a write that was refused or failed.
+// vmark.workspace.save → coherence capture (WI-1.6, WI-LX1.4). The capture
+// itself is pinned in services/coherence; this file pins that a SUCCESSFUL
+// workspace.save reaches the kernel exactly once, as an MCP write carrying the
+// exact text written, and that a save which was refused or failed never does.
+//
+// Only the Tauri boundary is mocked: the handler, the save pipeline and the
+// capture chain are real, and "captured" is read at the kernel boundary.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useTabStore } from "@/stores/tabStore";
-import { useDocumentStore } from "@/stores/documentStore";
 
-vi.mock("@/services/mcpBridge/utils", () => ({ respond: vi.fn() }));
-vi.mock("@/services/persistence/workspaceStorage", () => ({
-  getCurrentWindowLabel: () => "main",
-}));
-
-const writeMock = vi.fn<(path: string, content: string) => Promise<void>>(async () => undefined);
-vi.mock("@tauri-apps/plugin-fs", () => ({
-  writeTextFile: (path: string, content: string) => writeMock(path, content),
-}));
-
-vi.mock("@/utils/pendingSaves", () => ({
-  registerPendingSave: () => 1,
-  clearPendingSave: () => undefined,
-}));
-
-const checkBridgePathMock = vi.fn<(p: string) => Promise<{ allowed: boolean; reason?: string }>>(
-  async () => ({ allowed: true })
+vi.mock("@tauri-apps/plugin-fs", async () =>
+  (await import("./bridgeWriteGate")).gatedFsModule(),
 );
-vi.mock("@/services/mcpBridge/bridgePathGuard", () => ({
-  checkBridgePath: (p: string) => checkBridgePathMock(p),
-}));
+vi.mock("@tauri-apps/api/core", async () =>
+  (await import("./bridgeWriteGate")).gatedCoreModule(),
+);
 
-const captureMcpWriteMock = vi.fn(async (_args: unknown) => null);
-vi.mock("@/services/coherence/mcpCapture", () => ({
-  captureMcpWrite: (args: unknown) => captureMcpWriteMock(args),
-}));
-
-import { respond } from "@/services/mcpBridge/utils";
+import { statefulFs } from "@/test/statefulFsFake";
+import { ROOT, doc, editDoc, newUntitledTab, openDocInTab, settle } from "@/test/tier0/harness";
 import { handleWorkspaceSave } from "@/services/mcpBridge/v2/workspaceSave";
+import { captures, resetBridge, responseTo } from "./bridgeDiskHarness";
 
-function lastRespond() {
-  const calls = vi.mocked(respond).mock.calls;
-  return calls[calls.length - 1][0];
-}
-
-function seedTab(id: string, filePath: string | null, content: string) {
-  useTabStore.setState({
-    tabs: {
-      main: [{ kind: "document", id, filePath, title: "t", isPinned: false, formatId: "markdown" }],
-    },
-    activeTabId: { main: id },
-    untitledCounter: 0,
-  });
-  useDocumentStore.getState().initDocument(id, content, filePath);
-}
+const CHAPTER = `${ROOT}/story/ch1.md`;
 
 beforeEach(() => {
-  vi.clearAllMocks();
-  useDocumentStore.setState({ documents: {} });
-  checkBridgePathMock.mockResolvedValue({ allowed: true });
-  writeMock.mockResolvedValue(undefined);
+  resetBridge();
 });
 
 describe("workspace.save hands successful writes to coherence capture", () => {
   it("captures the exact content written, tagged with the tool name", async () => {
-    seedTab("t1", "/ws/story/ch1.md", "saved");
-    useDocumentStore.getState().setEditorContent("t1", "edited body");
+    const tabId = await openDocInTab(CHAPTER, "saved\n");
+    editDoc(tabId, "edited body\n");
 
     await handleWorkspaceSave("req-1", {});
 
-    expect(lastRespond().success).toBe(true);
-    expect(writeMock).toHaveBeenCalledWith("/ws/story/ch1.md", "edited body");
-    expect(captureMcpWriteMock).toHaveBeenCalledTimes(1);
-    expect(captureMcpWriteMock).toHaveBeenCalledWith({
-      absolutePath: "/ws/story/ch1.md",
-      content: "edited body",
-      toolName: "workspace.save",
+    expect(responseTo("req-1").success).toBe(true);
+    expect(statefulFs.read(CHAPTER)).toBe("edited body\n");
+    await vi.waitFor(() => expect(captures).toHaveLength(1));
+    expect(captures[0].request).toMatchObject({
+      path: "story/ch1.md",
+      content: "edited body\n",
+      confidence: "inferred",
+      agent: { type: "model", id: "mcp-client" },
+      intent: { kind: "mcp-document-write", summary: "workspace.save" },
     });
   });
 
   it("a rejected capture never fails the save", async () => {
-    seedTab("t2", "/ws/story/ch2.md", "x");
-    captureMcpWriteMock.mockRejectedValueOnce(new Error("kernel down"));
+    const tabId = await openDocInTab(CHAPTER, "x\n");
+    editDoc(tabId, "y\n");
+    statefulFs.stubCommand("coherence_capture", () => {
+      throw new Error("kernel down");
+    });
 
     await handleWorkspaceSave("req-2", {});
 
-    expect(lastRespond().success).toBe(true);
+    expect(responseTo("req-2").success).toBe(true);
+    expect(statefulFs.read(CHAPTER)).toBe("y\n");
+    expect(doc(tabId).isDirty).toBe(false);
   });
 
   it("does not capture when the disk write fails", async () => {
-    seedTab("t3", "/ws/story/ch3.md", "x");
-    writeMock.mockRejectedValueOnce(new Error("EACCES"));
+    const tabId = await openDocInTab(CHAPTER, "x\n");
+    editDoc(tabId, "y\n");
+    statefulFs.failWrites(new Error("EACCES"));
 
     await handleWorkspaceSave("req-3", {});
+    await settle();
 
-    expect(lastRespond().success).toBe(false);
-    expect(captureMcpWriteMock).not.toHaveBeenCalled();
+    expect(responseTo("req-3").success).toBe(false);
+    expect(captures).toEqual([]);
   });
 
   it("does not capture when the path guard refuses the write", async () => {
-    seedTab("t4", "/ws/story/ch4.md", "x");
-    checkBridgePathMock.mockResolvedValueOnce({ allowed: false, reason: "outside roots" });
+    const tabId = await openDocInTab(CHAPTER, "x\n");
+    editDoc(tabId, "y\n");
+    statefulFs.stubCommand("mcp_bridge_check_path", () => {
+      throw new Error("outside roots");
+    });
 
     await handleWorkspaceSave("req-4", {});
+    await settle();
 
-    expect(lastRespond().success).toBe(false);
-    expect(writeMock).not.toHaveBeenCalled();
-    expect(captureMcpWriteMock).not.toHaveBeenCalled();
+    expect(responseTo("req-4").success).toBe(false);
+    expect(statefulFs.writesTo(CHAPTER)).toEqual([]);
+    expect(captures).toEqual([]);
   });
 
   it("does not capture an untitled tab (nothing is written)", async () => {
-    seedTab("t5", null, "draft");
+    const tabId = newUntitledTab();
+    editDoc(tabId, "draft\n");
 
     await handleWorkspaceSave("req-5", {});
+    await settle();
 
-    expect(lastRespond().success).toBe(false);
-    expect(captureMcpWriteMock).not.toHaveBeenCalled();
+    expect(responseTo("req-5").success).toBe(false);
+    expect(captures).toEqual([]);
   });
 });

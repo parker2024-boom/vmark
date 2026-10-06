@@ -153,7 +153,7 @@ pub(super) async fn deliver_response(
 /// `server.rs` and the routing/emit refusals in `routing.rs`. It lived as a
 /// private helper in `server.rs`, so `routing.rs` carried its own copies of
 /// the same remove-unlock-send sequence and the policy was split across
-/// modules (audit round 1, finding 7).
+/// modules.
 ///
 /// The state lock is released before answering: `send_error_response` may
 /// force-disconnect, which re-locks it.

@@ -2,6 +2,8 @@
  * Workspace Rail Feature Flag
  *
  * Reads from settingsStore.general.workspaceRailMode (persisted).
+ *
+ * @module services/featureFlags/workspaceRailFeatureFlag
  */
 
 import { useSettingsStore } from "@/stores/settingsStore";

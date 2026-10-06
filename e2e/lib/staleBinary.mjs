@@ -3,7 +3,7 @@
  *
  * `pnpm tauri:dev` rebuilds when a Rust file changes, and a `cargo build` from
  * another shell rewrites `target/debug/vmark` too — but neither is guaranteed to
- * restart the process (measured 2026-09-04: a rebuild that landed 36 s after
+ * restart the process (measured: a rebuild that landed 36 s after
  * launch left the old process running). The process keeps running the old
  * code; macOS keys keychain access on the code identity it verifies AGAINST
  * THE FILE, so a write still succeeds and the read back of the item the app
@@ -15,11 +15,11 @@
  *
  * The predicate is the executable itself. Cargo places `target/debug/vmark` by
  * REMOVING the old file and copying the fresh artifact in (measured: link count
- * 1, and a new inode at every rebuild of 2026-09-04 — 208183964 → 208283475 →
+ * 1, and a new inode at every rebuild in one session — 208183964 → 208283475 →
  * 208286491 → 208383781), so the inode the process is running (its `txt`
  * mapping) stops matching the inode at the path the moment a rebuild lands. That
  * is stateless and catches a replacement that happened before the harness ever
- * looked — a per-pid record of the first-seen hash could not (round 5, #204: it
+ * looked — a per-pid record of the first-seen hash could not (it
  * was also keyed by a pid that the OS reuses). A binary cargo did not rebuild
  * keeps its inode and its bytes, and is left alone; a same-inode rewrite with
  * different bytes is not something this toolchain produces.

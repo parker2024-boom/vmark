@@ -19,7 +19,9 @@ vi.mock("@/plugins/toolbarActions/dispatch", () => ({
 vi.mock("@/utils/imeGuard", () => ({
   runOrQueueCodeMirrorAction: mocks.runOrQueueCodeMirrorAction,
 }));
-vi.mock("./clipboardBridge", () => ({
+// The context-menu path is a re-export shim; the module that owns the clipboard
+// boundary (Tauri `invoke` + clipboard plugin) is the one mocked.
+vi.mock("@/services/editor/clipboardBridge", () => ({
   runClipboardCommand: mocks.runClipboardCommand,
   focusEditorSurface: mocks.focusEditorSurface,
 }));

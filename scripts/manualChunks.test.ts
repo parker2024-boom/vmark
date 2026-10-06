@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { manualChunks } from "./manualChunks";
+import { chunkFileNames, manualChunks } from "./manualChunks";
 
 /** Build a pnpm-style node_modules id for a package-internal file. */
 function pnpmId(pkg: string, file = "dist/index.js"): string {
@@ -34,6 +34,16 @@ describe("manualChunks — special pins (checked before node_modules dispatch)",
     "/repo/src/assets/fonts/KaTeX_Main-Regular.woff2?inline",
   ])("pins the export-style blob member %s to htmlExportStyles", (id) => {
     expect(manualChunks(id)).toBe("htmlExportStyles");
+  });
+
+  it("never pins the Settings primitives — pinning drags their importers' shared deps in", () => {
+    for (const id of [
+      "/repo/src/pages/settings/components.tsx",
+      "/repo/src/pages/settings/inputs.tsx",
+      "/repo/src/pages/settings/EditorSettings.tsx",
+    ]) {
+      expect(manualChunks(id)).toBeUndefined();
+    }
   });
 
   it("leaves ordinary app source unassigned", () => {
@@ -124,6 +134,8 @@ describe("manualChunks — vendor dispatch (pnpm-style ids)", () => {
     ["prosemirror-view", "vendor-tiptap"],
     // Sanitizer isolated so mermaid stays lazy
     ["dompurify", "vendor-dompurify"],
+    // The TOML parser, named so the eager gate can require it stays lazy (WI-RA24.9)
+    ["smol-toml", "vendor-toml"],
     // Workflow layout dagre isolated from mermaid's bundled fork
     ["@dagrejs/dagre", "vendor-dagre"],
     ["dagre", "vendor-dagre"],
@@ -190,5 +202,37 @@ describe("manualChunks — vendor dispatch (pnpm-style ids)", () => {
 
   it("degenerate trailing node_modules/ id is unassigned", () => {
     expect(manualChunks("/repo/node_modules/")).toBeUndefined();
+  });
+});
+
+// WI-RA24.9 — chunks a budget must glob get a stable FILE name from their
+// content, without changing what any chunk holds.
+describe("chunkFileNames", () => {
+  const SETTINGS = "/repo/src/pages/settings";
+  const named = (name: string, moduleIds: string[]) => chunkFileNames({ name, moduleIds });
+
+  it("emits the Settings page as SettingsPage-*, apart from the settings-* locale chunks", () => {
+    expect(named("Settings", ["/repo/src/pages/Settings.tsx"])).toBe("assets/SettingsPage-[hash].js");
+    expect(named("settings", ["/repo/src/locales/en/settings.json"])).toBe("assets/[name]-[hash].js");
+  });
+
+  it("emits the chunk of shared Settings primitives as settingsPrimitives-*, whatever Rolldown called it", () => {
+    const ids = [
+      pnpmId("lucide-react", "dist/esm/icons/palette.mjs"),
+      `${SETTINGS}/buttons.tsx`,
+      `${SETTINGS}/SettingsSearchContext.ts`,
+      `${SETTINGS}/layout.tsx`,
+      `${SETTINGS}/inputs.tsx`,
+      `${SETTINGS}/TagInput.tsx`,
+    ];
+    expect(named("components", ids)).toBe("assets/settingsPrimitives-[hash].js");
+  });
+
+  it("keeps the name of a chunk that holds anything besides the primitives", () => {
+    expect(named("EditorSettings", [`${SETTINGS}/EditorSettings.tsx`, `${SETTINGS}/inputs.tsx`])).toBe(
+      "assets/[name]-[hash].js",
+    );
+    expect(named("vendor-react", [pnpmId("react")])).toBe("assets/[name]-[hash].js");
+    expect(named("empty", [])).toBe("assets/[name]-[hash].js");
   });
 });

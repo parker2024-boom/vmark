@@ -11,8 +11,7 @@
  * normalises CRLF back to LF on insert — with two real side effects: an undo
  * entry that restores nothing, and a collapsed selection. On WYSIWYG it was
  * worse: remark preserves `\r\n` inside a paragraph, so the CR survived into
- * ProseMirror text nodes — the LF-invariant violation shipped as a feature
- * (WI-1.7).
+ * ProseMirror text nodes — the LF-invariant violation shipped as a feature.
  *
  * Key decisions:
  *   - No tab → false. The action did nothing; claiming success would make a

@@ -5,6 +5,9 @@
  * handed to settledScroll, which lands it on large documents where
  * content-visibility moves it mid-scroll. Real-engine proof of the settling is
  * utils/settledScroll.webkit.test.ts; this pins the hook's side of it.
+ *
+ * WI-RA14A.2 — the hook's editor-poll and cursor-debounce timers run on a fake
+ * clock, so neither can fire at a moment the test did not choose.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
@@ -67,6 +70,7 @@ async function clickOutlineItem(headingIndex: number) {
 describe("useOutlineSync — scroll on outline click", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
     vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb) => {
       cb(0);
       return 0;
@@ -75,6 +79,7 @@ describe("useOutlineSync — scroll on outline click", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
     document.body.innerHTML = "";
   });
 

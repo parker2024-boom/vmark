@@ -7,7 +7,7 @@
 //! reporter's link carried `\\?\C:\SEC\VMark\vmark-mcp-server.exe`.
 //!
 //! Third-party consumers do not recognise the prefix — the same reason
-//! `workspace_validation` already strips it before handing a path to the
+//! `workspace::validation` already strips it before handing a path to the
 //! frontend. These pin the stripping rather than the (untestable here)
 //! canonicalize call, so the rule holds on every platform's CI.
 

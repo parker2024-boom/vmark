@@ -1,7 +1,7 @@
 //! Tests for `atomic_replace.rs` — the shared atomic-replacement core.
 //!
 //! Caller-facing behavior (exact error strings, validation, sentinel
-//! prefixes) stays pinned by the `app_paths` and `file_write` test suites;
+//! prefixes) stays pinned by the `app_paths` and `files::write` test suites;
 //! these tests pin the core's own contract.
 
 use super::*;
@@ -89,6 +89,65 @@ fn empty_contents_produce_empty_file() {
     atomic_replace(&target, dir.path(), b"").unwrap();
 
     assert_eq!(fs::read(&target).unwrap(), b"");
+}
+
+// ─── WI-RA11.2: the rename is made durable ────────────────────────────────
+
+/// The directories this thread's atomic writes synced since `clear`.
+#[cfg(unix)]
+fn synced_directories(clear: bool) -> Vec<std::path::PathBuf> {
+    use crate::atomic_persist::SYNCED_DIRECTORIES;
+    SYNCED_DIRECTORIES.with(|synced| {
+        if clear {
+            synced.borrow_mut().clear();
+        }
+        synced.borrow().clone()
+    })
+}
+
+/// A rename edits the parent directory; until that directory is synced a
+/// crash can come back with the old entry. Every caller of this core
+/// (workspace config, the MCP port file) depends on it.
+#[cfg(unix)]
+#[test]
+fn replacing_a_file_syncs_its_parent_directory() {
+    let dir = tempdir().unwrap();
+    let target = dir.path().join("workspace.json");
+    fs::write(&target, "old").unwrap();
+    synced_directories(true);
+
+    atomic_replace(&target, dir.path(), b"new").unwrap();
+
+    assert_eq!(synced_directories(false), vec![dir.path().to_path_buf()]);
+}
+
+#[cfg(unix)]
+#[test]
+fn the_streaming_form_syncs_its_parent_directory_too() {
+    let dir = tempdir().unwrap();
+    let target = dir.path().join("export.pdf");
+    synced_directories(true);
+
+    atomic_replace_with(&target, dir.path(), |out| out.write_all(b"%PDF")).unwrap();
+
+    assert_eq!(synced_directories(false), vec![dir.path().to_path_buf()]);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_write_that_fails_before_the_rename_syncs_no_directory() {
+    let dir = tempdir().unwrap();
+    let target = dir.path().join("never.txt");
+    synced_directories(true);
+
+    let error = atomic_replace_with(&target, dir.path(), |_| {
+        Err(std::io::Error::other("producer failed"))
+    })
+    .expect_err("the producer's failure is the write's failure");
+
+    assert!(matches!(error, AtomicReplaceError::WriteTemp(_)));
+    assert!(synced_directories(false).is_empty());
+    assert!(!target.exists());
 }
 
 // ─── B3: extended attributes (audit 20260906) ─────────────────────────────

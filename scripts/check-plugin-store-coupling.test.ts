@@ -1,5 +1,6 @@
 /**
  * WI-11 — Four-channel plugin coupling ratchet (decision ledger D3).
+ * WI-RA28.3 — the explanation the gate writes cites only documents a clone has.
  *
  * Tests for the plugin→host coupling gate used by
  * scripts/check-plugin-store-coupling.mjs.
@@ -36,7 +37,7 @@
 
 import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -415,6 +416,29 @@ describe("wiring — the real package.json and the real baseline", () => {
       .filter(([, channels]) => (channels.stores ?? 0) > 0)
       .map(([unit]) => unit);
     expect(coupledToStores).toEqual([]);
+  });
+
+  it("explains itself with documents a clone can open, and the committed baseline carries that explanation", () => {
+    // The header is what a contributor reads when the ratchet fails: it is
+    // written into the baseline by --write-baseline. A citation of a gitignored
+    // dev-docs/ file sends every clone to a document that does not exist.
+    const root = writeTree({ "src/plugins/gallery/index.ts": "export const a = 1;\n" });
+    const written = path.join(root, "written.json");
+    const res = spawnSync(process.execPath, [SCRIPT, "--root", root, "--baseline", written, "--write-baseline"], {
+      encoding: "utf8",
+    });
+    expect(res.status, res.stderr).toBe(0);
+    const header = (JSON.parse(readFileSync(written, "utf8")) as { "//": string[] })["//"];
+    const text = header.join("\n");
+    expect(text).not.toMatch(/dev-docs\//);
+    expect(text).toContain(".claude/rules/00-engineering-principles.md");
+    const cited = text.match(/[\w./-]+\.(?:md|mjs|json)\b/g) ?? [];
+    expect(cited.length).toBeGreaterThan(0);
+    for (const rel of cited) expect(existsSync(path.join(REPO, rel)), `${rel} is not in the tree`).toBe(true);
+    const committed = JSON.parse(
+      readFileSync(path.join(REPO, "scripts", "plugin-store-coupling-baseline.json"), "utf8"),
+    );
+    expect(committed["//"]).toEqual(header);
   });
 
   it("freezes only known channels, as non-negative integers", () => {

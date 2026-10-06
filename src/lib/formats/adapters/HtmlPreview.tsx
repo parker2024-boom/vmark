@@ -59,7 +59,7 @@ const CSP_CONTENT =
  * serialization escapes `&` and `"` but NOT `>`, so DOMPurify passes
  * `<head title="a>b">` straight through. The regex then matched
  * `<head title="a>` and spliced the meta INSIDE the attribute value, leaving
- * the sandboxed document with NO policy element at all (audit finding #19).
+ * the sandboxed document with NO policy element at all.
  *
  * A parser cannot be confused by a `>` inside an attribute, so the whole class
  * goes away. `DOMParser` with `text/html` always synthesises `html`/`head`/
@@ -106,7 +106,7 @@ export function HtmlPreview({
 
   return (
     <div className="html-preview">
-      {/* WI-3.4's pending-sign-off notice, unchanged. It is a statement about
+      {/* The security review's pending-sign-off notice, unchanged. It is a statement about
           the SANDBOXED path, so it stays with that path rather than following
           the user into trusted mode, which is a different mechanism with its
           own reasoning recorded in src-tauri/src/trusted_html/. */}

@@ -1,8 +1,8 @@
-/* Workflow approval dialog (WI-3.2). Component-scoped one-off dimensions
+/* Workflow approval dialog. Component-scoped one-off dimensions
    live on `.approval-dialog` per .claude/rules/31-design-tokens.md. */
 
 /* Backdrop chrome (scrim, centring, z) comes from the shared overlay
-   shell (WI-UI3.1); the sizing knobs stay here. */
+   shell; the sizing knobs stay here. */
 .approval-dialog__backdrop {
   --approval-dialog-max-height: 80vh;
   --approval-preview-max-height: 240px;

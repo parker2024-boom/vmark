@@ -1,10 +1,10 @@
 /**
- * browserNavigation — stateless browser navigation actions (WI-S1.2 / ADR-5).
+ * browserNavigation — stateless browser navigation actions (ADR-5).
  *
  * The nav controls (back / forward / reload / stop) and the omnibox submit live in
  * the bottom `StatusBar` now (ADR-4), while the native webview is owned by
  * `BrowserSurface`. Both drive navigation through these functions rather than
- * duplicating `invoke` calls: each takes a `tabId` and issues the WI-1.2 command,
+ * duplicating `invoke` calls: each takes a `tabId` and issues the native command,
  * keeping `browserUiStore` (address-bar text, loading) and the committed
  * `BrowserTab.url` in sync. No component state, no hooks — safe to call from an
  * event handler or a store subscriber.
@@ -43,13 +43,13 @@ function loadUrl(tabId: string, url: string): void {
   // error is no longer what is on screen.
   ui.setError(tabId, null);
   void invoke("browser_navigate", { tabId, url }).catch((e: unknown) => {
-    // Do NOT swallow this (WI-S0.9). A rejected navigate used to leave a spinner and a
+    // Do NOT swallow this. A rejected navigate used to leave a spinner and a
     // blank rect, indistinguishable from a slow page.
     useBrowserUiStore.getState().setError(tabId, commandErrorMessage(e));
   });
 }
 
-/** Report a failed native command instead of silently dropping it (WI-S0.9). */
+/** Report a failed native command instead of silently dropping it. */
 function reportFailure(tabId: string): (e: unknown) => void {
   return (e: unknown) => useBrowserUiStore.getState().setError(tabId, commandErrorMessage(e));
 }
@@ -58,7 +58,7 @@ function reportFailure(tabId: string): (e: unknown) => void {
 export function submitOmnibox(tabId: string, entry: string): void {
   const target = resolveOmnibox(entry);
   if (target === "") return;
-  // The user typed this. History wants to know that (WI-S2.2).
+  // The user typed this. History wants to know that.
   setNavIntent(tabId, "typed");
   loadUrl(tabId, target);
 }

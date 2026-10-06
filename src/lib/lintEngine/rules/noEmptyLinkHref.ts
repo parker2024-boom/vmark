@@ -3,6 +3,8 @@
  *
  * Purpose: Flag link nodes where the URL/href is an empty string.
  * Valid markdown but almost always a mistake.
+ *
+ * @module lib/lintEngine/rules/noEmptyLinkHref
  */
 
 import { visit } from "unist-util-visit";

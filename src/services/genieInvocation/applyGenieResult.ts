@@ -9,9 +9,9 @@
  * the SAME fallback the stale-target guard already used — keep the result as a
  * suggestion against the originating tab, so it is never lost and never
  * written blind:
- *   - the registered editor is not the one showing the originating tab (#963),
- *   - the originating document is read-only (#964),
- *   - the document changed under the captured range mid-stream (#965).
+ *   - the registered editor is not the one showing the originating tab,
+ *   - the originating document is read-only,
+ *   - the document changed under the captured range mid-stream.
  *
  * @coordinates-with streamRunner.ts — the only consumer; owns RunContext
  * @coordinates-with stores/aiStore/suggestion.ts — where a refused result goes
@@ -28,7 +28,7 @@ import { useDocumentStore } from "@/stores/documentStore";
 import { useEditorStore } from "@/stores/editorStore";
 import { captureAiEdit } from "@/services/coherence/captureFunnel";
 import { useGeniePickerStore } from "@/stores/geniePickerStore";
-import { createMarkdownPasteSlice } from "@/plugins/markdownPaste/tiptap";
+import { createMarkdownPasteSlice } from "@/plugins/shared/markdownPasteSlice";
 import type { ExtractionResult } from "./extraction";
 import { failInvocation, type ApplyOutcome, type RunContext } from "./streamRunnerContext";
 
@@ -56,7 +56,7 @@ function buildSuggestionParams(
 }
 
 /**
- * The editor that is showing `tabId`, or null (audit #963).
+ * The editor that is showing `tabId`, or null.
  *
  * `tiptap.editor` is whichever editor registered LAST — with a split pane, or a
  * Source pane holding focus, that is not the editor showing the originating
@@ -78,24 +78,24 @@ export function editorForTab(tabId: string) {
 function applyDirectly(ctx: RunContext, content: string): ApplyOutcome {
   const editor = editorForTab(ctx.tabId);
   if (!editor) {
-    failInvocation(i18n.t("dialog:toast.genieEditorUnavailable"), ctx.requestId);
+    failInvocation(i18n.t("dialog:toast.genieEditorUnavailable"), ctx.requestId, ctx.retry);
     return "failed";
   }
   const doc = useDocumentStore.getState().getDocument(ctx.tabId);
   // A read-only document refuses the USER's keystrokes, and a programmatic
-  // `view.dispatch` walks straight past that (audit #964): ProseMirror's
+  // `view.dispatch` walks straight past that: ProseMirror's
   // `editable` gates input handlers, not transactions. A read-only duplicate is
   // the copy another window owns for writing, so silently editing it is the
   // worst possible outcome — keep the result as a suggestion instead.
   if (doc?.readOnly) return "suggest";
-  // Coherence (WI-1.6): dirty state must be read BEFORE the apply — it
+  // Coherence: dirty state must be read BEFORE the apply — it
   // decides whether the capture's input revision is exact or inferred.
   const bufferWasDirty = doc?.isDirty ?? false;
   const isInsert = ctx.action === "insert";
   const from = isInsert ? ctx.extraction.to : ctx.extraction.from;
   const to = ctx.extraction.to;
-  // The captured range is only meaningful in the document it was taken from
-  // (audit #965). A stream can run for minutes, and typing in the SAME tab
+  // The captured range is only meaningful in the document it was taken from.
+  // A stream can run for minutes, and typing in the SAME tab
   // shifts every position after the edit — applying the old from/to then
   // overwrites unrelated text. Verify the range still holds what was extracted
   // (and, for an insert, that the position still exists) before writing.
@@ -108,7 +108,7 @@ function applyDirectly(ctx: RunContext, content: string): ApplyOutcome {
   editor.view.dispatch(tr);
   useGeniePickerStore.getState().closePicker();
   useAiInvocationStore.getState().finish(ctx.requestId);
-  // Synchronous after dispatch (audit T3): onUpdate has synced the store
+  // Synchronous after dispatch: onUpdate has synced the store
   // and captureAiEdit snapshots at entry — no timer race with a second
   // apply or tab switch.
   void captureAiEdit({
@@ -121,8 +121,7 @@ function applyDirectly(ctx: RunContext, content: string): ApplyOutcome {
 }
 
 /**
- * Whether the captured range still describes the document it was taken from
- * (audit #965).
+ * Whether the captured range still describes the document it was taken from.
  *
  * The extracted text is markdown SERIALIZED from the range, not the raw text at
  * those positions, so it cannot be compared back. What can be compared is the
@@ -158,12 +157,12 @@ function keepAsSuggestion(ctx: RunContext, content: string): void {
 export function handleStreamDone(ctx: RunContext, accumulated: string): void {
   const content = accumulated.trim();
   if (!content) {
-    failInvocation(i18n.t("dialog:toast.genieEmptyResponse"), ctx.requestId);
+    failInvocation(i18n.t("dialog:toast.genieEmptyResponse"), ctx.requestId, ctx.retry);
     return;
   }
 
   const autoApprove = useSettingsStore.getState().advanced.mcpServer.autoApproveEdits;
-  // Stale-target guard (WI-0.9, C4): if the user navigated to a different
+  // Stale-target guard (C4): if the user navigated to a different
   // tab while the stream was arriving, the captured from/to positions belong
   // to the originating doc. Applying them to the now-active editor would
   // corrupt the wrong document. Preserve the result as a suggestion scoped

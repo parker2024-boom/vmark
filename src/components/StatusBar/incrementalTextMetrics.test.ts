@@ -10,7 +10,7 @@
  * between non-empty blocks (see module header of incrementalTextMetrics.ts).
  */
 import { describe, expect, it } from "vitest";
-import { computeTextMetrics, stripMarkdown } from "./statusTextMetrics";
+import { computeTextMetrics, stripMarkdown } from "@/utils/markdownTextMetrics";
 import { createMetricsCache } from "./incrementalTextMetrics";
 import { generateCjkMarkdown, generateMarkdown } from "@/bench/helpers";
 

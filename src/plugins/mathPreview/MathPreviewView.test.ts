@@ -15,7 +15,7 @@ const mockLoadKatex = vi.fn(() =>
   })
 );
 
-vi.mock("@/plugins/latex/katexLoader", () => ({
+vi.mock("@/plugins/shared/katexLoader", () => ({
   loadKatex: (...args: unknown[]) => mockLoadKatex(...args),
 }));
 

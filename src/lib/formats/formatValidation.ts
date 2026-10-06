@@ -3,7 +3,7 @@
  *
  * Purpose: `registerFormat` had grown to ~125 lines of interleaved validation,
  * normalization, freezing and commit, with the same predicate checked twice and
- * one branch therefore unreachable (audit R3 #793/#795). Registration is a
+ * one branch therefore unreachable. Registration is a
  * transaction; the checks it runs first are not, and they are pure — a config
  * plus two "is this taken?" questions in, a normalized extension list or a
  * throw out. Splitting them makes the commit short enough to read as atomic and
@@ -25,7 +25,7 @@ const ID_PATTERN = /^[a-z0-9-]+$/;
  * whitespace.
  *
  * Registration used to accept anything non-empty after trimming and stripping
- * leading dots (audit R3 #794), so `"tar.gz"`, `"a/b"` and `"md?x"` all
+ * leading dots, so `"tar.gz"`, `"a/b"` and `"md?x"` all
  * registered — and then never matched a single file, because the lookup key for
  * `a.tar.gz` is `gz`. A format that registers and never dispatches is the
  * quietest failure this module can produce; refusing it at composition is loud.
@@ -36,15 +36,15 @@ const EXTENSION_KEY = /^[^.\\/?#\s]+$/;
  * Fields whose value is an IMPORT THUNK, checked for callability at
  * registration rather than at first mount.
  *
- * A non-callable value means either a half-written adapter or the pre-WI-13
+ * A non-callable value means either a half-written adapter or the older
  * shape (an already-imported component), and the second silently reinstates the
- * static import WI-13 removed: everything still renders and the ~900 kB WYSIWYG
+ * static import the thunk removed: everything still renders and the ~900 kB WYSIWYG
  * chunk is back on every cold start with no test failing. Callability is all
  * that is checkable — a thunk and a function component are indistinguishable by
  * inspection, and CALLING one here would defeat the point of the field being
  * lazy.
  *
- * `loadLanguage` and `loadExtraExtensions` were missing from this list (#796),
+ * `loadLanguage` and `loadExtraExtensions` were missing from this list,
  * so a malformed value survived registration and threw at first use — in the
  * editor, on the user's document, rather than at composition.
  */
@@ -141,8 +141,8 @@ function normalizeExtensions(config: FormatConfig, registry: RegistryLookup): st
  * A wysiwyg format MUST bring its own surface. Editor.tsx used to fall back to
  * MarkdownEditorSurface, so a format declaring kind=wysiwyg without a component
  * silently rendered AS MARKDOWN — failing open into the very privilege Phase 4B
- * removes (WI-4.5). This predicate was checked TWICE, and the second branch was
- * unreachable dead code (#795); the surviving message is the informative one.
+ * removes. This predicate was checked TWICE, and the second branch was
+ * unreachable dead code; the surviving message is the informative one.
  *
  * Invariant 4 (plan rev 5): non-wysiwyg formats MAY omit `loadLanguage` — they
  * render with raw CodeMirror, and full editing, find, undo and save still work.
@@ -190,7 +190,7 @@ function assertAdapterPolicy(config: FormatConfig): void {
 
 /**
  * Freeze the config so the indexes cannot drift from the object the registry
- * serves back (#403).
+ * serves back.
  *
  * The extensions are rewritten IN PLACE to their normalized form (a no-op for
  * every adapter, which declares them lowercase and dot-less) — in place rather
@@ -201,8 +201,8 @@ function assertAdapterPolicy(config: FormatConfig): void {
  *
  * `adapters` is frozen one level down too: it carries the invariant validated
  * above, and a shallow freeze left `readOnlyDefault` writable afterwards — so a
- * config could be made to contradict the check it had already passed (audit R2,
- * #797). Deliberately NOT a recursive freeze: `schemaRenderers` holds React
+ * config could be made to contradict the check it had already passed.
+ * Deliberately NOT a recursive freeze: `schemaRenderers` holds React
  * components, and a `React.lazy` one mutates its own `_status` and `_result` as
  * the chunk resolves — freezing those would break the preview it renders.
  */

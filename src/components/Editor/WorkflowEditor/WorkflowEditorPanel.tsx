@@ -16,25 +16,25 @@
  *   Selection is driven by the workflow view store, which is also
  *   what JobNode click handlers populate, so the canvas and form
  *   are tightly bound through the store rather than via props. It is a
- *   SINGLETON, so two mounted panels share one selection (audit R2, #572 —
- *   keying it by document is a workflowStore change, not a panel one).
+ *   SINGLETON, so two mounted panels share one selection (keying
+ *   it by document is a workflowStore change, not a panel one).
  *
  *   The preview overlay, by contrast, is scoped: the panel reads the patch
  *   queue of the document the workbench hands it, never the store's active
- *   one, which under a document split can be the other pane's (audit R2, #575).
+ *   one, which under a document split can be the other pane's.
  *   The forms are handed a SECOND, structural-only IR beside it: a field's own
- *   queued edit must not be the value it compares itself against (#1020).
+ *   queued edit must not be the value it compares itself against.
  *
  *   The container composes and nothing else (audit 20260907, #283): the
  *   preview overlay is `usePreviewWorkflow`, the selection → form choice is
  *   `SelectionForm`, the derivation `stepSelection.ts`, and the focus
  *   restoration `useStepFocusRestore`.
  *
- * Origin: GitHub Actions workflow viewer plan (2026-05-04, retired) §6
- *   Phase 7 / WI-7.1 + WI-7.2.
+ * Origin: GitHub Actions workflow viewer plan (retired) §6
+ *   Phase 7.
  *
  * @coordinates-with src/stores/workflowStore.ts — selection + patch queue
- * @coordinates-with src/components/Editor/WorkflowEditor/useActionlintDiagnostics.ts — actionlint rows (WI-FL3.8)
+ * @coordinates-with src/components/Editor/WorkflowEditor/useActionlintDiagnostics.ts — actionlint rows
  * @coordinates-with src/components/Editor/WorkflowEditor/stepSelection.ts — selected job/step derivation
  * @coordinates-with src/components/Editor/WorkflowEditor/useStepFocusRestore.ts — focus after step navigation
  * @module components/Editor/WorkflowEditor/WorkflowEditorPanel
@@ -64,16 +64,16 @@ import "./workflow-editor.css";
 
 interface WorkflowEditorPanelProps {
   workflow: WorkflowIR | null;
-  /** The hosting pane's tab — the text actionlint lints (WI-FL3.8). Null
+  /** The hosting pane's tab — the text actionlint lints. Null
    *  keeps the banner parser-only; the workbench always supplies it. */
   tabId: string | null;
   /** The edit store's id for THIS pane's document, from the workbench that
    *  owns the binding. The preview overlay reads the queue belonging to it
-   *  rather than whichever queue is active (audit R2, #575). */
+   *  rather than whichever queue is active. */
   documentId: string | null;
   onSave: () => Promise<void> | void;
   /** Optional: SaveControls already clears the queue and the forms remount
-   *  here, so a host with no source-of-truth to reload passes nothing (#299). */
+   *  here, so a host with no source-of-truth to reload passes nothing. */
   onDiscard?: () => void;
 }
 
@@ -90,8 +90,7 @@ export function WorkflowEditorPanel({
   // StepForm remount, dropping any locally-typed-but-uncommitted
   // `useState` values. Without this, "Discard" cleared the patch queue
   // (via SaveControls.handleDiscard → clearPatches) but the visible
-  // form fields still showed the user's mid-edit text (impact-analyst
-  // audit finding for WI-7.2).
+  // form fields still showed the user's mid-edit text.
   const [formGen, setFormGen] = useState(0);
 
   const handleDiscard = useCallback((): void => {
@@ -102,11 +101,11 @@ export function WorkflowEditorPanel({
   // Focus follows a step→step navigation remount (never an initial selection).
   // Scoped to THIS panel: the selection lives in one store slice, so every
   // mounted panel's hook reacts to it, and a document-wide query put focus on
-  // whichever pane's nav button came first in the DOM (audit R2, #586).
+  // whichever pane's nav button came first in the DOM.
   const rootRef = useRef<HTMLDivElement>(null);
   useStepFocusRestore(selectedStepId, rootRef);
 
-  // WI-FL3.8 — actionlint's rows (setting-gated, debounced, async) join
+  // Actionlint's rows (setting-gated, debounced, async) join
   // the parser's in the banner below; they never delay the parser's rows.
   const actionlintDiagnostics = useActionlintDiagnostics(tabId);
   const previewed = usePreviewWorkflow(workflow, documentId);
@@ -116,7 +115,7 @@ export function WorkflowEditorPanel({
 
   // Every stateful control is keyed by `formGen` — Discard clears the patch
   // queue, and a control that kept its own `useState` went on showing the
-  // value it had just discarded (audit R2, #574).
+  // value it had just discarded.
   return (
     <div className="workflow-editor-panel" ref={rootRef}>
       <SaveControls onSave={onSave} onDiscard={handleDiscard} />
@@ -144,15 +143,14 @@ const NO_PATCHES: readonly IRPatch[] = [];
 /**
  * Preview-IR overlay: the parsed IR with the structural pendingPatches
  * (job.create/delete, step.insert/delete/move) applied, so freshly-added
- * entities are visible before save (WI-C0). Non-structural edits are
+ * entities are visible before save. Non-structural edits are
  * tracked via local React state in the form components. The store selector
  * keeps this reactive — the panel re-renders when patches enqueue/dequeue.
  *
  * THIS document's queue, not the active one. The edit store holds one active
  * binding and stashes every other document's queue, so a panel that read
  * `pendingPatches` unconditionally rendered the OTHER pane's edits over its own
- * workflow — a job created in one document appearing in another (audit R2,
- * #575).
+ * workflow — a job created in one document appearing in another.
  */
 function usePreviewWorkflow(
   workflow: WorkflowIR | null,
@@ -164,7 +162,7 @@ function usePreviewWorkflow(
       ? s.edit.pendingPatches
       : (s.edit.patchesByDocument[documentId] ?? NO_PATCHES);
   });
-  // Memoized on the two inputs (audit R3 #576). Both walks rebuild the IR, and
+  // Memoized on the two inputs. Both walks rebuild the IR, and
   // they ran on EVERY panel render — an actionlint result arriving, a Discard,
   // a selection change — even when neither the parsed workflow nor the queue
   // had moved. Worse than the work: each run handed the forms a fresh
@@ -184,7 +182,7 @@ function usePreviewWorkflow(
 
 interface SelectionFormProps {
   workflow: WorkflowIR;
-  /** The pre-edit IR the forms compare a field against (#1020). Same jobs and
+  /** The pre-edit IR the forms compare a field against. Same jobs and
    *  step ORDER as `workflow`, so an id or index selects the same entity. */
   baseline: WorkflowIR;
   selectedJobId: string | null;
@@ -193,7 +191,7 @@ interface SelectionFormProps {
   formGen: number;
 }
 
-/** The form for the canvas selection: a step, a job, or the "select a job" hint (#283). */
+/** The form for the canvas selection: a step, a job, or the "select a job" hint. */
 function SelectionForm({ workflow, baseline, selectedJobId, selectedStepId, formGen }: SelectionFormProps): ReactElement {
   const { t } = useTranslation("workflowEditor");
   const { selectedJob, selectedStep, selectedStepIndex, stepCount, prevStepId, nextStepId } =

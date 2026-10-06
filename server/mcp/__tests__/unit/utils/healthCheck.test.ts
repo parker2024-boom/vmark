@@ -16,25 +16,17 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-
-const { listToolsMock, seenBridge } = vi.hoisted(() => ({
-  listToolsMock: vi.fn(),
-  seenBridge: { current: undefined as unknown },
-}));
-
-vi.mock('../../../src/index.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../../src/index.js')>();
-  return {
-    ...actual,
-    createVMarkMcpServer: vi.fn((bridge: unknown) => {
-      seenBridge.current = bridge;
-      return { listTools: listToolsMock };
-    }),
-  };
-});
-
 import { runHealthCheck } from '../../../src/utils/healthCheck.js';
-import { TOOL_REGISTRY, EXPECTED_TOOL_COUNT } from '../../../src/index.js';
+import { createVMarkMcpServer, TOOL_REGISTRY, EXPECTED_TOOL_COUNT } from '../../../src/index.js';
+
+const listToolsMock = vi.fn();
+
+/**
+ * A server whose tool surface the test controls. The real registry cannot
+ * produce a wrong name or a duplicate, so the failure arms are reached by
+ * handing the validation such a surface through the factory parameter.
+ */
+const fakeServer = () => ({ listTools: listToolsMock });
 
 /** The exact surface the registry declares — what a healthy run reports. */
 const healthy = (): { name: string; inputSchema: object }[] =>
@@ -63,9 +55,7 @@ function reported(spy: ReturnType<typeof vi.spyOn>): Record<string, unknown> {
 }
 
 describe('runHealthCheck', () => {
-  it('reports ok, on stdout, with the tools it found', async () => {
-    listToolsMock.mockReturnValue(healthy());
-
+  it('reports ok, on stdout, with the tools the REAL server registers', async () => {
     await runHealthCheck('9.9.9');
 
     const result = reported(log);
@@ -80,7 +70,6 @@ describe('runHealthCheck', () => {
   });
 
   it('sets exitCode rather than exiting, so a piped stdout can drain', async () => {
-    listToolsMock.mockReturnValue(healthy());
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
 
     await runHealthCheck('1.0.0');
@@ -94,11 +83,14 @@ describe('runHealthCheck', () => {
   // run calls its methods, so only asserting its contract exercises them — and
   // a `send` that silently resolved would make the health check a live client.
   it('hands the server a bridge that refuses to send and reports itself disconnected', async () => {
-    listToolsMock.mockReturnValue(healthy());
+    let seenBridge: unknown;
+    await runHealthCheck('1.0.0', (bridge, options) => {
+      seenBridge = bridge;
+      return createVMarkMcpServer(bridge, options);
+    });
+    expect(reported(log).status).toBe('ok');
 
-    await runHealthCheck('1.0.0');
-
-    const bridge = seenBridge.current as {
+    const bridge = seenBridge as {
       send: () => Promise<never>;
       isConnected: () => boolean;
       connect: () => Promise<void>;
@@ -118,7 +110,7 @@ describe('runHealthCheck', () => {
     wrong[0] = { name: 'not-a-real-tool', inputSchema: {} };
     listToolsMock.mockReturnValue(wrong);
 
-    await runHealthCheck('1.0.0');
+    await runHealthCheck('1.0.0', fakeServer);
 
     const result = reported(err);
     expect(result.status).toBe('error');
@@ -133,7 +125,7 @@ describe('runHealthCheck', () => {
     dupes[1] = { name: dupes[0].name, inputSchema: {} };
     listToolsMock.mockReturnValue(dupes);
 
-    await runHealthCheck('1.0.0');
+    await runHealthCheck('1.0.0', fakeServer);
 
     const result = reported(err);
     expect(String(result.error)).toContain('Duplicate tool registration(s)');
@@ -144,7 +136,7 @@ describe('runHealthCheck', () => {
   it('fails when a register function contributed nothing', async () => {
     listToolsMock.mockReturnValue(healthy().slice(1));
 
-    await runHealthCheck('1.0.0');
+    await runHealthCheck('1.0.0', fakeServer);
 
     expect(String(reported(err).error)).toContain('Tool surface mismatch');
     expect(process.exitCode).toBe(1);
@@ -156,7 +148,7 @@ describe('runHealthCheck', () => {
   it('fails on an extra tool with the whole declared surface present', async () => {
     listToolsMock.mockReturnValue([...healthy(), { name: 'surprise-tool', inputSchema: {} }]);
 
-    await runHealthCheck('1.0.0');
+    await runHealthCheck('1.0.0', fakeServer);
 
     const message = String(reported(err).error);
     expect(message).toContain('unexpected: surprise-tool');
@@ -169,7 +161,7 @@ describe('runHealthCheck', () => {
     delete (schemaless[0] as { inputSchema?: object }).inputSchema;
     listToolsMock.mockReturnValue(schemaless);
 
-    await runHealthCheck('1.0.0');
+    await runHealthCheck('1.0.0', fakeServer);
 
     expect(String(reported(err).error)).toContain('Invalid tool definition');
     expect(process.exitCode).toBe(1);
@@ -180,7 +172,7 @@ describe('runHealthCheck', () => {
       throw 'listTools exploded';
     });
 
-    await runHealthCheck('1.0.0');
+    await runHealthCheck('1.0.0', fakeServer);
 
     const result = reported(err);
     expect(result.status).toBe('error');

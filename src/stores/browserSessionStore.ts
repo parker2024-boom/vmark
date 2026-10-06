@@ -1,5 +1,5 @@
 /**
- * Browser session/profile registry (WI-P6.4/P6.5) — the frontend's metadata-only
+ * Browser session/profile registry — the frontend's metadata-only
  * index of saved sessions and named profiles, so the management UI can LIST them.
  *
  * The actual credential blobs live in the OS keychain (session_state.rs) and named

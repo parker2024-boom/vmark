@@ -1,8 +1,12 @@
-// WI-5.1 — package.json schema detector + dependency-tree renderer.
-//
-// JSON adapter wires this detector. Filename match wins (ADR-5
-// path-first); content fallback catches manifests with non-standard
-// names (a `dependencies` map alongside `name`/`version`).
+/**
+ * package.json schema detector + dependency-tree renderer for the JSON preview.
+ *
+ * JSON adapter wires this detector. Filename match wins (ADR-5
+ * path-first); content fallback catches manifests with non-standard
+ * names (a `dependencies` map alongside `name`/`version`).
+ *
+ * @module lib/formats/adapters/packageJson
+ */
 
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";

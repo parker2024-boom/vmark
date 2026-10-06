@@ -1,5 +1,5 @@
 /**
- * Agent perception — page snapshot and role/name locators (WI-2.2), the
+ * Agent perception — page snapshot and role/name locators, the
  * TypeScript mirror of the injected agent library.
  *
  * Purpose: how the AI *sees* and *targets* a page. `ariaSnapshot` renders the
@@ -23,8 +23,8 @@
  *     the act path distinguishes it (S-04).
  *   - The walk is the COMPOSED tree: an element, then its open shadow tree, then
  *     its light children (S-05) — so web components are perceived, in the same
- *     order the injected `__vmarkWalk` produces. It is LAZY in both dimensions
- *     (#103): a cursor per open node, so a hostile node with a billion children
+ *     order the injected `__vmarkWalk` produces. It is LAZY in both dimensions:
+ *     a cursor per open node, so a hostile node with a billion children
  *     costs one cursor, and `SNAPSHOT_VISIT_BUDGET` bounds the visited elements —
  *     the same number the core's `__vmarkVisitBudget()` returns, pinned by
  *     `ariaParity.test.ts`. Every consumer streams the walk; nothing here ever
@@ -56,7 +56,7 @@ export { computeRole, accessibleName };
 export interface AriaNode {
   role: string;
   name: string;
-  /** Stable handle for this element within the committed page (WI-P2.1). `act`
+  /** Stable handle for this element within the committed page. `act`
    *  can target `{ref}` exactly instead of re-resolving a fuzzy role + name. */
   ref: string;
   /** Heading level (1–6), when `role === "heading"`. */
@@ -76,7 +76,7 @@ export interface AriaSnapshot {
   nodes: AriaNode[];
   /** True when the snapshot is not everything perceivable: the node cap (2000)
    *  or a name cap (200 chars) bit, or the walk ran out of `SNAPSHOT_VISIT_BUDGET`
-   *  before it had seen the whole page (#103). */
+   *  before it had seen the whole page. */
   truncated: boolean;
   unreachable: {
     /** Custom-element hosts exposing no open shadow root — where a closed root can
@@ -119,7 +119,7 @@ function isHidden(el: Element): boolean {
   return hiddenBy(el) !== null;
 }
 
-/** Elements a composed walk visits before it stops looking (#103). Distinct from
+/** Elements a composed walk visits before it stops looking. Distinct from
  *  the NODE cap on the output: that only bounded what was emitted, while the
  *  whole hostile-page DOM was still materialized as an array first. The injected
  *  core's `__vmarkVisitBudget()` returns the same number — `ariaParity.test.ts`

@@ -1,5 +1,5 @@
 /**
- * Runtime-availability state for the Knowledge Base panel (WI-FL1.1) — pure.
+ * Runtime-availability state for the Knowledge Base panel — pure.
  *
  * Purpose: turn the `content_server_runtime` report into what the panel tells
  * the user, so the copy decisions (which half is missing, and what would
@@ -54,7 +54,7 @@ const isCliSource = (value: unknown): value is ContentServerRuntime["cliSource"]
  * came from and `missing` never does. A report that says `cli: "ready"` with
  * `cliSource: null` therefore came from something other than this backend, and
  * believing its "ready" half is exactly the partial-report failure above under
- * a second spelling (audit R2, #633).
+ * a second spelling.
  */
 export function isContentServerRuntime(value: unknown): value is ContentServerRuntime {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;

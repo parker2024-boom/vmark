@@ -3,7 +3,7 @@
  *
  * Purpose: produce a stable canonical form of a navigable http(s) URL so that
  * browser tabs can be deduplicated ("is this URL already open?") and persisted
- * deterministically (WI-1.1 / R1). This is a leaf-pure utility — no store, no
+ * deterministically (R1). This is a leaf-pure utility — no store, no
  * Tauri — built on the platform `URL` parser, which handles punycode/IDN and
  * default-port normalization for us.
  *
@@ -107,7 +107,7 @@ export function parseNavigableUrl(input: string): URL | null {
  * Handing any of these to the AI would open a leak channel nothing else in the approval
  * model opens. The scheme/host/port/path that remain are enough for the AI to reason about
  * where it is; if it legitimately needs a query value it can read the rendered page.
- * (Security review P5, Medium #3 — extends the earlier userinfo-only redaction.)
+ * (This extends the earlier userinfo-only redaction.)
  *
  * FAILS CLOSED (audit 2026-09-03 round 1): a URL that will not parse yields a placeholder,
  * not the raw string — an unparseable value can still carry a credential — and an OPAQUE
@@ -194,7 +194,7 @@ export function urlForPersistence(url: string): string {
     // recorder applies to a recorded workflow, for the same reason — the file
     // outlives the session that had a reason for the secret.
     if (credentialPath(parsed.pathname)) return `${parsed.origin}/`;
-    // One sanitizer per URL component, composed (audit R3 #783). `||` would
+    // One sanitizer per URL component, composed. `||` would
     // short-circuit past the later components the moment an earlier one fired.
     let changed = stripPassword(parsed);
     // Query parameters that NAME a credential go too: OAuth callbacks, magic

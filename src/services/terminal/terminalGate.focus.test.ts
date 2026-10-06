@@ -9,6 +9,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { useUIStore } from "@/stores/uiStore";
+import { useTerminalStore } from "@/stores/terminalStore";
 import { useEditorStore } from "@/stores/editorStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { registerTerminalResolver } from "./activeTerminal";
@@ -42,8 +43,8 @@ beforeEach(() => {
   useUIStore.setState({
     terminalVisible: false,
     sourceMode: false,
-    terminal: { ...useUIStore.getState().terminal, activeSessionId: "s1" },
   });
+  useTerminalStore.setState({ activeSessionId: "s1" });
   document.body.innerHTML = "";
 });
 
@@ -123,7 +124,7 @@ describe("toggleTerminalFocus", () => {
   });
 
   it("still opens the panel when the session is not mounted yet", async () => {
-    useUIStore.setState({ terminal: { ...useUIStore.getState().terminal, activeSessionId: null } });
+    useTerminalStore.setState({ activeSessionId: null });
     toggleTerminalFocus();
     expect(useUIStore.getState().terminalVisible).toBe(true);
     await settle();

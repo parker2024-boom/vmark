@@ -4,9 +4,11 @@
  * Floating preview for inline math editing.
  * Shows rendered LaTeX while user edits source.
  * Styled like link popup (compact, inline).
+ *
+ * @module plugins/mathPreview/MathPreviewView
  */
 
-import { loadKatex } from "@/plugins/latex/katexLoader";
+import { loadKatex } from "@/plugins/shared/katexLoader";
 import { parseLatexError } from "@/plugins/latex/latexErrorParser";
 import {
   calculatePopupPosition,

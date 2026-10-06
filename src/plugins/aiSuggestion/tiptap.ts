@@ -12,20 +12,19 @@
  *   - POSITION SAFE: stored from/to are remapped through every doc-changing
  *     transaction (onTransaction → computeSuggestionRemap); suggestions whose
  *     target text is edited directly are dismissed as stale
- *   - Insert: ghost text widget at position
- *   - Replace: original with strikethrough + ghost text for new content
- *   - Delete: original with strikethrough
+ *   - The decoration set is plugin state (decorations.ts): rebuilt when the
+ *     suggestions change, mapped through edits, and its widgets are keyed
  *   - Accept/reject buttons are ProseMirror widgets, acting on the view they are handed
  *
  * @coordinates-with types.ts — AiSuggestion interface and event name constants
  * @coordinates-with types.ts — the AiSuggestionStore PORT; widgets.ts — its DOM
+ * @coordinates-with decorations.ts — which decorations exist, and when they are rebuilt
  * @coordinates-with utils/settledScroll.ts — scrolls to the focused suggestion
  * @module plugins/aiSuggestion/tiptap
  */
 
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
-import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { hostDocument } from "@/plugins/shared/hostDocument";
 import {
   requireSuggestionStore,
@@ -34,40 +33,16 @@ import {
 import { runOrQueueProseMirrorAction } from "@/utils/imeGuard";
 import type { AiSuggestion } from "./types";
 import { AI_SUGGESTION_EVENTS } from "./types";
-import {
-  createGhostText,
-  createButtons,
-  captureAcceptedSuggestion,
-} from "./widgets";
+import { captureAcceptedSuggestion } from "./widgets";
+import { suggestionDecorationField, type SuggestionDecorationState } from "./decorations";
 import "./ai-suggestion.css";
 
-const aiSuggestionPluginKey = new PluginKey("aiSuggestion");
+const aiSuggestionPluginKey = new PluginKey<SuggestionDecorationState>("aiSuggestion");
 
 export { applySuggestionToTr, computeSuggestionRemap, isValidPosition } from "./applySuggestion";
+export { getDecorationClass, isButtonEvent } from "./decorations";
 import { applySuggestionToTr, computeSuggestionRemap, isValidPosition } from "./applySuggestion";
 import { scrollToSettled } from "@/utils/settledScroll";
-
-/**
- * Check if a DOM event targets a suggestion button.
- * Used by widget decorations to tell ProseMirror not to handle button clicks.
- * @exported for testing
- */
-export function isButtonEvent(event: Event): boolean {
-  const target = event.target;
-  if (!(target instanceof Element)) return false;
-  return target.closest(".ai-suggestion-btn") !== null;
-}
-
-/**
- * Get decoration class for delete/replace original text.
- * @exported for testing
- */
-export function getDecorationClass(suggestion: AiSuggestion, isFocused: boolean): string {
-  const baseClass = `ai-suggestion ai-suggestion-${suggestion.type}`;
-  return isFocused ? `${baseClass} ai-suggestion-focused` : baseClass;
-}
-
-
 
 /** Tiptap extension that renders AI suggestion decorations and handles accept/reject shortcuts. */
 export const aiSuggestionExtension = Extension.create<AiSuggestionOptions>({
@@ -78,7 +53,7 @@ export const aiSuggestionExtension = Extension.create<AiSuggestionOptions>({
   },
 
   // Remap pending suggestion positions through every document change so
-  // decorations and accept always target the intended text (audit H8).
+  // decorations and accept always target the intended text.
   onTransaction({ transaction }) {
     if (!transaction.docChanged) return;
     const store = requireSuggestionStore(this.options.store).getState();
@@ -161,112 +136,13 @@ export const aiSuggestionExtension = Extension.create<AiSuggestionOptions>({
       new Plugin({
         key: aiSuggestionPluginKey,
 
+        // Built when the suggestions change, mapped through edits, untouched
+        // by everything else — see decorations.ts.
+        state: suggestionDecorationField(store),
+
         props: {
           decorations(state) {
-            const suggestionState = store.getState();
-            if (suggestionState.suggestions.size === 0) {
-              return DecorationSet.empty;
-            }
-
-            const decorations: Decoration[] = [];
-            const { focusedSuggestionId, suggestions } = suggestionState;
-
-            for (const suggestion of suggestions.values()) {
-              const isFocused = suggestion.id === focusedSuggestionId;
-              const docSize = state.doc.content.size;
-
-              // Skip suggestions with invalid positions
-              if (!isValidPosition(suggestion, docSize)) continue;
-
-              switch (suggestion.type) {
-                case "insert": {
-                  // Insert: Show ghost text widget at position
-                  // No inline decoration - document unchanged
-                  decorations.push(
-                    Decoration.widget(suggestion.from, (view) => {
-                      const container = document.createElement("span");
-                      container.className = "ai-suggestion-insert-container";
-                      container.setAttribute("data-suggestion-id", suggestion.id);
-
-                      // Ghost text preview
-                      if (suggestion.newContent) {
-                        container.appendChild(createGhostText(suggestion.newContent, isFocused));
-                      }
-
-                      // Buttons for focused suggestion
-                      if (isFocused) {
-                        container.appendChild(createButtons(suggestion, view, store));
-                      }
-
-                      return container;
-                    }, { side: 0, stopEvent: isButtonEvent })
-                  );
-                  break;
-                }
-
-                case "replace": {
-                  // Replace: Strikethrough original + ghost text for new
-                  // Skip zero-length range (nothing to strike through)
-                  if (suggestion.from === suggestion.to) continue;
-                  // Strikethrough decoration on original text
-                  decorations.push(
-                    Decoration.inline(suggestion.from, suggestion.to, {
-                      class: getDecorationClass(suggestion, isFocused),
-                      "data-suggestion-id": suggestion.id,
-                      "data-suggestion-type": suggestion.type,
-                    })
-                  );
-
-                  // Ghost text widget after original
-                  decorations.push(
-                    Decoration.widget(suggestion.to, (view) => {
-                      const container = document.createElement("span");
-                      container.className = "ai-suggestion-replace-container";
-                      container.setAttribute("data-suggestion-id", suggestion.id);
-
-                      // Ghost text for new content
-                      if (suggestion.newContent) {
-                        container.appendChild(createGhostText(suggestion.newContent, isFocused));
-                      }
-
-                      // Buttons for focused suggestion
-                      if (isFocused) {
-                        container.appendChild(createButtons(suggestion, view, store));
-                      }
-
-                      return container;
-                    }, { side: 0, stopEvent: isButtonEvent })
-                  );
-                  break;
-                }
-
-                case "delete": {
-                  // Delete: Strikethrough decoration only
-                  // Skip zero-length range (nothing to delete)
-                  if (suggestion.from === suggestion.to) continue;
-                  decorations.push(
-                    Decoration.inline(suggestion.from, suggestion.to, {
-                      class: getDecorationClass(suggestion, isFocused),
-                      "data-suggestion-id": suggestion.id,
-                      "data-suggestion-type": suggestion.type,
-                    })
-                  );
-
-                  // Buttons for focused suggestion
-                  if (isFocused) {
-                    decorations.push(
-                      Decoration.widget(suggestion.to, (view) => createButtons(suggestion, view, store), {
-                        side: 0,
-                        stopEvent: isButtonEvent,
-                      })
-                    );
-                  }
-                  break;
-                }
-              }
-            }
-
-            return DecorationSet.create(state.doc, decorations);
+            return aiSuggestionPluginKey.getState(state)?.decorations;
           },
 
           handleClick(_view, _pos, event) {

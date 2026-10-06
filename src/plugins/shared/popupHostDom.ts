@@ -2,10 +2,11 @@
  * Popup host DOM helpers
  *
  * Purpose: generic, editor-agnostic DOM utilities for anchoring popups to a
- * host element. Moved here from plugins/sourcePopup (WI-8): ~8 plugins across
- * both WYSIWYG and Source surfaces consume these, which made sourcePopup a
- * second de-facto shared layer. Anything CodeMirror-specific (EditorView
- * bounds, positions, anchor rects) stays in sourcePopup/sourcePopupUtils.
+ * host element, consumed by plugins on both the WYSIWYG and Source surfaces.
+ * Anything CodeMirror-specific (EditorView bounds, positions, anchor rects)
+ * lives in sourcePopupUtils.ts.
+ *
+ * @module plugins/shared/popupHostDom
  */
 
 /**

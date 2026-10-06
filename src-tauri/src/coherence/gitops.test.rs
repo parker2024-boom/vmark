@@ -133,7 +133,7 @@ fn fetch_only_new_shas_without_head_move_is_noop() {
 // ── integration: real repos in temp dirs ────────────────────────────────
 
 fn run_git(dir: &std::path::Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::ai_provider::build_command("git", &[])
         .args(args)
         .current_dir(dir)
         .env("GIT_AUTHOR_NAME", "t")

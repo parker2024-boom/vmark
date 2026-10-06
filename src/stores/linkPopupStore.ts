@@ -1,7 +1,7 @@
 /**
  * Link Popup Store — WYSIWYG link-edit popup state.
  *
- * Standalone Zustand store (T09 revert, WI-9 plan-20260803-161713): the
+ * Standalone Zustand store: the
  * former merged-store slice re-inlined. The shim API is the contract —
  * consumers are unchanged.
  *
@@ -31,7 +31,7 @@ interface LinkPopupState extends LinkPopupData {
   }) => void;
   closePopup: () => void;
   setHref: (href: string) => void;
-  /** Remap the tracked link range after an external doc change (WI-1). */
+  /** Remap the tracked link range after an external doc change. */
   setLinkRange: (linkFrom: number, linkTo: number) => void;
 }
 

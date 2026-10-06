@@ -341,6 +341,8 @@ fn a_fifo_inside_the_genies_dir_is_refused_without_blocking() {
     let t = tree();
     let fifo = t.genies.join("pipe.md");
     let c_path = std::ffi::CString::new(fifo.to_str().unwrap()).expect("cstring");
+    // SAFETY: `c_path` is a NUL-terminated string that outlives the call, and
+    // `mkfifo` only reads it.
     assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0, "mkfifo");
     let (tx, rx) = std::sync::mpsc::channel();
     let genies = t.genies.clone();

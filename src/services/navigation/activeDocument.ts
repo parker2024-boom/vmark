@@ -6,7 +6,10 @@
  *
  * Purpose: Prevent wrong-document bugs when menu operations act on documents.
  * The active tab's document should be used, not a document keyed by windowLabel.
+ *
+ * @module services/navigation/activeDocument
  */
+
 import { useTabStore } from "@/stores/tabStore";
 import { useDocumentStore, type DocumentState } from "@/stores/documentStore";
 

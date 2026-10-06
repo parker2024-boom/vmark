@@ -8,7 +8,7 @@
  * out because the hook sat exactly on the ~300-line cap, and because both
  * rules below were previously written twice — the shape that drifts.
  *
- * PREFIX, not substring (audit #753). Layer 2 (arrow-key cycling) and Layer 3
+ * PREFIX, not substring. Layer 2 (arrow-key cycling) and Layer 3
  * (ghost text) are documented as prefix matching, and ghost text implemented it
  * with `startsWith`; cycling delegated to the store's `getFilteredEntries`,
  * whose parameter is named `prefix` and whose body is `includes`. So a draft of
@@ -49,7 +49,7 @@ export function ghostSuffix(entries: readonly string[], draft: string): string {
 }
 
 /**
- * Bring `index` inside what `rowCount` rows can show, at BOTH ends (audit #387).
+ * Bring `index` inside what `rowCount` rows can show, at BOTH ends.
  *
  * An upper-only clamp let ArrowDown on an empty result pin the selection at
  * -1; the expression then had to be repeated at every stepping site, which is

@@ -75,7 +75,7 @@
 }
 
 /* Markdown structure characters (#, >, -) — syntax ink, matching WYSIWYG's
-   --md-char-color (WI-UI3.6). */
+   --md-char-color. */
 :is(.source-editor, .source-pane) .cm-hl-md-char {
   color: var(--md-char-color);
 }

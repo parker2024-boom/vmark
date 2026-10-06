@@ -2,11 +2,13 @@
  * Source Footnote Actions
  *
  * Actions for editing footnotes in Source mode (CodeMirror 6).
+ *
+ * @module plugins/sourceFootnotePopup/sourceFootnoteActions
  */
 
 import type { Text } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
-import type { StoreApi } from "@/plugins/sourcePopup";
+import type { StoreApi } from "@/plugins/shared/types";
 import type { FootnotePopupState } from "@/plugins/shared/popupPorts";
 
 /** The popup state these actions read — injected, never imported (ADR-015). */

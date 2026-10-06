@@ -7,7 +7,8 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
 import userEvent from "@testing-library/user-event";
 import { useUIStore } from "@/stores/uiStore";
 import { useShortcutsStore, formatKeyForDisplay } from "@/stores/settingsStore";
@@ -23,9 +24,26 @@ vi.mock("@/services/workspaces/workspaceConfig", () => ({
   toggleShowAllFiles: vi.fn().mockResolvedValue(undefined),
 }));
 
-// FileExplorer pulls in the workspace stack (Tauri FS, watchers, etc.) which
-// is irrelevant to these assertions. Stub it to a static node so the test
-// stays focused on the Sidebar shell wiring.
+// The real FileExplorer mounts in the files view. Its boundaries are the
+// directory-listing command and the window focus subscription; both answer
+// with an empty, well-formed workspace here.
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn((command: string) =>
+    Promise.resolve(
+      command === "list_directory_tree"
+        ? { rootPrefix: "/workspace/", separator: "/", entries: [], truncated: false }
+        : undefined,
+    ),
+  ),
+}));
+vi.mock("@tauri-apps/api/webviewWindow", () => ({
+  getCurrentWebviewWindow: () => ({
+    label: "main",
+    listen: vi.fn(() => Promise.resolve(() => {})),
+    onFocusChanged: vi.fn(() => Promise.resolve(() => {})),
+    onDragDropEvent: vi.fn(() => Promise.resolve(() => {})),
+  }),
+}));
 // The sidebar now follows the active tab's KIND (WI-S2.1), so it needs a window.
 vi.mock("@/contexts/WindowContext", () => ({
   useWindowLabel: () => "main",
@@ -38,16 +56,8 @@ vi.mock("@/components/Browser/BookmarksView", () => ({
   BookmarksView: () => <div data-testid="bookmarks-view" />,
 }));
 
-vi.mock("./FileExplorer", () => ({
-  FileExplorer: () => null,
-}));
-
 vi.mock("./OutlineView", () => ({
   OutlineView: () => null,
-}));
-
-vi.mock("./HistoryView", () => ({
-  HistoryView: () => null,
 }));
 
 // useDocumentFilePath reaches into editor/tab state we don't want to
@@ -124,11 +134,15 @@ describe("Sidebar — show-all-files toggle", () => {
     });
   });
 
-  it("renders in the files view and reports the current state via aria-pressed", () => {
+  it("renders in the files view and reports the current state via aria-pressed", async () => {
     render(<Sidebar />);
     expect(
       screen.getByRole("button", { name: /show all files/i }),
     ).toHaveAttribute("aria-pressed", "false");
+    // The files view hosts the real explorer, which lists the workspace.
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("list_directory_tree", expect.objectContaining({})),
+    );
   });
 
   it("reports aria-pressed='true' once non-markdown files are shown", () => {

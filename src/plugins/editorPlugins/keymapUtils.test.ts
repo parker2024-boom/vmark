@@ -32,9 +32,11 @@ import {
 } from "./keymapUtils";
 import { canRunActionInMultiSelection } from "@/plugins/toolbarActions/multiSelectionPolicy";
 import { findAnyMarkRangeAtCursor } from "@/plugins/syntaxReveal/marks";
-import { MultiSelection } from "@/plugins/multiCursor/MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 import { collapseMultiSelection } from "@/plugins/multiCursor/commands";
 import type { Command } from "@tiptap/pm/state";
+import { Schema } from "@tiptap/pm/model";
+import { AllSelection, EditorState, NodeSelection, SelectionRange, TextSelection } from "@tiptap/pm/state";
 
 describe("toProseMirrorKey", () => {
   it("converts Up to ArrowUp", () => {
@@ -218,7 +220,7 @@ describe("escapeMarkBoundary", () => {
   });
 
   it("clears stored marks when cursor is at mark end (markTo)", () => {
-    vi.mocked(findAnyMarkRangeAtCursor).mockReturnValueOnce({ from: 2, to: 5 });
+    vi.mocked(findAnyMarkRangeAtCursor).mockReturnValueOnce({ from: 2, to: 5, isLink: false });
 
     const dispatchFn = vi.fn();
     const mockTr = { setStoredMarks: vi.fn().mockReturnThis() };
@@ -237,11 +239,6 @@ describe("escapeMarkBoundary", () => {
   });
 
   it("handles cursor at markFrom with markFrom > 1 using real ProseMirror state", () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Schema } = require("@tiptap/pm/model");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { EditorState, TextSelection } = require("@tiptap/pm/state");
-
     const testSchema = new Schema({
       nodes: {
         doc: { content: "paragraph+" },
@@ -266,7 +263,7 @@ describe("escapeMarkBoundary", () => {
     );
 
     // Mark range starts at pos 3
-    vi.mocked(findAnyMarkRangeAtCursor).mockReturnValueOnce({ from: 3, to: 6 });
+    vi.mocked(findAnyMarkRangeAtCursor).mockReturnValueOnce({ from: 3, to: 6, isLink: false });
 
     const dispatchFn = vi.fn();
     const view = {
@@ -280,7 +277,7 @@ describe("escapeMarkBoundary", () => {
   });
 
   it("clears stored marks when at markFrom and markFrom <= 1", () => {
-    vi.mocked(findAnyMarkRangeAtCursor).mockReturnValueOnce({ from: 1, to: 5 });
+    vi.mocked(findAnyMarkRangeAtCursor).mockReturnValueOnce({ from: 1, to: 5, isLink: false });
 
     const dispatchFn = vi.fn();
     const mockTr = { setStoredMarks: vi.fn().mockReturnThis() };
@@ -335,11 +332,6 @@ describe("escapeMarkBoundary", () => {
     // editor keymap's escapeMarkBoundary must return false (no swallow) even with
     // a stored mark at the primary caret, and the multi-cursor keymap's
     // collapseMultiSelection must then reduce it to a plain TextSelection.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Schema } = require("@tiptap/pm/model");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { EditorState, SelectionRange } = require("@tiptap/pm/state");
-
     const testSchema = new Schema({
       nodes: {
         doc: { content: "paragraph+" },
@@ -373,23 +365,17 @@ describe("escapeMarkBoundary", () => {
     expect(dispatch).not.toHaveBeenCalled();
 
     // 2) The multi-cursor Escape handler then collapses it to a single,
-    //    non-MultiSelection caret. (Assert against MultiSelection — the
-    //    top-level import — rather than a require()'d TextSelection, which would
-    //    be a different module instance and break instanceof.)
+    //    non-MultiSelection caret.
     const tr = collapseMultiSelection(state);
-    expect(tr).not.toBeNull();
+    if (tr === null) throw new Error("collapseMultiSelection returned no transaction");
     const collapsed = state.apply(tr);
     expect(collapsed.selection).not.toBeInstanceOf(MultiSelection);
+    expect(collapsed.selection).toBeInstanceOf(TextSelection);
     expect(collapsed.selection.ranges.length).toBe(1);
     expect(collapsed.selection.empty).toBe(true);
   });
 
   it("moves cursor to mark end when inside mark range using real state", () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Schema } = require("@tiptap/pm/model");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { EditorState, TextSelection } = require("@tiptap/pm/state");
-
     const testSchema = new Schema({
       nodes: {
         doc: { content: "paragraph+" },
@@ -414,7 +400,7 @@ describe("escapeMarkBoundary", () => {
       state.tr.setSelection(TextSelection.create(state.doc, 3))
     );
 
-    vi.mocked(findAnyMarkRangeAtCursor).mockReturnValueOnce({ from: 1, to: 6 });
+    vi.mocked(findAnyMarkRangeAtCursor).mockReturnValueOnce({ from: 1, to: 6, isLink: false });
 
     const dispatchFn = vi.fn();
     const view = {
@@ -429,11 +415,6 @@ describe("escapeMarkBoundary", () => {
 });
 
 describe("collapseNonEmptySelection", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { Schema } = require("@tiptap/pm/model");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { EditorState, TextSelection, AllSelection, NodeSelection } = require("@tiptap/pm/state");
-
   const testSchema = new Schema({
     nodes: {
       doc: { content: "block+" },

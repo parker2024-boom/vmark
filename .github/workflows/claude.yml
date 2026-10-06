@@ -314,15 +314,19 @@ jobs:
           #
           # Line-anchored as before: a ❌ NOT VERIFIED comment that merely
           # QUOTES the ✅ marker mid-sentence must not pass.
-          VERDICT_LINE=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-            --json comments \
-            --jq --arg who "$VERIFIER" --arg since "$OPENED_AT" '
+          #
+          # The filter runs in jq, not in `gh --jq`: gh's --jq takes only an
+          # expression and rejects --arg, so the old single call failed before
+          # reading anything. Fetching first keeps a gh failure fatal here
+          # rather than letting it read as "no verdict".
+          COMMENTS_JSON=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json comments)
+          VERDICT_LINE=$(jq -r --arg who "$VERIFIER" --arg since "$OPENED_AT" '
               [ .comments[]
                 | select(.author.login == $who)
                 | select(.createdAt >= $since)
                 | .body | split("\n")[]
                 | select(startswith("✅ **VERIFIED**") or startswith("❌ **NOT VERIFIED**") or startswith("⚠️ **PARTIAL**"))
-              ] | last // ""')
+              ] | last // ""' <<< "$COMMENTS_JSON")
 
           CURRENT_HEAD=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)
           if [ "$CURRENT_HEAD" != "$VERIFIED_HEAD" ]; then

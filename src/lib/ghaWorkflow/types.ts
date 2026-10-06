@@ -1,13 +1,16 @@
-// WI-1.1 — GitHub Actions Workflow IR types.
-//
-// Origin: GitHub Actions workflow viewer plan (2026-05-04, retired) §4
-// Tested via: WI-1.2 / WI-1.3 (parser tests exercise every type).
-//
-// The IR is the canonical pivot between the YAML source and every renderer
-// (interactive xyflow canvas, Mermaid export, SVG/PNG export, lint
-// diagnostics, future structured editor). It is a typed, position-aware
-// description of a GitHub Actions workflow, derived from the official
-// `@actions/workflow-parser` AST plus our own normalization.
+/**
+ * GitHub Actions Workflow IR types.
+ *
+ * Tested via: the parser tests (they exercise every type).
+ *
+ * The IR is the canonical pivot between the YAML source and every renderer
+ * (interactive xyflow canvas, Mermaid export, SVG/PNG export, lint
+ * diagnostics, future structured editor). It is a typed, position-aware
+ * description of a GitHub Actions workflow, derived from the official
+ * `@actions/workflow-parser` AST plus our own normalization.
+ *
+ * @module lib/ghaWorkflow/types
+ */
 
 /**
  * Source position into the YAML string. Both line and column are 1-based,

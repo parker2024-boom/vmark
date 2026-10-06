@@ -1,4 +1,11 @@
-import type { LinkInfo } from "@/plugins/toolbarContext/types";
+/**
+ * Link popup helpers — resolve the href and range the link popup opens with,
+ * from the link under the cursor or else from a non-empty selection.
+ *
+ * @module plugins/formatToolbar/linkPopupUtils
+ */
+
+import type { LinkInfo } from "@/plugins/shared/toolbarContextTypes";
 
 export interface LinkPopupPayload {
   href: string;

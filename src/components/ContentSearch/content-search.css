@@ -1,7 +1,7 @@
 /* Content Search — "Find in Files" spotlight overlay */
 
 /* Backdrop / panel / input / footer come from the shared overlay shell
-   (`overlay-shared.css`, WI-UI3.1). Match rows stay DENSE on purpose: this
+   (`overlay-shared.css`). Match rows stay DENSE on purpose: this
    is a grep-results list, not a menu — 36px rows would show a third as many
    matches. */
 

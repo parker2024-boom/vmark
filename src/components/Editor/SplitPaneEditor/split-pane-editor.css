@@ -1,4 +1,4 @@
-/* WI-1A.4 + WI-1A.10 — SplitPaneEditor styles.
+/* SplitPaneEditor styles.
  *
  * Two-pane layout with a keyboard-resizable handle. Theme-token-only;
  * no hardcoded colors. Dark mode parity is implicit because every
@@ -169,7 +169,7 @@
   overflow: auto;
 }
 
-/* Matches `.vm-scroll--thin` (WI-UI3.4). Stays as CSS because CodeMirror
+/* Matches `.vm-scroll--thin`. Stays as CSS because CodeMirror
    constructs `.cm-scroller` itself — there is no className seam to hand the
    utility class to without a bespoke extension. */
 .source-pane .cm-scroller::-webkit-scrollbar {
@@ -187,7 +187,7 @@
 }
 
 .source-pane .cm-scroller::-webkit-scrollbar-thumb:hover {
-  /* WI-UI1.4 (gap-audit): thumbs share ONE ink source — --md-char-color is
+  /* Thumbs share ONE ink source — --md-char-color is
      the syntax tier and renders green on night. */
   background: var(--text-secondary);
 }

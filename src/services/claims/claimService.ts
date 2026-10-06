@@ -1,5 +1,5 @@
 /**
- * Claim service (WI-2b.6) — the IPC seam for the claim lifecycle
+ * Claim service — the IPC seam for the claim lifecycle
  * (design-2a.md D2: four explicit human acts on a stable claim id).
  * Errors land in the store (`error`), never thrown past this seam —
  * the panel renders them; stale rows stay visible so a failed refresh
@@ -29,8 +29,7 @@ export const DEFAULT_CONTEXT_ID = "00000000-0000-0000-0000-000000000000";
 export async function refreshClaims(workspaceRoot: string): Promise<void> {
   // Never refresh a workspace the user has already left: the synchronous
   // loading/error writes below would land on the store the new workspace
-  // shows, and taking a ticket here would starve the active refresh
-  // (audit #4/#5).
+  // shows, and taking a ticket here would starve the active refresh.
   if (!isActiveWorkspace(workspaceRoot)) return;
   const ticket = takeRefreshTicket("claims");
   const store = useClaimStore.getState();

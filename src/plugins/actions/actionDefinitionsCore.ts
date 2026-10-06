@@ -91,7 +91,7 @@ export const CORE_ACTIONS = {
   },
   // Both adapters already implemented "unlink"; only the ActionId was missing,
   // so the Source shortcut had to call the adapter directly and skipped the
-  // executor's format/capability gates, unified undo and IME safety (WI-2.1).
+  // executor's format/capability gates, unified undo and IME safety.
   unlink: {
     id: "unlink",
     label: "Unlink",

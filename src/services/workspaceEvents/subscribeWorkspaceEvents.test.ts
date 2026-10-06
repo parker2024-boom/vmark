@@ -17,9 +17,20 @@ describe("workspace event source registry", () => {
     const off2 = subscribeWorkspaceEvents("main", () => {});
     await Promise.resolve();
     expect(listen).toHaveBeenCalledTimes(1);
-    expect(listen).toHaveBeenCalledWith("fs:changed", expect.any(Function));
+    expect(listen).toHaveBeenCalledWith("fs:changed", expect.any(Function), expect.anything());
     off1();
     off2();
+  });
+
+  // WI-RA11.1 — the watcher addresses its batches to the owning window. A
+  // listener registered without a target would still be woken by every other
+  // window's watcher.
+  it("listens only for events addressed to its own window", async () => {
+    subscribeWorkspaceEvents("doc-2", () => {});
+    await Promise.resolve();
+    expect(listen).toHaveBeenCalledWith("fs:changed", expect.any(Function), {
+      target: { kind: "WebviewWindow", label: "doc-2" },
+    });
   });
 
   it("returns a working unsubscribe", () => {

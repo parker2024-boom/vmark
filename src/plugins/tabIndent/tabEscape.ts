@@ -1,13 +1,13 @@
 /**
- * Tab Escape for WYSIWYG Mode
- *
- * Detects when cursor is at the end of an inline mark (bold, italic, code, strike)
- * or inside a link, and provides target position for Tab to jump out.
+ * Tab Escape for WYSIWYG Mode — detects when the cursor is at the end of an
+ * inline mark (bold, italic, code, strike) or inside a link, and provides the
+ * target position for Tab to jump out.
+ * @module plugins/tabIndent/tabEscape
  */
 
 import type { EditorState } from "@tiptap/pm/state";
 import { SelectionRange } from "@tiptap/pm/state";
-import { MultiSelection } from "@/plugins/multiCursor/MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 
 /** Mark types that Tab can escape from */
 const ESCAPABLE_MARKS = new Set(["bold", "italic", "code", "strike"]);

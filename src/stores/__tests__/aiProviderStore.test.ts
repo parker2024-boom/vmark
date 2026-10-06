@@ -249,16 +249,16 @@ describe("aiProviderStore", () => {
       expect(useAiProviderStore.getState().activeProvider).toBe("anthropic");
     });
 
-    it("auto-selects ollama-api (key-optional) as fallback", async () => {
+    it("does not fall back to ollama-api (key-optional) when nothing is configured", async () => {
       vi.mocked(invoke).mockImplementation(async (cmd: string) => {
         if (cmd === "detect_ai_providers") return [];
         if (cmd === "read_env_api_keys") return {};
         return undefined;
       });
 
-      // No CLI available, no REST keys — ollama-api is key-optional
+      // No CLI available, no REST keys: nothing is set up, so nothing is picked.
       await useAiProviderStore.getState().detectProviders();
-      expect(useAiProviderStore.getState().activeProvider).toBe("ollama-api");
+      expect(useAiProviderStore.getState().activeProvider).toBeNull();
     });
 
     it("sets detecting to false on error", async () => {
@@ -411,7 +411,7 @@ describe("aiProviderStore", () => {
       });
 
       const result = await useAiProviderStore.getState().ensureProvider();
-      // ollama-api is not in restProviders here, so no fallback
+      // Nothing configured, so there is no provider to fall back to.
       expect(result).toBe(false);
     });
   });

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * WI-4 — cargo-mutants config-path staleness guard (D1).
+ * cargo-mutants config-path staleness guard (D1).
  *
  * Purpose: cargo-mutants reads its configuration from `.cargo/mutants.toml`
  * relative to the workspace root of the manifest it mutates (for this repo:

@@ -25,7 +25,7 @@ On the first launch after upgrading to multi-format support, VMark surfaces a on
 |---|---|---|---|---|
 | Markdown | `.md`, `.markdown`, `.mdown`, `.mkd`, `.mdx` | always on | WYSIWYG + Source modes | rendered prose |
 | Plain text | `.txt` | always on | source | — |
-| Data — YAML | `.yaml`, `.yml` | always on | source + tree | navigable tree, schema-aware (GitHub Actions) |
+| Data — YAML | `.yaml`, `.yml` | always on | source + tree | navigable tree, schema-aware (GitHub Actions, VMark workflows) |
 | Data — JSON | `.json`, `.jsonl` | requires **Data formats** toggle | source + tree | navigable JSON tree, schema-aware (`package.json`) |
 | Data — TOML | `.toml` | requires **Data formats** toggle | source + tree | navigable tree, schema-aware (`Cargo.toml`, `pyproject.toml`) |
 | Diagrams | `.mmd` | requires **Diagrams & SVG** toggle | source + render | live Mermaid diagram |
@@ -78,7 +78,8 @@ How it works and what to expect:
   engine, so support tracks what your system's webview can decode. On macOS
   that is wide — HEIC, TIFF, `.mov`/H.264, and FLAC all play. Formats the
   webview can't decode (e.g. `.mkv`, `.avi`, `.wmv`) still open, showing a
-  fallback panel with **Open with default app** and **Reveal in Finder**.
+  fallback panel with **Open with default app** and **Reveal in Finder**
+  (**Show in Explorer** on Windows, **Show in File Manager** on Linux).
 - **Read-only.** Media tabs never become dirty and close without a save prompt.
 
 ## Schema-aware previews
@@ -91,6 +92,14 @@ Opens with the workflow workbench: the interactive job-DAG canvas plus a structu
 
 - Path detection: a `.yml` / `.yaml` file under `.github/workflows/` routes to the workflow renderer — even with malformed YAML, so you see the degraded view with diagnostics rather than a blank tree. (The file must reach the YAML adapter first; that requires the `.yml`/`.yaml` extension.)
 - Content detection: top-level `on:` and `jobs:` keys.
+
+### VMark workflow (top-level `steps:`)
+
+Opens with the workflow run panel: a **Run** / **Cancel** toolbar with a status line, the live step graph (or the parse error), and **Restore Files** after a run that wrote files. See the [Workflows guide](/guide/workflows).
+
+- Path detection: never under `.github/workflows/` — GitHub owns that folder.
+- Content detection: the YAML parses, has no top-level `jobs:`, and has a top-level `steps:` list in which at least one step's `uses:` starts with `genie/`, `action/` or `webhook/`. Broken YAML is never a VMark workflow.
+- The panel needs **Settings → Advanced → Workflow Engine**. With the engine off, the file shows the plain YAML tree (unless a run started from this tab is still live, so its Cancel stays reachable).
 
 ### `Cargo.toml`
 
@@ -121,6 +130,12 @@ Opens with a Python dependency tree — both PEP 621 (`[project]` + `[project.op
 - **Visual formats** (Mermaid, SVG, HTML) ship in the source pane with the rendered view in the right pane. The preview renders at lower priority than your typing, so on a large document it catches up a beat behind the caret rather than re-rendering on every keystroke.
 - **Code formats** open as syntax-highlighted viewers; toggle to edit in place or open in your external editor (see below).
 
+## Markdown dialect
+
+VMark reads and writes Markdown with remark (micromark underneath): CommonMark, plus GitHub Flavored Markdown (tables, task lists, strikethrough with `~~`, autolinks, footnotes), YAML front matter, `$…$` / `$$…$$` math, wiki links (`[[target]]`), GitHub alerts (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`), `<details>` blocks, `[TOC]`, and four inline marks: `==highlight==`, `~subscript~`, `^superscript^` and `++underline++`. A single tilde is subscript, never strikethrough.
+
+**Nesting limit.** WYSIWYG supports blockquotes and lists nested up to 1000 levels deep. A deeper document opens in **Source mode** with a message saying how deep it is, and the status bar shows *"Opened in Source mode (cannot be displayed in WYSIWYG)."* While it is in that state, the file is protected from being overwritten by the rich editor. Reduce the nesting, then use **Switch to WYSIWYG**. Fenced code, thematic breaks and inline emphasis do not count toward the limit. See also [Large Files](/guide/large-files).
+
 ## How VMark decides a file's type
 
 VMark treats **markdown as an allowlist, not a default**. The rule, in order:
@@ -132,6 +147,25 @@ VMark treats **markdown as an allowlist, not a default**. The rule, in order:
 This means a config file is never silently rendered as markdown. A `.env.local` opens as plain text, with its `KEY=value` lines, `#` comments, and underscores left exactly as typed.
 
 Dotfile families are recognized as a group: an override on `.env` covers `.env.local`, `.env.production`, and so on.
+
+### Opening files from your system
+
+The installer registers VMark with your operating system as an editor for these file types, so they appear in **Open With** and can be double-clicked into VMark:
+
+| Extensions | Registered as |
+|---|---|
+| `.md`, `.markdown`, `.mdown`, `.mkd`, `.mdx` | Markdown Document |
+| `.txt` | Plain Text Document |
+| `.json`, `.jsonl` | JSON Document |
+| `.yaml`, `.yml` | YAML Document |
+| `.toml` | TOML Document |
+| `.mmd` | Mermaid Diagram |
+| `.svg` | SVG Image |
+| `.html`, `.htm` | HTML Document |
+
+On **Windows**, the installer does not take over a file type something else already handles: for each extension that already has a default program, VMark adds itself to **Open With** and leaves that default in place. It becomes the default only where nothing was registered — in practice the Markdown extensions, not `.txt`, `.html`, `.htm` or `.svg`. A default you choose yourself in Windows settings always wins. Uninstalling restores Windows' **New → Text Document** menu entry and the previous handler.
+
+A registered file opens in VMark only if its format is enabled (see [Enabling formats](#enabling-formats)); otherwise it opens as plain text.
 
 ### Syntax highlighting for plain files
 
@@ -221,7 +255,7 @@ relax it — so no iframe attribute alone can make an inline script run.
 
 For code files, the read-only banner's **Open in external editor** button launches your editor of choice. Resolution order:
 
-1. **Settings → Formats → External editor** (the GUI field — see [Settings](/guide/settings#formats)). Pick an `.app` bundle on macOS, an executable on Linux/Windows, or anything your shell would resolve.
+1. **Settings → Formats → External editor** (the GUI field — see [Settings](/guide/settings#formats)). Enter either the **name of a known editor** (`code`, `cursor`, `zed`, `subl`, `bbedit`, `idea`, `vim`, `nvim`, `emacs`, `notepad++`, …) or the **full path** of an editor — an `.app` bundle on macOS, an executable on Linux/Windows. The field holds one program, never arguments; to pass arguments, use `$VMARK_EXTERNAL_EDITOR`.
 2. `$VMARK_EXTERNAL_EDITOR` (project-level env override)
 3. `$VISUAL`
 4. `$EDITOR`
@@ -233,7 +267,16 @@ VMark routes through a login-shell PATH so VS Code / Cursor / JetBrains wrappers
 
 ### Security gate
 
-The `open_in_external_editor` Tauri command rejects:
+The **External editor** setting itself is checked before anything launches. VMark refuses:
+
+- shell characters (`;`, `|`, `&`, `` ` ``, `$`, `<`, `>`, quotes, line breaks) and a leading `-`
+- a bare name that is not an editor VMark knows — *"“X” is not an editor VMark knows by name — enter the full path to the editor instead"*
+- a relative path, a path with a `..` segment or a trailing slash, or a path that does not exist
+- a program that runs the files it is given instead of opening them — a shell (`sh`, `bash`, `zsh`, `pwsh`, `cmd`, …), an interpreter (`python`, `node`, `ruby`, `perl`, `osascript`, …), a launcher (`env`, `sudo`, `open`, `xdg-open`, …) or a terminal emulator — checked under both the name you typed and the name a link resolves to
+
+The environment variables in the fallback chain are not restricted: they are set outside VMark, by you.
+
+The `open_in_external_editor` Tauri command also rejects:
 
 - non-existent paths
 - directories and other non-regular files (sockets, devices)

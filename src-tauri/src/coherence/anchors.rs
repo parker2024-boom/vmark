@@ -2,7 +2,7 @@
 //!
 //! An edge pins `(upstream object, upstream revision)`, so ANY edit to a large
 //! upstream reopens EVERY dependent edge — even when the passage the dependency
-//! actually rests on never changed. Measured cost (2026-07-20): **11 of 28 edges
+//! actually rests on never changed. Measured cost: **11 of 28 edges
 //! reopened, several 4×**. An anchor narrows the question from "did the file
 //! change?" to "did the part I depend on change?".
 //!

@@ -51,7 +51,7 @@ export function handleShortcutsStorageEvent(event: StorageEvent): void {
   }
 
   // Application errors below are not parse errors — surface them instead of
-  // masking them as malformed JSON (audit Medium-11).
+  // masking them as malformed JSON.
   try {
     const incoming = parsed?.state?.customBindings;
     if (

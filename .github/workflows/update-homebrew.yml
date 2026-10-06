@@ -196,6 +196,10 @@ jobs:
           SHA256_ARM: ${{ steps.sha256.outputs.sha256_arm }}
           SHA256_INTEL: ${{ steps.sha256.outputs.sha256_intel }}
         run: |
+          # The delimiter is unquoted so ${VERSION}, ${REPO} and the sha256s
+          # expand. Everything else is shell too: a literal backtick or $ in
+          # the template must be escaped (\` or \$), or it runs on the runner
+          # and its output, usually nothing, lands in the cask.
           cat > homebrew-tap/Casks/vmark.rb << RUBY
           cask "vmark" do
             version "${VERSION}"
@@ -223,7 +227,7 @@ jobs:
             # :ventura (13.0) while the real floor is 13.4 — see
             # scripts/check-webview-floor.mjs. The precise gate stays
             # LSMinimumSystemVersion from tauri.conf.json, which refuses to
-            # open with a readable message; this line keeps `brew install` from
+            # open with a readable message; this line keeps \`brew install\` from
             # cheerfully installing onto Catalina, which it did until #1278.
             depends_on macos: :ventura
 

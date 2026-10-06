@@ -12,7 +12,8 @@
  *     unless hidden entries are shown — hidden directories pruned before they are
  *     read. The hook used to recurse here with one IPC round trip per directory,
  *     serially awaited: seconds per scan on a large root, and that slowness was
- *     the fuel of the rescan loop below.
+ *     the fuel of the rescan loop below. The listing names the root once and
+ *     each node by name only; `treeListingPaths` rebuilds the absolute paths.
  *   - WHEN to re-list is `rescanScheduler`'s decision, not this hook's: events are
  *     debounced, a stream that never goes quiet still gets a scan within a bound,
  *     and a scan that saw events while it ran is followed by a rest that doubles
@@ -45,13 +46,15 @@
  *
  * @coordinates-with FileExplorer.tsx — consumes the tree data and refresh callback
  * @coordinates-with components/Sidebar/FileExplorer/rescanScheduler.ts — decides when a scan runs
- * @coordinates-with src-tauri/src/file_tree_walk.rs — the one-call listing this invokes
+ * @coordinates-with src-tauri/src/files/tree_walk.rs — the one-call listing this invokes
+ * @coordinates-with components/Sidebar/FileExplorer/treeListingPaths.ts — rebuilds node paths from the compact listing
  * @coordinates-with services/workspaceEvents/subscribeWorkspaceEvents.ts — the shared, scoped fs-event source it subscribes to
  * @module components/Sidebar/FileExplorer/useFileTree
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { FileNode, TreeEntry, TreeListing } from "./types";
+import { withAbsolutePaths, type WireTreeListing } from "./treeListingPaths";
 import { subscribeWorkspaceEvents } from "@/services/workspaceEvents/subscribeWorkspaceEvents";
 import {
   isSupportedFileName,
@@ -66,12 +69,16 @@ import { useRefreshOnWindowFocus } from "./useRefreshOnWindowFocus";
 
 type LoadOptions = FileTreeFilterOptions & { showExtensions: boolean };
 
-/** The whole tree under `rootPath`, in ONE round trip. THROWS when the root cannot be read. */
+/**
+ * The whole tree under `rootPath`, in ONE round trip, every node carrying its
+ * absolute path. THROWS when the root cannot be read or the listing is malformed.
+ */
 async function listDirectoryTree(rootPath: string, options: LoadOptions): Promise<TreeListing> {
-  return invoke<TreeListing>("list_directory_tree", {
+  const listing = await invoke<WireTreeListing>("list_directory_tree", {
     path: rootPath,
     options: { excludeFolders: options.excludeFolders, showHidden: options.showHidden },
   });
+  return withAbsolutePaths(listing);
 }
 
 /** Folders first, then by name. */
@@ -103,7 +110,7 @@ function toNodes(entries: TreeEntry[], options: LoadOptions): FileNode[] {
 
 // Phase 1B: file explorer surfaces every registered format. The
 // workflow + markdown-only narrowing of the legacy filter is preserved as a
-// fallback when the registry isn't bootstrapped. WI-19: either workflow
+// fallback when the registry isn't bootstrapped. Either workflow
 // feature makes a standalone .yml a VMark file, so the fallback ORs them —
 // gating on the engine alone would hide workflow files from a viewer-only user.
 const mdFilter = (name: string, isFolder: boolean): boolean => {
@@ -174,8 +181,8 @@ export function useFileTree(
         showExtensions,
       };
       const listing = await listDirectoryTree(rootPath, loadOptions);
-      // Diagnostics are gated on the SAME request id as the state updates
-      // (audit R3 #651). A listing superseded by a root change used to report
+      // Diagnostics are gated on the SAME request id as the state updates.
+      // A listing superseded by a root change used to report
       // truncation — and, below, a failure — against a workspace the user had
       // already left, so the log described a tree nothing was going to render.
       // A stale outcome is still logged, but SAID to be stale and named.
@@ -217,14 +224,14 @@ export function useFileTree(
       // just closed must not repopulate the cleared tree.
       requestIdRef.current += 1;
       // …which means the in-flight scan's `finally` will NOT clear `isLoading`
-      // either — it is gated on the same id (audit R3 #652). Closing a
+      // either — it is gated on the same id. Closing a
       // workspace mid-scan left the flag true forever, and the explorer shows
       // "loading" for a workspace that no longer exists. Clearing it here is
       // the other half of the invalidation, and `treeRoot` goes with it: it
       // named the closed workspace, which is what the return below gates on.
       // Legitimate: clears the tree as part of an async load + fs-watcher setup
       // keyed on rootPath, not derivable during render (#1063).
-      /* eslint-disable react-hooks/set-state-in-effect */
+      /* eslint-disable react-hooks/set-state-in-effect -- resets tree state when the workspace closes, the other half of invalidating the in-flight listing */
       setTree([]);
       setTreeRoot(null);
       setIsLoading(false);
@@ -275,7 +282,7 @@ export function useFileTree(
   // Every RESULT belongs to the root it was listed for, not just the tree:
   // gating `tree` alone left the previous workspace's error banner and its
   // truncation notice standing over the new workspace's empty, still-loading
-  // tree — status about a folder the user has already left (audit R2, #653).
+  // tree — status about a folder the user has already left.
   const isCurrent = treeRoot === rootPath;
   return {
     tree: isCurrent ? tree : EMPTY_TREE,

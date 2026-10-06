@@ -1,5 +1,5 @@
 /**
- * Recorder capture (WI-NB7.1) — the isolated-world side of the page-world recorder
+ * Recorder capture — the isolated-world side of the page-world recorder
  * shim, mirroring the console-shim pattern.
  *
  * A page-world shim (`recorderShim.src.js`) captures `click`/`change` LOCATORS into a

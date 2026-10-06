@@ -5,7 +5,7 @@
  * being duplicated by edits. ProseMirror's split copies a node's attributes to
  * BOTH halves, so a paragraph carrying a captured run of N blank lines would
  * give the newly-created second paragraph N too — emitting N spurious blank
- * lines on the next serialize (plan ADR-5 / WI-1.5).
+ * lines on the next serialize (plan ADR-5).
  *
  * Rule: null `blankLinesBefore` on any block that this transaction newly
  * created — the second half of a split, or a fully-inserted (pasted) block —
@@ -16,6 +16,11 @@
  * (an inserted block). A split's first half starts at/before the range and is
  * not fully contained, so it keeps its value; typing inside a block changes an
  * inline range that neither starts a block nor contains one.
+ *
+ * Cost: the guard runs on every transaction, so it must not walk the document.
+ * A step that inserts only inline content — a typed character, pasted text —
+ * cannot create a block, and is skipped by reading its slice. For the steps
+ * that can, only the blocks overlapping their changed ranges are visited.
  *
  * Programmatic content loads (initial parse, external sync via
  * setContentWithoutHistory) are skipped entirely — they replace the whole doc
@@ -30,6 +35,7 @@
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { Transaction } from "@tiptap/pm/state";
 import type { Node as PMNode } from "@tiptap/pm/model";
+import { ReplaceStep, type Step } from "@tiptap/pm/transform";
 import { isHistoryBatch } from "@/plugins/shared/historyBatch";
 
 const blankLinesGuardKey = new PluginKey("blankLinesGuard");
@@ -41,7 +47,21 @@ function hasBlankLinesAttr(node: PMNode): boolean {
 }
 
 /**
- * Collect the changed ranges of a set of doc-changing transactions, expressed
+ * Whether `step` can put a block into the document. A plain replace whose
+ * slice holds only inline content cannot: its changed range lies inside one
+ * textblock. Any other step that changes positions is taken to be structural.
+ */
+function mayCreateBlock(step: Step): boolean {
+  if (!(step instanceof ReplaceStep)) return true;
+  const { content } = step.slice;
+  for (let i = 0; i < content.childCount; i += 1) {
+    if (content.child(i).isBlock) return true;
+  }
+  return false;
+}
+
+/**
+ * Collect the changed ranges of the steps that can create a block, expressed
  * in the coordinate space of the final document.
  */
 function changedRanges(transactions: readonly Transaction[]): Array<{ from: number; to: number }> {
@@ -49,6 +69,7 @@ function changedRanges(transactions: readonly Transaction[]): Array<{ from: numb
   transactions.forEach((transaction, ti) => {
     if (!transaction.docChanged) return;
     transaction.mapping.maps.forEach((map, mi) => {
+      if (!mayCreateBlock(transaction.steps[mi])) return;
       map.forEach((_oldStart, _oldEnd, newStart, newEnd) => {
         // Forward through the rest of this transaction's steps...
         const rest = transaction.mapping.slice(mi + 1);
@@ -86,24 +107,29 @@ export function blankLinesGuard(): Plugin {
       const ranges = changedRanges(transactions);
       if (ranges.length === 0) return null;
 
-      let tr: Transaction | null = null;
-      newState.doc.descendants((node, pos) => {
-        if (!node.isBlock || !hasBlankLinesAttr(node)) return;
-        if (node.attrs.blankLinesBefore == null) return;
-        const end = pos + node.nodeSize;
-        // "Newly created" = start strictly inside a changed range (a split's
-        // second half) OR whole span contained in one (an inserted/pasted
-        // block). The first disjunct MUST be upper-bounded by `pos < r.to`:
-        // without it, `pos > r.from` matches every block positioned after any
-        // edit, clearing preserved gaps throughout the document on each keystroke.
-        const newlyCreated = ranges.some(
-          (r) => (pos > r.from && pos < r.to) || (pos >= r.from && end <= r.to),
-        );
-        if (newlyCreated) {
-          tr ??= newState.tr;
-          tr.setNodeAttribute(pos, "blankLinesBefore", null);
-        }
-      });
+      // A block two ranges both cover is reset once, in document order.
+      const created = new Set<number>();
+      for (const r of ranges) {
+        // Every block the rule below can match starts inside [r.from, r.to),
+        // so only the nodes overlapping the range need looking at.
+        newState.doc.nodesBetween(r.from, r.to, (node, pos) => {
+          if (!node.isBlock || !hasBlankLinesAttr(node)) return;
+          if (node.attrs.blankLinesBefore == null) return;
+          const end = pos + node.nodeSize;
+          // "Newly created" = start strictly inside a changed range (a split's
+          // second half) OR whole span contained in one (an inserted/pasted
+          // block). The first disjunct MUST be upper-bounded by `pos < r.to`:
+          // without it, `pos > r.from` matches every block positioned after any
+          // edit, clearing preserved gaps throughout the document on each keystroke.
+          if ((pos > r.from && pos < r.to) || (pos >= r.from && end <= r.to)) created.add(pos);
+        });
+      }
+      if (created.size === 0) return null;
+
+      const tr = newState.tr;
+      for (const pos of [...created].sort((a, b) => a - b)) {
+        tr.setNodeAttribute(pos, "blankLinesBefore", null);
+      }
       return tr;
     },
   });

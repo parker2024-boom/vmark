@@ -46,33 +46,6 @@ vi.mock("@/plugins/sourceContextDetection/listDetection", () => ({
   getListBlockBounds: (...args: unknown[]) => mockGetListBlockBounds(...args),
 }));
 
-// Mock all sourceShortcutsHelpers
-vi.mock("../sourceShortcutsHelpers", () => ({
-  runSourceAction: () => () => true,
-  setHeading: () => () => true,
-  increaseHeadingLevel: () => true,
-  decreaseHeadingLevel: () => true,
-  toggleBlockquote: () => true,
-  toggleList: () => true,
-  openFindBar: () => true,
-  findNextMatch: () => true,
-  findPreviousMatch: () => true,
-  formatCJKSelection: () => true,
-  formatCJKFile: () => true,
-  copySelectionAsHtml: () => true,
-  doTransformUppercase: () => true,
-  doTransformLowercase: () => true,
-  doTransformTitleCase: () => true,
-  doTransformToggleCase: () => true,
-  doMoveLineUp: () => true,
-  doMoveLineDown: () => true,
-  doDuplicateLine: () => true,
-  doDeleteLine: () => true,
-  doJoinLines: () => true,
-  doSortLinesAsc: () => true,
-  doSortLinesDesc: () => true,
-}));
-
 import { useShortcutsStore } from "@/stores/settingsStore";
 import { bindPluginHostSettings } from "@/services/assembly/bindHostSettings";
 import { buildSourceShortcutKeymap, getSourceBlockBounds } from "../sourceShortcuts";

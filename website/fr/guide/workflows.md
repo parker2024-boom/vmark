@@ -198,19 +198,26 @@ La validation du schéma est volontairement minimale — elle confirme que les c
 
 ## Conditions
 
-Une étape peut porter une condition `if:`. Si elle s'évalue à faux, l'étape est ignorée (et non en échec)&nbsp;; si elle s'évalue à vrai ou est absente, l'étape s'exécute. Trois fonctions d'état sont disponibles&nbsp;:
+Une étape peut porter une condition `if:`. Si elle s'évalue à faux, l'étape est ignorée (et non en échec). Trois fonctions d'état sont disponibles, et elles suivent les règles de GitHub Actions&nbsp;:
 
-| Condition | Signification |
+| Condition | Vraie lorsque |
 |-----------|---------------|
-| `success()` | Vrai lorsque aucune étape antérieure n'a échoué. |
-| `failure()` | Vrai lorsqu'une étape antérieure a échoué. |
-| `always()` | Toujours vrai. |
+| `success()` | Aucune étape n'a échoué jusqu'ici, **et** chaque étape dont celle-ci dépend (`needs`) s'est terminée. |
+| `failure()` | Une étape antérieure quelconque de l'exécution a échoué — pas seulement une étape dont celle-ci dépend. |
+| `always()` | Toujours. |
+
+`success()` est la valeur par défaut. Une étape sans `if:` ne s'exécute que lorsque `success()` est vraie, de même qu'une étape dont le `if:` ne nomme aucune des trois fonctions — `if: X` signifie `success() && (X)`. C'est ce qui empêche une étape ordinaire de s'exécuter après un échec.
+
+| Ce qui s'est passé auparavant | Étape simple ou `success()` | Étape `failure()` | Étape `always()` |
+|---|---|---|---|
+| Tout ce dont elle dépend a réussi | s'exécute | ignorée | s'exécute |
+| Une étape dont elle dépend a **échoué** (ou a expiré, ou son approbation a été refusée) | ignorée | s'exécute | s'exécute |
+| Une étape dont elle dépend a été **ignorée** par son propre `if:` | ignorée | ignorée — rien n'a échoué | s'exécute |
+| L'exécution a été **annulée** | ignorée | ignorée | ignorée |
+
+Une annulation n'est pas visible pour une condition&nbsp;: elle est vérifiée avant le `if:`, et chaque étape restante est ignorée avec *Workflow cancelled*, étapes `always()` comprises. Une exécution dans laquelle une étape a échoué se termine tout de même **en échec** et nomme la première étape qui a échoué, même lorsque des étapes `failure()` ou `always()` se sont exécutées ensuite.
 
 Vous pouvez combiner références et comparaisons, par ex. `${{ steps.classify.outputs.title == "Draft" }}`. Une condition mal formée ou non prise en charge **fait échouer l'étape de manière visible** au lieu de passer silencieusement — il n'existe aucun repli du type « supposer vrai en cas d'erreur ».
-
-::: warning Limitation actuelle : failure() et always() ne se déclenchent pas encore
-L'exécuteur ignore toutes les étapes restantes dès qu'une étape échoue — et cet abandon a lieu **avant** l'évaluation de la condition `if:`. Par conséquent, `success()` fonctionne comme prévu, mais les conditions `failure()` et `always()` sont pour l'instant latentes&nbsp;: une étape protégée par l'une d'elles est ignorée avec toutes les autres dès qu'un échec survient, et n'a donc jamais l'occasion de s'exécuter sur le chemin d'échec. Considérez `failure()` / `always()` comme une syntaxe réservée pour le moment. Utilisez `success()` (ou aucune condition) pour les étapes censées s'exécuter sur le chemin nominal.
-:::
 
 ## Paramètres par étape
 
@@ -227,7 +234,7 @@ L'exécuteur ignore toutes les étapes restantes dès qu'une étape échoue — 
 
 ### Délais d'expiration
 
-Chaque étape est encadrée par son délai d'expiration effectif. À l'expiration, l'étape échoue avec `Timed out after Xs`&nbsp;: le processus enfant d'un fournisseur CLI est tué&nbsp;; une requête REST en cours est abandonnée. Les étapes en aval qui dépendent d'une étape expirée sont ignorées. Il existe aussi une limite stricte de 5 Mo sur la sortie collectée d'une seule étape — un fournisseur qui s'emballe est annulé avec `Provider output exceeded 5 MB cap`.
+Chaque étape est encadrée par son délai d'expiration effectif. À l'expiration, l'étape échoue avec `Timed out after Xs`&nbsp;: le processus enfant d'un fournisseur CLI est tué&nbsp;; une requête REST en cours est abandonnée. Une étape expirée compte comme un échec&nbsp;: les étapes qui en dépendent sont ignorées, sauf si leur `if:` utilise `failure()` ou `always()`. Il existe aussi une limite stricte de 5 Mo sur la sortie collectée d'une seule étape — un fournisseur qui s'emballe est annulé avec `Provider output exceeded 5 MB cap`.
 
 ## Approbations
 
@@ -251,7 +258,7 @@ Ouvrez un fichier de workflow `.yml` / `.yaml` dans un espace de travail (les wo
 
 Au fil de l'exécution, chaque nœud se met à jour en direct — en cours, réussi, ignoré ou en erreur — pour que vous puissiez suivre la progression du pipeline et voir exactement quelle étape a échoué le cas échéant. À la fin, la barre d'outils indique si l'exécution s'est terminée, a échoué ou a été annulée. Si le backend refuse de lancer une exécution — le moteur est désactivé, le YAML n'est pas valide, l'instantané a échoué — une notification en indique la raison.
 
-Un seul workflow s'exécute à la fois dans toute l'application, et non par fenêtre&nbsp;: tant qu'un workflow s'exécute, Exécuter est désactivé dans tous les autres fichiers de workflow, et un génie de workflow lancé entre-temps est refusé.
+Un seul workflow s'exécute à la fois dans toute l'application, et non par fenêtre. Tant qu'un workflow s'exécute, Exécuter est désactivé dans tous les autres fichiers de workflow **de la même fenêtre**, et la barre d'outils affiche *Un autre workflow est en cours d’exécution*. Un fichier de workflow ouvert dans une autre fenêtre affiche toujours Exécuter comme actif&nbsp;; un clic est refusé avec *Un flux de travail est déjà en cours. Attendez la fin ou annulez-le.* Un génie de workflow lancé entre-temps est refusé lui aussi.
 
 ### Annuler une exécution
 
@@ -265,15 +272,18 @@ Avant une exécution qui comporte des étapes `action/save-file`, VMark copie ch
 flowchart TD
     A["Click Run on .yml file"] --> B["Topological sort of steps by needs:"]
     B --> C{"Next step"}
-    C --> D{"Dependency failed or workflow failed?"}
+    C --> D{"Run cancelled?"}
     D -->|Yes| E["Skip step"]
-    D -->|No| F{"if: condition present?"}
-    F -->|"Evaluates false"| E
-    F -->|"True or absent"| G{"approval resolves to ask?"}
+    D -->|No| F{"Evaluate if: against the run so far (success() when absent)"}
+    F -->|"False"| E
+    F -->|"Error"| I["Step fails"]
+    F -->|"True"| G{"approval resolves to ask?"}
     G -->|Yes| H["Pause: approval dialog"]
-    H -->|Denied| I["Step fails"]
+    H -->|"Denied or expired"| I
+    H -->|"Cancelled"| E
     H -->|Approved| J["Fill template, call provider"]
     G -->|No| J
+    J -->|"Error or timeout"| I
     J --> K["Store outputs.text and JSON fields"]
     K --> C
     E --> C

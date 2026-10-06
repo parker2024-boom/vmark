@@ -1,6 +1,6 @@
 /**
  * conditionalMenuItemSync — keep every native menu item whose feature ships off
- * in step with the setting that decides it (#1425; generalized from WI-S0.5's
+ * in step with the setting that decides it (#1425; generalized from the
  * browser-only sync).
  *
  * Purpose: these items exist NATIVELY, not as DOM shortcuts, because once a
@@ -54,7 +54,7 @@ export interface ConditionalMenuItem {
 }
 
 export const CONDITIONAL_MENU_ITEMS: readonly ConditionalMenuItem[] = [
-  // The embedded browser: off-platform or off by setting (WI-S0.5, audit X-04).
+  // The embedded browser: off-platform or off by setting.
   { itemId: "new-browser-tab", visible: browserAvailableHere },
   // The Knowledge Base: Developer Mode only, because no packaged build carries
   // the content server runtime (#1425).

@@ -1,7 +1,7 @@
 /**
  * Purpose: Shared types for the pruned 4-tool MCP surface.
  *
- *   See dev-docs/plans/20260504-mcp-pruning.md for the full ADR set.
+ *   See .claude/adr/plans/20260504-mcp-pruning.md for the full ADR set.
  *   These types are exposed as part of the MCP server's public schema —
  *   changes to shape are breaking and must bump the action version.
  *   `BrowserSessionTab` is the browser-tab record `sessionSerializers.ts`
@@ -112,8 +112,10 @@ export type V2ErrorCode =
   // must approve the edit. The agent should ask the user to enable approval
   // or confirm the destination, then retry.
   | "APPROVAL_REQUIRED"
-  // A window-transition is already in progress (open_workspace racing a menu
-  // "Open Folder"). Transient — the agent should retry shortly.
+  // Something transient is in the way: a window-transition already in
+  // progress (open_workspace racing a menu "Open Folder"), or the user is
+  // composing with an input method in the editor a write would change.
+  // The agent should retry shortly.
   | "BUSY"
   // Too many pending approvals queued (untrusted-client flooding). The agent
   // should wait for the user to resolve them before retrying.

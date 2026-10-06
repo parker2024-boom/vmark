@@ -7,6 +7,15 @@
 #   - non-existent on npm or unqueryable (likely hallucinated)
 #   - created less than $MIN_AGE_DAYS ago (default 30)
 #   - has fewer than $MIN_WEEKLY_DL weekly downloads (default 1000)
+#   - installed from somewhere the registry cannot vouch for (git, URL, tarball)
+#
+# The package that is CHECKED is the package that is INSTALLED. An alias
+# (`"lodash": "npm:something-else@1"`) is looked up by its target, and
+# re-pointing an existing name at a different package counts as new — otherwise
+# a healthy-looking key would launder whatever it resolves to.
+#
+# `npm` and `curl` are found on PATH, which is how the self-test swaps in a
+# stub registry.
 #
 # Background: USENIX Security 2025 (Spracklen et al.) measured 5.2-21.7%
 # package hallucination rate in LLM-generated code, with 43% of names
@@ -23,7 +32,9 @@
 # Exit codes:
 #   0  no new deps, OR every new dep passes flag thresholds
 #   1  one or more new deps flagged for human review (CI fails)
-#  64  bad invocation
+#  64  bad invocation, or a base ref that does not resolve
+#
+# @coordinates-with scripts/check-new-deps.test.mjs — runs this against a stub registry
 
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -45,17 +56,24 @@ if [[ -z "$BASE" ]]; then
   echo "could not determine base ref; pass one explicitly"
   exit 64
 fi
+# A ref that names nothing would make every `git show` below fail, and a failed
+# `git show` is also what a manifest that is new on this branch looks like.
+# Tell the two apart here, once, rather than guessing per manifest.
+if ! git rev-parse --verify --quiet "${BASE}^{commit}" >/dev/null 2>&1; then
+  echo "base ref '$BASE' does not resolve to a commit"
+  exit 64
+fi
 
 # All shipped npm manifests — the sidecar is compiled into release
 # binaries and the website deploys publicly, so a hallucinated package
-# in either is just as dangerous as in the root (audit 20260612 H26).
+# in either is just as dangerous as in the root.
 # Rust deps are covered separately: cargo-audit in CI + Dependabot's
 # cargo ecosystem (see .claude/rules/60-ai-governance.md §4).
 MANIFESTS=("package.json" "server/mcp/package.json" "server/content/package.json" "website/package.json")
 
 # Diff dependency OBJECTS via JSON parsing, not grep over diff lines —
 # the old grep matched script entries like "e2e:smoke" and fed npm
-# unparseable names, which then failed open (audit 20260612 H26).
+# unparseable names, which then failed open.
 NEW_PKGS=""
 for mf in "${MANIFESTS[@]}"; do
   [[ -f "$mf" ]] || continue
@@ -65,17 +83,58 @@ for mf in "${MANIFESTS[@]}"; do
     const cur = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     let base = {};
     try { base = JSON.parse(process.env.BASE_JSON || "{}"); } catch {}
-    const entries = (o) => Object.entries({
-      ...(o.dependencies || {}),
-      ...(o.devDependencies || {}),
-      ...(o.optionalDependencies || {}),
+    // The package an override selector names: the last `>` segment of a
+    // parent path, without its version range (`undici@<6`, `a>@s/b@2`,
+    // yarn `**/lodash`).
+    const overridden = (selector) => {
+      const last = selector.split(">").pop().split("/**/").pop().replace(/^\*\*\//, "");
+      const at = last.indexOf("@", last.startsWith("@") ? 1 : 0);
+      return at === -1 ? last : last.slice(0, at);
+    };
+    // Overrides redirect what a dependency installs without touching a
+    // dependency map, so each is read as a [package, spec] entry. npm nests
+    // them (`{ foo: { ".": spec, bar: spec } }`); `.` is the parent itself.
+    const overrideEntries = (map, parent) => Object.entries(map || {}).flatMap(([sel, spec]) => {
+      if (spec !== null && typeof spec === "object") return overrideEntries(spec, overridden(sel));
+      return [[sel === "." ? parent : overridden(sel), spec]];
     });
-    const baseNames = new Set(entries(base).map(([n]) => n));
-    for (const [name, spec] of entries(cur)) {
-      if (baseNames.has(name)) continue;
-      // Local references are not registry packages.
-      if (/^(workspace:|link:|file:)/.test(String(spec))) continue;
-      console.log(name);
+    const entries = (o) => [
+      ...Object.entries({
+        ...(o.dependencies || {}),
+        ...(o.devDependencies || {}),
+        ...(o.optionalDependencies || {}),
+      }),
+      ...overrideEntries((o.pnpm || {}).overrides),
+      ...overrideEntries(o.overrides),
+      ...overrideEntries(o.resolutions),
+    ];
+    // What a dependency entry actually installs, as one tab-separated line:
+    //   R <package>        a registry package (an alias resolves to its target)
+    //   U <name> <spec>    a spec the registry cannot vouch for
+    //   null               a local reference, not a package at all
+    const resolve = (name, rawSpec) => {
+      const spec = String(rawSpec).trim();
+      if (/^(workspace:|link:|file:)/.test(spec)) return null;
+      // Override-only forms: `$name` reuses the spec of a direct dependency and
+      // `-` removes the package; neither installs anything new.
+      if (spec.startsWith("$") || spec === "-") return null;
+      if (spec.startsWith("npm:")) {
+        const target = spec.slice(4);
+        const at = target.indexOf("@", target.startsWith("@") ? 1 : 0);
+        return "R\t" + (at === -1 ? target : target.slice(0, at));
+      }
+      // A registry range or dist-tag has no path separator and no protocol.
+      // Everything that does (git, github shorthand, http tarball) installs
+      // code no registry lookup describes.
+      if (/[\/:]/.test(spec) && !spec.startsWith("catalog:")) return "U\t" + name + "\t" + spec;
+      return "R\t" + name;
+    };
+    const installed = (o) => new Set(
+      entries(o).map(([name, spec]) => resolve(name, spec)).filter(Boolean),
+    );
+    const before = installed(base);
+    for (const line of installed(cur)) {
+      if (!before.has(line)) console.log(line);
     }
   ' "$mf" 2>/dev/null) || {
     echo "  ✗ failed to parse $mf — failing closed"
@@ -83,7 +142,7 @@ for mf in "${MANIFESTS[@]}"; do
   }
   if [[ -n "$ADDED" ]]; then
     echo "new dependencies in $mf:"
-    echo "$ADDED" | sed 's/^/    /'
+    echo "$ADDED" | cut -f2- | tr '\t' ' ' | sed 's/^/    /'
     NEW_PKGS+="$ADDED"$'\n'
   fi
 done
@@ -101,13 +160,20 @@ FLAGGED=0
 NOW_EPOCH=$(date +%s)
 SECS_PER_DAY=86400
 
-while IFS= read -r pkg; do
-  [[ -z "$pkg" ]] && continue
+while IFS=$'\t' read -r kind pkg spec; do
+  [[ -z "$kind" ]] && continue
+
+  if [[ "$kind" != "R" ]]; then
+    # Not a registry version: there is no creation date or download count to
+    # read, so nothing can vouch for it. Fail closed.
+    echo "  ✗ $pkg — not a registry version ($spec); nothing vouches for what it installs"
+    FLAGGED=$((FLAGGED+1))
+    continue
+  fi
 
   # Fetch metadata. `npm view <pkg> --json` returns full registry doc.
   # Fail CLOSED: any error — 404, invalid name, network failure — flags
-  # the package. A gate that can't see the registry must not pass
-  # (audit 20260612 H26).
+  # the package. A gate that can't see the registry must not pass.
   META=$(npm view "$pkg" --json 2>&1) || {
     if echo "$META" | grep -q "E404"; then
       echo "  ✗ $pkg — NOT FOUND on npm (likely hallucinated)"
@@ -151,6 +217,10 @@ while IFS= read -r pkg; do
           process.stdout.write(String(d.downloads ?? '?'));}catch(e){}})
     " 2>/dev/null || echo "?")
   fi
+  # Only a plain non-negative integer is a count. Bash arithmetic would read
+  # any other token as a variable NAME, so a stray word either aborts the run
+  # or compares some unrelated value against the threshold.
+  [[ "$WEEKLY" =~ ^[0-9]+$ ]] || WEEKLY="?"
 
   # Flag conditions. Unknown metadata ("?") flags too — fail closed
   # rather than passing a package the registry can't describe.
@@ -167,7 +237,9 @@ while IFS= read -r pkg; do
   fi
 
   if (( ${#REASONS[@]} > 0 )); then
-    JOIN=$(IFS=', '; echo "${REASONS[*]}")
+    # `IFS=', '` would join on its FIRST character only.
+    JOIN=$(printf '%s, ' "${REASONS[@]}")
+    JOIN="${JOIN%, }"
     echo "  ⚠ $pkg — flagged: $JOIN  (age=${AGE_DAYS}d, dl/wk=${WEEKLY})"
     FLAGGED=$((FLAGGED+1))
   else

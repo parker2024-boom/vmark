@@ -1,9 +1,10 @@
 /**
  * Tests for useSidebarResize.
  *
- * Covers width clamping (150-500), listener registration and cleanup on
- * mouseup/blur/unmount, and body style restoration. Regression here leaks
- * mousemove listeners and traps the cursor in `col-resize`.
+ * Covers width clamping, the live paint during a drag and the single store
+ * commit when it ends (WI-RA9B.5), listener cleanup on mouseup/blur/unmount,
+ * and body style restoration. Regression here leaks mousemove listeners,
+ * traps the cursor in `col-resize`, or re-renders the layout per pointer move.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
@@ -26,14 +27,37 @@ vi.mock("@/stores/uiStore", () => ({
 
 import { useSidebarResize } from "./useSidebarResize";
 
-function fireMouseDown(clientX: number): React.MouseEvent {
-  // The handler only reads `preventDefault` and `clientX`. Build a minimal
-  // event-like object — a real React synthetic event isn't reachable from
-  // a hook test without rendering an actual handle element.
+/** A detached copy of the layout the handle lives in: shell > aside > column > handle. */
+function buildLayout(sidebarWidth: number, asideWidth: number) {
+  const shell = document.createElement("div");
+  shell.className = "app-shell";
+  shell.style.setProperty("--shell-side-width", `${asideWidth}px`);
+  const aside = document.createElement("aside");
+  aside.className = "app-shell__sidebar";
+  aside.style.width = `${asideWidth}px`;
+  aside.style.minWidth = `${asideWidth}px`;
+  const column = document.createElement("div");
+  column.className = "app-sidebar-stack__sidebar";
+  column.style.width = `${sidebarWidth}px`;
+  const handle = document.createElement("div");
+  handle.setAttribute("aria-valuenow", String(sidebarWidth));
+  column.appendChild(handle);
+  aside.appendChild(column);
+  shell.appendChild(aside);
+  return { shell, aside, column, handle };
+}
+
+let layout: ReturnType<typeof buildLayout>;
+
+function fireMouseDown(clientX: number, handle: HTMLElement = layout.handle): React.MouseEvent<HTMLElement> {
+  // The handler reads `preventDefault`, `clientX` and `currentTarget`. A real
+  // React synthetic event isn't reachable from a hook test without rendering
+  // the handle; App.sidebarDrag.test.tsx covers that path end to end.
   return {
     preventDefault: vi.fn(),
     clientX,
-  } as unknown as React.MouseEvent;
+    currentTarget: handle,
+  } as unknown as React.MouseEvent<HTMLElement>;
 }
 
 function fireMouseMove(clientX: number): void {
@@ -50,44 +74,82 @@ function fireBlur(): void {
 
 beforeEach(() => {
   mockSetSidebarWidth.mockReset();
+  // The store keeps what it is given, so a second drag starts from the first one's commit.
+  mockSetSidebarWidth.mockImplementation((width: number) => {
+    uiState.sidebarWidth = width;
+  });
   uiState.sidebarWidth = 250;
+  window.innerWidth = 1024;
   document.body.style.cursor = "";
   document.body.style.userSelect = "";
+  // The aside is 46px wider than the sidebar column: rail (30) + card gutters (16).
+  layout = buildLayout(250, 296);
 });
 
 describe("useSidebarResize", () => {
-  it("clamps width to MIN (180) when delta pushes below the floor", () => {
+  it.each([
+    ["below the floor clamps to MIN (180)", 500, 100, 180],
+    ["above the ceiling clamps to MAX (480)", 0, 1000, 480],
+    ["inside the range passes through", 100, 150, 300],
+  ])("a drag %s and commits once, on release", (_name, downX, moveX, expected) => {
     const { result } = renderHook(() => useSidebarResize());
-    act(() => result.current.handleResizeStart(fireMouseDown(500)));
+    act(() => result.current.handleResizeStart(fireMouseDown(downX)));
+    act(() => fireMouseMove(moveX));
 
-    // Drag far to the left — delta = -400, start was 250 → 250-400 = -150,
-    // clamped to 150.
-    act(() => fireMouseMove(100));
+    // Nothing is written while the pointer is down…
+    expect(mockSetSidebarWidth).not.toHaveBeenCalled();
+    // …but the layout already shows the width.
+    expect(layout.column.style.width).toBe(`${expected}px`);
 
-    expect(mockSetSidebarWidth).toHaveBeenLastCalledWith(180);
     act(() => fireMouseUp());
+    expect(mockSetSidebarWidth).toHaveBeenCalledTimes(1);
+    expect(mockSetSidebarWidth).toHaveBeenCalledWith(expected);
   });
 
-  it("clamps width to MAX (480) when delta pushes above the ceiling", () => {
-    const { result } = renderHook(() => useSidebarResize());
-    act(() => result.current.handleResizeStart(fireMouseDown(0)));
-
-    // Drag far right — delta = +1000, 250+1000 = 1250, clamped to 500.
-    act(() => fireMouseMove(1000));
-
-    expect(mockSetSidebarWidth).toHaveBeenLastCalledWith(480);
-    act(() => fireMouseUp());
-  });
-
-  it("passes unclamped widths inside [150, 500] through unchanged", () => {
+  it("paints the live width on the column, the shell aside, the shell variable and the handle", () => {
     const { result } = renderHook(() => useSidebarResize());
     act(() => result.current.handleResizeStart(fireMouseDown(100)));
-
-    // delta = +50, start 250 → 300 (within range)
     act(() => fireMouseMove(150));
 
-    expect(mockSetSidebarWidth).toHaveBeenLastCalledWith(300);
+    expect(layout.column.style.width).toBe("300px");
+    expect(layout.aside.style.width).toBe("346px");
+    expect(layout.aside.style.minWidth).toBe("346px");
+    expect(layout.shell.style.getPropertyValue("--shell-side-width")).toBe("346px");
+    expect(layout.handle.getAttribute("aria-valuenow")).toBe("300");
     act(() => fireMouseUp());
+  });
+
+  it("clamps against a narrow window, keeping room for the editor", () => {
+    window.innerWidth = 700; // 700 - 480 leaves 220 for the sidebar
+    const { result } = renderHook(() => useSidebarResize());
+    mockSetSidebarWidth.mockClear(); // the mount-time reclamp is not under test here
+    uiState.sidebarWidth = 200;
+    act(() => result.current.handleResizeStart(fireMouseDown(0)));
+    act(() => fireMouseMove(400));
+    act(() => fireMouseUp());
+
+    expect(mockSetSidebarWidth).toHaveBeenCalledTimes(1);
+    expect(mockSetSidebarWidth).toHaveBeenCalledWith(220);
+  });
+
+  it("still commits when the handle is outside the expected layout", () => {
+    const orphan = document.createElement("div");
+    const { result } = renderHook(() => useSidebarResize());
+    act(() => result.current.handleResizeStart(fireMouseDown(100, orphan)));
+    act(() => fireMouseMove(150));
+    act(() => fireMouseUp());
+
+    expect(orphan.getAttribute("aria-valuenow")).toBe("300");
+    expect(mockSetSidebarWidth).toHaveBeenCalledWith(300);
+  });
+
+  it("a press with no movement commits nothing", () => {
+    const { result } = renderHook(() => useSidebarResize());
+    act(() => result.current.handleResizeStart(fireMouseDown(100)));
+    act(() => fireMouseUp());
+
+    expect(mockSetSidebarWidth).not.toHaveBeenCalled();
+    expect(layout.column.style.width).toBe("250px");
   });
 
   it("sets body cursor and userSelect on drag start", () => {
@@ -103,63 +165,78 @@ describe("useSidebarResize", () => {
   it("resets body styles and removes listeners on mouseup", () => {
     const { result } = renderHook(() => useSidebarResize());
     act(() => result.current.handleResizeStart(fireMouseDown(0)));
+    act(() => fireMouseMove(50));
     act(() => fireMouseUp());
 
     expect(document.body.style.cursor).toBe("");
     expect(document.body.style.userSelect).toBe("");
 
-    // Further mousemove must not produce store writes.
-    const callsBefore = mockSetSidebarWidth.mock.calls.length;
-    act(() => fireMouseMove(500));
-    expect(mockSetSidebarWidth.mock.calls.length).toBe(callsBefore);
+    // Further mousemove/mouseup must neither repaint nor write.
+    act(() => fireMouseMove(200));
+    act(() => fireMouseUp());
+    expect(layout.column.style.width).toBe("300px");
+    expect(mockSetSidebarWidth).toHaveBeenCalledTimes(1);
   });
 
-  it("window blur triggers the same cleanup as mouseup", () => {
+  it("window blur ends the drag and commits the width on screen", () => {
     const { result } = renderHook(() => useSidebarResize());
     act(() => result.current.handleResizeStart(fireMouseDown(0)));
+    act(() => fireMouseMove(40));
     act(() => fireBlur());
 
     expect(document.body.style.cursor).toBe("");
     expect(document.body.style.userSelect).toBe("");
+    expect(mockSetSidebarWidth).toHaveBeenCalledTimes(1);
+    expect(mockSetSidebarWidth).toHaveBeenCalledWith(290);
 
-    const callsBefore = mockSetSidebarWidth.mock.calls.length;
     act(() => fireMouseMove(500));
-    expect(mockSetSidebarWidth.mock.calls.length).toBe(callsBefore);
+    expect(layout.column.style.width).toBe("290px");
+    expect(mockSetSidebarWidth).toHaveBeenCalledTimes(1);
   });
 
-  it("rapid repeated mousedown does not leak the previous drag's listeners", () => {
-    // Regression: a second mousedown before mouseup used to overwrite
-    // handlersRef, orphaning the first drag's mousemove/mouseup listeners.
-    // The leaked mousemove handler then fired alongside the new one,
-    // producing duplicate store writes per pointer move.
+  it("a second mousedown before mouseup does not leak the previous drag's listeners", () => {
+    // A mouseup delivered outside the window never reaches the document, so
+    // the next press arrives with the previous drag still attached. A leaked
+    // mousemove handler would keep painting from the FIRST drag's origin.
     const { result } = renderHook(() => useSidebarResize());
     act(() => result.current.handleResizeStart(fireMouseDown(100)));
-    act(() => result.current.handleResizeStart(fireMouseDown(100)));
+    act(() => fireMouseMove(130)); // first drag: 250 → 280
+    act(() => result.current.handleResizeStart(fireMouseDown(130)));
 
-    act(() => fireMouseMove(150));
-
-    // Exactly one write per mousemove — a leaked handler would double it.
+    // The interrupted drag was committed before the new one read its start.
     expect(mockSetSidebarWidth).toHaveBeenCalledTimes(1);
+    expect(mockSetSidebarWidth).toHaveBeenLastCalledWith(280);
 
-    // And mouseup must fully clean up: no further writes after release.
+    act(() => fireMouseMove(150)); // second drag: 280 → 300
+    expect(layout.column.style.width).toBe("300px");
+
     act(() => fireMouseUp());
-    const callsBefore = mockSetSidebarWidth.mock.calls.length;
+    expect(mockSetSidebarWidth).toHaveBeenCalledTimes(2);
+    expect(mockSetSidebarWidth).toHaveBeenLastCalledWith(300);
+
+    // And mouseup fully cleaned up: nothing after release.
     act(() => fireMouseMove(400));
-    expect(mockSetSidebarWidth.mock.calls.length).toBe(callsBefore);
+    act(() => fireMouseUp());
+    expect(layout.column.style.width).toBe("300px");
+    expect(mockSetSidebarWidth).toHaveBeenCalledTimes(2);
   });
 
-  it("unmount mid-drag runs cleanup", () => {
+  it("unmount mid-drag cleans up and keeps the dragged width", () => {
     const { result, unmount } = renderHook(() => useSidebarResize());
     act(() => result.current.handleResizeStart(fireMouseDown(0)));
+    act(() => fireMouseMove(30));
 
     unmount();
 
     expect(document.body.style.cursor).toBe("");
     expect(document.body.style.userSelect).toBe("");
+    expect(mockSetSidebarWidth).toHaveBeenCalledTimes(1);
+    expect(mockSetSidebarWidth).toHaveBeenCalledWith(280);
 
-    const callsBefore = mockSetSidebarWidth.mock.calls.length;
     act(() => fireMouseMove(500));
-    expect(mockSetSidebarWidth.mock.calls.length).toBe(callsBefore);
+    act(() => fireMouseUp());
+    expect(layout.column.style.width).toBe("280px");
+    expect(mockSetSidebarWidth).toHaveBeenCalledTimes(1);
   });
 
   // ─── WI-2.2 — keyboard resize (a11y) ──────────────────────────────────

@@ -4,8 +4,8 @@
  *   Enter). The store accumulates the patches; the panel's Save button
  *   serializes them through the Phase 8 CST mutator pipeline.
  *
- * Origin: GitHub Actions workflow viewer plan (2026-05-04, retired) §6
- *   Phase 7 / WI-7.1 + WI-7.2.
+ * Origin: GitHub Actions workflow viewer plan (retired) §6
+ *   Phase 7.
  *
  * Key decisions:
  *   - Patches are emitted on blur, not on every keystroke — keeps the
@@ -37,7 +37,7 @@ interface JobFormProps {
   /** The PRE-EDIT job — what a field compares itself against to decide the
    *  user has reverted it. `job` is the preview and already carries this
    *  job's queued edits, so comparing against it cancelled the edit just
-   *  committed (audit R2, #1020). Defaults to `job`, which is only the same
+   *  committed. Defaults to `job`, which is only the same
    *  thing while nothing is queued. */
   baseline?: JobIR | undefined;
 }

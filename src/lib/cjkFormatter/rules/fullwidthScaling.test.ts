@@ -9,89 +9,55 @@
  * Θ(N²) — and the formatter is synchronous, called from "Format CJK File" and
  * from paste, so the cost lands on the UI thread as a freeze.
  *
- * The bounds below are DELIBERATELY generous. They exist to catch quadratic
- * blow-up (10k commas went from ~10k document scans to a bounded few), not to
- * police constant factors on a loaded CI box. The output assertions matter as
- * much as the timing: "fast" is easy if you stop converting.
+ * WI-RA14A.2 — it asserts a GROWTH EXPONENT, never a duration: the method of
+ * `lib/formats/adapters/htmlScaling.test.ts`. It used to hold an absolute
+ * 2 s wall-clock budget, which measures how busy the machine is as much as
+ * the algorithm; an exponent measured on the test thread's own CPU clock
+ * (`@/test/cpuClock`) is what contention and coverage instrumentation cannot
+ * move, because neither turns cost ∝ n into cost ∝ n².
+ *
+ * Sizes stay at 2k → 8k: past ~64k chars the timing turns over (0.25 → 1.11
+ * ms/1k at 96k) on V8 string representation, not on this algorithm, so a
+ * bigger sample measures the engine instead.
+ *
+ * The output assertions matter as much as the growth: "fast" is easy if you
+ * stop converting.
  */
 import { describe, expect, it } from "vitest";
-import { measureGrowth } from "@/test/cpuClock";
+import { growthExponent, measureGrowth } from "@/test/cpuClock";
 import { normalizeFullwidthPunctuation } from "./fullwidth";
 
-/** Generous absolute ceiling — a quadratic implementation blows past it by orders. */
-const BUDGET_MS = 2000;
+/** Linear is 1, quadratic is 2; 4x the input under a quadratic law is ~16x the work. */
+const MAX_EXPONENT = 1.35;
+const SMALL = 2_000;
+const LARGE = 8_000;
 
-function elapsed(fn: () => void): number {
-  const started = performance.now();
-  fn();
-  return performance.now() - started;
-}
+const MARKS = ",.!?;:";
+const mixedRun = (n: number) => Array.from({ length: n }, (_, i) => MARKS[i % MARKS.length]).join("");
 
-describe("normalizeFullwidthPunctuation scaling", () => {
-  it("converts a 10k-comma run after a CJK char well inside the budget", () => {
-    const input = `中${",".repeat(10_000)}`;
-    let output = "";
+const CASES: { name: string; make: (n: number) => string }[] = [
+  { name: "a comma run after a CJK char", make: (n) => `中${",".repeat(n)}` },
+  { name: "a mixed run of every convertible mark", make: (n) => `中${mixedRun(n)}` },
+  { name: "an ASCII-only comma run", make: (n) => ",".repeat(n) },
+];
 
-    const ms = elapsed(() => {
-      output = normalizeFullwidthPunctuation(input);
-    });
-
-    // Every comma converts: each one's left neighbour is the comma before it,
-    // which is itself CJK terminal punctuation once converted.
-    expect(output).toBe(`中${"，".repeat(10_000)}`);
-    expect(ms).toBeLessThan(BUDGET_MS);
+describe("normalizeFullwidthPunctuation output on long runs", () => {
+  it("converts every comma of a 10k run after a CJK char", () => {
+    // Each comma's left neighbour is the comma before it, which is itself CJK
+    // terminal punctuation once converted.
+    expect(normalizeFullwidthPunctuation(`中${",".repeat(10_000)}`)).toBe(`中${"，".repeat(10_000)}`);
   });
 
-  it("handles a mixed 10k run of every convertible mark", () => {
-    const marks = ",.!?;:";
-    const run = Array.from({ length: 10_000 }, (_, i) => marks[i % marks.length]).join("");
-    let output = "";
-
-    const ms = elapsed(() => {
-      output = normalizeFullwidthPunctuation(`中${run}`);
-    });
+  it("converts a mixed 10k run of every convertible mark", () => {
+    const output = normalizeFullwidthPunctuation(`中${mixedRun(10_000)}`);
 
     expect(output).not.toContain(",");
     expect(output.startsWith("中，。！？；：")).toBe(true);
-    expect(ms).toBeLessThan(BUDGET_MS);
   });
 
-  // Opt-in, like `markdownPipeline/__tests__/performance.test.ts` (PERF=1).
-  //
-  // It was opted out as a wall-clock RATIO: in the full suite — ~1450 files
-  // across every core — that noise is larger than the signal it measures.
-  // Linear and quadratic differ by 4x at 4x input; a saturated runner inflates
-  // a millisecond sample by ~14x. It failed at 26.5ms against a 20.4ms bound on
-  // code measured at rest as flatly linear (0.23 ms/1k, n=8k→64k). Best-of-N
-  // did not save it on the wall clock, and taking the minimum of BOTH sides
-  // widened the ratio, because the sub-millisecond baseline improved far more
-  // than the large one did. It is now timed on the test thread's own CPU clock
-  // (`@/test/cpuClock`), which descheduling cannot inflate; it has not been
-  // re-measured in the full suite on that clock, so it stays opt-in.
-  //
-  // Widening the input ratio to buy margin does not work either: past ~64k
-  // chars the timing turns over (0.25 → 1.11 ms/1k at 96k) on V8 string
-  // representation, not on this algorithm, so a bigger sample measures the
-  // engine instead.
-  //
-  // What still guards the ORIGINAL defect on every run is the absolute ceiling
-  // in the two tests above: the quadratic implementation this file was written
-  // against rescanned the whole document per converted character, which blows
-  // past a 2s budget on 10k commas by orders of magnitude — no ratio needed.
-  const itPerf = process.env.PERF === "1" ? it : it.skip;
-
-  itPerf("scales sub-quadratically: 4x the input is not ~16x the work", () => {
-    // A direct shape assertion on the algorithm, independent of the machine:
-    // the old implementation's pass count grew with the run length, so this
-    // ratio grew with it too.
-    const run = (n: number) => `中${",".repeat(n)}`;
-    // Sizes stay in the range where the timing is genuinely linear (see above).
-    // The minimum of interleaved samples per side, after an untimed warm-up;
-    // each sample repeats its run until it costs enough to time precisely.
-    const cost = measureGrowth(normalizeFullwidthPunctuation, run(2_000), run(8_000));
-
-    // 4x input under a quadratic law is ~16x time.
-    expect(cost.largeMs, `on the ${cost.clock} clock`).toBeLessThan(cost.smallMs * 12);
+  it("leaves a long ASCII-only run untouched", () => {
+    const input = ",".repeat(10_000);
+    expect(normalizeFullwidthPunctuation(input)).toBe(input);
   });
 
   it("still protects technical subspans inside a long document", () => {
@@ -103,19 +69,22 @@ describe("normalizeFullwidthPunctuation scaling", () => {
     expect(output.startsWith(`中${"，".repeat(5_000)}`)).toBe(true);
   });
 
-  it("leaves a long ASCII-only run untouched", () => {
-    const input = ",".repeat(10_000);
-    let output = "";
-    const ms = elapsed(() => {
-      output = normalizeFullwidthPunctuation(input);
-    });
-
-    expect(output).toBe(input);
-    expect(ms).toBeLessThan(BUDGET_MS);
-  });
-
   it("is idempotent on the adversarial input", () => {
     const once = normalizeFullwidthPunctuation(`中${",".repeat(5_000)}`);
     expect(normalizeFullwidthPunctuation(once)).toBe(once);
+  });
+});
+
+describe("normalizeFullwidthPunctuation scales linearly", () => {
+  it.each(CASES)("$name", (c) => {
+    const small = c.make(SMALL);
+    const large = c.make(LARGE);
+    const cost = measureGrowth((s: string) => void normalizeFullwidthPunctuation(s), small, large);
+    const exponent = growthExponent(cost, small.length, large.length);
+    expect(
+      exponent,
+      `${c.name}: ${small.length} chars → ${cost.smallMs.toFixed(2)}ms, ${large.length} chars → ` +
+        `${cost.largeMs.toFixed(2)}ms (exponent ${exponent.toFixed(2)} on the ${cost.clock} clock)`,
+    ).toBeLessThan(MAX_EXPONENT);
   });
 });

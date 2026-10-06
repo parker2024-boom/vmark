@@ -11,6 +11,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 
 const setTitle = vi.fn<(t: string) => Promise<void>>();
 const titleBarWarn = vi.fn();
@@ -23,16 +24,13 @@ vi.mock("@/utils/debug", async (importOriginal) => ({
   titleBarWarn: (...args: unknown[]) => titleBarWarn(...args),
 }));
 
+// The document the window shows, seeded into the REAL tab and document stores
+// by `renderTitle` — the hook reads them through the real selectors.
 const state: { filePath: string | null; isDirty: boolean; hasActiveTab: boolean } = {
   filePath: "/docs/readme.md",
   isDirty: false,
   hasActiveTab: true,
 };
-vi.mock("./useDocumentState", () => ({
-  useDocumentFilePath: () => state.filePath,
-  useDocumentIsDirty: () => state.isDirty,
-  useHasActiveTab: () => state.hasActiveTab,
-}));
 
 // The native title's audience is platform-dependent (#1296): on macOS it is
 // hidden behind the app's own chrome strip, everywhere else it IS the title bar.
@@ -43,7 +41,34 @@ vi.mock("@/utils/platform", async (importOriginal) => ({
 }));
 
 const { useSettingsStore } = await import("@/stores/settingsStore");
+const { useTabStore } = await import("@/stores/tabStore");
+const { useDocumentStore } = await import("@/stores/documentStore");
+const { WindowContext } = await import("@/contexts/WindowContext");
 const { useWindowTitle } = await import("./useWindowTitle");
+
+const WINDOW = "main";
+
+function seedWindow() {
+  useTabStore.getState().removeWindow(WINDOW);
+  for (const id of Object.keys(useDocumentStore.getState().documents)) {
+    useDocumentStore.getState().removeDocument(id);
+  }
+  if (!state.hasActiveTab) return;
+  const tabId = useTabStore.getState().createTab(WINDOW, state.filePath);
+  useDocumentStore.getState().initDocument(tabId, "body", state.filePath);
+  if (state.isDirty) useDocumentStore.getState().setEditorContent(tabId, "body, edited");
+}
+
+function renderTitle() {
+  seedWindow();
+  return renderHook(() => useWindowTitle(), {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <WindowContext.Provider value={{ windowLabel: WINDOW, isDocumentWindow: true }}>
+        {children}
+      </WindowContext.Provider>
+    ),
+  });
+}
 
 beforeEach(() => {
   setTitle.mockReset().mockResolvedValue(undefined);
@@ -64,7 +89,7 @@ const setShowFilename = (show: boolean) =>
 
 describe("useWindowTitle", () => {
   it("sets the native title and the document title from the file path", async () => {
-    renderHook(() => useWindowTitle());
+    renderTitle();
     await waitFor(() => expect(setTitle).toHaveBeenCalledWith("readme.md"));
     // document.title drops the extension for cleaner print-to-PDF naming.
     expect(document.title).toBe("readme");
@@ -73,20 +98,20 @@ describe("useWindowTitle", () => {
 
   it("prefixes the dirty indicator", async () => {
     state.isDirty = true;
-    renderHook(() => useWindowTitle());
+    renderTitle();
     await waitFor(() => expect(setTitle).toHaveBeenCalledWith("• readme.md"));
   });
 
   it("clears the native title when the filename is not shown", async () => {
     setShowFilename(false);
-    renderHook(() => useWindowTitle());
+    renderTitle();
     await waitFor(() => expect(setTitle).toHaveBeenCalledWith(""));
   });
 
   it("reports a setTitle rejection instead of dropping it", async () => {
     const boom = new Error("ipc down");
     setTitle.mockRejectedValueOnce(boom);
-    renderHook(() => useWindowTitle());
+    renderTitle();
     await waitFor(() =>
       expect(titleBarWarn).toHaveBeenCalledWith("Failed to set window title:", boom)
     );
@@ -94,7 +119,7 @@ describe("useWindowTitle", () => {
 
   it("localises the fallback name for an unsaved document", async () => {
     state.filePath = null;
-    renderHook(() => useWindowTitle());
+    renderTitle();
     // The literal used to be hardcoded English. It reached the native title bar
     // on every locale — and off macOS that title bar is always visible (#1296).
     await waitFor(() => expect(setTitle).toHaveBeenCalledWith("Untitled"));
@@ -111,13 +136,13 @@ describe("useWindowTitle — off macOS the native title is not optional", () => 
 
   it("shows the filename even with the macOS-only setting off", async () => {
     setShowFilename(false);
-    renderHook(() => useWindowTitle());
+    renderTitle();
     await waitFor(() => expect(setTitle).toHaveBeenCalledWith("readme.md"));
   });
 
   it("never clears the native title", async () => {
     setShowFilename(false);
-    renderHook(() => useWindowTitle());
+    renderTitle();
     await waitFor(() => expect(setTitle).toHaveBeenCalled());
     expect(setTitle).not.toHaveBeenCalledWith("");
   });
@@ -125,14 +150,14 @@ describe("useWindowTitle — off macOS the native title is not optional", () => 
   it("still carries the dirty indicator", async () => {
     setShowFilename(false);
     state.isDirty = true;
-    renderHook(() => useWindowTitle());
+    renderTitle();
     await waitFor(() => expect(setTitle).toHaveBeenCalledWith("• readme.md"));
   });
 
   it("falls back to the localised untitled name with no file", async () => {
     setShowFilename(false);
     state.filePath = null;
-    renderHook(() => useWindowTitle());
+    renderTitle();
     await waitFor(() => expect(setTitle).toHaveBeenCalledWith("Untitled"));
   });
 });
@@ -149,14 +174,14 @@ describe("useWindowTitle — no document open (WelcomeScreen)", () => {
   });
 
   it("shows the product name instead of the untitled label", async () => {
-    renderHook(() => useWindowTitle());
+    renderTitle();
     await waitFor(() => expect(setTitle).toHaveBeenCalledWith("VMark"));
     expect(setTitle).not.toHaveBeenCalledWith("Untitled");
   });
 
   it("shows the product name off macOS too", async () => {
     platform.overlayTitleBar = false;
-    renderHook(() => useWindowTitle());
+    renderTitle();
     await waitFor(() => expect(setTitle).toHaveBeenCalledWith("VMark"));
   });
 
@@ -165,7 +190,7 @@ describe("useWindowTitle — no document open (WelcomeScreen)", () => {
   // open" is no reason to override a preference the user set.
   it("still honours the macOS show-filename setting", async () => {
     setShowFilename(false);
-    renderHook(() => useWindowTitle());
+    renderTitle();
     await waitFor(() => expect(setTitle).toHaveBeenCalledWith(""));
   });
 
@@ -173,7 +198,7 @@ describe("useWindowTitle — no document open (WelcomeScreen)", () => {
   // document behind it.
   it("never prefixes a dirty indicator", async () => {
     state.isDirty = true;
-    renderHook(() => useWindowTitle());
+    renderTitle();
     await waitFor(() => expect(setTitle).toHaveBeenCalledWith("VMark"));
   });
 });

@@ -9,6 +9,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { EditorState, TextSelection } from "@tiptap/pm/state";
 import { taskListItemExtension } from "./tiptap";
 import { toggleTaskList, convertSelectionToTaskList } from "./tiptapTaskListUtils";
+import { Schema } from "@tiptap/pm/model";
 
 // ---------------------------------------------------------------------------
 // Schema + helpers
@@ -260,8 +261,6 @@ describe("convertSelectionToTaskList", () => {
 describe("convertSelectionToTaskList — missing schema types", () => {
   it("falls back to chain when bulletListType is missing from schema", () => {
     // Create a minimal schema that has no bulletList — triggers the !bulletListType branch (line 108)
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Schema } = require("@tiptap/pm/model");
     const minSchema = new Schema({
       nodes: {
         doc: { content: "paragraph+" },

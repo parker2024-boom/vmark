@@ -1,10 +1,10 @@
-//! Shared coherence read-model (Phase 6, WI-6.1; `design-projection-framework.md`).
+//! Shared coherence read-model (Phase 6; `design-projection-framework.md`).
 //! The **minimal shared interface** every coherence surface produces — one
 //! `CoherenceRow` and one `Projection` trait — so a new surface (operator
 //! preview, canon view, merge audit) becomes a *registration*, not a bespoke
 //! panel (Theme E: defined before more panels accrue). This is additive: the
 //! shipped `breakdown` is untouched; `BreakdownProjection` *wraps* it as the
-//! reference implementation. Porting the other surfaces onto the trait is WI-6.2.
+//! reference implementation; the other surfaces port onto the same trait.
 
 use std::path::PathBuf;
 
@@ -72,7 +72,7 @@ impl Projection for BreakdownProjection {
 }
 
 impl CoherenceIndex {
-    /// Project a given edge set into shared rows (WI-6.2) — the assembly the
+    /// Project a given edge set into shared rows — the assembly the
     /// merge-audit and incident projections share. Runs the *same* pure
     /// `project_edge`; edges that project to `None` (retired / not live) are
     /// dropped, matching breakdown.
@@ -104,7 +104,7 @@ impl CoherenceIndex {
     }
 }
 
-/// The edges a completed git merge touched (Phase 5) as a projection (WI-6.2).
+/// The edges a completed git merge touched (Phase 5) as a projection.
 pub struct MergeAuditProjection {
     pub root: PathBuf,
 }
@@ -129,7 +129,7 @@ impl Projection for IncidentProjection {
 }
 
 /// Build a `CoherenceRow` from raw projection parts — the helper the other
-/// surfaces (WI-6.2: preview delta, merge audit, incident) use so they all emit
+/// surfaces (preview delta, merge audit, incident) use so they all emit
 /// the identical shape without duplicating field assembly.
 #[allow(clippy::too_many_arguments)]
 pub fn row_from(

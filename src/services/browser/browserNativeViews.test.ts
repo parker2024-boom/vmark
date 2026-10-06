@@ -8,8 +8,6 @@ const invoke = vi.fn<(cmd: string, args?: Record<string, unknown>) => Promise<un
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...a: [string, Record<string, unknown>?]) => invoke(...a) }));
 vi.mock("@/utils/debug", () => ({ browserWarn: vi.fn() }));
 vi.mock("./browserOcclusion", () => ({ browserOcclusion: { removeTab: vi.fn(), register: vi.fn() }, OCCLUDER: {} }));
-vi.mock("./browserEventBroker", () => ({ browserEventBroker: { cancelTab: vi.fn() } }));
-vi.mock("./navIntent", () => ({ clearNavIntent: vi.fn() }));
 
 import { destroyBrowserNativeView, ensureBrowserNativeView, leakedNativeViews, __resetNativeViews } from "./browserNativeViews";
 import { browserWarn } from "@/utils/debug";

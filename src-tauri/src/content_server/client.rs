@@ -1,11 +1,11 @@
 //! One authenticated loopback client per observed content-server generation.
 //!
 //! Purpose: everything a command needs to TALK to a running content server,
-//! in one place — the manager read that pairs port with token under ONE lock
-//! (#128), the bounded `reqwest` client (#130), the bearer header, the
-//! status-before-body refusal (#131) and the nonce mint — so `http.rs` and
+//! in one place — the manager read that pairs port with token under ONE lock,
+//! the bounded `reqwest` client, the bearer header, the
+//! status-before-body refusal and the nonce mint — so `http.rs` and
 //! `slidev_commands.rs` no longer carry their own copies, which had already
-//! drifted (#129): one mint checked the status before decoding and the other
+//! drifted: one mint checked the status before decoding and the other
 //! did not; one client was bounded and the other was `Client::new()`.
 //!
 //! The client never follows a redirect. No API call answers with one, and
@@ -35,14 +35,14 @@ pub(super) struct ServerClient {
     base: String,
     token: String,
     http: Client,
-    /// When this client's whole conversation must be over (#310).
+    /// When this client's whole conversation must be over.
     deadline: Instant,
 }
 
 impl ServerClient {
     /// The client for the server registered for `workspace_root` — port and
-    /// token from ONE manager read (#128) — or `not-found` when none runs.
-    /// `total` bounds the whole conversation, not each request (#130, #310).
+    /// token from ONE manager read — or `not-found` when none runs.
+    /// `total` bounds the whole conversation, not each request.
     pub(super) fn connect(
         mgr: &ContentServerManager,
         workspace_root: &str,
@@ -57,7 +57,7 @@ impl ServerClient {
     /// A client for an explicit base URL — what tests point at a mock server.
     ///
     /// `total` is the deadline for EVERYTHING this client goes on to do, not a
-    /// per-request allowance (#310). Every caller here makes more than one
+    /// per-request allowance. Every caller here makes more than one
     /// request — `preview_url` posts and then mints, `graph_over` mints,
     /// authenticates and fetches — so a per-request bound let a command run for
     /// a multiple of the number the constant names: `content_server_slidev_preview`
@@ -82,7 +82,7 @@ impl ServerClient {
     /// The `/__auth?t=` PATH that trades `nonce` for a session cookie, landing
     /// on `next` (a same-origin path) or the site root.
     ///
-    /// One construction, two consumers (#286): [`Self::auth_url`] hands the
+    /// One construction, two consumers: [`Self::auth_url`] hands the
     /// absolute URL to the webview, and `http::graph_over` sends this path
     /// itself. They were built separately, so the endpoint, the parameter name
     /// and the `next` spelling each lived in two places and only one of them
@@ -123,7 +123,7 @@ impl ServerClient {
     }
 
     /// Send `req`, classing a request that got no answer: `timeout` when the
-    /// bound elapsed (#130), `network` for anything else the transport
+    /// bound elapsed, `network` for anything else the transport
     /// reports. The status is the caller's to judge — `/__auth` answers 302.
     pub(super) async fn send(
         &self,
@@ -146,7 +146,7 @@ impl ServerClient {
     }
 
     /// `send`, and require a 2xx answer. Anything else is a `refusal`, with
-    /// the status read BEFORE the body (#131) so an error document is
+    /// the status read BEFORE the body so an error document is
     /// reported as the refusal it is, not as a decoding failure.
     pub(super) async fn send_ok(
         &self,
@@ -174,7 +174,7 @@ impl ServerClient {
             .json()
             .await
             .map_err(|e| body_failure("nonce mint", e))?;
-        // An EMPTY nonce is not a nonce (#275). It deserializes fine, so it
+        // An EMPTY nonce is not a nonce. It deserializes fine, so it
         // used to travel on: `auth_url` handed the webview `/__auth?t=`, and
         // `graph_over` sent it and reported the server's inevitable refusal as
         // an authentication failure — a diagnosis pointing at the handshake
@@ -187,7 +187,7 @@ impl ServerClient {
     }
 }
 
-/// Most bytes of a REFUSED response's body kept for the message (#273).
+/// Most bytes of a REFUSED response's body kept for the message.
 ///
 /// The server's own error documents are a line of JSON. A body read whole
 /// travels into a `CommandError` message, the log and the frontend, so a
@@ -212,15 +212,15 @@ pub(super) async fn error_body(mut resp: Response) -> String {
     String::from_utf8_lossy(&body).into_owned()
 }
 
-/// A response whose BODY could not be read or decoded (#274).
+/// A response whose BODY could not be read or decoded.
 ///
 /// `reqwest` reports both as `Kind::Decode`, so classifying every one of them
 /// `internal` told the frontend a completed-but-malformed answer — a contract
 /// break with VMark's own server, not worth retrying — when the real event was
 /// a read that timed out or a connection that never opened. Those are asked
 /// FIRST and keep the codes `transport_failure` gives them; `internal` is left
-/// for the case it names. The URL is stripped for the same reason it is there
-/// (#276): the graph fetch carries a live session token in its query.
+/// for the case it names. The URL is stripped for the same reason it is there:
+/// the graph fetch carries a live session token in its query.
 ///
 /// Residual: a connection reset midway through a body is still `internal`,
 /// because reqwest gives it the same kind as a serde failure and exposes
@@ -235,10 +235,10 @@ pub(super) fn body_failure(what: &str, e: reqwest::Error) -> CommandError {
     ))
 }
 
-/// A request that got no answer: `timeout` when the bounded client gave up
-/// (#130), `network` for anything else the transport reports.
+/// A request that got no answer: `timeout` when the bounded client gave up,
+/// `network` for anything else the transport reports.
 ///
-/// The URL is STRIPPED first (#276). `reqwest::Error`'s `Display` appends
+/// The URL is STRIPPED first. `reqwest::Error`'s `Display` appends
 /// `for url (…)`, and the two session-in-query calls carry live credentials
 /// there — the one-time `/__auth?t=<nonce>` and the `/api/graph?s=<session>`
 /// token — so formatting the error whole wrote a working credential into the

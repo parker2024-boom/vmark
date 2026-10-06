@@ -53,7 +53,9 @@ export function useCrashRecoveryCleanup(): void {
     return () => unsub();
   }, [windowLabel]);
 
-  // Save cleanup: detect dirty → clean transitions
+  // Save cleanup: detect dirty → clean transitions. Watches the document store
+  // whole, tabs or not: all a tabless document can cause here is the deletion
+  // of ITS OWN snapshot, which the tab-close cleanup above already wants gone.
   useEffect(() => {
     const docs = useDocumentStore.getState().documents;
     for (const [tabId, doc] of Object.entries(docs)) {

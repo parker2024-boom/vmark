@@ -1,55 +1,104 @@
 // @vitest-environment node
 /**
  * Tests for autoPair tiptap extension — extension creation, plugin structure,
- * config reading, IME composition guard.
+ * injected config, IME composition guard. The plugin's props run the REAL
+ * handlers, key handler and IME guard against a real ProseMirror state; only
+ * the view is a minimal object (state + dispatch + composing), which is all
+ * these code paths read.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-
-// Mock settingsStore before importing the extension
-vi.mock("@/stores/settingsStore", () => ({
-  useSettingsStore: {
-    getState: vi.fn(() => ({
-      markdown: {
-        autoPairEnabled: true,
-        autoPairCJKStyle: "off",
-        autoPairCurlyQuotes: false,
-        autoPairRightDoubleQuote: false,
-      },
-    })),
-  },
-}));
-
-// Mock imeGuard
-const mockIsProseMirrorComposing = vi.fn(() => false);
-const mockIsProseMirrorInCompositionGrace = vi.fn(() => false);
-const mockMarkProseMirrorCompositionEnd = vi.fn();
-const mockIsImeKeyEvent = vi.fn(() => false);
-
-vi.mock("@/utils/imeGuard", () => ({
-  isProseMirrorComposing: (...args: unknown[]) => mockIsProseMirrorComposing(...args),
-  isProseMirrorInCompositionGrace: (...args: unknown[]) => mockIsProseMirrorInCompositionGrace(...args),
-  markProseMirrorCompositionEnd: (...args: unknown[]) => mockMarkProseMirrorCompositionEnd(...args),
-  isImeKeyEvent: (...args: unknown[]) => mockIsImeKeyEvent(...args),
-}));
-
-// Mock handlers
-const mockHandleTextInput = vi.fn(() => false);
-const mockCreateKeyHandler = vi.fn(() => vi.fn(() => false));
-
-vi.mock("../handlers", () => ({
-  handleTextInput: (...args: unknown[]) => mockHandleTextInput(...args),
-}));
-
-vi.mock("../keyHandler", () => ({
-  createKeyHandler: (...args: unknown[]) => mockCreateKeyHandler(...args),
-}));
-
+import { describe, it, expect } from "vitest";
+import { Schema } from "@tiptap/pm/model";
+import { EditorState, TextSelection, type Transaction } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
+import { markProseMirrorCompositionEnd } from "@/utils/imeGuard";
 import { autoPairExtension } from "../tiptap";
+import type { AutoPairConfig } from "../handlers";
 
-beforeEach(() => {
-  vi.clearAllMocks();
+const schema = new Schema({
+  nodes: {
+    doc: { content: "paragraph+" },
+    paragraph: { content: "text*", group: "block" },
+    text: { inline: true },
+  },
 });
+
+const CONFIG: AutoPairConfig = {
+  enabled: true,
+  includeCJK: false,
+  includeCurlyQuotes: false,
+  normalizeRightDoubleQuote: false,
+};
+
+type TestView = EditorView & { composing: boolean; dispatched: Transaction[] };
+
+/** A view over a single paragraph with the cursor at `cursorOffset`. */
+function makeView(text: string, cursorOffset: number): TestView {
+  const para = schema.node("paragraph", null, text ? [schema.text(text)] : []);
+  const base = EditorState.create({ doc: schema.node("doc", null, [para]), schema });
+  const state = base.apply(base.tr.setSelection(TextSelection.create(base.doc, 1 + cursorOffset)));
+  const view = {
+    state,
+    composing: false,
+    dispatched: [] as Transaction[],
+    dispatch(tr: Transaction) {
+      view.dispatched.push(tr);
+      view.state = view.state.apply(tr);
+    },
+  };
+  return view as unknown as TestView;
+}
+
+const textOf = (view: TestView) => view.state.doc.textContent;
+const cursorOf = (view: TestView) => view.state.selection.from - 1;
+
+type Props = {
+  handleTextInput: (view: EditorView, from: number, to: number, text: string) => boolean;
+  handleDOMEvents: {
+    keydown: (view: EditorView, event: KeyboardEvent) => boolean;
+    compositionend: (view: EditorView) => boolean;
+  };
+};
+
+function pluginsFor(options: { getConfig: () => AutoPairConfig }) {
+  return autoPairExtension.config.addProseMirrorPlugins!.call({
+    editor: {},
+    name: "autoPair",
+    options,
+    storage: {},
+    type: undefined,
+    parent: undefined,
+  } as never);
+}
+
+function propsFor(getConfig: () => AutoPairConfig = () => CONFIG): Props {
+  return (pluginsFor({ getConfig })[0] as unknown as { props: Props }).props;
+}
+
+function key(k: string, extra: Partial<KeyboardEvent> = {}): KeyboardEvent {
+  let prevented = false;
+  return {
+    key: k,
+    keyCode: 0,
+    shiftKey: false,
+    ctrlKey: false,
+    altKey: false,
+    metaKey: false,
+    preventDefault: () => {
+      prevented = true;
+    },
+    get defaultPrevented() {
+      return prevented;
+    },
+    ...extra,
+  } as unknown as KeyboardEvent;
+}
+
+/** Type `text` at the view's cursor through the plugin, as ProseMirror would. */
+function typeChar(props: Props, view: TestView, text: string): boolean {
+  const pos = view.state.selection.from;
+  return props.handleTextInput(view, pos, pos, text);
+}
 
 // ---------------------------------------------------------------------------
 // Extension metadata
@@ -71,84 +120,63 @@ describe("autoPairExtension metadata", () => {
 
 describe("autoPairExtension addProseMirrorPlugins", () => {
   it("returns exactly one plugin", () => {
-    const plugins = autoPairExtension.config.addProseMirrorPlugins!.call({
-      editor: {},
-      name: "autoPair",
-      options: { getConfig: () => ({ enabled: true, includeCJK: false, includeCurlyQuotes: false, normalizeRightDoubleQuote: false }) },
-      storage: {},
-      type: undefined,
-      parent: undefined,
-    } as never);
-    expect(plugins).toHaveLength(1);
-  });
-
-  it("creates key handler with config getter on plugin creation", () => {
-    autoPairExtension.config.addProseMirrorPlugins!.call({
-      editor: {},
-      name: "autoPair",
-      options: { getConfig: () => ({ enabled: true, includeCJK: false, includeCurlyQuotes: false, normalizeRightDoubleQuote: false }) },
-      storage: {},
-      type: undefined,
-      parent: undefined,
-    } as never);
-    expect(mockCreateKeyHandler).toHaveBeenCalledTimes(1);
-    expect(typeof mockCreateKeyHandler.mock.calls[0][0]).toBe("function");
+    expect(pluginsFor({ getConfig: () => CONFIG })).toHaveLength(1);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Config reading from settings store
+// Config is injected, and asked per input
 // ---------------------------------------------------------------------------
 
 describe("autoPair config is INJECTED, not read from a store", () => {
-  // These used to write the settings store and assert the plugin noticed —
-  // they were testing the coupling that stopped it shipping standalone
-  // (ADR-015). The host supplies `getConfig` now, so what matters here is that
-  // the plugin ASKS, asks the injected getter, and asks it again per keystroke.
-  const CONFIG = {
-    enabled: true,
-    includeCJK: false,
-    includeCurlyQuotes: false,
-    normalizeRightDoubleQuote: false,
-  };
-
-  function build(getConfig: () => unknown) {
-    autoPairExtension.config.addProseMirrorPlugins!.call({
-      editor: {},
-      name: "autoPair",
-      options: { getConfig },
-      storage: {},
-      type: undefined,
-      parent: undefined,
-    } as never);
-    return mockCreateKeyHandler.mock.calls[0][0] as () => unknown;
-  }
-
-  it("passes the INJECTED getter through to the key handler", () => {
-    expect(build(() => CONFIG)()).toEqual(CONFIG);
+  it("text input pairs an opening bracket with the injected config", () => {
+    const view = makeView("", 0);
+    expect(typeChar(propsFor(), view, "(")).toBe(true);
+    expect(textOf(view)).toBe("()");
+    expect(cursorOf(view)).toBe(1);
   });
 
-  it("re-asks — a value captured at construction would freeze the answer", () => {
+  it("re-asks per keystroke — a value captured at construction would freeze the answer", () => {
     let enabled = false;
-    const getter = build(() => ({ ...CONFIG, enabled }));
-    expect((getter() as { enabled: boolean }).enabled).toBe(false);
+    const props = propsFor(() => ({ ...CONFIG, enabled }));
+
+    const off = makeView("", 0);
+    expect(typeChar(props, off, "(")).toBe(false);
+    expect(off.dispatched).toHaveLength(0);
+
     enabled = true;
-    expect((getter() as { enabled: boolean }).enabled).toBe(true);
+    const on = makeView("", 0);
+    expect(typeChar(props, on, "(")).toBe(true);
+    expect(textOf(on)).toBe("()");
+  });
+
+  it("the key handler reads the same live getter (Backspace deletes a pair only when enabled)", () => {
+    let enabled = false;
+    const props = propsFor(() => ({ ...CONFIG, enabled }));
+
+    const off = makeView("()", 1);
+    expect(props.handleDOMEvents.keydown(off, key("Backspace"))).toBe(false);
+    expect(textOf(off)).toBe("()");
+
+    enabled = true;
+    const on = makeView("()", 1);
+    const event = key("Backspace");
+    expect(props.handleDOMEvents.keydown(on, event)).toBe(true);
+    expect(textOf(on)).toBe("");
+    expect(event.defaultPrevented).toBe(true);
   });
 
   it("falls back to a working default when the host supplies nothing", () => {
     // A standalone consumer with no settings layer must get a live plugin,
     // not a dead one.
-    autoPairExtension.config.addProseMirrorPlugins!.call({
-      editor: {},
-      name: "autoPair",
-      options: autoPairExtension.config.addOptions!.call({} as never),
-      storage: {},
-      type: undefined,
-      parent: undefined,
-    } as never);
-    const getter = mockCreateKeyHandler.mock.calls[0][0] as () => { enabled: boolean };
-    expect(getter().enabled).toBe(true);
+    const options = autoPairExtension.config.addOptions!.call({} as never) as {
+      getConfig: () => AutoPairConfig;
+    };
+    expect(options.getConfig().enabled).toBe(true);
+    const props = (pluginsFor(options)[0] as unknown as { props: Props }).props;
+    const view = makeView("", 0);
+    expect(typeChar(props, view, "[")).toBe(true);
+    expect(textOf(view)).toBe("[]");
   });
 });
 
@@ -157,91 +185,62 @@ describe("autoPair config is INJECTED, not read from a store", () => {
 // ---------------------------------------------------------------------------
 
 describe("autoPair IME composition guard", () => {
-  function getPluginProps() {
-    const plugins = autoPairExtension.config.addProseMirrorPlugins!.call({
-      editor: {},
-      name: "autoPair",
-      options: { getConfig: () => ({ enabled: true, includeCJK: false, includeCurlyQuotes: false, normalizeRightDoubleQuote: false }) },
-      storage: {},
-      type: undefined,
-      parent: undefined,
-    } as never);
-    return (plugins[0] as { props: Record<string, unknown> }).props;
-  }
-
-  it("handleTextInput blocks during IME composing", () => {
-    mockIsProseMirrorComposing.mockReturnValue(true);
-    const props = getPluginProps();
-    const handleTextInput = props.handleTextInput as (view: unknown, from: number, to: number, text: string) => boolean;
-    const result = handleTextInput({}, 0, 0, "a");
-    expect(result).toBe(false);
-    expect(mockHandleTextInput).not.toHaveBeenCalled();
+  it("handleTextInput does nothing while the view is composing", () => {
+    const view = makeView("", 0);
+    view.composing = true;
+    expect(typeChar(propsFor(), view, "(")).toBe(false);
+    expect(view.dispatched).toHaveLength(0);
   });
 
-  it("handleTextInput blocks during composition grace period", () => {
-    mockIsProseMirrorComposing.mockReturnValue(false);
-    mockIsProseMirrorInCompositionGrace.mockReturnValue(true);
-    const props = getPluginProps();
-    const handleTextInput = props.handleTextInput as (view: unknown, from: number, to: number, text: string) => boolean;
-    const result = handleTextInput({}, 0, 0, "a");
-    expect(result).toBe(false);
-    expect(mockHandleTextInput).not.toHaveBeenCalled();
+  it("handleTextInput does nothing inside the post-composition grace period", () => {
+    const view = makeView("", 0);
+    markProseMirrorCompositionEnd(view);
+    expect(typeChar(propsFor(), view, "(")).toBe(false);
+    expect(view.dispatched).toHaveLength(0);
   });
 
-  it("handleTextInput delegates to handler when not composing", () => {
-    mockIsProseMirrorComposing.mockReturnValue(false);
-    mockIsProseMirrorInCompositionGrace.mockReturnValue(false);
-    mockHandleTextInput.mockReturnValue(true);
-    const props = getPluginProps();
-    const handleTextInput = props.handleTextInput as (view: unknown, from: number, to: number, text: string) => boolean;
-    const result = handleTextInput({}, 0, 5, "(");
-    expect(result).toBe(true);
-    expect(mockHandleTextInput).toHaveBeenCalledWith({}, 0, 5, "(", expect.any(Object));
+  it("handleTextInput pairs when not composing", () => {
+    const view = makeView("ab", 2);
+    expect(typeChar(propsFor(), view, "(")).toBe(true);
+    expect(textOf(view)).toBe("ab()");
   });
 
-  it("keydown blocks during IME key event", () => {
-    mockIsImeKeyEvent.mockReturnValue(true);
-    const props = getPluginProps();
-    const handleDOMEvents = props.handleDOMEvents as { keydown: (view: unknown, event: unknown) => boolean };
-    const result = handleDOMEvents.keydown({}, { keyCode: 229 });
-    expect(result).toBe(false);
+  it("keydown ignores an IME key event (keyCode 229)", () => {
+    const view = makeView("()", 1);
+    expect(propsFor().handleDOMEvents.keydown(view, key("Backspace", { keyCode: 229 }))).toBe(false);
+    expect(view.dispatched).toHaveLength(0);
   });
 
-  it("keydown delegates to keyHandler when not composing and not IME (line 80)", () => {
-    mockIsProseMirrorComposing.mockReturnValue(false);
-    mockIsProseMirrorInCompositionGrace.mockReturnValue(false);
-    mockIsImeKeyEvent.mockReturnValue(false);
-    const props = getPluginProps();
-    const handleDOMEvents = props.handleDOMEvents as { keydown: (view: unknown, event: unknown) => boolean };
-    const result = handleDOMEvents.keydown({}, { key: "Tab", keyCode: 9 });
-    // The mockCreateKeyHandler returns a vi.fn(() => false), so keyHandler returns false
-    expect(result).toBe(false);
+  it("keydown ignores an event flagged isComposing", () => {
+    const view = makeView("()", 1);
+    expect(propsFor().handleDOMEvents.keydown(view, key("Backspace", { isComposing: true }))).toBe(false);
+    expect(view.dispatched).toHaveLength(0);
   });
 
-  it("keydown returns false when isComposingOrGrace returns true (composing branch, line ~79)", () => {
-    // isComposingOrGrace = isProseMirrorComposing || isProseMirrorInCompositionGrace
-    // This branch is distinct from the isImeKeyEvent branch
-    mockIsProseMirrorComposing.mockReturnValue(true);
-    mockIsProseMirrorInCompositionGrace.mockReturnValue(false);
-    mockIsImeKeyEvent.mockReturnValue(false);
-    const props = getPluginProps();
-    const handleDOMEvents = props.handleDOMEvents as { keydown: (view: unknown, event: unknown) => boolean };
-    const result = handleDOMEvents.keydown({}, { key: ")", keyCode: 41 });
-    // isComposingOrGrace is true → returns false immediately, keyHandler not called
-    expect(result).toBe(false);
-    // The inner keyHandler (from createKeyHandler) should NOT be called
-    const keyHandler = mockCreateKeyHandler.mock.results[0]?.value as ReturnType<typeof vi.fn> | undefined;
-    if (keyHandler) {
-      expect(keyHandler).not.toHaveBeenCalled();
-    }
+  it("keydown delegates to the key handler when not composing (Tab jumps a closing bracket)", () => {
+    const view = makeView("()", 1);
+    const event = key("Tab");
+    expect(propsFor().handleDOMEvents.keydown(view, event)).toBe(true);
+    expect(cursorOf(view)).toBe(2);
+    expect(event.defaultPrevented).toBe(true);
   });
 
-  it("compositionend marks composition end", () => {
-    const props = getPluginProps();
-    const handleDOMEvents = props.handleDOMEvents as { compositionend: (view: unknown) => boolean };
-    const mockView = {};
-    const result = handleDOMEvents.compositionend(mockView);
-    expect(result).toBe(false);
-    expect(mockMarkProseMirrorCompositionEnd).toHaveBeenCalledWith(mockView);
+  it("keydown returns false and leaves the doc alone while composing", () => {
+    const view = makeView("()", 1);
+    view.composing = true;
+    expect(propsFor().handleDOMEvents.keydown(view, key(")"))).toBe(false);
+    expect(view.dispatched).toHaveLength(0);
+    expect(cursorOf(view)).toBe(1);
+  });
+
+  it("compositionend opens the grace period for that view", () => {
+    const props = propsFor();
+    const view = makeView("", 0);
+    expect(props.handleDOMEvents.compositionend(view)).toBe(false);
+    // The grace window now blocks pairing on this view…
+    expect(typeChar(props, view, "(")).toBe(false);
+    // …but not on a different view.
+    const other = makeView("", 0);
+    expect(typeChar(props, other, "(")).toBe(true);
   });
 });

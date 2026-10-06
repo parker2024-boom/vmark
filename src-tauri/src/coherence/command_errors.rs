@@ -86,7 +86,7 @@ pub(super) fn state_conflict(detail: String) -> CommandError {
 /// One failure mode here is provably distinguishable, and it matters because it
 /// demands the opposite response from the user: if the last reconcile skipped
 /// entries in a format this build cannot parse, `with_write_lock` refused the
-/// write (WI-2.2) and the remedy is to UPGRADE VMARK — `unsupported`, not
+/// write and the remedy is to UPGRADE VMARK — `unsupported`, not
 /// "fix your input". The kernel answers that as a typed question
 /// (`short_read_entries`), so we never have to match the message text, which
 /// rule 50 forbids and which would silently stop working the day someone

@@ -11,6 +11,8 @@
  * Solution: An appendTransaction that detects when the cursor is at the
  * left boundary of a code-marked text node and explicitly sets storedMarks
  * to include the code mark.
+ *
+ * @module plugins/inlineCodeBoundary/plugin
  */
 
 import { Plugin, PluginKey } from "@tiptap/pm/state";

@@ -1,5 +1,6 @@
 //! Unit tests for the CLI install/uninstall module (see `mod.rs`).
-//! Split into a sibling file to keep `mod.rs` under the size gate.
+//! Split into a sibling file to keep `mod.rs` under the size gate. The
+//! install flow itself is exercised in `install_flow.test.rs`.
 
 use super::*;
 
@@ -8,11 +9,8 @@ fn script_content_is_valid_bash() {
     assert!(SCRIPT_CONTENT.starts_with("#!/bin/bash\n"));
     assert!(SCRIPT_CONTENT.ends_with('\n'));
     assert!(SCRIPT_CONTENT.contains("open -b app.vmark"));
-}
-
-#[test]
-fn cli_parent_dir_derived_from_cli_path() {
-    assert_eq!(cli_parent_dir(), "/usr/local/bin");
+    // The content travels inside a command-line argument, which cannot hold a NUL.
+    assert!(!SCRIPT_CONTENT.contains('\0'));
 }
 
 #[test]
@@ -40,49 +38,6 @@ fn error_display_failed() {
 fn error_into_string() {
     let s: String = CliInstallError::Cancelled.into();
     assert_eq!(s, "Operation cancelled.");
-}
-
-#[test]
-fn shell_single_quote_plain_path() {
-    assert_eq!(shell_single_quote("/usr/local/bin"), "'/usr/local/bin'");
-}
-
-#[test]
-fn shell_single_quote_path_with_space() {
-    assert_eq!(shell_single_quote("/tmp/with space"), "'/tmp/with space'");
-}
-
-#[test]
-fn shell_single_quote_disarms_command_injection() {
-    // The shape of the attack #921 was filed for: a TMPDIR containing `;`
-    // that breaks out of the path argument. After quoting, the `;` and any
-    // following command live inside a literal single-quoted string and do
-    // nothing.
-    let evil = "/tmp/foo;touch /tmp/pwned";
-    assert_eq!(shell_single_quote(evil), "'/tmp/foo;touch /tmp/pwned'");
-}
-
-#[test]
-fn shell_single_quote_handles_dollar_paren_and_backtick() {
-    let evil = "/tmp/$(id)/`whoami`";
-    assert_eq!(shell_single_quote(evil), "'/tmp/$(id)/`whoami`'");
-}
-
-#[test]
-fn shell_single_quote_escapes_embedded_single_quote() {
-    // POSIX idiom: close, escape, reopen — a single `'` inside the string
-    // becomes `'\''` (close-quote, escaped-quote, reopen-quote).
-    assert_eq!(shell_single_quote("/a/it's/b"), "'/a/it'\\''s/b'");
-}
-
-#[test]
-fn shell_single_quote_escapes_multiple_single_quotes() {
-    assert_eq!(shell_single_quote("a'b'c"), "'a'\\''b'\\''c'");
-}
-
-#[test]
-fn shell_single_quote_empty_input() {
-    assert_eq!(shell_single_quote(""), "''");
 }
 
 #[test]

@@ -67,7 +67,7 @@
 
 /* ───── Popover ───── */
 
-/* Panel chrome comes from `.vm-overlay__panel` (WI-UI3.1); this card is
+/* Panel chrome comes from `.vm-overlay__panel`; this card is
    ANCHORED (fixed near the status bar), not centred in a backdrop. */
 .mcp-history-popover {
   /* ui-ok(overlay): anchored popover residual — position/z only; the shell
@@ -78,7 +78,7 @@
   max-height: none;
 }
 
-/* `.vm-panel__header` (WI-UI3.4). */
+/* Header chrome comes from the shared `.vm-panel__header`. */
 .mcp-history-popover__header {
   justify-content: space-between;
   font-size: var(--font-size-sm);
@@ -207,7 +207,7 @@
   box-shadow: 0 0 0 var(--border-medium) var(--accent-primary);
 }
 
-/* WI-UI1.8 (C10/rule 33 §4): visible keyboard focus. */
+/* Visible keyboard focus (C10/rule 33 §4). */
 .mcp-history-popover__clear:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 1px;

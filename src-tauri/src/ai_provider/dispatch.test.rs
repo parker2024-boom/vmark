@@ -3,8 +3,9 @@
 //! Every arm is exercised with no server and no real provider: the refusals
 //! are pure; a REST arm is identified by the "<Provider> request failed"
 //! prefix it produces when its endpoint is a loopback port nothing listens
-//! on; the CLI arms run a `/bin/sh` shim that prints its argv — the POSIX-shim
-//! technique `cli.test.rs` already uses. Google has no endpoint parameter
+//! on; the CLI arms run a `/bin/sh` shim that records its stdin and prints its
+//! argv — the POSIX-shim technique `cli.test.rs` already uses (WI-RA4.1: the
+//! prompt reaches a CLI on stdin, never in argv). Google has no endpoint parameter
 //! (its public host is hard-coded), so its arm is covered here only up to the
 //! API-key refusal; its request shape is pinned in `rest_providers.test.rs`.
 
@@ -152,47 +153,60 @@ async fn each_rest_arm_reaches_its_own_request_builder_and_surfaces_transport_er
 }
 
 // ── CLI arms ────────────────────────────────────────────────────────────────
+//
+// The prompt is document text, so it must never be an argument: on Windows an
+// npm-installed CLI is a `.cmd` shim, and an argument to one is parsed by
+// cmd.exe. Every CLI arm hands the prompt to the child on stdin and keeps its
+// argv fixed.
 
-/// A stand-in CLI binary that prints each argv entry on its own line.
+/// A stand-in CLI binary that saves its stdin to `<shim>.stdin`, then prints
+/// each argv entry on its own line.
 #[cfg(unix)]
-fn argv_shim() -> (tempfile::TempDir, String) {
-    use std::os::unix::fs::PermissionsExt;
-    let dir = tempfile::tempdir().expect("tempdir");
-    let path = dir.path().join("fake-cli");
-    std::fs::write(
-        &path,
-        "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done\n",
+fn recording_shim() -> (tempfile::TempDir, String) {
+    crate::ai_provider::test_shim::sh_shim(
+        "cat > \"$0.stdin\"\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done",
     )
-    .expect("write shim");
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
-    (dir, path.to_str().expect("utf-8 path").to_string())
 }
+
+/// What the shim's stdin held, byte for byte.
+#[cfg(unix)]
+fn stdin_seen_by(shim: &str) -> Vec<u8> {
+    std::fs::read(format!("{shim}.stdin")).expect("the shim records its stdin")
+}
+
+/// The fixed argv each CLI provider is spawned with. None of it is caller data.
+#[cfg(unix)]
+const CLI_ARGV: [(&str, &[&str]); 3] = [
+    ("claude", &["-p", "--output-format", "text"]),
+    ("codex", &["exec", "--skip-git-repo-check", "-"]),
+    ("gemini", &[]),
+];
+
+/// Text a document can hold and a shell would act on: quotes, command
+/// separators, a pipe, variable expansions for cmd.exe and sh, command
+/// substitutions, CRLF and LF line ends, CJK, and a trailing backslash.
+#[cfg(unix)]
+const HOSTILE_PROMPT: &str = "say \"hi\" & echo INJECTED | more %PATH% $HOME `id` $(id)\r\n\
+     second line ^ < > ! '\n中文段落——全角标点。\nlast line ends with a backslash \\";
 
 #[cfg(unix)]
 #[tokio::test]
-async fn cli_arms_spawn_their_binary_with_the_provider_argv_and_need_no_api_key() {
-    let (_dir, shim) = argv_shim();
-    let cases: [(&str, Vec<&str>); 3] = [
-        (
-            "claude",
-            vec!["-p", "hello world", "--output-format", "text"],
-        ),
-        (
-            "codex",
-            vec!["exec", "--skip-git-repo-check", "hello world"],
-        ),
-        ("gemini", vec!["-p", "hello world"]),
-    ];
-    for (provider, expected) in cases {
+async fn cli_arms_deliver_the_prompt_on_stdin_byte_for_byte_and_never_in_argv() {
+    for (provider, expected_argv) in CLI_ARGV {
+        let (_dir, shim) = recording_shim();
         let sink = Arc::new(RecordingSink::new());
-        let mut req = request(provider, "hello world");
+        let mut req = request(provider, HOSTILE_PROMPT);
         req.cli_path = Some(shim.clone());
         assert_eq!(dispatch(&sink, req).await, Ok(()), "{provider}");
-        let text = sink.collected_text();
         assert_eq!(
-            text.lines().collect::<Vec<_>>(),
-            expected,
-            "{provider} argv"
+            stdin_seen_by(&shim),
+            HOSTILE_PROMPT.as_bytes(),
+            "{provider}: stdin must hold the prompt unchanged"
+        );
+        assert_eq!(
+            sink.collected_text().lines().collect::<Vec<_>>(),
+            expected_argv,
+            "{provider}: argv is fixed and carries no part of the prompt"
         );
         assert_eq!(
             sink.events().last(),
@@ -202,20 +216,61 @@ async fn cli_arms_spawn_their_binary_with_the_provider_argv_and_need_no_api_key(
     }
 }
 
+/// A prompt far larger than a pipe buffer — and than the 32,767 characters a
+/// Windows command line can hold, which an argv prompt could never exceed —
+/// arrives whole.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_prompt_larger_than_a_pipe_buffer_reaches_the_cli_whole() {
+    let prompt = "0123456789abcdef 中文\n".repeat(64 * 1024);
+    assert!(prompt.len() > 1024 * 1024);
+    let (_dir, shim) = recording_shim();
+    let sink = Arc::new(RecordingSink::new());
+    let mut req = request("claude", &prompt);
+    req.cli_path = Some(shim.clone());
+    assert_eq!(dispatch(&sink, req).await, Ok(()));
+    assert!(
+        stdin_seen_by(&shim) == prompt.as_bytes(),
+        "the whole prompt must arrive on stdin"
+    );
+    assert_eq!(sink.events().last(), Some(&SinkEvent::Done));
+}
+
+/// An empty prompt is an empty stdin, never an empty argument: the CLI sees
+/// end-of-input and reports "no prompt" itself.
+#[cfg(unix)]
+#[tokio::test]
+async fn an_empty_prompt_is_an_empty_stdin_not_an_empty_argument() {
+    for (provider, expected_argv) in CLI_ARGV {
+        let (_dir, shim) = recording_shim();
+        let sink = Arc::new(RecordingSink::new());
+        let mut req = request(provider, "");
+        req.cli_path = Some(shim.clone());
+        assert_eq!(dispatch(&sink, req).await, Ok(()), "{provider}");
+        assert_eq!(stdin_seen_by(&shim), b"", "{provider}");
+        assert_eq!(
+            sink.collected_text().lines().collect::<Vec<_>>(),
+            expected_argv,
+            "{provider}"
+        );
+    }
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn max_tokens_neither_constrains_nor_blocks_a_cli_provider() {
-    let (_dir, shim) = argv_shim();
+    let (_dir, shim) = recording_shim();
     let sink = Arc::new(RecordingSink::new());
     let mut req = request("claude", "hello world");
-    req.cli_path = Some(shim);
+    req.cli_path = Some(shim.clone());
     req.max_tokens = Some(10);
     assert_eq!(dispatch(&sink, req).await, Ok(()));
     assert_eq!(
         sink.collected_text().lines().collect::<Vec<_>>(),
-        vec!["-p", "hello world", "--output-format", "text"],
+        vec!["-p", "--output-format", "text"],
         "the cap is only logged (D8): no flag reaches the CLI"
     );
+    assert_eq!(stdin_seen_by(&shim), b"hello world");
 }
 
 // ── cooperative cancellation around a REST call ─────────────────────────────

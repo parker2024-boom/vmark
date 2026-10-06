@@ -9,32 +9,36 @@
  *   - REORDER_LOCK_THRESHOLD (6px horizontal) prevents accidental reorder on click
  *   - Auto-scroll at tab bar edges during reorder
  *   - Touch hold delay (180ms) before entering drag mode on mobile
+ *   - The document listeners belong to `useDocumentDrag`, so a drag also ends
+ *     when the window loses focus, when the tab bar unmounts, and when a new
+ *     press arrives with the old drag still attached. Every end releases the
+ *     pointer capture and clears the hold timer; only a release commits.
  *
  * @coordinates-with tabStore.ts — reorder and detach mutations
+ * @coordinates-with hooks/useDocumentDrag.ts — document listener lifetime
+ * @coordinates-with utils/tabDragGeometry.ts — drop index, detach band, auto-scroll
  * @module hooks/useTabDragOut
  */
 
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { useDocumentDrag } from "@/hooks/useDocumentDrag";
+import {
+  calcAutoScrollDelta,
+  calcDropIndex,
+  isOutsideVerticalBand,
+  toPoint,
+  type DragOutPoint,
+} from "@/utils/tabDragGeometry";
 
-/** Vertical distance (px) outside the tab bar to trigger drag-out. */
-const DRAG_OUT_THRESHOLD = 40;
+export type { DragOutPoint } from "@/utils/tabDragGeometry";
+
 /** Horizontal distance (px) to lock into reorder mode. */
 const REORDER_LOCK_THRESHOLD = 6;
-const AUTO_SCROLL_EDGE_PX = 28;
-const AUTO_SCROLL_MAX_STEP = 14;
 const TOUCH_HOLD_DELAY_MS = 180;
 const TOUCH_HOLD_CANCEL_PX = 8;
 
 /** Current phase of a tab drag interaction. */
 type DragMode = "idle" | "hold" | "pending" | "reorder" | "dragout";
-
-/** Screen and viewport coordinates captured at the moment a tab is dragged out. */
-export interface DragOutPoint {
-  clientX: number;
-  clientY: number;
-  screenX: number;
-  screenY: number;
-}
 
 /** Payload emitted on each pointer move during a tab drag. */
 interface DragMovePayload {
@@ -65,51 +69,6 @@ interface UseTabDragResult {
   dragPoint: DragOutPoint | null;
 }
 
-/** Get the index where a dragged tab should be inserted based on cursor X. */
-function calcDropIndex(bar: HTMLElement, clientX: number): number {
-  const tablist = bar.querySelector("[role='tablist']");
-  if (!tablist) return -1;
-
-  const tabs = Array.from(tablist.querySelectorAll<HTMLElement>("[role='tab']:not([data-workspace-tab])")); // exclude synthetic workspace tab
-  if (tabs.length === 0) return -1;
-
-  for (let i = 0; i < tabs.length; i++) {
-    const rect = tabs[i].getBoundingClientRect();
-    const midX = rect.left + rect.width / 2;
-    if (clientX < midX) {
-      return i;
-    }
-  }
-  return tabs.length;
-}
-
-function isOutsideVerticalBand(barTop: number, barBottom: number, clientY: number): boolean {
-  return clientY > barBottom + DRAG_OUT_THRESHOLD || clientY < barTop - DRAG_OUT_THRESHOLD;
-}
-
-function calcAutoScrollDelta(tablistRect: DOMRect, clientX: number): number {
-  const leftEdge = tablistRect.left + AUTO_SCROLL_EDGE_PX;
-  const rightEdge = tablistRect.right - AUTO_SCROLL_EDGE_PX;
-  if (clientX < leftEdge) {
-    const intensity = Math.min(1, (leftEdge - clientX) / AUTO_SCROLL_EDGE_PX);
-    return -Math.ceil(AUTO_SCROLL_MAX_STEP * intensity);
-  }
-  if (clientX > rightEdge) {
-    const intensity = Math.min(1, (clientX - rightEdge) / AUTO_SCROLL_EDGE_PX);
-    return Math.ceil(AUTO_SCROLL_MAX_STEP * intensity);
-  }
-  return 0;
-}
-
-function toPoint(ev: PointerEvent): DragOutPoint {
-  return {
-    clientX: ev.clientX,
-    clientY: ev.clientY,
-    screenX: ev.screenX,
-    screenY: ev.screenY,
-  };
-}
-
 /** Hook that manages tab drag interactions -- reorder within the bar or drag out to detach. */
 export function useTabDragOut({ tabBarRef, onDragOut, onReorder, onDragMove }: UseTabDragOptions): UseTabDragResult {
   const [isDragging, setIsDragging] = useState(false);
@@ -119,7 +78,7 @@ export function useTabDragOut({ tabBarRef, onDragOut, onReorder, onDragMove }: U
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const [dragPoint, setDragPoint] = useState<DragOutPoint | null>(null);
 
-  // Track drop index in a ref so handleUp can read it synchronously
+  // Track drop index in a ref so the drag's end can read it synchronously
   const dropIndexRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const dragPointRef = useRef<DragOutPoint | null>(null);
@@ -155,22 +114,17 @@ export function useTabDragOut({ tabBarRef, onDragOut, onReorder, onDragMove }: U
   const onReorderRef = useRef(onReorder);
   const onDragMoveRef = useRef(onDragMove);
   const stableBarRef = useRef(tabBarRef);
-  /* eslint-disable react-hooks/refs */
+  /* eslint-disable react-hooks/refs -- latest-value refs read by document pointer listeners mid-drag must be fresh before any event fires */
   onDragOutRef.current = onDragOut;
   onReorderRef.current = onReorder;
   onDragMoveRef.current = onDragMove;
   stableBarRef.current = tabBarRef;
   /* eslint-enable react-hooks/refs */
 
-  // Detach document listeners and reset state
-  /* v8 ignore start -- @preserve reason: cleanupRef empty-function initializer and reset are uncovered; drag cleanup not triggered in unit tests */
-  const cleanupRef = useRef(() => {});
-  /* v8 ignore stop */
-  const cleanup = useCallback(() => {
-    cleanupRef.current();
-    /* v8 ignore start -- @preserve reason: cleanupRef reset to empty fn; only executed during live drag cleanup */
-    cleanupRef.current = () => {};
-    /* v8 ignore stop */
+  const drag = useDocumentDrag("pointer");
+
+  /** Return every piece of per-drag state to idle. Runs when a drag ends, however it ends. */
+  const resetDrag = useCallback(() => {
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -206,6 +160,11 @@ export function useTabDragOut({ tabBarRef, onDragOut, onReorder, onDragMove }: U
         const target = e.target;
         if (target instanceof Element && target.closest("[data-tab-close]")) return;
 
+        // A press can arrive while a previous drag is still attached (its
+        // pointerup was delivered outside the window). End it before this
+        // press writes the per-drag state it would otherwise reset.
+        drag.stop();
+
         const captureTarget = e.currentTarget as HTMLElement;
         const pointerId = e.pointerId;
         try {
@@ -231,7 +190,7 @@ export function useTabDragOut({ tabBarRef, onDragOut, onReorder, onDragMove }: U
           setDragMode("hold");
           stateRef.current.holdTimer = setTimeout(() => {
             const s = stateRef.current;
-            /* v8 ignore next -- @preserve guard unreachable: cleanup() clears holdTimer before changing tabId/mode */
+            /* v8 ignore next -- @preserve guard unreachable: resetDrag() clears holdTimer before changing tabId/mode */
             if (s.tabId !== tabId || s.mode !== "hold") return;
             s.isHoldingPointer = false;
             setMode("pending");
@@ -241,7 +200,7 @@ export function useTabDragOut({ tabBarRef, onDragOut, onReorder, onDragMove }: U
 
         const handleMove = (ev: PointerEvent) => {
           const s = stateRef.current;
-          /* v8 ignore next -- @preserve guard unreachable: cleanup() removes listener before nulling tabId */
+          /* v8 ignore next -- @preserve guard unreachable: the drag session removes this listener before resetDrag() nulls tabId */
           if (!s.tabId) return;
 
           const point = toPoint(ev);
@@ -251,7 +210,7 @@ export function useTabDragOut({ tabBarRef, onDragOut, onReorder, onDragMove }: U
             const holdDx = Math.abs(ev.clientX - s.startX);
             const holdDy = Math.abs(ev.clientY - s.startY);
             if (holdDx > TOUCH_HOLD_CANCEL_PX || holdDy > TOUCH_HOLD_CANCEL_PX) {
-              cleanup();
+              drag.stop();
             }
             return;
           }
@@ -315,41 +274,32 @@ export function useTabDragOut({ tabBarRef, onDragOut, onReorder, onDragMove }: U
           }
         };
 
-        const handleUp = (ev: PointerEvent) => {
-          if (stateRef.current.holdTimer) {
-            clearTimeout(stateRef.current.holdTimer);
-            stateRef.current.holdTimer = null;
-          }
-          const s = stateRef.current;
-          if (s.tabId && s.mode !== "hold") {
-            if (s.mode === "dragout") {
-              void Promise.resolve(onDragOutRef.current(s.tabId, toPoint(ev)));
-            } else if (s.mode === "reorder" && dropIndexRef.current !== null) {
-              onReorderRef.current(s.tabId, dropIndexRef.current);
+        drag.start({
+          onMove: handleMove,
+          onEnd: (reason, ev) => {
+            const s = stateRef.current;
+            // Only a release commits; a cancel, a blur, an unmount or a new
+            // press abandons the drag where it was.
+            if (reason === "release" && ev && s.tabId && s.mode !== "hold") {
+              if (s.mode === "dragout") {
+                void Promise.resolve(onDragOutRef.current(s.tabId, toPoint(ev)));
+              } else if (s.mode === "reorder" && dropIndexRef.current !== null) {
+                onReorderRef.current(s.tabId, dropIndexRef.current);
+              }
             }
-          }
-          cleanup();
-        };
-
-        document.addEventListener("pointermove", handleMove);
-        document.addEventListener("pointerup", handleUp);
-        document.addEventListener("pointercancel", cleanup);
-
-        cleanupRef.current = () => {
-          document.removeEventListener("pointermove", handleMove);
-          document.removeEventListener("pointerup", handleUp);
-          document.removeEventListener("pointercancel", cleanup);
-          try {
-            if (captureTarget.hasPointerCapture(pointerId)) {
-              captureTarget.releasePointerCapture(pointerId);
+            try {
+              if (captureTarget.hasPointerCapture(pointerId)) {
+                captureTarget.releasePointerCapture(pointerId);
+              }
+            } catch {
+              // Best effort cleanup.
             }
-          } catch {
-            // Best effort cleanup.
-          }
-        };
+            resetDrag();
+          },
+        });
       },
     }),
-    [cleanup, emitDragPoint, setMode]
+    [drag, resetDrag, emitDragPoint, setMode]
   );
 
   return { getTabDragHandlers, isDragging, isReordering, dragMode, dragTabId, dropIndex, dragPoint };

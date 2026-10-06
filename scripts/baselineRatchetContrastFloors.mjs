@@ -1,5 +1,5 @@
 /**
- * WI-UI0.1 — the `contrastFloors` PAIR comparator for
+ * The `contrastFloors` PAIR comparator for
  * scripts/theme-contrast-baseline.json's `ansiFloor` / `exempt` sections.
  *
  * A pair comparator, not a set comparator: the Set-based custom API cannot

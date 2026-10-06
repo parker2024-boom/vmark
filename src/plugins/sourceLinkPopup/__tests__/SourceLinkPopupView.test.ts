@@ -43,16 +43,12 @@ const mockLinkStore = {
   },
 };
 
-vi.mock("@/utils/imeGuard", () => ({
-  isImeKeyEvent: () => false,
-}));
-
 vi.mock("@/plugins/shared/popupHostDom", () => ({
   getPopupHostForDom: () => null,
   toHostCoordsForDom: (_host: HTMLElement, pos: { top: number; left: number }) => pos,
 }));
 
-vi.mock("@/plugins/sourcePopup/sourcePopupUtils", () => ({
+vi.mock("@/plugins/shared/sourcePopupUtils", () => ({
   getEditorBounds: () => ({
     horizontal: { left: 0, right: 800 },
     vertical: { top: 0, bottom: 600 },
@@ -375,6 +371,23 @@ describe("SourceLinkPopupView", () => {
 
       expect(saveLinkChanges).toHaveBeenCalled();
       expect(mockClosePopup).toHaveBeenCalled();
+    });
+
+    // WI-RA18.2 — the Enter that confirms an IME composition (CJK input) picks
+    // a candidate; it must not also save and close the popup.
+    it.each([
+      ["isComposing", { isComposing: true }],
+      ["keyCode 229", { keyCode: 229 }],
+    ])("does not save on the Enter that confirms an IME composition (%s)", (_label, ime) => {
+      const field = document.querySelector(".source-link-popup-href") as HTMLInputElement;
+      field.focus();
+
+      const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...ime });
+      field.dispatchEvent(event);
+
+      expect(saveLinkChanges).not.toHaveBeenCalled();
+      expect(mockClosePopup).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
     });
 
     // Regression: paste / IME / drop can mutate input.value without firing the

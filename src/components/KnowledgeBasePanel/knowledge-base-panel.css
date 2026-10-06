@@ -61,7 +61,7 @@
   color: var(--error-color);
 }
 
-/* Runtime state (WI-FL1.1): what a start would find, shown before Start is
+/* Runtime state: what a start would find, shown before Start is
    offered. The note is a single line inside the empty state's column; the
    missing state is a heading, a list of what is missing, and a Check-again
    button. Tailwind's preflight zeroes <p>/<ul> margins and removes bullets, so

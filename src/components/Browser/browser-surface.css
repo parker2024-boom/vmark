@@ -1,4 +1,4 @@
-/* BrowserSurface (WI-1.3) — reserved viewport + full-cover overlays for the native
+/* BrowserSurface — reserved viewport + full-cover overlays for the native
    webview. BrowserChrome owns the page tabs and navigation controls. */
 
 /* A column, because off macOS this surface hosts the browser chrome above the
@@ -35,7 +35,7 @@
 }
 
 /* Shown only when the web content process has crashed and the native view is
-   frozen (hidden), so this DOM overlay is visible in its place (WI-1.8). */
+   frozen (hidden), so this DOM overlay is visible in its place. */
 .browser-crash-overlay {
   position: absolute;
   inset: 0;
@@ -76,7 +76,7 @@
   color: var(--text-tertiary);
 }
 
-/* Page JS dialog (alert/confirm). Shown over the frozen native view (WI-1.7). */
+/* Page JS dialog (alert/confirm). Shown over the frozen native view. */
 .browser-dialog {
   position: absolute;
   inset: 0;
@@ -92,7 +92,7 @@
 
 .browser-dialog-message {
   margin: 0;
-  max-width: 576px; /* was 32em @ 18px (WI-UI2.1) */
+  max-width: 576px; /* was 32em @ 18px */
   text-align: center;
   color: var(--text-color);
   white-space: pre-wrap;
@@ -149,7 +149,7 @@
   outline-offset: 2px;
 }
 
-/* The native view is hidden by an occluder, leaving a blank rect (WI-SOC.1b). This
+/* The native view is hidden by an occluder, leaving a blank rect. This
    opaque surface stands in its place so an overlay above — including one with a
    translucent backdrop — composites over something real instead of a hole. It is what
    makes hide-only freeze correct without capturing a page snapshot. */
@@ -159,7 +159,7 @@
   background: var(--bg-color);
 }
 
-/* A failed load or create (WI-S0.9). Opaque: it stands in for the page it replaces,
+/* A failed load or create. Opaque: it stands in for the page it replaces,
    over a native view that is either absent or frozen. */
 .browser-error {
   position: absolute;

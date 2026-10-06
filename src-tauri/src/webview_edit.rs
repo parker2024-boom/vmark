@@ -9,7 +9,7 @@
 //!
 //! Focus contract: the frontend must return focus to the editor before
 //! invoking (the first responder receives the action). See
-//! `dev-docs/plans/20260709-editor-context-menu.md` ADR-3.
+//! `.claude/adr/plans/20260709-editor-context-menu.md` ADR-3.
 //!
 //! Non-macOS: returns an error; the frontend falls back to
 //! `document.execCommand` / clipboard-manager reads (best-effort per the
@@ -114,6 +114,10 @@ async fn dispatch(window: tauri::Window, action: EditAction) -> Result<(), Strin
         let ns_app = NSApplication::sharedApplication(mtm);
         // Target `None` = first responder of the key window — which the
         // gate above just proved is the invoking window.
+        // SAFETY: the selector is one of `cut:`, `copy:`, `paste:`, `selectAll:`
+        // — standard actions taking one `id` sender — so whichever responder
+        // AppKit resolves is messaged with the signature it implements. A nil
+        // target and a nil sender are permitted; `mtm` proves the main thread.
         let handled = unsafe { ns_app.sendAction_to_from(action.selector(), None, None) };
         let _ = tx.send(SendOutcome::Handled(handled));
     })

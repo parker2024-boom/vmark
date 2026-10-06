@@ -22,7 +22,11 @@
  * Tauri imports so tests can pass fakes.
  */
 export interface FsChangeContext {
-  /** Read a file from disk; rejects if the file is gone/unreadable. */
+  /**
+   * Read a document's raw disk text, a leading BOM included (production:
+   * `readDocumentText`); rejects if the file is gone, unreadable, or in an
+   * encoding VMark refuses.
+   */
   readTextFile: (path: string) => Promise<string>;
   /** Existence probe that never loads content — used for binary media tabs. */
   fileExists: (path: string) => Promise<boolean>;

@@ -52,6 +52,7 @@ let nextMockToken = 1;
 vi.mock("@/utils/pendingSaves", () => ({
   registerPendingSave: vi.fn(() => nextMockToken++),
   clearPendingSave: vi.fn(),
+  clearPendingSaveAfterGrace: vi.fn(),
 }));
 
 const toastMocks = vi.hoisted(() => ({
@@ -89,7 +90,7 @@ import { useDocumentStore } from "@/stores/documentStore";
 import { useTabStore } from "@/stores/tabStore";
 import { useRecentFilesStore } from "@/stores/workspaceStore";
 import { useSettingsStore } from "@/stores/settingsStore";
-import { registerPendingSave, clearPendingSave } from "@/utils/pendingSaves";
+import { registerPendingSave, clearPendingSave, clearPendingSaveAfterGrace } from "@/utils/pendingSaves";
 
 /** Factory for settings store mock with overrides */
 function makeSettings(overrides?: {
@@ -618,15 +619,18 @@ describe("saveToPath", () => {
       expect(registerCall).toBeLessThan(writeCall);
     });
 
-    it("clears pending save after successful write (delayed, with token)", async () => {
+    it("hands a successful write's token to the grace window instead of clearing at once", async () => {
       vi.mocked(invoke).mockResolvedValue(undefined);
 
       await saveToPath("tab-1", "/tmp/doc.md", "content", "manual");
 
-      // clearPendingSave is delayed via setTimeout to handle late watcher events
+      // An immediate clear would let the watcher's late echo of this very
+      // write read as an external change. The window itself is pinned in
+      // utils/pendingSaves.test.ts.
       expect(clearPendingSave).not.toHaveBeenCalled();
-      vi.advanceTimersByTime(1000);
-      expect(clearPendingSave).toHaveBeenCalledWith("/tmp/doc.md", expect.any(Number));
+      const token = vi.mocked(registerPendingSave).mock.results[0].value;
+      expect(clearPendingSaveAfterGrace).toHaveBeenCalledTimes(1);
+      expect(clearPendingSaveAfterGrace).toHaveBeenCalledWith("/tmp/doc.md", token);
     });
 
     it("clears pending save on write failure with token", async () => {
@@ -635,8 +639,10 @@ describe("saveToPath", () => {
 
       await saveToPath("tab-1", "/tmp/doc.md", "content", "manual");
 
-      // clearPendingSave should be called with path and a token (number)
+      // A failed write left nothing on disk to echo: cleared at once, with
+      // its own token, and never parked in the grace window.
       expect(clearPendingSave).toHaveBeenCalledWith("/tmp/doc.md", expect.any(Number));
+      expect(clearPendingSaveAfterGrace).not.toHaveBeenCalled();
       consoleError.mockRestore();
     });
 

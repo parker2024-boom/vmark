@@ -5,10 +5,10 @@
  * validates, this module authorizes and acts. Three contracts live here:
  *
  *  - A `{role,name}` act authorizes through the shared approval machine
- *    (`browserApprovalFlow`, round 3 #43): the frontend one-shot is consumed with
+ *    (`browserApprovalFlow`): the frontend one-shot is consumed with
  *    the EXACT script (payload-binding ops) and the current generation, and the
- *    driver's mint confirmation is AWAITED before invoking — one mint path
- *    (audit A-04). This module decides WHAT is bound: a click binds its element,
+ *    driver's mint confirmation is AWAITED before invoking — one mint path.
+ *    This module decides WHAT is bound: a click binds its element,
  *    `type`/`key`/`scroll` bind the built script.
  *  - A driver rejection propagates as its typed token. A `<timeout>`-class
  *    failure used to be read as "the click did not affect the target", which
@@ -116,7 +116,7 @@ export async function finishAct(
     }),
   );
   const result = parseEvalResult(raw);
-  // Re-resolve AFTER the act (WI-NB1.3): a click that navigated may already have
+  // Re-resolve AFTER the act: a click that navigated may already have
   // bumped the webview mirror, and the model needs the freshest page state it can
   // get without a second round-trip. (A navigation landing later is still possible
   // — that is what wait_for is for; the primer says so.)

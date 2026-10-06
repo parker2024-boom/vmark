@@ -2,8 +2,7 @@
 //!
 //! The file holds `{port}:{token}`, and that token is the *only* thing
 //! standing between a different-UID process and full authority over the
-//! editor. Its mode is therefore a security control, not a detail (WI-9,
-//! audit 20260728 §2.2).
+//! editor. Its mode is therefore a security control, not a detail.
 //!
 //! Before this module the 0600 mode was an ACCIDENT: `tempfile::NamedTempFile`
 //! happens to create 0600 files, `atomic_replace::preserve_target_permissions`
@@ -14,7 +13,7 @@
 //! stayed 0644 forever, silently.
 //!
 //! The shape adopted here is Jupyter's `secure_write`, with the ordering
-//! fixed (audit round 1, finding 1): the token goes to a temp file that is set
+//! fixed: the token goes to a temp file that is set
 //! to 0600 **before a byte of it is written** and **re-stat'ed immediately
 //! before the rename**, so it is never reachable under a name at the wrong
 //! mode and the staging window rests on this file's own enforcement rather
@@ -63,7 +62,7 @@ pub(crate) fn write_port_file_at(path: &Path, port: u16, token: &str) -> Result<
     std::fs::create_dir_all(parent)
         .map_err(|e| format!("Failed to create app data directory {parent:?}: {e}"))?;
     // Fatal when the directory is writable by others, a warning when it is
-    // merely visible to them (audit round 2, item 1 — see `token_dir`).
+    // merely visible to them (see `token_dir`).
     super::token_dir::guard_parent_dir(parent)?;
 
     let content = format!("{port}:{token}");
@@ -100,7 +99,7 @@ pub fn remove_port_file<R: tauri::Runtime>(app: &AppHandle<R>) {
 /// Stage the contents in a temp file, lock that file to 0600, verify it, and
 /// only then rename it over `path`.
 ///
-/// Deliberately NOT `app_paths::atomic_write_file` (audit round 1, finding 1):
+/// Deliberately NOT `app_paths::atomic_write_file`:
 /// that writer *preserves the target's* permissions, which is right for user
 /// documents and wrong for a secret. A target that was 0644 handed 0644 to
 /// the temp file, so the new token was published world-readable and a chmod
@@ -151,8 +150,8 @@ fn write_secured(path: &Path, parent: &Path, contents: &[u8]) -> Result<(), Stri
     // ANY persist failure — a transient sharing refusal from an antivirus
     // scanner included — so it deleted the live token file and then failed to
     // rewrite it, leaving the bridge's only credential gone. `atomic_replace.rs`
-    // had the identical defect and the identical false premise (audit 20260906
-    // B1); removing it there without a retry turned CI's Windows leg red with
+    // had the identical defect and the identical false premise;
+    // removing it there without a retry turned CI's Windows leg red with
     // `os error 5`, because the second attempt was the thing that had been
     // absorbing the contention by accident.
     //
@@ -171,7 +170,7 @@ fn write_secured(path: &Path, parent: &Path, contents: &[u8]) -> Result<(), Stri
 /// Delete a token file whose published mode could not be verified, folding a
 /// cleanup failure into the message the caller reports.
 ///
-/// Discarding the `remove_file` result (audit round 1, finding 2) let this
+/// Discarding the `remove_file` result let this
 /// return "refusing to expose the token" while the readable token was still
 /// sitting on disk — telling the operator the opposite of what happened.
 fn abandon_unprotected_token(path: &Path, cause: String) -> String {

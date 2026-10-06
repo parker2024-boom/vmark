@@ -2,6 +2,8 @@
  * Blockquote Detection for Source Mode
  *
  * Detects if cursor is inside a markdown blockquote.
+ *
+ * @module plugins/sourceContextDetection/blockquoteDetection
  */
 
 import type { EditorView } from "@codemirror/view";

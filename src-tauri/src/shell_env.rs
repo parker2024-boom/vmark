@@ -8,6 +8,11 @@
 //!   - Default shell resolved via `getpwuid_r` → `$SHELL` → `/bin/sh` (reliable in
 //!     GUI apps). Available shells detected from `/etc/shells` (Unix) or `where.exe`
 //!     (Windows), always returning absolute paths.
+//!   - The lookups block (a directory service, a stat per candidate, `where.exe`),
+//!     so each has two names: the blocking function (`default_shell`,
+//!     `available_shells`) for Rust callers already on a blocking thread, and the
+//!     command that runs it on the blocking pool — never the IPC thread, never
+//!     an async worker.
 
 use crate::ai_provider;
 
@@ -28,21 +33,34 @@ pub async fn get_login_shell_path() -> String {
         })
 }
 
-/// Return the user's default shell.
+/// Return the user's default shell — [`default_shell`], on the blocking pool.
+#[tauri::command]
+pub async fn get_default_shell() -> String {
+    tokio::task::spawn_blocking(default_shell)
+        .await
+        .unwrap_or_else(|e| {
+            log::error!("[shell_env] default-shell lookup task failed: {e}");
+            last_resort_shell()
+        })
+}
+
+/// The user's default shell.
 ///
 /// Fallback chain:
 /// - macOS/Linux: `getpwuid(getuid())` → `$SHELL` → `/bin/sh`
 ///   `getpwuid` reads the login shell from the user database, which is
 ///   reliable even in GUI apps where `$SHELL` may not be set.
 /// - Windows: `%COMSPEC%` → `%SystemRoot%\System32\cmd.exe` → `C:\Windows\System32\cmd.exe`
-#[tauri::command]
-pub fn get_default_shell() -> String {
+///
+/// Blocking: the user-database lookup can go to a directory service and each
+/// candidate is stat'ed. Call from the blocking pool or a plain thread.
+pub(crate) fn default_shell() -> String {
     if cfg!(target_os = "windows") {
         // Prefer %COMSPEC%, fall back to absolute cmd.exe path (never bare "cmd.exe")
         std::env::var("COMSPEC")
             .ok()
             .filter(|v| shell_path_is_valid(v))
-            .unwrap_or_else(windows_absolute_cmd)
+            .unwrap_or_else(last_resort_shell)
     } else {
         login_shell_from_passwd()
             .filter(|s| shell_path_is_valid(s))
@@ -51,7 +69,16 @@ pub fn get_default_shell() -> String {
                     .ok()
                     .filter(|s| shell_path_is_valid(s))
             })
-            .unwrap_or_else(|| "/bin/sh".to_string())
+            .unwrap_or_else(last_resort_shell)
+    }
+}
+
+/// The shell named when nothing better validates. Touches no disk.
+fn last_resort_shell() -> String {
+    if cfg!(target_os = "windows") {
+        windows_absolute_cmd()
+    } else {
+        "/bin/sh".to_string()
     }
 }
 
@@ -68,6 +95,8 @@ fn login_shell_from_passwd() -> Option<String> {
     let uid = unsafe { libc::getuid() };
 
     // Start with sysconf hint, fall back to 1024
+    // SAFETY: `sysconf` takes an integer name and touches no memory; a name it
+    // does not know, or a limit that is indeterminate, comes back as -1.
     let init_size = unsafe { libc::sysconf(libc::_SC_GETPW_R_SIZE_MAX) };
     let mut buf_size = if init_size > 0 {
         init_size as usize
@@ -160,15 +189,28 @@ fn shell_path_is_valid(path: &str) -> bool {
     p.is_file() && is_executable(p)
 }
 
-/// List available shells on the system.
+/// List the shells on this system — [`available_shells`], on the blocking pool.
+#[tauri::command]
+pub async fn list_available_shells() -> Vec<String> {
+    tokio::task::spawn_blocking(available_shells)
+        .await
+        .unwrap_or_else(|e| {
+            log::error!("[shell_env] shell-list task failed: {e}");
+            Vec::new()
+        })
+}
+
+/// The shells on this system.
 ///
 /// - macOS/Linux: reads `/etc/shells`, filters to existing executable paths, deduplicates.
 ///   Includes the user's login shell (via `getpwuid` → `$SHELL` fallback) when it
 ///   validates as an existing executable.
 /// - Windows: checks for known shell executables via `where.exe` (absolute path);
 ///   `%COMSPEC%` is included only if it validates too.
-#[tauri::command]
-pub fn list_available_shells() -> Vec<String> {
+///
+/// Blocking: it reads `/etc/shells`, stats every entry and on Windows spawns
+/// `where.exe` three times. Call from the blocking pool or a plain thread.
+pub(crate) fn available_shells() -> Vec<String> {
     if cfg!(target_os = "windows") {
         let resolved = ["powershell.exe", "pwsh.exe", "cmd.exe"]
             .iter()
@@ -202,7 +244,7 @@ fn collect_unix_shells(
         }
     }
     // Include the user's login shell first — but only if it validates, same
-    // gate get_default_shell applies.
+    // gate default_shell applies.
     if let Some(shell) = user_shell.filter(|s| valid(s)) {
         if !shells.contains(&shell) {
             shells.insert(0, shell);
@@ -218,7 +260,7 @@ fn collect_unix_shells(
 /// `%COMSPEC%`. Every candidate must validate: COMSPEC is env-derived, and
 /// `where.exe` results are only as trustworthy as PATH (also user-writable)
 /// — a shim or since-deleted entry must not be offered (mirrors
-/// `get_default_shell`). Dedup is case-insensitive (Windows paths).
+/// `default_shell`). Dedup is case-insensitive (Windows paths).
 fn collect_windows_shells(
     resolved: Vec<String>,
     comspec: Option<String>,
@@ -252,3 +294,7 @@ fn is_executable(_path: &std::path::Path) -> bool {
 #[cfg(test)]
 #[path = "shell_env.test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "ipc_thread.test.rs"]
+mod ipc_thread_tests;

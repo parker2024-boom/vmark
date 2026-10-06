@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Header-reference gate (WI-FL0.2) — every file header that names another file
+ * Header-reference gate — every file header that names another file
  * must name one that exists.
  *
  * Headers carry three reference grammars and nothing resolved any of them:
@@ -8,7 +8,7 @@
  * a glob, or a Rust `a::b` module path), `@module <path>` (the file's OWN path
  * relative to its tree root, extension dropped) and `Plan: <file>`. A target
  * that moved, was renamed or was deleted kept reading as documentation: the
- * 2026-09-07 inspection (feature ledger F4) found `@coordinates-with
+ * feature-ledger inspection (finding F4) found `@coordinates-with
  * closeDecision.ts` with no such file under `src/`, two `@module utils/…`
  * headers on files living in `services/ime/`, and a Rust header pointing at a
  * TypeScript hook that no longer exists. Rule 22 asks for headers to be kept
@@ -65,7 +65,7 @@ export function parseArgs(argv, defaultRoot) {
   // `path.resolve("")` is the CWD, so a bare `--root=` used to silently scan
   // wherever the caller happened to stand instead of the tree it named — the
   // difference between "checked nothing" and "checked something else" is
-  // invisible in the output (audit R2 #51).
+  // invisible in the output.
   const root = (raw, spelling) => {
     if (raw.trim() === "") throw new Error(`${spelling} needs a directory path\n${USAGE}`);
     return path.resolve(raw);
@@ -169,7 +169,7 @@ function main() {
     // scripts/gen-feature-ledger.mjs writes the ledger: a direct write
     // TRUNCATES first, so an interruption or a full disk leaves a partial
     // baseline. A write failure is reported here rather than escaping as an
-    // unhandled stack trace with no mention of --update (audit R2 #53).
+    // unhandled stack trace with no mention of --update.
     const tmpPath = `${baselinePath}.tmp-${process.pid}`;
     try {
       writeFileSync(tmpPath, formatBaseline(next));

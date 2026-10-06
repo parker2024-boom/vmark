@@ -12,12 +12,19 @@
  * it. A filter that is never called looks exactly like one that passes
  * everything, and only an end-to-end assertion can tell those apart.
  *
+ * Also here: the "Keep my changes" refresh (issue 904) — after Keep, an
+ * identical follow-up disk touch must queue no conflict at all. Its debounce is
+ * driven on a fake clock, so "nothing was queued" is observed, not slept on.
+ *
  * Split from `useExternalFileChanges.test.ts`, which is size-baselined and full.
+ *
+ * WI-RA14A.2 — the debounce waits run on a fake clock, not wall-clock sleeps.
  *
  * @coordinates-with utils/openPolicy/externalChangePolicy.ts — the predicate
  * @module hooks/useExternalFileChanges.staleConflict.test
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { fileBytes } from "@/test/fileBytes";
 import { renderHook } from "@testing-library/react";
 
 // --- Hoisted mocks ---
@@ -41,7 +48,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: mocks.readTextFile,
+  readFile: (path: string) => fileBytes(mocks.readTextFile(path)),
   exists: mocks.exists,
 }));
 
@@ -143,7 +150,9 @@ function captureListenCallback(): ListenCallback {
     const activeRoot = mocks.activeScopeRoot();
     if (activeRoot && payload.rootPath !== activeRoot) return; // …and by the watched root
     listener(toSemantic(payload));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // One macrotask turn for the async routing, advanced on the fake clock
+    // every case runs under.
+    await vi.advanceTimersByTimeAsync(0);
   };
 }
 
@@ -169,7 +178,20 @@ beforeEach(() => {
   useDocumentStore.setState({ documents: {} });
 });
 
+/** The debounce the hook queues dirty conflicts behind. */
+const BATCH_DEBOUNCE_MS = 300;
+
 describe("a queued conflict that went stale is not resolved", () => {
+  // The queue's debounce is a real `setTimeout`; faking it lets each case
+  // advance exactly past the debounce instead of sleeping and hoping it fired.
+  // Faked from the start so the debounce is scheduled on the fake clock.
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   // Audit finding #27. An entry names the tab and path captured when it was
   // QUEUED, then waits out a 300 ms debounce (and, for a multi-file batch, a
   // modal the user may sit on). The decision logic is unit-tested as
@@ -189,9 +211,14 @@ describe("a queued conflict that went stale is not resolved", () => {
       },
     });
 
-    useDocumentStore.setState({ documents: {} });
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    // The conflict is queued: its debounce is the pending timer.
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
 
+    useDocumentStore.setState({ documents: {} });
+    await vi.advanceTimersByTimeAsync(BATCH_DEBOUNCE_MS);
+
+    // The debounce fired and the batch ran — and asked nothing.
+    expect(vi.getTimerCount()).toBe(0);
     expect(mocks.dialogMessage).not.toHaveBeenCalled();
   });
 
@@ -211,9 +238,11 @@ describe("a queued conflict that went stale is not resolved", () => {
 
     // Saved while queued: the conflict resolved itself, and prompting would
     // ask the user about something that is no longer true.
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
     seedStores({ isDirty: false });
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await vi.advanceTimersByTimeAsync(BATCH_DEBOUNCE_MS);
 
+    expect(vi.getTimerCount()).toBe(0);
     expect(mocks.dialogMessage).not.toHaveBeenCalled();
   });
 });
@@ -225,6 +254,15 @@ describe("a queued conflict that went stale is not resolved", () => {
 // and write content the user had already superseded. The symptom is a document
 // that silently reverts to a version that was on disk moments ago.
 describe("batches are serialized, so an older read cannot land last", () => {
+  // On the fake clock like the rest of the file: the settle after each batch
+  // is advanced, not slept through.
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("leaves the NEWER content in the document when reads finish out of order", async () => {
     seedStores();
 
@@ -256,7 +294,7 @@ describe("batches are serialized, so an older read cannot land last", () => {
     releaseFirst("# first (older)");
     await first;
     await second;
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     expect(useDocumentStore.getState().documents["tab-1"]?.content)
       .toBe("# second (newer)");
@@ -274,8 +312,108 @@ describe("batches are serialized, so an older read cannot land last", () => {
 
     await callback(event("/workspace/test.md"));
     await callback(event("/workspace/test.md"));
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     expect(mocks.readTextFile).toHaveBeenCalledTimes(2);
+  });
+});
+
+// Regression for issue 904: OneDrive (and other cloud sync daemons) keep
+// touching the file in the background even when the user has "paused" sync.
+// With a dirty doc, that triggers the external-change dialog. The user picks
+// "Keep my changes" → divergent → auto-save paused. The bug: lastDiskContent
+// was not refreshed after Keep, so every subsequent identical disk touch
+// fires the dialog AGAIN — user is stuck in a loop until they manually save.
+//
+// Fix: after Keep, re-read disk and adopt that content as lastDiskContent so
+// the soft-equals guard silently no-ops identical follow-up touches.
+describe("useExternalFileChanges — Keep my changes refreshes lastDiskContent", () => {
+  // Fake clock: the follow-up must be shown to queue NOTHING, which a sleep
+  // past the debounce can only hope to observe.
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("adopts current disk content as lastDiskContent after Keep, suppressing follow-up dialogs", async () => {
+    seedStores({ isDirty: true, lastDiskContent: "# old content" });
+
+    // First fs:changed: disk has a OneDrive-rewritten version.
+    mocks.readTextFile.mockResolvedValueOnce("# rewritten by onedrive");
+    // User picks "Keep my changes" (Cancel button on the 3-way dialog).
+    mocks.dialogMessage.mockResolvedValueOnce("Cancel");
+    // Re-read inside handleDirtyChange returns the same rewritten content.
+    mocks.readTextFile.mockResolvedValueOnce("# rewritten by onedrive");
+
+    const callback = await setupHookAndCallback();
+
+    await callback({
+      payload: {
+        watchId: "main",
+        rootPath: "/workspace",
+        paths: ["/workspace/test.md"],
+        kind: "modify",
+      },
+    });
+    // Let the debounce batch run.
+    await vi.advanceTimersByTimeAsync(BATCH_DEBOUNCE_MS);
+    await vi.waitFor(() => expect(mocks.dialogMessage).toHaveBeenCalledTimes(1));
+    // And the post-dialog re-read.
+    await vi.waitFor(() => expect(mocks.readTextFile).toHaveBeenCalledTimes(2));
+
+    const doc = useDocumentStore.getState().documents["tab-1"];
+    expect(doc?.isDivergent).toBe(true);
+    // Critical: lastDiskContent now reflects the OneDrive-rewritten content,
+    // so an identical follow-up rewrite is invisible to the soft-equals guard.
+    expect(doc?.lastDiskContent).toBe("# rewritten by onedrive");
+
+    // Second fs:changed for the SAME rewritten content — must NOT prompt.
+    mocks.readTextFile.mockResolvedValueOnce("# rewritten by onedrive");
+    mocks.dialogMessage.mockClear();
+
+    await callback({
+      payload: {
+        watchId: "main",
+        rootPath: "/workspace",
+        paths: ["/workspace/test.md"],
+        kind: "modify",
+      },
+    });
+    // Soft-equals matches → silent no-op: nothing is queued behind the
+    // debounce, and running the clock past it re-fires no dialog.
+    expect(mocks.readTextFile).toHaveBeenCalledTimes(3);
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(BATCH_DEBOUNCE_MS);
+    expect(mocks.dialogMessage).not.toHaveBeenCalled();
+  });
+
+  it("tolerates disk-read failure during the post-Keep refresh", async () => {
+    seedStores({ isDirty: true, lastDiskContent: "# old content" });
+
+    mocks.readTextFile.mockResolvedValueOnce("# rewritten by onedrive");
+    mocks.dialogMessage.mockResolvedValueOnce("Cancel");
+    // Refresh read fails — must not crash the handler.
+    mocks.readTextFile.mockRejectedValueOnce(new Error("EBUSY"));
+
+    const callback = await setupHookAndCallback();
+
+    await callback({
+      payload: {
+        watchId: "main",
+        rootPath: "/workspace",
+        paths: ["/workspace/test.md"],
+        kind: "modify",
+      },
+    });
+    await vi.waitFor(() =>
+      expect(mocks.readTextFile).toHaveBeenCalledTimes(2),
+    );
+
+    // Divergent is still set; lastDiskContent simply stays at the value from
+    // the initial dialog read (worst case: prompt re-fires on the next event).
+    const doc = useDocumentStore.getState().documents["tab-1"];
+    expect(doc?.isDivergent).toBe(true);
   });
 });

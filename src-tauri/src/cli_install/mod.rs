@@ -5,12 +5,29 @@
 //!
 //! The installed script simply delegates to `open -b app.vmark`, which lets macOS
 //! handle single-instance behavior natively via the bundle identifier.
+//!
+//! Key decisions:
+//!   - The administrator shell is given ONE command that carries the script's
+//!     content inside it, creates the target, and verifies it (`script.rs`).
+//!     No file the user can write is ever read by root.
+//!   - Everything except the `osascript` call takes its target and its
+//!     privileged runner as arguments (`install_at`), so the whole flow is
+//!     tested against a temp directory with `/bin/sh` standing in for root.
+//!
+//! @coordinates-with cli_install/script.rs — the privileged commands, as text
+//! @coordinates-with cli_install/dialog.rs — the menu action and result dialog
 
 use serde::Serialize;
 use std::path::Path;
 
-/// Menu-action orchestration + localized result dialog (audit 20260612).
+use script::{
+    apple_script, install_command, shell_exit_status, uninstall_command, EXIT_MISMATCH,
+    EXIT_TARGET_EXISTS,
+};
+
+/// Menu-action orchestration + localized result dialog.
 pub mod dialog;
+mod script;
 
 pub const CLI_PATH: &str = "/usr/local/bin/vmark";
 
@@ -54,7 +71,7 @@ impl From<CliInstallError> for String {
 
 /// Structured success outcome so the caller localizes the dialog text
 /// instead of string-matching English Ok messages across the module
-/// boundary (audit 20260612 deferred i18n).
+/// boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CliCommandOutcome {
     Installed,
@@ -75,35 +92,25 @@ pub struct CliStatus {
 /// Check whether `/usr/local/bin/vmark` exists and was installed by VMark.
 /// Uses exact content comparison (not substring match) for ownership detection.
 pub fn cli_install_status() -> Result<CliStatus, String> {
-    let path = Path::new(CLI_PATH);
-    if !path.exists() {
-        return Ok(CliStatus {
-            installed: false,
-            path: CLI_PATH.to_string(),
-            foreign: false,
-        });
-    }
-    let content = std::fs::read_to_string(path).unwrap_or_default();
-    let ours = content == SCRIPT_CONTENT;
-    Ok(CliStatus {
-        installed: ours,
-        path: CLI_PATH.to_string(),
-        foreign: !ours,
-    })
+    Ok(status_at(Path::new(CLI_PATH)))
 }
 
-/// POSIX-safe single-quote wrap. Escapes embedded single quotes via the
-/// `'\''` close-escape-open idiom, then wraps in single quotes. The result
-/// is safe to interpolate into a `/bin/sh` command line because single-
-/// quoted strings disable every metacharacter except `'`.
-///
-/// Load-bearing: `tmp_path` in `cli_install` is derived from `TMPDIR`,
-/// which a terminal-launched VMark inherits from the user's shell. Without
-/// quoting, a `TMPDIR` containing `;`, `$()`, backticks, or whitespace
-/// would inject arbitrary commands into the `osascript with administrator
-/// privileges` call — local privilege escalation to root.
-fn shell_single_quote(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "'\\''"))
+/// [`cli_install_status`] for any target path.
+fn status_at(target: &Path) -> CliStatus {
+    let path = target.to_string_lossy().into_owned();
+    if !target.exists() {
+        return CliStatus {
+            installed: false,
+            path,
+            foreign: false,
+        };
+    }
+    let ours = std::fs::read_to_string(target).unwrap_or_default() == SCRIPT_CONTENT;
+    CliStatus {
+        installed: ours,
+        path,
+        foreign: !ours,
+    }
 }
 
 /// Run a shell command with administrator privileges via `osascript`.
@@ -111,93 +118,101 @@ fn shell_single_quote(s: &str) -> String {
 ///
 /// SECURITY INVARIANT (not expressible in code): `shell_cmd` must be
 /// app-constructed. The only callers are `cli_install` / `cli_uninstall`
-/// (both zero-argument — no frontend/user input reaches them), which build
-/// the command from compile-time constants plus paths wrapped in
-/// `shell_single_quote`. The only externally-influenced operand is the temp
-/// path derived from `TMPDIR` via `std::env::temp_dir()`, and it is
-/// single-quoted before interpolation. The `replace` calls below escape only
-/// for AppleScript string embedding — they are NOT a shell-injection
-/// defense. Never pass user-controlled input to this function.
+/// (both zero-argument — no frontend/user input reaches them), which get it
+/// from `script.rs`: compile-time constants, each wrapped in
+/// `shell_single_quote`. Never pass user-controlled input to this function.
 fn run_admin_shell(shell_cmd: &str) -> Result<(), CliInstallError> {
-    let apple_script = format!(
-        "do shell script \"{}\" with administrator privileges",
-        shell_cmd.replace('\\', "\\\\").replace('"', "\\\"")
-    );
-
-    let output = std::process::Command::new("/usr/bin/osascript")
+    let output = crate::ai_provider::build_command("/usr/bin/osascript", &[])
         .arg("-e")
-        .arg(&apple_script)
+        .arg(apple_script(shell_cmd, true))
         .output()
         .map_err(|e| CliInstallError::Failed(format!("Failed to run osascript: {}", e)))?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        if stderr.contains("User canceled") || stderr.contains("-128") {
-            return Err(CliInstallError::Cancelled);
-        }
-        return Err(CliInstallError::Failed(stderr.trim().to_string()));
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(classify_failure(&String::from_utf8_lossy(&output.stderr)))
     }
-
-    Ok(())
 }
 
-/// Derive the parent directory from CLI_PATH (single source of truth).
-fn cli_parent_dir() -> &'static str {
-    // CLI_PATH is a compile-time constant; parent is always /usr/local/bin
-    Path::new(CLI_PATH)
-        .parent()
-        .and_then(|p| p.to_str())
-        .unwrap_or("/usr/local/bin")
+/// Turn the stderr of a failed `osascript` run into the error to report: the
+/// user closing the password dialog, one of the install command's own
+/// refusals (by its exit status), or whatever else went wrong, verbatim.
+fn classify_failure(stderr: &str) -> CliInstallError {
+    if stderr.contains("User canceled") || stderr.contains("-128") {
+        return CliInstallError::Cancelled;
+    }
+    match shell_exit_status(stderr) {
+        Some(EXIT_TARGET_EXISTS) => CliInstallError::ForeignFile,
+        Some(EXIT_MISMATCH) => {
+            CliInstallError::Failed(rust_i18n::t!("errors.cli.mismatch").to_string())
+        }
+        _ => CliInstallError::Failed(stderr.trim().to_string()),
+    }
 }
 
 /// Install the `vmark` command using `osascript` for admin privileges.
-///
-/// Writes script to a temp file first, then uses a single privileged shell command
-/// to create the target directory, move the file, and set permissions. This avoids
-/// shell quoting issues entirely — the temp file is written by Rust, not by shell.
 pub fn cli_install() -> Result<CliCommandOutcome, String> {
-    let status = cli_install_status()?;
+    install_at(Path::new(CLI_PATH), &run_admin_shell)
+}
+
+/// [`cli_install`] with the target and the privileged runner injected.
+///
+/// The privileged shell writes the script from a literal inside the command,
+/// refuses a target that already exists, and removes what it wrote if it does
+/// not verify (`script::install_command`). The result is then checked once
+/// more from here, outside that shell.
+fn install_at(
+    target: &Path,
+    run_admin: &dyn Fn(&str) -> Result<(), CliInstallError>,
+) -> Result<CliCommandOutcome, String> {
+    let status = status_at(target);
     if status.foreign {
         return Err(CliInstallError::ForeignFile.into());
     }
     if status.installed {
         return Ok(CliCommandOutcome::AlreadyInstalled);
     }
+    let (Some(parent), Some(path)) = (target.parent().and_then(Path::to_str), target.to_str())
+    else {
+        return Err(format!("{} is not a usable install path", target.display()));
+    };
 
-    // Write script to a temp file (no quoting needed — Rust handles the write)
-    let tmp = std::env::temp_dir().join("vmark-cli-install.tmp");
-    std::fs::write(&tmp, SCRIPT_CONTENT)
-        .map_err(|e| format!("Failed to write temp file: {}", e))?;
+    run_admin(&install_command(SCRIPT_CONTENT, parent, path)).map_err(String::from)?;
+    verify_installed(target, run_admin)
+}
 
-    // POSIX-quote every path interpolated into the privileged shell call.
-    // `parent` and `CLI_PATH` are compile-time constants today (/usr/local/bin
-    // and /usr/local/bin/vmark) and don't contain metacharacters, but quoting
-    // them as well future-proofs the code if either is ever made configurable.
-    let tmp_path_q = shell_single_quote(&tmp.to_string_lossy());
-    let parent_q = shell_single_quote(cli_parent_dir());
-    let cli_path_q = shell_single_quote(CLI_PATH);
-    let shell_cmd = format!(
-        "mkdir -p {} && mv {} {} && chmod 755 {}",
-        parent_q, tmp_path_q, cli_path_q, cli_path_q
-    );
-
-    if let Err(e) = run_admin_shell(&shell_cmd) {
-        // Clean up temp file on failure
-        let _ = std::fs::remove_file(&tmp);
-        return Err(e.into());
-    }
-
-    // Verify: check file exists, is a regular file, and has expected content
-    let path = Path::new(CLI_PATH);
-    if !path.is_file() {
+/// Confirm that `target` is a regular file holding exactly the script. If it
+/// is anything else, it is REMOVED before the failure is reported — an
+/// unverified file must not stay on the user's PATH. Removal is tried
+/// unprivileged first (enough whenever something other than root could have
+/// replaced the file), then through the privileged runner.
+fn verify_installed(
+    target: &Path,
+    run_admin: &dyn Fn(&str) -> Result<(), CliInstallError>,
+) -> Result<CliCommandOutcome, String> {
+    let Ok(metadata) = std::fs::symlink_metadata(target) else {
         return Err(rust_i18n::t!("errors.cli.noFile").to_string());
-    }
-    let actual = std::fs::read_to_string(path).unwrap_or_default();
-    if actual != SCRIPT_CONTENT {
-        return Err(rust_i18n::t!("errors.cli.mismatch").to_string());
+    };
+    let matches = metadata.file_type().is_file()
+        && std::fs::read_to_string(target).is_ok_and(|actual| actual == SCRIPT_CONTENT);
+    if matches {
+        return Ok(CliCommandOutcome::Installed);
     }
 
-    Ok(CliCommandOutcome::Installed)
+    log::error!(
+        "[cli_install] {:?} is not the script that was installed; removing it",
+        target
+    );
+    let removed = std::fs::remove_file(target).is_ok()
+        || target
+            .to_str()
+            .is_some_and(|path| run_admin(&uninstall_command(path)).is_ok());
+    if removed && std::fs::symlink_metadata(target).is_err() {
+        Err(rust_i18n::t!("errors.cli.mismatch").to_string())
+    } else {
+        Err(rust_i18n::t!("errors.cli.mismatchNotRemoved", path = target.display()).to_string())
+    }
 }
 
 /// Uninstall the `vmark` command using `osascript` for admin privileges.
@@ -210,11 +225,14 @@ pub fn cli_uninstall() -> Result<CliCommandOutcome, String> {
         return Ok(CliCommandOutcome::NotInstalled);
     }
 
-    let shell_cmd = format!("rm {}", shell_single_quote(CLI_PATH));
-    run_admin_shell(&shell_cmd).map_err(String::from)?;
+    run_admin_shell(&uninstall_command(CLI_PATH)).map_err(String::from)?;
 
     Ok(CliCommandOutcome::Removed)
 }
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+#[path = "install_flow.test.rs"]
+mod install_flow_tests;

@@ -12,15 +12,17 @@
 use crate::command_error::CommandError;
 use tauri::{AppHandle, Manager};
 
-/// Find a document window at the given screen coordinates.
-/// Returns `None` when no other document window contains the point.
+/// Find a document window, other than the one asking, at the given screen
+/// coordinates. Returns `None` when no other document window contains the
+/// point.
 #[tauri::command]
-pub fn find_drop_target_window(
-    app: AppHandle,
-    source_window_label: String,
+pub fn find_drop_target_window<R: tauri::Runtime>(
+    app: AppHandle<R>,
+    window: tauri::Window<R>,
     screen_x: f64,
     screen_y: f64,
 ) -> Option<String> {
+    let source_window_label = window.label();
     let windows = app.webview_windows();
     let mut focused_match: Option<String> = None;
     let mut fallback_match: Option<String> = None;
@@ -79,7 +81,7 @@ pub fn focus_existing_window(app: AppHandle, window_label: String) -> Result<(),
         .map_err(|e| CommandError::internal(e.to_string()))
 }
 
-/// Pure point-in-rect test for a window's outer bounds (WI-5.4, TQ5).
+/// Pure point-in-rect test for a window's outer bounds.
 ///
 /// A zero-size window is never a drop target. Edges are inclusive — a point
 /// exactly on a border counts as inside (matches the original drop behavior).

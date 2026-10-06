@@ -2,13 +2,17 @@
 
 VMark inclut un ensemble complet de règles de mise en forme pour les textes chinois, japonais et coréen. Ces outils aident à maintenir une typographie cohérente lors du mélange de caractères CJK et latins.
 
+::: info Le coréen est délibérément laissé tel quel
+Le coréen utilise un espacement des mots natif, et les particules s'attachent directement au mot qui les précède — `VMark에는`, jamais `VMark 에는`. Insérer une espace à cet endroit est une faute de grammaire, pas une préférence typographique ; **le hangul est donc exclu de toutes les règles d'espacement** ainsi que de la conversion en ponctuation pleine largeur. Le texte coréen passe sans modification ; seuls les caractères Han qu'il contient sont mis en forme.
+:::
+
 ## Démarrage rapide
 
 Utilisez **Format → CJK → Mettre en forme le fichier entier** ou appuyez sur `Alt + Mod + Shift + F` pour formater l'intégralité du document.
 
 **Format → CJK → Mettre en forme la sélection** (`Mod + Shift + F`) met en forme **les blocs que votre sélection recouvre** — le paragraphe, la liste ou le tableau entier que le curseur ou la sélection touche, et non les caractères exactement sélectionnés. L'espacement CJK est une propriété de la frontière *entre* deux caractères adjacents, et une sélection à mi-mot ne contient aucune frontière de ce type ; la commande désigne donc une région à corriger plutôt qu'un texte à réécrire. Sans sélection, elle met en forme le bloc où se trouve le curseur.
 
-Les deux commandes protègent exactement les mêmes éléments (voir « Contenu protégé »), donc tout sélectionner avant `Mod + Shift + F` est sans risque.
+Les deux commandes protègent exactement les mêmes éléments (voir [Contenu protégé](#contenu-protege)), donc tout sélectionner avant `Mod + Shift + F` est sans risque.
 
 ---
 
@@ -16,13 +20,50 @@ Les deux commandes protègent exactement les mêmes éléments (voir « Contenu 
 
 ### 1. Espacement CJK-Latin
 
-Ajoute automatiquement des espaces entre les caractères CJK et les caractères/chiffres latins.
+Ajoute automatiquement des espaces entre les caractères CJK et les caractères/chiffres latins, y compris
+les nombres signés (négatifs, positifs, plus-ou-moins) et les nombres précédés d'un symbole
+monétaire.
 
 | Avant | Après |
 |-------|-------|
 | 学习Python编程 | 学习 Python 编程 |
 | 共100个 | 共 100 个 |
 | 使用macOS系统 | 使用 macOS 系统 |
+| 我有-1个 | 我有 -1 个 |
+| 我有+1个 | 我有 +1 个 |
+| 误差±5%范围 | 误差 ±5% 范围 |
+| 中文-$100元 | 中文 -$100 元 |
+| 范围-100到-200 | 范围 -100 到 -200 |
+
+Les signes reconnus sont les ASCII `-` `+`, les pleine largeur `－` `＋`, le signe moins
+Unicode `−` et le plus-ou-moins `±`. Un signe n'est rattaché au nombre que s'il est
+suivi d'un chiffre (ou d'un symbole monétaire suivi d'un chiffre) ; ainsi, les identifiants
+CJK-latins à trait d'union (ex. `中文-Web`) et les expressions CJK-CJK à trait d'union
+(ex. `中文-我`) restent intacts, et les plages comme `5-10` sont préservées.
+
+**Ce qui compte comme CJK et ce qui compte comme latin.** Un caractère CJK est un caractère
+Han, hiragana, katakana ou bopomofo selon son écriture Unicode. Cela inclut les blocs Han
+plus rares (Extension A, les extensions des plans supplémentaires et les idéogrammes de
+compatibilité), la marque d'itération `々`, le zéro idéographique `〇`, les katakana
+demi-largeur et la marque d'allongement `ー`. Un caractère latin est toute lettre de
+l'écriture latine, lettres accentuées comprises ; les deux côtés d'un mot sont donc
+espacés :
+
+| Avant | Après |
+|-------|-------|
+| 中文café中文 | 中文 café 中文 |
+| 中文𠀀abc | 中文𠀀 abc |
+| ｶﾀｶﾅabc | ｶﾀｶﾅ abc |
+| 日本・東京 | 日本・東京 |
+
+Les lettres latines pleine largeur (`Ａ`) portent leur propre espacement et ne sont jamais
+espacées. Le point médian katakana `・` est un signe de ponctuation, pas une lettre ; aucune
+espace n'est donc ajoutée à côté.
+
+**Liens.** La parenthèse fermante d'un lien n'est séparée par une espace du texte CJK qui
+la suit que lorsque le texte visible du lien se termine par une lettre latine ou un chiffre —
+c'est l'écart que voit le lecteur. `参见[link](https://x.com)中文` devient
+`参见[link](https://x.com) 中文` ; `参见[中文](https://x.com)中文` reste inchangé.
 
 ### 2. Ponctuation pleine largeur
 
@@ -45,7 +86,7 @@ Convertit les lettres et chiffres pleine largeur en demi-largeur.
 
 ### 4. Conversion des crochets
 
-Convertit les crochets demi-largeur en pleine largeur lorsqu'ils entourent du contenu CJK.
+Convertit les crochets demi-largeur en pleine largeur lorsqu'ils entourent du contenu CJK. Les deux crochets doivent se trouver dans le même paragraphe : séparés par une ligne vide, ils restent tels qu'ils ont été saisis.
 
 | Avant | Après |
 |-------|-------|
@@ -78,6 +119,8 @@ VMark utilise un **algorithme d'appariement de guillemets basé sur une pile** q
 | "don't worry" | “don't worry” |
 | 5'10" tall | 5'10" tall |
 
+Aucune espace n'est insérée entre un caractère CJK et un glyphe de guillemet. `“ ”`, `‘ ’`, `「 」` et `『 』` sont pleine largeur en contexte CJK — GB/T 15834 et JLREQ leur attribuent tous deux leur propre approche latérale — donc `他说“你好”然后走了` reste exactement tel qu'écrit. Le texte latin reçoit toujours une espace : `word“text”` devient `word “text”`.
+
 Avec l'option de crochets d'angle activée :
 
 | Avant | Après |
@@ -87,7 +130,7 @@ Avec l'option de crochets d'angle activée :
 
 ### 7. Normalisation des points de suspension
 
-Standardise la mise en forme des points de suspension.
+Standardise la mise en forme des points de suspension, sous la forme qu'utilise l'écriture environnante. Il n'y a pas de réponse unique : le chinois (GB/T 15834) et le japonais (JIS X 4051) utilisent les points de suspension à six points `……` sans **aucune** espace après, le coréen utilise `…`, et seul le texte latin utilise `...` suivi d'une espace.
 
 | Avant | Après |
 |-------|-------|
@@ -96,6 +139,8 @@ Standardise la mise en forme des points de suspension.
 | そして...続く | そして……続く |
 | 그리고...계속 | 그리고…계속 |
 | wait...ok | wait... ok |
+
+L'écriture est déterminée à partir des caractères immédiatement voisins des points, et non à partir du document ; ainsi, des `...` dans une citation anglaise au sein d'un fichier chinois conservent leur forme latine.
 
 ### 8. Ponctuation répétée
 
@@ -111,7 +156,7 @@ Limite les signes de ponctuation consécutifs (limite configurable).
 - Espaces multiples compressés : `多个   空格` → `多个 空格`
 - Espaces de fin de ligne supprimés
 - Espacement des barres obliques : `A / B` → `A/B`
-- Espacement des devises : `$ 100` → `$100`
+- Liaison des devises et des unités : `$ 100` → `$100`, `100 %` → `100%`. Seuls les espaces et les tabulations sont supprimés : un nombre en fin de ligne ou de paragraphe n'est jamais joint à une unité ou une devise de la ligne suivante, et une espace insécable que vous avez tapée entre un nombre et son unité est conservée
 
 ---
 
@@ -202,7 +247,7 @@ Lorsque les **Crochets d'angle CJK** sont activés, les guillemets courbes autou
 
 ### Saut des sections de références
 
-Le formateur CJK détecte les titres «&nbsp;References&nbsp;» / «&nbsp;参考文献&nbsp;» / «&nbsp;参考资料&nbsp;» / «&nbsp;Bibliography&nbsp;» et saute la reformulation dans ces sections — le texte au format de citation s'appuie souvent sur une ponctuation spécifique que les règles CJK normaliseraient autrement.
+Lorsque **Ignorer les sections de références** est activé dans Paramètres → Langue → Traitement des sections (désactivé par défaut), le formateur CJK détecte les titres «&nbsp;References&nbsp;» / «&nbsp;Further Reading&nbsp;» / «&nbsp;参考文献&nbsp;» / «&nbsp;参考资料&nbsp;» / «&nbsp;Bibliography&nbsp;» et saute la reformulation dans ces sections — le texte au format de citation s'appuie souvent sur une ponctuation spécifique que les règles CJK normaliseraient autrement. Activez-le pour les documents académiques ; laissez-le désactivé pour mettre en forme le fichier entier.
 
 ### Vérification d'intégrité
 
@@ -218,7 +263,7 @@ VMark inclut une fonctionnalité d'espacement des lettres dédiée au texte CJK 
 
 ### Paramètres
 
-Configurez dans **Paramètres → Éditeur → Typographie → Espacement des lettres CJK** :
+Configurez dans **Paramètres → Éditeur → Typographie → Espacement des caractères CJK** :
 
 | Option | Valeur | Description |
 |--------|--------|-------------|
@@ -227,6 +272,8 @@ Configurez dans **Paramètres → Éditeur → Typographie → Espacement des le
 | Léger | 0.03em | Espacement léger |
 | Normal | 0.05em | Recommandé pour la plupart des usages |
 | Large | 0.08em | Espacement plus prononcé |
+| Plus large | 0.10em | Plus large encore, pour les grandes tailles d'affichage |
+| Extra | 0.12em | Le réglage le plus large |
 
 ### Fonctionnement
 
@@ -268,7 +315,7 @@ VMark utilise un algorithme sophistiqué basé sur une pile pour l'appariement d
 3. **Détection des apostrophes** : Reconnaît les contractions (don't, it's) et les préserve
 4. **Détection des primes** : Reconnaît les mesures (5'10") et les préserve
 5. **Détection de contexte CJK** : Vérifie si le contenu entre guillemets contient des caractères CJK
-6. **Nettoyage des orphelins** : Gère gracieusement les guillemets non appariés
+6. **Nettoyage des orphelins** : Gère gracieusement les guillemets non appariés ; un guillemet encore ouvert à la fin d'un paragraphe reste non apparié, si bien que des guillemets ne s'apparient jamais par-dessus une ligne vide
 
 ### Exemples
 
@@ -324,7 +371,8 @@ Lorsque les **Crochets d'angle CJK** sont activés, les guillemets courbes autou
 
 ### Caractères pris en charge
 
-La conversion en crochets d'angle se déclenche lorsque le contenu entre guillemets contient des **caractères chinois** (idéographes unifiés CJK U+4E00–U+9FFF) :
+La conversion en crochets d'angle se déclenche lorsque le contenu entre guillemets — ou le texte
+immédiatement voisin — est en Han, hiragana, katakana ou bopomofo :
 
 | Type de contenu | Exemple | Conversion ? |
 |-----------------|---------|--------------|
@@ -335,7 +383,8 @@ La conversion en crochets d'angle se déclenche lorsque le contenu entre guillem
 | Coréen | `"한글"` | ✗ reste `"한글"` |
 | Anglais | `"hello"` | ✗ reste `"hello"` |
 
-**Conseil :** Pour le texte japonais avec seulement des kana, utilisez manuellement les crochets d'angle `「」` ou incluez au moins un kanji.
+Le coréen est exclu pour la même raison que pour les règles d'espacement : le coréen utilise `“ ”`,
+et non les crochets d'angle.
 
 ---
 
@@ -375,7 +424,7 @@ Après la mise en forme, le texte ressemblera à ceci :
 
 学习过程中遇到的最大挑战是 —— 状态管理。Redux 的概念……说实话有点难理解。后来换成了 Zustand，简单多了！
 
-老师说 "don't give up" 然后继续讲 "写代码要注重可读性"，我觉得很有道理。
+老师说“don't give up”然后继续讲“写代码要注重可读性”，我觉得很有道理。
 
 访问 https://example.com/docs 获取 v2.0.0 版本文档，价格 $99.99，时间 12:30 开始。
 
@@ -390,10 +439,17 @@ Après la mise en forme, le texte ressemblera à ceci :
 ---
 
 **Modifications appliquées :**
+
 - Espacement CJK-Latin ajouté (学习 TypeScript)
 - Ponctuation pleine largeur convertie (，。！)
 - Chiffres pleine largeur normalisés (３→3, １０００→1000, ２００→200)
-- Doubles tirets convertis en tirets cadratin (-- → ——)
-- Points de suspension normalisés (. . . → ...)
-- Guillemets intelligents appliqués, apostrophe préservée (don't)
+- Doubles tirets convertis en tirets cadratin (是--状态 → 是 —— 状态)
+- Points de suspension normalisés sous la forme chinoise, sans espace après (. . . → ……)
+- Guillemets intelligents appliqués sans espace à côté du texte CJK, apostrophe préservée (don't)
 - Constructions techniques protégées (https://example.com/docs, v2.0.0, $99.99, 12:30)
+
+**Et ce qui ne change _pas_ :** le `--` de `**Frontend**--React` reste un double
+trait d'union. La conversion des tirets exige un caractère CJK ou un caractère alphanumérique
+immédiatement à côté des tirets, et `*` n'est ni l'un ni l'autre. Se déclencher sur les marqueurs
+d'emphase convertirait au contraire le `--` de chaque élément de liste purement anglais d'un
+document chinois, ce qui serait pire que de laisser ces trois-là tels quels.

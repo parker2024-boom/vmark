@@ -54,32 +54,8 @@ vi.mock("@/services/ime/imeToast", () => ({
   imeToast: { error: mockToastError, success: vi.fn(), warning: mockToastWarning },
 }));
 
-vi.mock("../themeSnapshot", () => ({
-  captureThemeCSS: () => "",
-  isDarkTheme: () => false,
-}));
-
-vi.mock("../htmlExportStyles", () => ({
-  getEditorContentCSS: () => "",
-}));
-
-vi.mock("../pdfHtmlTemplate", () => ({
-  getKatexCSS: () => "",
-  getForceLightThemeCSS: () => "",
-  getSharedContentCSS: () => "",
-  // The print document forces every <details> open in the MARKUP, because the
-  // shared CSS above styles `details[open]` (see printDocument.test.ts).
-  expandDetails: (html: string) => html,
-}));
-
 vi.mock("@/i18n", () => ({
   default: { t: (key: string) => key },
-}));
-
-// The markdown path renders through the off-screen ExportSurface; only its
-// choice is under test here, so it echoes the markdown it was given.
-vi.mock("../renderMarkdownToHtml", () => ({
-  renderMarkdownToHtml: (markdown: string) => Promise.resolve(`<p>rendered from markdown: ${markdown}</p>`),
 }));
 
 import type { Editor as TiptapEditor } from "@tiptap/core";
@@ -286,7 +262,8 @@ describe("exportToPdf — deferred node-view renders in the live editor", () => 
       katexArrives = resolve;
     }));
 
-    const printing = exportToPdf({ markdown: "$x^2$", sourceFilePath: "/docs/my-notes/note.md" });
+    // The markdown snapshot goes through the real off-screen render.
+    const printing = exportToPdf({ markdown: "# markdown snapshot", sourceFilePath: "/docs/my-notes/note.md" });
     useEditorStore.getState().clearActiveEditors(); // the tab went away
     live.remove();
     katexArrives();
@@ -294,7 +271,8 @@ describe("exportToPdf — deferred node-view renders in the live editor", () => 
 
     const [, payload] = mockInvoke.mock.calls[0];
     const html = (payload as { html: string }).html;
-    expect(html).toContain("rendered from markdown: $x^2$");
+    expect(html).toMatch(/<h1[^>]*>markdown snapshot<\/h1>/);
     expect(html).not.toContain('class="math-inline"');
+    expect(html).not.toContain("x^2");
   });
 });

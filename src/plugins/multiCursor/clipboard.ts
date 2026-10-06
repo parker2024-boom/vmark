@@ -8,16 +8,18 @@
  * Key decisions:
  *   - Copy joins ranges with newlines (each range on its own line)
  *   - Paste splits by newline; if line count matches range count, distributes 1:1
- *   - Cut/delete operations run in reverse doc order to preserve positions
+ *   - Cut and paste edit in reverse doc order to preserve positions
  *
  * @coordinates-with multiCursorPlugin.ts — integrates clipboard handlers into the plugin
- * @coordinates-with rangeUtils.ts — sorting ranges for safe reverse-order editing
+ * @coordinates-with rangeEdits.ts — applies the per-range edits from the end and maps the ranges
+ * @coordinates-with shared/rangeUtils.ts — merges overlapping ranges before editing
  * @module plugins/multiCursor/clipboard
  */
 import { SelectionRange } from "@tiptap/pm/state";
 import type { EditorState, Transaction } from "@tiptap/pm/state";
-import { MultiSelection } from "./MultiSelection";
-import { normalizeRangesWithPrimary, sortRangesDescending } from "./rangeUtils";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
+import { normalizeRangesWithPrimary } from "@/plugins/shared/rangeUtils";
+import { editRangesFromEnd } from "./rangeEdits";
 
 /**
  * Serialize multi-selection content for clipboard.
@@ -52,20 +54,14 @@ export function handleMultiCursorCut(
   const preMerged = normalizeRangesWithPrimary(
     selection.ranges, state.doc, selection.primaryIndex, true
   );
-  const sortedRanges = sortRangesDescending(preMerged.ranges);
-  let tr = state.tr;
-
-  for (const range of sortedRanges) {
-    const from = range.$from.pos;
-    const to = range.$to.pos;
-    if (from !== to) {
-      tr = tr.delete(from, to);
-    }
-  }
+  const edits = editRangesFromEnd(state, preMerged.ranges, (tr, range) =>
+    range.$from.pos !== range.$to.pos ? tr.delete(range.$from.pos, range.$to.pos) : tr
+  );
+  let { tr } = edits;
 
   // Remap all cursors to collapsed positions
-  const newRanges: SelectionRange[] = preMerged.ranges.map((range) => {
-    const newPos = tr.mapping.map(range.$from.pos);
+  const newRanges: SelectionRange[] = preMerged.ranges.map((range, index) => {
+    const newPos = edits.map(index, range.$from.pos);
     const $pos = tr.doc.resolve(newPos);
     return new SelectionRange($pos, $pos);
   });
@@ -110,19 +106,14 @@ export function handleMultiCursorPaste(
   const textsToInsert =
     lines.length === ranges.length ? lines : ranges.map(() => text);
 
-  const sorted = ranges
-    .map((range, index) => ({ range, text: textsToInsert[index] }))
-    .sort((a, b) => b.range.$from.pos - a.range.$from.pos);
+  const edits = editRangesFromEnd(state, ranges, (tr, range, index) =>
+    tr.insertText(textsToInsert[index], range.$from.pos, range.$to.pos)
+  );
+  let { tr } = edits;
 
-  let tr = state.tr;
-
-  for (const entry of sorted) {
-    tr = tr.insertText(entry.text, entry.range.$from.pos, entry.range.$to.pos);
-  }
-
-  const newRanges: SelectionRange[] = ranges.map((range) => {
-    const newFrom = tr.mapping.map(range.$from.pos);
-    const newTo = tr.mapping.map(range.$to.pos);
+  const newRanges: SelectionRange[] = ranges.map((range, index) => {
+    const newFrom = edits.map(index, range.$from.pos);
+    const newTo = edits.map(index, range.$to.pos);
     const newPos = Math.max(newFrom, newTo);
     const $pos = tr.doc.resolve(newPos);
     return new SelectionRange($pos, $pos);

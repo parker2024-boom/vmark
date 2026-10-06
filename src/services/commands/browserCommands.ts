@@ -1,5 +1,5 @@
 /**
- * Browser commands — the user-facing entry point to the embedded browser (WI-1.10).
+ * Browser commands — the user-facing entry point to the embedded browser.
  *
  * A single "New Browser Tab" command, gated by the `browser.enabled` setting AND
  * the platform via the CommandBus `when` predicate, so the palette/menu simply

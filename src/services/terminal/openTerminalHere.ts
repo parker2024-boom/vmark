@@ -1,7 +1,7 @@
 /**
  * openTerminalHere
  *
- * Purpose: "Open Terminal Here" (F2/WI-4.2) — create a terminal session
+ * Purpose: "Open Terminal Here" (F2) — create a terminal session
  * anchored to a specific directory and reveal the panel. Lives in `services/`
  * rather than in the file-explorer component because both the explorer context
  * menu and (later) any other surface should be able to call it without a
@@ -21,7 +21,7 @@
  *
  * @coordinates-with components/Sidebar/FileExplorer/FileExplorer.tsx — context-menu action
  * @coordinates-with components/Terminal/useTerminalShellLifecycle.ts — consumes requestedCwd
- * @coordinates-with stores/uiStore/terminalSlice.ts — terminalCreateSession({ requestedCwd })
+ * @coordinates-with stores/terminalStore/sessionActions.ts — terminalCreateSession({ requestedCwd })
  * @coordinates-with services/terminal/revealTerminalSession.ts — shared create + reveal
  * @module services/terminal/openTerminalHere
  */
@@ -40,7 +40,7 @@ export type OpenTerminalHereResult =
 
 /** True when another terminal session can still be created — the
  *  AUTHORITATIVE creation predicate (audit 20260831 #20): the same
- *  owner-aware union the slice's cap gate applies, never a bare count. */
+ *  owner-aware union the store's cap gate applies, never a bare count. */
 export function canOpenTerminalHere(): boolean {
   return canCreateTerminalSessionHere(getCurrentWindowLabel());
 }

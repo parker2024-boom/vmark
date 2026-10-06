@@ -20,7 +20,7 @@ import type { PhrasingContent, Text } from "mdast";
  * left-flanking): `~~word ~~` is not strikethrough, so serializing a
  * space-edged strike mark verbatim emits LITERAL tildes that survive into
  * the author's text on the next parse — corruption, found by the editing
- * fuzz (WI-4.1, seed 42). remark-stringify handles this for strong/em; the
+ * fuzz (seed 42). remark-stringify handles this for strong/em; the
  * gfm and dialect delimiters get it here.
  */
 function expelEdgeWhitespace(content: PhrasingContent[]): {

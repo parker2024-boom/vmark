@@ -6,12 +6,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fileBytes } from "@/test/fileBytes";
 
 // --- Mocks ---
 
 const mockReadTextFile = vi.fn();
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: (...args: unknown[]) => mockReadTextFile(...args),
+  readFile: (...args: unknown[]) => fileBytes(mockReadTextFile(...args)),
 }));
 
 const mockOpen = vi.fn();
@@ -62,11 +63,6 @@ vi.mock("@/services/tabs/replaceableTab", () => ({
   getReplaceableTab: (...args: unknown[]) => mockGetReplaceableTab(...args),
   findExistingTabForPath: (...args: unknown[]) => mockFindExistingTabForPath(...args),
   isWindowEmpty: (windowLabel: string) => mockIsWindowEmpty(windowLabel),
-}));
-
-const mockCreateUntitledTab = vi.fn();
-vi.mock("@/services/navigation/newFile", () => ({
-  createUntitledTab: (...args: unknown[]) => mockCreateUntitledTab(...args),
 }));
 
 import {
@@ -346,18 +342,24 @@ describe("handleOpenFile", () => {
 
 describe("handleNew", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    useTabStore.getState().removeWindow(WINDOW);
+    useDocumentStore.setState({ documents: {} });
   });
 
   it("creates an untitled tab", () => {
     handleNew(WINDOW);
-    expect(mockCreateUntitledTab).toHaveBeenCalledWith(WINDOW);
+    const tabs = useTabStore.getState().getTabsByWindow(WINDOW);
+    expect(tabs).toEqual([expect.objectContaining({ kind: "document", filePath: null })]);
+    const doc = useDocumentStore.getState().getDocument(tabs[0].id);
+    expect(doc).toMatchObject({ content: "", filePath: null, isDirty: false });
   });
 
   it("can be called multiple times for multiple new tabs", () => {
     handleNew(WINDOW);
     handleNew(WINDOW);
-    expect(mockCreateUntitledTab).toHaveBeenCalledTimes(2);
+    const ids = useTabStore.getState().getTabsByWindow(WINDOW).map((t) => t.id);
+    expect(new Set(ids).size).toBe(2);
+    ids.forEach((id) => expect(useDocumentStore.getState().getDocument(id)?.content).toBe(""));
   });
 });
 

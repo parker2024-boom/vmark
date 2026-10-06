@@ -3,7 +3,7 @@
 //! Purpose: `print_document` used to resolve `Ok(())` whatever the user did
 //! with the dialog, so the frontend could not tell a cancelled print from a
 //! finished one (`print-document`, F5). This is the one type both sides read,
-//! and each platform's mapping from its native signal onto it (WI-FL6.3).
+//! and each platform's mapping from its native signal onto it.
 //!
 //! What each platform exposes, verified against the vendored bindings:
 //!   - **macOS** — `NSPrintOperation runOperationModalForWindow:delegate:
@@ -23,7 +23,7 @@
 //! shown and the user is doing something with it, and nothing the app can
 //! observe says what.
 //!
-//! macOS's one flag is ambiguous, and the wire says so (#215, #228): a
+//! macOS's one flag is ambiguous, and the wire says so: a
 //! `cancelled` from the sheet carries `mayHaveFailed: true`, because
 //! `success == NO` is what AppKit sends for a dismissed panel AND for a job
 //! that failed after the user pressed Print — `NSPrintOperation` exposes no
@@ -49,7 +49,7 @@ pub enum PrintStatus {
     /// The dialog ended without a print. On Linux that is the user's Cancel,
     /// and certain. On macOS `printOperationDidRun:success:` reports NO for
     /// a dismissed panel AND for a job that failed, and exposes nothing that
-    /// separates them (#215, #228); that outcome carries
+    /// separates them; that outcome carries
     /// [`PrintOutcome::may_have_failed`] so the ambiguity is on the wire
     /// rather than hidden behind a word that promises user dismissal.
     Cancelled,
@@ -66,7 +66,7 @@ pub enum PrintStatus {
 pub struct PrintOutcome {
     pub status: PrintStatus,
     /// `status` is `Cancelled` and the platform's signal ALSO covers a job
-    /// that failed after confirmation — macOS's `success == NO` (#215, #228).
+    /// that failed after confirmation — macOS's `success == NO`.
     /// Absent on the wire wherever the platform can tell the two apart.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub may_have_failed: bool,

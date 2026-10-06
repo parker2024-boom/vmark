@@ -22,6 +22,8 @@ vi.mock("@/services/editor/runEditorAction", async (importOriginal) => {
 });
 
 import { buildEditorKeymapBindings, editorKeymapExtension } from "./editorPlugins.tiptap";
+import { Schema } from "@tiptap/pm/model";
+import { EditorState, TextSelection } from "@tiptap/pm/state";
 
 function resetShortcuts() {
   useShortcutsStore.setState({ customBindings: {} });
@@ -35,10 +37,6 @@ describe("buildEditorKeymapBindings — inner callback coverage", () => {
   // to exercise the inner `if (!view) return false` bodies.
 
   function makeMockView() {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Schema } = require("@tiptap/pm/model");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { EditorState } = require("@tiptap/pm/state");
     const schema = new Schema({
       nodes: {
         doc: { content: "paragraph+" },
@@ -96,11 +94,6 @@ describe("buildEditorKeymapBindings — inner callback coverage", () => {
     const { useSourcePeekStore } = await import("@/stores/sourcePeekStore");
     useSourcePeekStore.setState({ isOpen: false });
     useUIStore.getState().setUniversalToolbarVisible(false);
-
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Schema } = require("@tiptap/pm/model");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { EditorState, TextSelection } = require("@tiptap/pm/state");
 
     const schema = new Schema({
       nodes: {
@@ -337,10 +330,6 @@ describe("buildEditorKeymapBindings — inner callback coverage", () => {
     const shortcuts = useShortcutsStore.getState();
     const key = shortcuts.getShortcut("blockquote");
     if (key && bindings[key]) {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { Schema } = require("@tiptap/pm/model");
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { EditorState } = require("@tiptap/pm/state");
       const testSchema = new Schema({
         nodes: {
           doc: { content: "block+" },
@@ -500,10 +489,6 @@ describe("buildEditorKeymapBindings — isMacPlatform branch", () => {
 describe("buildEditorKeymapBindings — transformToggleCase with custom key", () => {
 
   function makeMockViewForToggle() {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Schema } = require("@tiptap/pm/model");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { EditorState } = require("@tiptap/pm/state");
     const schema = new Schema({
       nodes: {
         doc: { content: "paragraph+" },
@@ -562,10 +547,6 @@ describe("buildEditorKeymapBindings — direct inner body coverage", () => {
     const handler = bindings[key];
     if (!handler) return;
 
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Schema } = require("@tiptap/pm/model");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { EditorState } = require("@tiptap/pm/state");
     const schema = new Schema({
       nodes: {
         doc: { content: "paragraph+" },

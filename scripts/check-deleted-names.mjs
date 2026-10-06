@@ -4,7 +4,7 @@
  *
  * ADR-009 deleted `src/stores/editorStore.ts`; a later refactor re-created that
  * filename for a different concept and nothing caught it, so an "Accepted" ADR's
- * central decision was silently reversed (`dev-docs/audit/20260722-adr-reality-audit.md`).
+ * central decision was silently reversed.
  *
  * This gate gives that lesson teeth going forward: when an ADR/plan declares a
  * file or exported symbol deleted, a later change that re-introduces it fails
@@ -16,25 +16,11 @@
  * append to REGISTRY in `scripts/lib/deletedNamesRegistry.mjs` with the
  * deleting decision and the reason.
  *
- * SYMBOL DETECTION covers the export forms the codebase actually uses (see
- * `symbolPatterns`): plain and `async` functions, generators, `const`/`let`/
- * `var`, classes (incl. `abstract`), `type`/`interface`/`enum`, `declare`
- * variants, `export default`, `export { X as Name }` re-exports and
- * `export * as Name from …`. The first version matched only
- * `export (function|const|class|type|interface) Name`, so a deleted symbol
- * could come back as `export async function`, or be re-exported from a new
- * file under its old name, without the gate noticing.
- *
- * RUST ITEMS are covered too (WI-FL3.2): `[pub[(crate|super|self|in path)]]
- * [const] [async] [unsafe] [extern ["ABI"]] (fn|struct|enum|type|const|static|
- * mod|trait|union) [r#]Name`, with any whitespace the grammar allows inside
- * `pub ( crate )` / `pub(in  path )` and a raw identifier (`fn r#name`) treated
- * as the name it spells. Before that, a Rust name registered here was a
- * tombstone nothing could trip over — the grammar knew only `export`, so the
- * entry was green with no coverage at all. A CALL or a `use` of the name is
- * not a definition and does not fire. This is the SUPPORTED grammar, fixture-
- * tested form by form — not a Rust parser: an item produced by a macro, or
- * one whose keyword and name sit on different lines, is outside it.
+ * SYMBOL DETECTION, RUST ITEMS and the WRAPPED export clause are described
+ * where their grammar lives, `scripts/lib/deletedNamePatterns.mjs`. The
+ * wrapped form needs a second stage here: `git grep` finds files with a
+ * lone-identifier line, then each candidate is READ and confirmed with a
+ * multiline `export { … }` match, so an import clause does not fire.
  *
  * FAILS CLOSED, in both ways a tripwire can be quietly disarmed: a `git grep`
  * that could not LOOK (not a repository, an invalid pattern, git missing —
@@ -42,22 +28,12 @@
  * understand (an unknown `kind`, a missing field) both exit 2 with a message,
  * never "nothing reappeared".
  *
- * A WRAPPED export clause (`export {\n  useX,\n} from "./x"`) is the one form a
- * line-based scan structurally cannot see, and prettier produces it for any
- * clause past the print width — so it is the ordinary shape of a barrel file.
- * It is covered by a two-stage check (`wrappedExportClausePattern`): git grep
- * finds files with a lone-identifier line, then each candidate is READ and
- * confirmed with a multiline `export { … }` match, so an import clause does
- * not fire. The header used to record this as a limitation left open on the
- * grounds that the registry was "eight entries long"; it is now a dozen symbol
- * tombstones and the premise expired (audit R2 #30).
- *
  * It searches the WORKING TREE, not just the index: `git grep --untracked`
  * covers a new-but-not-ignored file, so a re-created symbol fires on the run
- * that reintroduced it rather than on a later one (audit R2 #34) — the same
+ * that reintroduced it rather than on a later one — the same
  * reasoning `check-no-nul-bytes.mjs` records. And a tombstoned PATH is probed
  * with `lstat`, so a broken symlink standing where the deleted file was counts
- * as the path being back (audit R2 #36); `existsSync` follows the link and
+ * as the path being back; `existsSync` follows the link and
  * reported it gone.
  *
  * KNOWN LIMITATION — this is still git grep, so two things remain unseen:
@@ -73,6 +49,9 @@
  * Exit 0 held, 1 a deleted name reappeared, 2 the gate could not run (a
  * registry it cannot read or check), 64 bad arguments — the usage code every
  * sibling gate uses, so a caller can tell misuse from a real finding.
+ *
+ * @coordinates-with scripts/lib/deletedNamePatterns.mjs — what counts as a definition of a name
+ * @coordinates-with scripts/lib/deletedNamesRegistry.mjs — the tombstones evaluated here
  */
 import { lstatSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -83,109 +62,16 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 import { REGISTRY } from "./lib/deletedNamesRegistry.mjs";
 import { isMainModule } from "./lib/isMainModule.mjs";
+import {
+  clauseRe,
+  rustSymbolPatterns,
+  symbolPatterns,
+  wrappedExportClausePattern,
+} from "./lib/deletedNamePatterns.mjs";
 
-
-/** POSIX ERE word boundary — `git grep -E` has no portable `\b`. */
-const EDGE = "[^A-Za-z0-9_$]";
-const SP = "[[:space:]]";
-
-/**
- * `name` as a LITERAL inside a POSIX ERE. `$` is legal in a TypeScript
- * identifier (`use$Store`); interpolated raw it reads as end-of-line, so the
- * pattern could never match and the tombstone was silently dead — a tripwire
- * failing open. Only ERE's own specials are escaped: `}` and `]` are ordinary
- * outside their constructs, and escaping them is undefined in POSIX.
- */
-function ereEscape(name) {
-  return name.replace(/[.*+?^$(){|[\\]/g, "\\$&");
-}
-
-/** Every export form that would re-introduce `name`, as `git grep -E` patterns. */
-export function symbolPatterns(name) {
-  const declarators = "function|const|let|var|class|type|interface|enum|namespace|module";
-  const id = ereEscape(name);
-  // Qualifiers that may sit between `export` and the declarator, in any order
-  // the language allows: `export const enum X`, `export declare abstract class
-  // X`, `export async function* x`. Written as a repeated alternation rather
-  // than a fixed chain — the chain missed `const enum` outright (audit R2 #32).
-  const quals = `((default|declare|async|abstract|const)${SP}+)*`;
-  // `export type { X }` / `export type * as X from …` are the type-only
-  // spellings, and the brace pattern anchored on `export` + `{` did not reach
-  // past the `type` keyword — the commonest re-export form in this codebase.
-  const clause = `(type${SP}+)?`;
-  return [
-    // export [default] [declare] [async] [abstract] [const] <declarator>[*] Name
-    `export${SP}+${quals}(${declarators})[[:space:]*]+${id}(${EDGE}|$)`,
-    // export default Name        — re-export of an existing binding
-    `export${SP}+default${SP}+${id}(${EDGE}|$)`,
-    // export import Name = require(…) / = A.B  (TypeScript import alias)
-    `export${SP}+import${SP}+${id}${SP}*=`,
-    // export [type] { Name }, export { X as Name }, export { a, Name } [from "…"]
-    `export${SP}*${clause}\\{${SP}*${id}(${EDGE}|$)`,
-    `export${SP}*${clause}\\{[^}]*${EDGE}${id}(${EDGE}|$)`,
-    // export [type] * as Name from "…"
-    `export${SP}*${clause}[*]${SP}+as${SP}+${id}(${EDGE}|$)`,
-  ];
-}
-
-/**
- * A WRAPPED export clause names `name` — the one form `git grep` structurally
- * cannot see, because the clause spans lines:
- *
- *     export {
- *       useX,
- *     } from "./x";
- *
- * Prettier wraps any clause past the print width, so this is the ordinary
- * shape of a barrel file, not an exotic one. Two stages, so no file is read
- * that does not have to be: `git grep` finds files carrying a line that is
- * just the identifier (with an optional trailing comma or `as` alias), then
- * each candidate is READ and confirmed with a multiline match, so an import
- * clause or an array element does not fire.
- *
- * The header used to record this as a limitation deliberately left open "for a
- * coarse tripwire whose registry is eight entries long". The registry now
- * carries a dozen symbol tombstones, so the premise expired (audit R2 #30).
- */
-export function wrappedExportClausePattern(name) {
-  const id = ereEscape(name);
-  // Either side of an alias: the wrapped line may be `usePopupStore,` or
-  // `theStore as usePopupStore,` — the single-line patterns fire on both, so
-  // the wrapped probe must too.
-  const ident = "[A-Za-z0-9_$]+";
-  return `^${SP}*(${ident}${SP}+as${SP}+)?${id}(${SP}+as${SP}+${ident})?${SP}*,?${SP}*$`;
-}
-
-/** `name` as a literal inside a JS RegExp (distinct from `ereEscape`'s POSIX set). */
-const jsEscape = (name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-/** A real `export [type] { … <name> … }` clause, however many lines it spans. */
-const clauseRe = (name) =>
-  new RegExp(
-    String.raw`export\s+(?:type\s+)?\{[^}]*(?:^|[^A-Za-z0-9_$])` +
-      jsEscape(name) +
-      String.raw`(?![A-Za-z0-9_$])[^}]*\}`,
-    "m",
-  );
-
-/**
- * Every Rust item form that would re-introduce `name`. Scanned over `.rs`
- * files ONLY: `const name = 1;` is a private local in TypeScript, and the
- * TypeScript grammar above deliberately does not fire on those.
- */
-export function rustSymbolPatterns(name) {
-  const items = "fn|struct|enum|type|const|static|mod|trait|union";
-  // Visibility: `pub`, `pub(crate|super|self)`, `pub(in some::path)` — with
-  // whitespace allowed wherever the grammar allows it (`pub ( crate )`).
-  const vis = `(pub(${SP}*\\(${SP}*(crate|super|self|in${SP}+[^)]+)${SP}*\\))?${SP}+)?`;
-  // Function qualifiers, any combination and order the grammar allows:
-  // `const`, `async`, `unsafe`, `extern` with or without an ABI string.
-  // `const` doubles as an item keyword (`pub const NAME: u8`); the alternation
-  // backtracks, so both readings are tried.
-  const quals = `((const|async|unsafe|extern(${SP}+"[^"]*")?)${SP}+)*`;
-  // A raw identifier names the same item: `fn r#name` IS `name` coming back.
-  return [`^${SP}*${vis}${quals}(${items})${SP}+(r#)?${ereEscape(name)}(${EDGE}|$)`];
-}
+// The grammar lives in its own module; re-exported so the gate stays the one
+// entry point its callers and self-test import from.
+export { rustSymbolPatterns, symbolPatterns, wrappedExportClausePattern } from "./lib/deletedNamePatterns.mjs";
 
 /** Files matched by `pathspec` containing any of `patterns`. Empty when git
  *  grep matches nothing — its exit 1, and ONLY that; any other failure throws.
@@ -193,8 +79,8 @@ export function rustSymbolPatterns(name) {
  *  `--untracked` searches the WORKING TREE's new-but-not-ignored files as well
  *  as the tracked ones. Without it a locally re-created symbol was invisible
  *  until it was staged, so the tripwire fired on the commit AFTER the one that
- *  reintroduced the name — or never, if the author never re-ran the gate
- *  (audit R2 #34). It honours `.gitignore`, so `node_modules/`, `dev-docs/`
+ *  reintroduced the name — or never, if the author never re-ran the gate.
+ *  It honours `.gitignore`, so `node_modules/`, `dev-docs/`
  *  and build output stay out. */
 function gitGrepFiles(patterns, pathspec, cwd) {
   const args = ["grep", "-lE", "--untracked"];
@@ -259,7 +145,7 @@ export function evaluateRegistry(registry, cwd) {
     if (entry.kind === "path") {
       // `lstat`, not `existsSync`: the latter FOLLOWS a symlink, so a broken
       // one at the tombstoned path reported "gone" while git — and every
-      // reader of the tree — sees the path back (audit R2 #36). Any entry at
+      // reader of the tree — sees the path back. Any entry at
       // the path is the path existing again, whatever it points at.
       if (pathEntryExists(join(cwd, entry.path))) {
         failures.push(

@@ -41,6 +41,30 @@ followed by a digit (or a currency symbol followed by a digit), so CJK-Latin
 hyphenated identifiers (e.g. `中文-Web`) and CJK-CJK hyphenated phrases
 (e.g. `中文-我`) stay intact, and ranges like `5-10` are preserved.
 
+**What counts as CJK and what counts as Latin.** A CJK character is a Han,
+Hiragana, Katakana or Bopomofo character by Unicode script. That includes the
+rarer Han blocks (Extension A, the supplementary-plane extensions and the
+compatibility ideographs), the iteration mark `々`, the ideographic zero `〇`,
+halfwidth katakana and the prolonged sound mark `ー`. A Latin character is any
+Latin-script letter, accented letters included, so both sides of a word are
+spaced:
+
+| Before | After |
+|--------|-------|
+| 中文café中文 | 中文 café 中文 |
+| 中文𠀀abc | 中文𠀀 abc |
+| ｶﾀｶﾅabc | ｶﾀｶﾅ abc |
+| 日本・東京 | 日本・東京 |
+
+Fullwidth Latin letters (`Ａ`) carry their own spacing and are never spaced. The
+katakana middle dot `・` is punctuation, not a letter, so no space is added
+beside it.
+
+**Links.** The closing parenthesis of a link is spaced from CJK text that
+follows it only when the link's visible text ends in a Latin letter or digit —
+that is the gap a reader sees. `参见[link](https://x.com)中文` becomes
+`参见[link](https://x.com) 中文`; `参见[中文](https://x.com)中文` is unchanged.
+
 ### 2. Fullwidth Punctuation
 
 Converts halfwidth punctuation to fullwidth in CJK context.
@@ -62,7 +86,7 @@ Converts fullwidth letters and numbers to halfwidth.
 
 ### 4. Bracket Conversion
 
-Converts halfwidth brackets to fullwidth when surrounding CJK content.
+Converts halfwidth brackets to fullwidth when surrounding CJK content. Both brackets must be in the same paragraph: across a blank line they stay as typed.
 
 | Before | After |
 |--------|-------|
@@ -132,7 +156,7 @@ Limits consecutive punctuation marks (configurable limit).
 - Multiple spaces compressed: `多个   空格` → `多个 空格`
 - Trailing whitespace removed
 - Slash spacing: `A / B` → `A/B`
-- Currency spacing: `$ 100` → `$100`
+- Currency and unit binding: `$ 100` → `$100`, `100 %` → `100%`. Only spaces and tabs are removed: a number at the end of one line or paragraph is never joined to a unit or currency on the next, and a no-break space you typed between a number and its unit is kept
 
 ---
 
@@ -291,7 +315,7 @@ VMark uses a sophisticated stack-based algorithm for quote pairing:
 3. **Apostrophe Detection**: Recognizes contractions (don't, it's) and preserves them
 4. **Prime Detection**: Recognizes measurements (5'10") and preserves them
 5. **CJK Context Detection**: Checks if quoted content involves CJK characters
-6. **Orphan Cleanup**: Handles unmatched quotes gracefully
+6. **Orphan Cleanup**: Handles unmatched quotes gracefully; a quote still open at the end of a paragraph stays unpaired, so quotes never pair across a blank line
 
 ### Examples
 

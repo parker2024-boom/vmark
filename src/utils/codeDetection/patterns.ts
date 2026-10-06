@@ -2,6 +2,8 @@
  * Language Detection Patterns
  *
  * Regex patterns for identifying programming languages in text.
+ *
+ * @module utils/codeDetection/patterns
  */
 
 /**

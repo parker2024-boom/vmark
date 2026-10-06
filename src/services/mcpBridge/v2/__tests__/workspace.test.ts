@@ -1,8 +1,10 @@
-// WI-1.4 — vmark.workspace lifecycle (new, save, save_as, close,
-// switch_tab). open/focus_window are integration paths covered by
-// the Tauri MCP smoke in WI-1.8.
+// WI-1.4 — vmark.workspace lifecycle (new, close, switch_tab).
+// open/focus_window are integration paths covered by the Tauri MCP smoke in
+// WI-1.8. save and save_as are covered against a stateful disk in
+// mcpSavePipeline.test.ts and workspaceSaveAs.test.ts.
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { fileBytes } from "@/test/fileBytes";
 import { useTabStore } from "@/stores/tabStore";
 import { useDocumentStore, useRevisionStore } from "@/stores/documentStore";
 
@@ -23,26 +25,9 @@ vi.mock("@/services/persistence/workspaceStorage", () => ({
   getCurrentWindowLabel: () => "main",
 }));
 
-const writeMock = vi.fn<(path: string, content: string) => Promise<void>>(
-  async () => undefined,
-);
 const readMock = vi.fn<(path: string) => Promise<string>>(async () => "");
-// WI-5: save_as consults `exists` before overwriting. These suites cover the
-// save-to-a-new-location paths, so the target is absent by default.
-const existsMock = vi.fn<(path: string) => Promise<boolean>>(async () => false);
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: (path: string) => readMock(path),
-  writeTextFile: (path: string, content: string) => writeMock(path, content),
-  exists: (path: string) => existsMock(path),
-}));
-
-const registerPendingSaveMock = vi.fn(() => 1);
-const clearPendingSaveMock = vi.fn();
-vi.mock("@/utils/pendingSaves", () => ({
-  registerPendingSave: (path: string, content: string) =>
-    registerPendingSaveMock(path, content),
-  clearPendingSave: (path: string, token?: number) =>
-    clearPendingSaveMock(path, token),
+  readFile: (path: string) => fileBytes(readMock(path)),
 }));
 
 // The path guard itself is unit-tested in
@@ -67,27 +52,14 @@ vi.mock("@/services/ime/imeToast", () => ({
 }));
 
 import { respond } from "@/services/mcpBridge/utils";
-import { useSettingsStore } from "@/stores/settingsStore";
 import {
   handleWorkspaceNew,
   handleWorkspaceOpen,
   handleWorkspaceClose,
   handleWorkspaceSwitchTab,
-  handleWorkspaceSave,
-  handleWorkspaceSaveAs,
   handleWorkspaceFocusWindow,
 } from "@/services/mcpBridge/v2/workspace";
 
-/** Set the MCP auto-approve-edits toggle for the current test. */
-function setAutoApproveEdits(value: boolean) {
-  const s = useSettingsStore.getState();
-  useSettingsStore.setState({
-    advanced: {
-      ...s.advanced,
-      mcpServer: { ...s.advanced.mcpServer, autoApproveEdits: value },
-    },
-  });
-}
 function resetStores() {
   useTabStore.setState({
     tabs: {},
@@ -97,7 +69,6 @@ function resetStores() {
   });
   useDocumentStore.setState({ documents: {} });
   useRevisionStore.setState({ revisions: {} });
-  existsMock.mockResolvedValue(false);
 }
 
 function lastRespond() {
@@ -384,196 +355,6 @@ describe("vmark.workspace.switch_tab", () => {
   });
 });
 
-describe("vmark.workspace.save / save_as", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    resetStores();
-    writeMock.mockReset().mockResolvedValue(undefined);
-    registerPendingSaveMock.mockReset().mockReturnValue(1);
-    clearPendingSaveMock.mockReset();
-    // These tests assert write mechanics on (often new) paths; treat the user
-    // as having granted approval. The auto-approve gate itself is covered in
-    // its own describe block below.
-    setAutoApproveEdits(true);
-  });
-
-  it("save writes the doc content to its existing filePath", async () => {
-    useTabStore.setState({
-      tabs: {
-        main: [
-          {
-            id: "t-s",
-            filePath: "/tmp/notes.md",
-            title: "notes",
-            isPinned: false,
-          },
-        ],
-      },
-      activeTabId: { main: "t-s" },
-      untitledCounter: 0,
-      closedTabs: {},
-    });
-    useDocumentStore.getState().initDocument("t-s", "hi", "/tmp/notes.md");
-    useDocumentStore.getState().setEditorContent("t-s", "updated");
-
-    await handleWorkspaceSave("req-s", {});
-    const r = lastRespond();
-    expect(r.success).toBe(true);
-    expect(writeMock).toHaveBeenCalledWith("/tmp/notes.md", "updated");
-    expect(useDocumentStore.getState().documents["t-s"].isDirty).toBe(false);
-  });
-
-  it("save returns INVALID_PATH on an untitled tab", async () => {
-    useTabStore.setState({
-      tabs: {
-        main: [{ id: "t-u", filePath: null, title: "u", isPinned: false }],
-      },
-      activeTabId: { main: "t-u" },
-      untitledCounter: 0,
-      closedTabs: {},
-    });
-    useDocumentStore.getState().initDocument("t-u", "x", null);
-    await handleWorkspaceSave("req-bad", {});
-    const r = lastRespond();
-    expect(r.success).toBe(false);
-    expect(parseStructuredError(r.error)).toMatchObject({
-      error: "INVALID_PATH",
-    });
-  });
-
-  it("save_as writes to the new path and updates filePath", async () => {
-    useTabStore.setState({
-      tabs: {
-        main: [{ id: "t-a", filePath: null, title: "u", isPinned: false }],
-      },
-      activeTabId: { main: "t-a" },
-      untitledCounter: 0,
-      closedTabs: {},
-    });
-    useDocumentStore.getState().initDocument("t-a", "hello", null);
-
-    await handleWorkspaceSaveAs("req-a", {
-      tabId: "t-a",
-      filePath: "/tmp/new.md",
-    });
-    const r = lastRespond();
-    expect(r.success).toBe(true);
-    expect(writeMock).toHaveBeenCalledWith("/tmp/new.md", "hello");
-    expect(
-      useDocumentStore.getState().documents["t-a"].filePath,
-    ).toBe("/tmp/new.md");
-  });
-
-  it("save registers and clears pending save around writeTextFile to suppress the external-change dialog", async () => {
-    vi.useFakeTimers();
-    useTabStore.setState({
-      tabs: {
-        main: [
-          {
-            id: "t-ps",
-            filePath: "/tmp/notes.md",
-            title: "notes",
-            isPinned: false,
-          },
-        ],
-      },
-      activeTabId: { main: "t-ps" },
-      untitledCounter: 0,
-      closedTabs: {},
-    });
-    useDocumentStore.getState().initDocument("t-ps", "hi", "/tmp/notes.md");
-    useDocumentStore.getState().setEditorContent("t-ps", "updated");
-
-    await handleWorkspaceSave("req-ps", {});
-
-    expect(registerPendingSaveMock).toHaveBeenCalledWith("/tmp/notes.md", "updated");
-    // Audit T9: delayed clear — the same 1000ms window as saveToPath.
-    expect(clearPendingSaveMock).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1100);
-    vi.useRealTimers();
-    expect(clearPendingSaveMock).toHaveBeenCalledWith("/tmp/notes.md", 1);
-    const registerOrder = registerPendingSaveMock.mock.invocationCallOrder[0];
-    const writeOrder = writeMock.mock.invocationCallOrder[0];
-    expect(registerOrder).toBeLessThan(writeOrder);
-  });
-
-  it("save clears pending save even when writeTextFile rejects", async () => {
-    vi.useFakeTimers();
-    useTabStore.setState({
-      tabs: {
-        main: [
-          {
-            id: "t-ps-fail",
-            filePath: "/readonly/notes.md",
-            title: "notes",
-            isPinned: false,
-          },
-        ],
-      },
-      activeTabId: { main: "t-ps-fail" },
-      untitledCounter: 0,
-      closedTabs: {},
-    });
-    useDocumentStore.getState().initDocument("t-ps-fail", "x", "/readonly/notes.md");
-    writeMock.mockRejectedValueOnce(new Error("EACCES"));
-
-    await handleWorkspaceSave("req-ps-fail", {});
-
-    expect(registerPendingSaveMock).toHaveBeenCalledWith("/readonly/notes.md", "x");
-    await vi.advanceTimersByTimeAsync(1100);
-    vi.useRealTimers();
-    expect(clearPendingSaveMock).toHaveBeenCalledWith("/readonly/notes.md", 1);
-  });
-
-  it("save_as registers and clears pending save around writeTextFile to suppress the external-change dialog", async () => {
-    useTabStore.setState({
-      tabs: {
-        main: [{ id: "t-as", filePath: null, title: "u", isPinned: false }],
-      },
-      activeTabId: { main: "t-as" },
-      untitledCounter: 0,
-      closedTabs: {},
-    });
-    useDocumentStore.getState().initDocument("t-as", "hello", null);
-
-    await handleWorkspaceSaveAs("req-as", {
-      tabId: "t-as",
-      filePath: "/tmp/new.md",
-    });
-
-    expect(registerPendingSaveMock).toHaveBeenCalledWith("/tmp/new.md", "hello");
-    expect(clearPendingSaveMock).toHaveBeenCalledWith("/tmp/new.md", 1);
-    const registerOrder = registerPendingSaveMock.mock.invocationCallOrder[0];
-    const writeOrder = writeMock.mock.invocationCallOrder[0];
-    const clearOrder = clearPendingSaveMock.mock.invocationCallOrder[0];
-    expect(registerOrder).toBeLessThan(writeOrder);
-    expect(writeOrder).toBeLessThan(clearOrder);
-  });
-
-  it("save_as clears pending save even when writeTextFile rejects", async () => {
-    useTabStore.setState({
-      tabs: {
-        main: [{ id: "t-as-fail", filePath: null, title: "u", isPinned: false }],
-      },
-      activeTabId: { main: "t-as-fail" },
-      untitledCounter: 0,
-      closedTabs: {},
-    });
-    useDocumentStore.getState().initDocument("t-as-fail", "hello", null);
-    writeMock.mockRejectedValueOnce(new Error("EACCES"));
-
-    await expect(
-      handleWorkspaceSaveAs("req-as-fail", {
-        tabId: "t-as-fail",
-        filePath: "/readonly/new.md",
-      }),
-    ).resolves.toBeUndefined();
-
-    expect(registerPendingSaveMock).toHaveBeenCalledWith("/readonly/new.md", "hello");
-    expect(clearPendingSaveMock).toHaveBeenCalledWith("/readonly/new.md", 1);
-  });
-});
-
 describe("vmark.workspace.focus_window", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -620,9 +401,6 @@ describe("vmark.workspace — path scope guard", () => {
     vi.clearAllMocks();
     resetStores();
     readMock.mockReset().mockResolvedValue("secret");
-    writeMock.mockReset().mockResolvedValue(undefined);
-    // Isolate the path-scope guard from the auto-approve gate.
-    setAutoApproveEdits(true);
   });
 
   it("open rejects an out-of-scope path and never reads from disk", async () => {
@@ -639,178 +417,6 @@ describe("vmark.workspace — path scope guard", () => {
       error: "INVALID_PATH",
     });
     expect(readMock).not.toHaveBeenCalled();
-  });
-
-  it("save_as rejects an out-of-scope path and never writes to disk", async () => {
-    useTabStore.setState({
-      tabs: {
-        main: [{ id: "t-evil", filePath: null, title: "u", isPinned: false }],
-      },
-      activeTabId: { main: "t-evil" },
-      untitledCounter: 0,
-      closedTabs: {},
-    });
-    useDocumentStore.getState().initDocument("t-evil", "payload", null);
-    checkBridgePathMock.mockResolvedValueOnce({
-      allowed: false,
-      reason: "Path is outside the workspace and open documents",
-    });
-
-    await handleWorkspaceSaveAs("req-saveas-evil", {
-      tabId: "t-evil",
-      filePath: "/Users/me/.zshenv",
-    });
-    const r = lastRespond();
-    expect(r.success).toBe(false);
-    expect(parseStructuredError(r.error)).toMatchObject({
-      error: "INVALID_PATH",
-    });
-    expect(writeMock).not.toHaveBeenCalled();
-  });
-
-  it("save rejects when the guard denies the tab's own path (defense in depth)", async () => {
-    useTabStore.setState({
-      tabs: {
-        main: [
-          {
-            id: "t-own",
-            filePath: "/outside/notes.md",
-            title: "notes",
-            isPinned: false,
-          },
-        ],
-      },
-      activeTabId: { main: "t-own" },
-      untitledCounter: 0,
-      closedTabs: {},
-    });
-    useDocumentStore.getState().initDocument("t-own", "x", "/outside/notes.md");
-    checkBridgePathMock.mockResolvedValueOnce({
-      allowed: false,
-      reason: "Path is outside the workspace and open documents",
-    });
-
-    await handleWorkspaceSave("req-save-evil", {});
-    const r = lastRespond();
-    expect(r.success).toBe(false);
-    expect(parseStructuredError(r.error)).toMatchObject({
-      error: "INVALID_PATH",
-    });
-    expect(writeMock).not.toHaveBeenCalled();
-  });
-
-  it("save_as proceeds when the guard allows the path (no regression)", async () => {
-    useTabStore.setState({
-      tabs: {
-        main: [{ id: "t-ok", filePath: null, title: "u", isPinned: false }],
-      },
-      activeTabId: { main: "t-ok" },
-      untitledCounter: 0,
-      closedTabs: {},
-    });
-    useDocumentStore.getState().initDocument("t-ok", "hello", null);
-    // default mock → allowed
-
-    await handleWorkspaceSaveAs("req-saveas-ok", {
-      tabId: "t-ok",
-      filePath: "/tmp/in-scope.md",
-    });
-    const r = lastRespond();
-    expect(r.success).toBe(true);
-    expect(writeMock).toHaveBeenCalledWith("/tmp/in-scope.md", "hello");
-  });
-});
-
-describe("vmark.workspace.save_as — auto-approve gate", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    resetStores();
-    writeMock.mockReset().mockResolvedValue(undefined);
-    registerPendingSaveMock.mockReset().mockReturnValue(1);
-    clearPendingSaveMock.mockReset();
-    // checkBridgePath default → allowed; the gate is the subject here.
-  });
-
-  it("blocks save_as to a NEW location with APPROVAL_REQUIRED + toast when auto-approve is off", async () => {
-    setAutoApproveEdits(false);
-    useTabStore.setState({
-      tabs: {
-        main: [
-          {
-            id: "t-g",
-            filePath: "/ws/orig.md",
-            title: "orig",
-            isPinned: false,
-          },
-        ],
-      },
-      activeTabId: { main: "t-g" },
-      untitledCounter: 0,
-      closedTabs: {},
-    });
-    useDocumentStore.getState().initDocument("t-g", "hi", "/ws/orig.md");
-
-    await handleWorkspaceSaveAs("req-gate", {
-      tabId: "t-g",
-      filePath: "/ws/elsewhere.md",
-    });
-    const r = lastRespond();
-    expect(r.success).toBe(false);
-    expect(parseStructuredError(r.error)).toMatchObject({
-      error: "APPROVAL_REQUIRED",
-    });
-    expect(writeMock).not.toHaveBeenCalled();
-    expect(warningToastMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("allows save_as to the tab's OWN current path even when auto-approve is off (normal round-trip)", async () => {
-    setAutoApproveEdits(false);
-    useTabStore.setState({
-      tabs: {
-        main: [
-          {
-            id: "t-own2",
-            filePath: "/ws/orig.md",
-            title: "orig",
-            isPinned: false,
-          },
-        ],
-      },
-      activeTabId: { main: "t-own2" },
-      untitledCounter: 0,
-      closedTabs: {},
-    });
-    useDocumentStore.getState().initDocument("t-own2", "hi", "/ws/orig.md");
-
-    await handleWorkspaceSaveAs("req-own", {
-      tabId: "t-own2",
-      filePath: "/ws/orig.md",
-    });
-    const r = lastRespond();
-    expect(r.success).toBe(true);
-    expect(writeMock).toHaveBeenCalledWith("/ws/orig.md", "hi");
-    expect(warningToastMock).not.toHaveBeenCalled();
-  });
-
-  it("allows save_as to a new location when auto-approve is on", async () => {
-    setAutoApproveEdits(true);
-    useTabStore.setState({
-      tabs: {
-        main: [{ id: "t-on", filePath: null, title: "u", isPinned: false }],
-      },
-      activeTabId: { main: "t-on" },
-      untitledCounter: 0,
-      closedTabs: {},
-    });
-    useDocumentStore.getState().initDocument("t-on", "hello", null);
-
-    await handleWorkspaceSaveAs("req-on", {
-      tabId: "t-on",
-      filePath: "/ws/new.md",
-    });
-    const r = lastRespond();
-    expect(r.success).toBe(true);
-    expect(writeMock).toHaveBeenCalledWith("/ws/new.md", "hello");
   });
 });
 

@@ -17,9 +17,10 @@
  * seam for it (the export unit tests `vi.mock` plugin-dialog; the live app has
  * no such hook). So this journey performs the ONE step the panel would have
  * performed — choosing the folder — and calls the same two functions the
- * command calls, imported from the dev module graph the way
- * dev-docs/e2e-testing.md's store-import trick does. Both modules are stateless
- * (no store singletons), so the HMR module-identity caveat there does not apply.
+ * command calls, imported from the dev module graph the way e2e/README.md
+ * ("Arranging state: import the app's own stores") imports a store. Both
+ * modules are stateless (no store singletons), so the HMR module-identity
+ * caveat there does not apply.
  * `fontSettings` is deliberately omitted: a web-font setting would make the
  * writer download from a CDN, and a disk assertion must not depend on the
  * network.

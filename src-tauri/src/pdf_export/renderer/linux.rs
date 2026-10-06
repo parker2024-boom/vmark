@@ -24,14 +24,14 @@
 //!   - **Nothing blocks the UI thread.** Handlers are registered and the
 //!     closure returns; GLib delivers `finished`/`failed` on the owning
 //!     context and the sink is settled there (ADR-PDF6).
-//!   - **Progress is reported at the same three points as macOS (WI-FL6.2):**
+//!   - **Progress is reported at the same three points as macOS:**
 //!     `Loading` before the window is built, `Rendering` when the load has
 //!     finished and the print starts, `Finishing` from the operation's
 //!     `finished` signal. That signal also fires after `failed`; the sink
 //!     drops a stage reported after the outcome, so the handler needs no
 //!     guard of its own. Until then this backend emitted nothing.
 //!   - **The window, the navigation and the load-failure tracking are
-//!     `linux_nav.rs`'s** (#205, #206): one copy for export and print; and
+//!     `linux_nav.rs`'s**: one copy for export and print; and
 //!     the operation's `failed`/`finished` wiring — settle, then close — is
 //!     `settle_from_signals` below, the one copy both paths connect. This
 //!     file keeps what is export's own: the print settings and the job.
@@ -61,7 +61,7 @@ pub(super) const LABEL_PREFIX: &str = "pdf-render-";
 /// The virtual printer GTK's file backend provides. Naming it is mandatory —
 /// see ADR-PDF2.
 ///
-/// **Residual, stated rather than papered over (#401):** GTK3's file backend
+/// **Residual, stated rather than papered over:** GTK3's file backend
 /// registers this printer under a TRANSLATED name, so on a non-English desktop
 /// the lookup misses and the export fails with `WebKitPrintError` 500 "Printer
 /// not found" — the same failure ADR-PDF2 records for omitting the key.
@@ -104,8 +104,8 @@ fn start(
         "VMark PDF render",
         sink,
         Box::new(move |view, app, label, sink| {
-            // The caller's bounded wait may have ended during the load
-            // (#227): a print for a caller that has given up would only fill
+            // The caller's bounded wait may have ended during the load:
+            // a print for a caller that has given up would only fill
             // a staging file the sink then deletes. The claim is the atomic
             // check.
             if !sink.claim() {
@@ -162,7 +162,7 @@ fn start(
 }
 
 /// Settle `sink` from the operation's signals and close the window, the one
-/// copy export and print both connect (#205): `failed` settles its error;
+/// copy export and print both connect: `failed` settles its error;
 /// `finished` — which WebKitGTK raises after `failed` too — settles
 /// `on_finished()`'s value, which settle() being idempotent turns into a
 /// no-op after a failure. Connect BEFORE the job starts: a handler connected
@@ -199,7 +199,7 @@ pub(super) fn settle_from_signals<T: 'static>(
 /// Tear the render window down — a timeout is not cancellation (ADR-PDF7).
 pub(super) fn close(app: &AppHandle, label: &str) {
     if let Some(w) = app.get_webview_window(label) {
-        // Reported, not discarded (#406). This close is the only thing between
+        // Reported, not discarded. This close is the only thing between
         // an abandoned render and a hidden webview plus its WebKit process
         // living for the rest of the session; a refusal that says nothing turns
         // that leak into an unexplainable memory report. The label is printed

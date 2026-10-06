@@ -27,11 +27,24 @@
 //! path, so re-focusing a stale one would show the previous export. This
 //! preserves the behaviour the TypeScript had.
 //!
+//! Key decision: the recreate WAITS for the close. `close()` only posts a
+//! request, and the label stays registered until Tauri delivers `Destroyed`;
+//! building before that fails with `WindowLabelAlreadyExists`. The wait is
+//! bounded and its expiry is an error the caller sees. The label itself stays
+//! fixed — the capability file, the progress events, the window-state denylist
+//! and the page's own close handler all address the window by this name — and
+//! the build goes through `ensure_window` like every other fixed label.
+//!
 //! @coordinates-with services/navigation/pdfExportWindow.ts — the caller
 //! @coordinates-with pdf_export/renderer/progress.rs — PROGRESS_WINDOW is this label
+//! @coordinates-with window_creation.rs — check-and-build as one step
 
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use std::sync::mpsc;
+use std::time::Duration;
 
+use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+
+use super::{ensure_window, Ensured};
 use crate::command_error::{CommandError, ErrorCode};
 use crate::localized_error;
 
@@ -69,17 +82,52 @@ pub fn open_pdf_export_window(
     x: Option<f64>,
     y: Option<f64>,
 ) -> Result<String, CommandError> {
+    let url = pdf_export_url(&html_path, default_name.as_deref());
+    open_export_window(&app, url, x.zip(y), PREVIOUS_WINDOW_CLOSE_LIMIT)
+}
+
+/// How long the previous export window may take to go away. Destruction takes
+/// milliseconds; this bounds a window that refuses to close, so the command
+/// fails with a reason instead of hanging.
+const PREVIOUS_WINDOW_CLOSE_LIMIT: Duration = Duration::from_secs(5);
+
+/// "The Export PDF window could not be opened", with the reason.
+fn open_failed(code: ErrorCode, detail: String) -> CommandError {
+    localized_error!(code, "errors.window.pdfExportCreate", detail = detail)
+}
+
+/// The command's body, generic over the runtime and with the close limit a
+/// parameter so `pdf_export_window.test.rs` can drive it on a mock app.
+///
+/// Must not run on the main thread: it waits for a `Destroyed` event that is
+/// delivered there. The command is `async`, so it runs on a worker.
+fn open_export_window<R: Runtime>(
+    app: &AppHandle<R>,
+    url: String,
+    position: Option<(f64, f64)>,
+    close_limit: Duration,
+) -> Result<String, CommandError> {
     // Close any previous export window first: it holds the PREVIOUS document's
     // rendered HTML, so focusing it would silently export the wrong file.
-    if let Some(existing) = app.get_webview_window(PDF_EXPORT_LABEL) {
-        let _ = existing.close();
+    if let Some(previous) = app.get_webview_window(PDF_EXPORT_LABEL) {
+        close_and_await_destroyed(&previous, close_limit)?;
     }
 
-    let url = pdf_export_url(&html_path, default_name.as_deref());
-    let title = rust_i18n::t!("window.pdfExport.title").to_string();
+    // THE FIX for #1377. Off macOS the menu bar is per-window, so a window
+    // built without one inherits the application menu. An empty menu is what
+    // the Settings window uses to stay bare.
+    #[cfg(not(target_os = "macos"))]
+    let menu = tauri::menu::Menu::new(app).map_err(|e| {
+        localized_error!(
+            ErrorCode::Internal,
+            "errors.window.pdfExportMenu",
+            detail = e.to_string()
+        )
+    })?;
 
-    let mut builder =
-        WebviewWindowBuilder::new(&app, PDF_EXPORT_LABEL, WebviewUrl::App(url.into()))
+    let ensured = ensure_window(app, PDF_EXPORT_LABEL, move |app, label| {
+        let title = rust_i18n::t!("window.pdfExport.title").to_string();
+        let mut builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
             .title(&title)
             .inner_size(PDF_EXPORT_WIDTH, PDF_EXPORT_HEIGHT)
             .min_inner_size(PDF_EXPORT_MIN_WIDTH, PDF_EXPORT_MIN_HEIGHT)
@@ -87,44 +135,79 @@ pub fn open_pdf_export_window(
             .theme(Some(super::current_theme()))
             .focused(true);
 
-    builder = match (x, y) {
-        (Some(x), Some(y)) => builder.position(x, y),
-        _ => builder.center(),
-    };
+        builder = match position {
+            Some((x, y)) => builder.position(x, y),
+            None => builder.center(),
+        };
 
-    #[cfg(target_os = "macos")]
-    {
-        builder = builder
-            .title_bar_style(tauri::TitleBarStyle::Overlay)
-            .hidden_title(true)
-            // A runtime-built window does not inherit tauri.conf.json's window
-            // entry, so the buttons have to be placed here too.
-            .traffic_light_position(super::TRAFFIC_LIGHT_POSITION);
+        #[cfg(target_os = "macos")]
+        {
+            builder = builder
+                .title_bar_style(tauri::TitleBarStyle::Overlay)
+                .hidden_title(true)
+                // A runtime-built window does not inherit tauri.conf.json's
+                // window entry, so the buttons have to be placed here too.
+                .traffic_light_position(super::TRAFFIC_LIGHT_POSITION);
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            builder = builder.menu(menu);
+        }
+
+        builder.build()
+    })
+    .map_err(|e| open_failed(ErrorCode::Internal, e.to_string()))?;
+
+    match ensured {
+        Ensured::Created(_) => Ok(PDF_EXPORT_LABEL.to_string()),
+        // The label is held by a window this call did not build: one that
+        // outlived its close, or another export opened in the same instant.
+        // Showing it would show the wrong document, so say so instead.
+        Ensured::Existing(_) | Ensured::Pending => Err(open_failed(
+            ErrorCode::Conflict,
+            "another Export PDF window still holds the label".to_string(),
+        )),
     }
+}
 
-    // THE FIX for #1377. Off macOS the menu bar is per-window, so a window
-    // built without one inherits the application menu. An empty menu is what
-    // the Settings window uses to stay bare.
-    #[cfg(not(target_os = "macos"))]
-    {
-        builder = builder.menu(tauri::menu::Menu::new(&app).map_err(|e| {
-            localized_error!(
-                ErrorCode::Internal,
-                "errors.window.pdfExportMenu",
-                detail = e.to_string()
-            )
-        })?);
+/// Ask the previous export window to close and wait until Tauri reports it
+/// destroyed, which is when its label is free again.
+///
+/// `close()` only posts a request to the event loop. Rebuilding the label
+/// straight after it raced the old window's teardown and failed, some of the
+/// time, with `WindowLabelAlreadyExists`.
+fn close_and_await_destroyed<R: Runtime>(
+    window: &WebviewWindow<R>,
+    limit: Duration,
+) -> Result<(), CommandError> {
+    let (destroyed, gone) = mpsc::channel();
+    window.on_window_event(move |event| {
+        if matches!(event, tauri::WindowEvent::Destroyed) {
+            let _ = destroyed.send(());
+        }
+    });
+    window
+        .close()
+        .map_err(|e| open_failed(ErrorCode::Internal, e.to_string()))?;
+    await_destroyed(&gone, limit)
+}
+
+/// Wait up to `limit` for the `Destroyed` signal.
+fn await_destroyed(gone: &mpsc::Receiver<()>, limit: Duration) -> Result<(), CommandError> {
+    match gone.recv_timeout(limit) {
+        // Destroyed — or its listeners were dropped without the event, which
+        // only a window that is already gone does. Either way the label check
+        // in `ensure_window` is what decides whether to build.
+        Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => Ok(()),
+        Err(mpsc::RecvTimeoutError::Timeout) => Err(open_failed(
+            ErrorCode::Timeout,
+            format!(
+                "the previous Export PDF window did not close within {} ms",
+                limit.as_millis()
+            ),
+        )),
     }
-
-    builder.build().map_err(|e| {
-        localized_error!(
-            ErrorCode::Internal,
-            "errors.window.pdfExportCreate",
-            detail = e.to_string()
-        )
-    })?;
-
-    Ok(PDF_EXPORT_LABEL.to_string())
 }
 
 #[cfg(test)]

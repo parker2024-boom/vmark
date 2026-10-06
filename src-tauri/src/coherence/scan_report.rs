@@ -15,7 +15,7 @@ pub struct ScanReport {
     /// was deferred to the next scan (#1207).
     pub git_observation_unreliable: bool,
     /// Set when the ledger holds entries in a format this build cannot parse,
-    /// so reconciliation was refused (WI-2.2).
+    /// so reconciliation was refused.
     ///
     /// The scan still RETURNS rather than erroring, and that is the point: the
     /// READ surfaces run a scan first — `perform_breakdown_in` sits behind both

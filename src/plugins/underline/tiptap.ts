@@ -1,3 +1,10 @@
+/**
+ * Underline mark — the Tiptap extension that parses and renders underlined
+ * text as `<u>`.
+ *
+ * @module plugins/underline/tiptap
+ */
+
 import { Mark, mergeAttributes } from "@tiptap/core";
 import "./underline.css";
 

@@ -1,6 +1,6 @@
 /**
  * Purpose: join e2e/README.md's journey inventory to what e2e/run-journeys.mjs
- *   would discover and run (WI-FL0.6).
+ *   would discover and run.
  *
  * The README says "N user journeys". The number was typed by hand, and the
  * directory it describes has files numbered 01–37 with a gap, so a file count,

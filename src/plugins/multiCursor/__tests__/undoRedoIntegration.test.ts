@@ -13,7 +13,7 @@ import { describe, it, expect } from "vitest";
 import { Schema } from "@tiptap/pm/model";
 import { EditorState, SelectionRange } from "@tiptap/pm/state";
 import { history, undo, redo } from "@tiptap/pm/history";
-import { MultiSelection } from "../MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 import { multiCursorPlugin } from "../multiCursorPlugin";
 import { handleMultiCursorInput } from "../inputHandling";
 

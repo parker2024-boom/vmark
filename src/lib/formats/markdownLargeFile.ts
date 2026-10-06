@@ -1,13 +1,17 @@
-// WI-1A.6 — markdown-adapter-internal large-file helper.
-//
-// Co-located with the registry rather than inside markdown.tsx so the
-// adapter's heavy React / store imports don't create cycles when entry-
-// point hooks (useFileOpen, useDragDropOpen, useFinderFileOpen,
-// WindowContext) import this helper.
-//
-// Logically belongs to the markdown adapter — see § WI-1A.6 of the
-// multi-format plan. Other formats don't have a WYSIWYG path, so
-// "force source mode for large files" is a markdown-only concept.
+/**
+ * Markdown-adapter-internal large-file helper — marks a large markdown tab
+ * as forced into source mode.
+ *
+ * Co-located with the registry rather than inside markdown.tsx so the
+ * adapter's heavy React / store imports don't create cycles when entry-
+ * point hooks (useFileOpen, useDragDropOpen, useFinderFileOpen,
+ * WindowContext) import this helper.
+ *
+ * Logically belongs to the markdown adapter. Other formats don't have a
+ * WYSIWYG path, so "force source mode for large files" is a markdown-only concept.
+ *
+ * @module lib/formats/markdownLargeFile
+ */
 
 import { useLargeFileSessionStore } from "@/stores/documentStore";
 import { dispatchEditor } from "./registry";

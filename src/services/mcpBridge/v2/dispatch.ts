@@ -7,11 +7,11 @@
  *   enumerates supported tools (diagnostic errors, capability docs)
  *   must import this rather than carry its own list.
  *
- * Origin: MCP pruning plan (2026-05-04, retired) WI-1.2 (initial 4 tools)
- *   and WI-2.1 (selection re-add per ADR-7).
+ * Origin: MCP pruning plan (retired) — the initial 4 tools,
+ *   and the selection re-add per ADR-7.
  *
  * Key decisions:
- *   - Routing is two TYPED TABLES, not a switch (round 3, #74): `EAGER_ROUTES`
+ *   - Routing is two TYPED TABLES, not a switch: `EAGER_ROUTES`
  *     maps each non-browser operation to its handler, `BROWSER_ROUTES` maps each
  *     browser operation to the NAME of its export in `./browser`. A table entry
  *     is checked by the compiler against the handler signature (or the export

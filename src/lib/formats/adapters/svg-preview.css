@@ -8,6 +8,10 @@
   height: 100%;
   padding: var(--space-3);
   overflow: auto;
+  /* The SVG is the document's: without a containing block, WebKit hit-tests
+   * an absolutely positioned element in a foreignObject against the whole
+   * window. Pinned by svgStyleContainment.webkit.test.ts. */
+  contain: paint;
 }
 
 .svg-preview > svg {

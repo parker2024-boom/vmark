@@ -70,6 +70,8 @@ Use iframes do player Vimeo:
 
 Você também pode colar uma URL do Vimeo diretamente (por exemplo, `https://vimeo.com/123456789`) e o VMark a converterá automaticamente em um embed.
 
+Vídeos não listados do Vimeo também são suportados: cole o link de compartilhamento não listado (`https://vimeo.com/123456789/abcdef1234` ou uma URL com `?h=…`) e o VMark preserva o hash de privacidade de que o embed precisa para ser reproduzido.
+
 ### Embeds do Bilibili
 
 Use o iframe do player Bilibili com um BV ID:
@@ -117,6 +119,18 @@ No modo Fonte, digite as tags HTML diretamente. As tags de mídia são destacada
 - **Vimeo** — borda azul
 - **Bilibili** — borda rosa
 
+### Colagem Inteligente no Modo Fonte
+
+Colar no modo Fonte faz o que é correto em Markdown em vez de despejar texto bruto:
+
+- **Um caminho de imagem** — ou vários, de uma cópia de vários arquivos no Finder ou no Explorador de Arquivos — é validado, copiado para a pasta de ativos do documento e inserido como `![](relative-path)`. Quando uma colagem é ambígua, um pequeno aviso de confirmação pergunta antes
+- **Uma captura de tela ou imagem copiada** (dados binários de imagem na área de transferência) é salva na pasta de ativos e inserida da mesma forma
+- **Uma URL colada sobre um texto selecionado** vira um link: `[selected text](https://…)`
+- **HTML ou Markdown copiado de outro app** é convertido e limpo antes de entrar — exceto dentro de um bloco de código delimitado, onde o texto colado permanece literal
+- **Arquivos de imagem arrastados do Finder ou do Explorador de Arquivos** para o editor de código-fonte também são copiados e inseridos
+
+A conversão segue **Configurações → Markdown → Tratamento de colagem da área de transferência** (`Smart` é o padrão; os outros modos desativam a conversão), e os arquivos são copiados para a pasta de ativos enquanto **Configurações → Arquivos e imagens → Copiar para a pasta de ativos** estiver ativado (o padrão).
+
 ## Editando Mídia
 
 Dê um duplo clique em qualquer elemento de mídia no modo WYSIWYG para abrir o popup de mídia:
@@ -135,13 +149,19 @@ O VMark suporta três tipos de caminhos de mídia:
 | Tipo de Caminho | Exemplo | Comportamento |
 |----------------|---------|---------------|
 | Relativo | `./assets/video.mp4` | Resolvido em relação ao diretório do documento |
+| Relativo ao diretório pai | `../images/photo.png` | Resolvido em relação ao diretório do documento, subindo quantos níveis o caminho pedir |
 | Absoluto | `/Users/me/video.mp4` | Usado diretamente via protocolo de ativos Tauri |
 | URL externa | `https://example.com/video.mp4` | Carregado diretamente da web |
 
 Caminhos relativos são recomendados — eles mantêm seus documentos portáteis entre máquinas.
 
+Uma pasta de ativos compartilhada ao lado das suas notas funciona como escrito — `notes/report.md`
+pode referenciar `../images/photo.png`. (Antes da versão 0.9.79, esses caminhos eram renderizados como
+espaços reservados quebrados.)
+
 ## Segurança
 
-- Caminhos relativos são validados contra ataques de travessia de diretório
-- Iframes de embeds de vídeo são restritos aos domínios permitidos: `youtube.com`, `youtube-nocookie.com`, `player.vimeo.com` e `player.bilibili.com`
+- Um caminho de mídia não pode conter um esquema de URI (`javascript:`, `file:` ou um personalizado); essas fontes são recusadas em vez de carregadas
+- Um caminho que aponta para um diretório em vez de um arquivo é recusado
+- Embeds de vídeo são carregados somente de três hosts: `www.youtube-nocookie.com` (o player com privacidade aprimorada do YouTube), `player.vimeo.com` e `player.bilibili.com`. Um link do YouTube, ou um iframe escrito com `youtube.com`, é incorporado pelo host com privacidade aprimorada. A política de segurança de conteúdo do VMark permite carregar frames desses hosts e de nenhum outro site
 - Outras fontes de iframe são removidas pelo sanitizador

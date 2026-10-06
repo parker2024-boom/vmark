@@ -17,7 +17,7 @@ import { partitionWindowTabs, resolveIncomingActiveTab } from "./workspaceOwners
 import { orderedWindowInstances } from "./workspaceContextOwnership";
 
 /**
- * Audit R2-F3: a stashed split may reference tabs that were REASSIGNED to
+ * A stashed split may reference tabs that were REASSIGNED to
  * another instance while hidden (Save As, rename). replaceWindowSplit only
  * checks liveness — ownership must be enforced here, through the kernel.
  */

@@ -15,6 +15,7 @@ import type { EditorView } from "@tiptap/pm/view";
 import type { StoreApi } from "zustand";
 import type { MediaPopupState } from "@/plugins/shared/popupPorts";
 import { MediaPopupView } from "./MediaPopupView";
+import { requirePort } from "@/plugins/shared/requirePort";
 
 const mediaPopupPluginKey = new PluginKey("mediaPopup");
 
@@ -37,21 +38,16 @@ class MediaPopupPluginView {
 /** Tiptap extension that shows a popup when the cursor is on an audio/video node. */
 export interface MediaPopupOptions {
   /** The popup state this plugin drives — a PORT, no default (ADR-015). */
-  store: StoreApi<MediaPopupState>;
+  store: StoreApi<MediaPopupState> | undefined;
 }
 
 export const mediaPopupExtension = Extension.create<MediaPopupOptions>({
   name: "mediaPopup",
   addOptions() {
-    return { store: undefined as unknown as StoreApi<MediaPopupState> };
+    return { store: undefined };
   },
   addProseMirrorPlugins() {
-    const { store } = this.options;
-    if (!store) {
-      throw new Error(
-        "mediaPopupExtension requires a `store` option — see services/assembly/tiptapExtensions.ts"
-      );
-    }
+    const store = requirePort(this.options.store, "mediaPopupExtension", "store");
     return [
       new Plugin({
         key: mediaPopupPluginKey,

@@ -1,9 +1,8 @@
-//! Provenance IPC surface + index queries (WI-3.1/3.2, split from
+//! Provenance IPC surface + index queries (split from
 //! `provenance.rs` for the file-size gate).
 
-use super::command_errors::{
-    classify_write, kernel_poisoned, ledger_unavailable, rejected_argument, workspace_unavailable,
-};
+use super::blocking::with_kernel;
+use super::command_errors::{classify_write, ledger_unavailable, rejected_argument};
 use crate::command_error::CommandError;
 use uuid::Uuid;
 
@@ -14,51 +13,45 @@ use super::provenance::{
 use super::types::{ObjectId, RevisionId};
 
 #[tauri::command]
-pub async fn coherence_provenance_candidates(
-    state: tauri::State<'_, super::commands::CoherenceState>,
+pub async fn coherence_provenance_candidates<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     workspace_root: String,
 ) -> Result<Vec<ProvenanceCandidate>, CommandError> {
-    let kernel = state
-        .registry
-        .kernel_for(std::path::Path::new(&workspace_root), state.writer)
-        .map_err(workspace_unavailable)?;
-    let mut kernel = kernel.lock().map_err(|_| kernel_poisoned())?;
-    // Read-only sweep for orphaned-but-recoverable candidates.
-    perform_provenance_candidates(&mut kernel).map_err(ledger_unavailable)
+    with_kernel(app, workspace_root, move |_state, kernel| {
+        // Read-only sweep for orphaned-but-recoverable candidates.
+        perform_provenance_candidates(kernel).map_err(ledger_unavailable)
+    })
+    .await
 }
 
 #[tauri::command]
-pub async fn coherence_propose_inputs(
-    state: tauri::State<'_, super::commands::CoherenceState>,
+pub async fn coherence_propose_inputs<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     workspace_root: String,
     path: String,
 ) -> Result<Proposal, CommandError> {
-    let kernel = state
-        .registry
-        .kernel_for(std::path::Path::new(&workspace_root), state.writer)
-        .map_err(workspace_unavailable)?;
-    let mut kernel = kernel.lock().map_err(|_| kernel_poisoned())?;
-    // `path` is caller-supplied and may name nothing the workspace tracks.
-    perform_propose_inputs(&mut kernel, &path).map_err(rejected_argument)
+    with_kernel(app, workspace_root, move |_state, kernel| {
+        // `path` is caller-supplied and may name nothing the workspace tracks.
+        perform_propose_inputs(kernel, &path).map_err(rejected_argument)
+    })
+    .await
 }
 
 #[tauri::command]
-pub async fn coherence_confirm_inputs(
-    state: tauri::State<'_, super::commands::CoherenceState>,
+pub async fn coherence_confirm_inputs<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     workspace_root: String,
     request: ConfirmRequest,
 ) -> Result<ConfirmReceipt, CommandError> {
     let root = std::path::PathBuf::from(&workspace_root);
-    let kernel = state
-        .registry
-        .kernel_for(&root, state.writer)
-        .map_err(workspace_unavailable)?;
-    let mut kernel = kernel.lock().map_err(|_| kernel_poisoned())?;
-    let actor = super::commands::actor_identity(&root);
-    // The request names the inputs to confirm; a rejection means the caller
-    // must send a different set.
-    perform_confirm_inputs(&mut kernel, &request, &actor)
-        .map_err(|e| classify_write(&kernel, rejected_argument, e))
+    with_kernel(app, workspace_root, move |_state, kernel| {
+        let actor = super::commands::actor_identity(&root);
+        // The request names the inputs to confirm; a rejection means the caller
+        // must send a different set.
+        perform_confirm_inputs(kernel, &request, &actor)
+            .map_err(|e| classify_write(kernel, rejected_argument, e))
+    })
+    .await
 }
 
 impl super::index::CoherenceIndex {

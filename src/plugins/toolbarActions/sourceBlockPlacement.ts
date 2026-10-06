@@ -82,7 +82,7 @@ interface BlockInsertionPlan {
 /**
  * Decide the placement (pure — no dispatch, no focus): the structure prefix,
  * the separator line, the replacement range and the caret. `insertBlockText`
- * is the thin wrapper that applies it (audit #435).
+ * is the thin wrapper that applies it.
  */
 function planBlockInsertion(
   state: EditorView["state"],
@@ -140,7 +140,7 @@ const textOfLineAbove = (state: EditorView["state"], number: number): string | n
  * `.trim()` also strips NBSP and every other Unicode space, none of which
  * CommonMark treats as blank: a line holding only U+3000 (a CJK keyboard's
  * default) is a paragraph, and reading it as empty made the insertion REPLACE
- * it, deleting real content silently (audit R2, #869).
+ * it, deleting real content silently.
  */
 function isBlankLine(lineText: string): boolean {
   return /^[ \t]*$/.test(lineText);
@@ -164,7 +164,7 @@ function mapOffsetThroughPrefix(text: string, prefix: string, offset: number): n
   // Clamped BEFORE the branch: the prefixed path bounds the offset at its loop's
   // end, the unprefixed one forwarded the caller's number untouched — and these
   // offsets are COMPUTED, so one past the template's end became an anchor outside
-  // the document, which CodeMirror rejects (audit R2, #870). A non-finite offset
+  // the document, which CodeMirror rejects. A non-finite offset
   // lands at the body's end, as a template asking for no caret position does.
   const clamped = Number.isFinite(offset) ? Math.min(Math.max(offset, 0), text.length) : text.length;
   if (!prefix) return clamped;
@@ -186,7 +186,7 @@ function mapOffsetThroughPrefix(text: string, prefix: string, offset: number): n
  * a blockquote's marker verbatim, a list item's as spaces to the same COLUMN.
  *
  * The walk is `containerPrefixParts` — the one the fence guards use — not a
- * second, WRONG copy of that grammar (audit R3 #871). The regexes it replaces
+ * second, WRONG copy of that grammar. The regexes it replaces
  * matched quotes then ONE list marker (`- > text` read as a bare list item, so a
  * block left the blockquote), accepted any indent and any digit count, and
  * consumed a TASK CHECKBOX as structure — indenting six columns into an item
@@ -275,7 +275,7 @@ export function prependLineMarker(view: EditorView, marker: string, pos?: number
   // Spaces and tabs only, as CommonMark defines indentation. `\s` also matches
   // NBSP and the ideographic space, which are ordinary CHARACTERS here — with
   // `\s` the wrapper swallowed them and the heading run below was then matched
-  // against text that does not start the line (audit R2, #872).
+  // against text that does not start the line.
   const wrapper = /^[ \t]*(?:>[ \t]?)*[ \t]*/.exec(line.text)?.[0] ?? "";
   const at = line.from + wrapper.length;
 
@@ -286,7 +286,7 @@ export function prependLineMarker(view: EditorView, marker: string, pos?: number
   // The run must be followed by a SPACE, A TAB or the line end — CommonMark
   // §ATX. `\s+` also matches a NBSP, so `###` + U+00A0 + `Title` — ordinary
   // paragraph text, not a heading — lost its literal hashes when a list marker
-  // was applied (audit R2, #872).
+  // was applied.
   const headingRun = /^#{1,6}(?:[ \t]+|$)/.exec(line.text.slice(wrapper.length))?.[0] ?? "";
 
   const changes = { from: at, to: at + headingRun.length, insert: marker };

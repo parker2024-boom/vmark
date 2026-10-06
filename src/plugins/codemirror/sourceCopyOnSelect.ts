@@ -7,7 +7,10 @@
  * Key decisions:
  *   - copyFormat setting is not applicable — source mode text IS already markdown
  *   - Only fires on mouseup (not keyboard selection) to avoid clipboard spam
- *   - Cleans text before copying (trailing whitespace, etc.)
+ *   - The selection is markdown and is copied as written: only the blank
+ *     lines before it and the whitespace after it are trimmed. Trailing spaces
+ *     on a line are a hard break or part of code, and blank lines inside a
+ *     fence are code, so nothing inside is touched.
  *   - Gated by the copyOnSelect setting from settingsStore
  *
  * @coordinates-with plugins/shared/hostSettings.ts — reads copyOnSelect
@@ -17,7 +20,7 @@
 import type { Extension } from "@codemirror/state";
 import { ViewPlugin, type EditorView } from "@codemirror/view";
 import { hostSettings } from "@/plugins/shared/hostSettings";
-import { cleanTextForClipboard } from "@/plugins/markdownCopy/tiptap";
+import { trimMarkdownForClipboard } from "@/plugins/markdownCopy/tiptap";
 import { clipboardWarn } from "@/utils/debug";
 import { errorMessage } from "@/utils/errorMessage";
 
@@ -44,7 +47,7 @@ export function createSourceCopyOnSelectPlugin(): Extension {
           if (from === to) return;
 
           const raw = view.state.sliceDoc(from, to);
-          const text = cleanTextForClipboard(raw);
+          const text = trimMarkdownForClipboard(raw);
           if (text) {
             navigator.clipboard.writeText(text).catch((error: unknown) => {
               clipboardWarn("Clipboard write failed:", errorMessage(error));

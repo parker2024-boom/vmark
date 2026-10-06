@@ -44,6 +44,7 @@ use super::super::payloads::NavPayload;
 use super::super::webview::{current_url, history_state};
 use super::super::NavDelegate;
 use crate::browser::ai_policy::same_document_allowed;
+use crate::browser::locks;
 use crate::browser::nav_api_navigation::{own, Settlement};
 use crate::browser::registry::same_document::SameDocumentRefusal;
 use crate::browser::surface::BrowserSurface;
@@ -74,13 +75,13 @@ impl NavDelegate {
         // can run another command against a view that is on its way out — as the
         // observer used to (by accident of the misfire) and the start does later.
         if let Some(state) = ivars.app.try_state::<BrowserSurface>() {
-            if let Ok(mut reg) = state.registry.lock() {
+            if let Some(mut reg) = locks::registry(&state) {
                 state.clear_tab_authority_in(&mut reg, &ivars.tab_id);
             }
         }
         pump(web_view);
         let saw_start = ivars.starts.get() != starts_before;
-        let still_loading = unsafe { web_view.isLoading() };
+        let still_loading = super::super::super::webkit_calls::is_loading(web_view);
         match owned.settle(&ivars.loading, saw_start, still_loading) {
             Settlement::CrossDocument | Settlement::Pending => {}
             Settlement::SameDocument { observe_now } => {
@@ -116,18 +117,15 @@ impl NavDelegate {
         };
         // ONE read of everything the decision needs, including the ticket the write
         // below must still find.
-        let Some(view) = state
-            .registry
-            .lock()
-            .ok()
-            .and_then(|reg| reg.same_document_view(&ivars.tab_id, &url))
+        let Some(view) =
+            locks::registry(&state).and_then(|reg| reg.same_document_view(&ivars.tab_id, &url))
         else {
             return; // an unknown tab has no authority to expire
         };
         if view.committed_url.as_deref() == Some(url.as_str()) {
             return; // already recorded — nothing changed, so no authority to expire
         }
-        let policy = state.ai_policy.lock().ok().map(|policy| *policy);
+        let policy = locks::ai_policy(&state);
         let allowed = policy.is_some_and(|policy| {
             same_document_allowed(
                 view.mode,
@@ -142,7 +140,7 @@ impl NavDelegate {
             return;
         }
         log::debug!(
-            "[browser] same-document navigation on {}: {}",
+            "[browser] same-document navigation on {:?}: {}",
             ivars.tab_id,
             crate::browser::redact::redact(&url)
         );
@@ -150,7 +148,7 @@ impl NavDelegate {
         // generation (so any operation stamped with the old one is refused as
         // stale) and record the new committed url — under one guard, and only if
         // no top-level navigation has superseded the page observed above.
-        let committed = state.registry.lock().ok().map(|mut reg| {
+        let committed = locks::registry(&state).map(|mut reg| {
             reg.commit_same_document(&ivars.tab_id, &url, view.navigation_id.as_deref())
         });
         let generation = match committed {
@@ -159,7 +157,7 @@ impl NavDelegate {
                 // A command thread began a navigation after the observation: its own
                 // commit records the next page, and its revocation stands.
                 log::debug!(
-                    "[browser] same-document navigation on {} superseded by a top-level navigation",
+                    "[browser] same-document navigation on {:?} superseded by a top-level navigation",
                     ivars.tab_id
                 );
                 return;
@@ -169,14 +167,14 @@ impl NavDelegate {
                 // within and no authority to expire — the registry's answer, not an
                 // anomaly (a first load's URL change, reported before its commit).
                 log::debug!(
-                    "[browser] same-document navigation on {} with no committed page; nothing to expire",
+                    "[browser] same-document navigation on {:?} with no committed page; nothing to expire",
                     ivars.tab_id
                 );
                 return;
             }
             Some(Err(refusal)) => {
                 log::warn!(
-                    "[browser] same-document commit refused for {}: {refusal:?}",
+                    "[browser] same-document commit refused for {:?}: {refusal:?}",
                     ivars.tab_id
                 );
                 if refusal == SameDocumentRefusal::GenerationExhausted {
@@ -184,21 +182,19 @@ impl NavDelegate {
                     // cannot stamp this view apart from the last one); finish the
                     // revocation under the registry guard, so nothing approved for
                     // the replaced view survives it and no reused id is caught in
-                    // between (#35).
-                    if let Ok(mut reg) = state.registry.lock() {
+                    // between.
+                    if let Some(mut reg) = locks::registry(&state) {
                         state.clear_tab_authority_in(&mut reg, &ivars.tab_id);
                     }
                 }
                 return;
             }
-            None => {
-                log::warn!("[browser] registry lock poisoned on same-document navigation");
-                return;
-            }
+            // The registry was refused (and the refusal logged): nothing commits.
+            None => return,
         };
         // R7a: the view the authority was granted against is gone — revoked under
-        // the registry guard, never in a gap after it (#35).
-        if let Ok(mut reg) = state.registry.lock() {
+        // the registry guard, never in a gap after it.
+        if let Some(mut reg) = locks::registry(&state) {
             state.clear_tab_authority_in(&mut reg, &ivars.tab_id);
         }
         let (can_go_back, can_go_forward) = history_state(web_view);

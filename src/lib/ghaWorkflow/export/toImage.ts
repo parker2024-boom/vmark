@@ -1,12 +1,16 @@
-// WI-4.2 — IR → SVG / PNG via html-to-image.
-//
-// Plan §6 Phase 4 + ADR-8. Wrapper over `html-to-image`'s toSvg/toPng,
-// applied to the live `@xyflow/react` viewport DOM element.
-//
-// Behavior verified in Spike B (probes/spike-b-runner.mjs) with 44-75 ms
-// timings on a 20-node graph in Chromium, light + dark themes, CSS
-// vars resolved correctly. Lossy notes (foreignObject SVG) documented
-// in spike-b-export.md.
+/**
+ * IR → SVG / PNG via html-to-image, exporting the live workflow canvas.
+ *
+ * ADR-8. Wrapper over `html-to-image`'s toSvg/toPng,
+ * applied to the live `@xyflow/react` viewport DOM element.
+ *
+ * Behavior verified in a spike with 44-75 ms
+ * timings on a 20-node graph in Chromium, light + dark themes, CSS
+ * vars resolved correctly. Lossy notes: the SVG output embeds the
+ * DOM in a foreignObject.
+ *
+ * @module lib/ghaWorkflow/export/toImage
+ */
 
 import { toPng, toSvg } from "html-to-image";
 

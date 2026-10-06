@@ -30,7 +30,7 @@
 import type { EditorState } from "@tiptap/pm/state";
 import type { Node as PMNode, MarkType, ResolvedPos } from "@tiptap/pm/model";
 import { SelectionRange } from "@tiptap/pm/state";
-import { MultiSelection } from "@/plugins/multiCursor/MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 
 /** Mark types that Shift+Tab can escape from (shared with tabEscape.ts) */
 const ESCAPABLE_MARKS = new Set(["bold", "italic", "code", "strike"]);

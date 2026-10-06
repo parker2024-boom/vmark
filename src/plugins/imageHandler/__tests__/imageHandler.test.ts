@@ -38,10 +38,9 @@ vi.mock("@/utils/imagePathDetection", () => ({
 
 // --- Imports (after mocks) ---
 
+import { validateLocalPath, expandHomePath } from "@/plugins/shared/localImagePath";
 import {
   fileUrlToPath,
-  validateLocalPath,
-  expandHomePath,
   isViewConnected,
   isImageFile,
   generateClipboardImageFilename,

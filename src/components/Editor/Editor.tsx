@@ -1,7 +1,7 @@
 /**
  * Editor
  *
- * Purpose: Format-registry dispatcher (WI-1A.5). Reads the active tab, resolves
+ * Purpose: Format-registry dispatcher. Reads the active tab, resolves
  *   a FormatConfig for it, and mounts one of four surfaces: <BrowserWorkspaceSurface>
  *   for kind:"browser" tabs, the format's wysiwygComponent (markdown today), the
  *   dedicated read-only <MediaViewer> for kind:"media" (image/audio/video), or
@@ -26,12 +26,12 @@
  *     recover it).
  *   - Markdown rendering surface lives in
  *     src/lib/formats/adapters/markdownSurface.tsx; this dispatcher pulls the
- *     import THUNK out of the FormatConfig (WI-13) so the registry stays the
+ *     import THUNK out of the FormatConfig so the registry stays the
  *     single source of truth AND `bootstrapFormats()` — which runs in every
  *     window before App — no longer drags the Tiptap surface onto cold start.
  *   - The remount key is `${tabId}-${formatConfig.id}`: a kind change
  *     (markdown → txt → json …) remounts the surface so per-tab state doesn't
- *     leak across formats (ADR-10 / WI-1A.12).
+ *     leak across formats (ADR-10).
  *   - No active tab → the empty-workspace window: render <WelcomeScreen />
  *     instead of an editor bound to no document. The window stays open after
  *     the last tab is closed (VSCode-style); this is what fills the editor area.
@@ -103,14 +103,14 @@ export function Editor() {
 
   // R1: a browser page is not a document — branch on `kind` BEFORE dispatchEditor,
   // or a browser tab (which has no filePath) would resolve as an untitled
-  // markdown document. Browser pages render inside the Browser workspace (WI-1.3).
+  // markdown document. Browser pages render inside the Browser workspace.
   if (tab && isBrowserTab(tab)) {
     return <BrowserWorkspaceSurface />;
   }
 
   const formatConfig = resolveFormat(tab && isDocumentTab(tab) ? tab : null);
 
-  // WI-4.3 — keying by tabId+formatId forces a remount on tab switch
+  // Keying by tabId+formatId forces a remount on tab switch
   // and on kind change (markdown → txt → json …) so per-tab state in
   // SplitPaneEditor / MarkdownEditorSurface (split fraction, lazy-
   // language load) doesn't leak across tabs.
@@ -119,9 +119,9 @@ export function Editor() {
   if (formatConfig.kind === "wysiwyg") {
     // No `?? MarkdownEditorSurface` fallback: registerFormat guarantees a
     // wysiwyg format declares its own surface, so a missing one is a
-    // registration error rather than a silent render-as-markdown (WI-4.5).
+    // registration error rather than a silent render-as-markdown.
     //
-    // WI-13: the surface is an import thunk, so mounting it is asynchronous.
+    // The surface is an import thunk, so mounting it is asynchronous.
     // FormatSurface owns that boundary — including the D4 failure surface, so
     // a chunk that fails to load shows something instead of nothing.
     return <FormatSurface key={key} formatConfig={formatConfig} tabId={tabId} />;

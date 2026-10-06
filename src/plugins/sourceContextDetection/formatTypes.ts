@@ -7,6 +7,7 @@
  *
  * @module plugins/sourceContextDetection/formatTypes
  */
+
 export type FormatType =
   | "bold"
   | "italic"

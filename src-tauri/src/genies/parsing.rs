@@ -186,12 +186,12 @@ fn parse_io_spec(map: &serde_yaml_ng::Mapping, key: &str) -> Option<GenieIoSpec>
     // Deprecated flat form — emit one warning per invocation.
     let flat_key = format!("{}_type", key);
     if let Some(io_type) = yaml_str(map, &flat_key) {
+        // `key` is a constant of this module; `io_type` is the genie file's
+        // own text, so it is logged escaped.
         log::warn!(
-            "Genie frontmatter uses deprecated flat form '{}_type'. \
-             Use nested form: `{}: {{ type: {} }}` instead.",
-            key,
-            key,
-            io_type
+            "Genie frontmatter uses the deprecated flat form {key}_type. \
+             Use the nested form instead: {key}: {{ type: {} }}",
+            crate::peer_text::peer_text(io_type)
         );
         let accept = yaml_str(map, &format!("{}_accept", key)).map(String::from);
         let description = yaml_str(map, &format!("{}_description", key)).map(String::from);
@@ -298,7 +298,7 @@ fn metadata_from_flat(frontmatter_block: &str, name: String) -> GenieMetadata {
 
 #[cfg(test)]
 mod tests {
-    // WI-5.2 — genie frontmatter parser (TQ3 coverage gap).
+    // Genie frontmatter parser (TQ3 coverage gap).
     use super::*;
 
     #[test]

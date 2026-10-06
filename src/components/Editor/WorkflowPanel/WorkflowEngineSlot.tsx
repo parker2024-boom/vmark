@@ -2,7 +2,7 @@
  * WorkflowEngineSlot — the one place the workflow ENGINE reaches the editor UI.
  *
  * Purpose: mount the Run/Cancel side panel only while
- * `advanced.workflowEngine` is on. Split out of `markdownSurface.tsx` by WI-19
+ * `advanced.workflowEngine` is on. Split out of `markdownSurface.tsx`
  * so the gate is a component with a test rather than an inline `&&` inside a
  * surface that needs Tiptap to render — "the affordance is hidden" was until
  * now the ONLY thing stopping the engine, because the Rust commands ignored

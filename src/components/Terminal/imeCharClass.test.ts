@@ -24,4 +24,19 @@ describe("ASCII detectors", () => {
   it.each(["你", "a你", ""])("ALL_ASCII_RE does not match %j", (s) => {
     expect(ALL_ASCII_RE.test(s)).toBe(false);
   });
+
+  // WI-RA17F.7 — the boundary is exactly 0x7F, whatever syntax spells it:
+  // NUL and DEL are ASCII, the first C1 control is not, and astral characters
+  // and lone surrogates (from a split composition) count as non-ASCII.
+  it.each([
+    ["NUL", "\u0000", true],
+    ["DEL", "\u007f", true],
+    ["U+0080", "\u0080", false],
+    ["an astral emoji", "\u{1F600}", false],
+    ["a lone high surrogate", "\ud83d", false],
+    ["a lone low surrogate", "\ude00", false],
+  ])("treats %s as ASCII = %s", (_label, s, ascii) => {
+    expect(ALL_ASCII_RE.test(s)).toBe(ascii);
+    expect(NON_ASCII_RE.test(s)).toBe(!ascii);
+  });
 });

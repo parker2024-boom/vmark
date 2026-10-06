@@ -4,6 +4,7 @@
  * Builds the tab context-menu items with state-driven availability and
  * getState()-based actions (each calls onClose()): Move-to-New-Window needs a
  * doc; Copy Relative Path needs a workspace file; Rename needs a saved file.
+ * Bulk closes skip pinned tabs; Close All asks once, then closes them too.
  *
  * @coordinates-with TabContextMenu.tsx, tabTransferActions.ts, tabCleanup.ts
  * @module components/Tabs/useTabContextMenuActions
@@ -16,9 +17,11 @@ import { useTabStore, type Tab } from "@/stores/tabStore";
 import { type DocumentState } from "@/stores/documentStore";
 import { useTabRenameStore } from "@/stores/tabRenameStore";
 import { closeTabWithDirtyCheck, closeTabsWithDirtyCheck } from "@/services/tabs/tabOperations";
+import { closeAllTabs } from "@/services/tabs/closeAllTabs";
 import { closeOthersIds, closeToRightIds, closeAllUnpinnedIds } from "@/services/tabs/bulkCloseSelectors";
 import { getRelativePath, isWithinRoot } from "@/utils/paths";
 import { tabContextError } from "@/utils/debug";
+import { revealFailedKey } from "@/utils/revealFailedKey";
 import { restoreTransferredTab } from "@/components/StatusBar/tabTransferActions";
 import { moveTabToNewWindow } from "@/services/tabs/moveTabToNewWindow";
 import { openToTheSide, canOpenToTheSide } from "@/services/tabs/openToTheSide";
@@ -88,6 +91,10 @@ export function useTabContextMenuActions({
   const handleCloseOthers = useCallback(() => closeMany(closeOthersIds(tabs, tab.id)), [closeMany, tab.id, tabs]);
   const handleCloseToRight = useCallback(() => closeMany(closeToRightIds(tabs, tabIndex)), [closeMany, tabIndex, tabs]);
   const handleCloseAllUnpinned = useCallback(() => closeMany(closeAllUnpinnedIds(tabs)), [closeMany, tabs]);
+  const handleCloseAll = useCallback(async () => {
+    await closeAllTabs(windowLabel, tabs);
+    onClose();
+  }, [onClose, tabs, windowLabel]);
 
   const handlePin = useCallback(() => {
     useTabStore.getState().togglePin(windowLabel, tab.id);
@@ -100,7 +107,7 @@ export function useTabContextMenuActions({
   }, [onClose, tab.id]);
 
   const handleMoveToNewWindow = useCallback(async () => {
-    // Body extracted to services/tabs/moveTabToNewWindow.ts in WI-DSPL1.5:
+    // Body extracted to services/tabs/moveTabToNewWindow.ts:
     // this file sat exactly on its 300-line-limit baseline (349), so the
     // "Open to the Side" item had nowhere to go. Detaching a tab is a
     // multi-step transfer with its own rollback — a service, not a callback.
@@ -128,12 +135,6 @@ export function useTabContextMenuActions({
     openToTheSide(windowLabel, tab.id);
     onClose();
   }, [onClose, tab.id, windowLabel]);
-
-  const handleCloseAll = useCallback(async () => {
-    const allTabIds = tabs.map((entry) => entry.id);
-    await closeTabsWithDirtyCheck(windowLabel, allTabIds);
-    onClose();
-  }, [onClose, tabs, windowLabel]);
 
   const handleCopyPath = useCallback(async () => {
     if (!filePath) return;
@@ -169,7 +170,7 @@ export function useTabContextMenuActions({
       await revealItemInDir(filePath);
     } catch (error) {
       tabContextError(" Failed to reveal file:", error);
-      toast.error(i18n.t("dialog:toast.failedToRevealInFileManager"));
+      toast.error(i18n.t(revealFailedKey()));
     }
     onClose();
   }, [filePath, onClose]);
@@ -186,7 +187,7 @@ export function useTabContextMenuActions({
       label: tab.isPinned ? i18n.t("tabMenu.unpin") : i18n.t("tabMenu.pin"),
       action: handlePin,
     },
-    // Omitted entirely for a browser tab (WI-DSPL1.5): panes hold documents, so
+    // Omitted entirely for a browser tab: panes hold documents, so
     // a permanently-disabled row on every browser tab is noise, not affordance.
     ...(tab.kind === "document"
       ? [

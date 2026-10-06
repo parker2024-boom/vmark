@@ -141,6 +141,10 @@ VMark sanitizes SVG content before rendering. Script tags and event handler attr
 
 External references are also removed: `<use>` and `<image>` may point at a same-document fragment (`href="#arrowhead"`) or an inline `data:image/…` payload, but a URL pointing off the machine is dropped. Without this, simply opening a document containing an untrusted diagram would fetch that URL — revealing your IP address and the moment you opened the file. Diagram tools such as Mermaid only ever reference fragments, so normal diagrams are unaffected.
 
+An SVG's own stylesheet (`<style>`) is confined to that SVG: every selector is rewritten so it can match only inside the SVG it came from, so a diagram cannot restyle the editor or another diagram. Only style rules, `@media` and `@keyframes` are kept (animation names are made unique per SVG); `@import`, `@font-face` and other at-rules, external `url()` references and `position: fixed` / `sticky` are dropped. `<form>` elements are removed (their content is kept).
+
+Links inside a rendered SVG never navigate VMark itself. Clicking a web link opens it in your system browser; a relative file link opens the file in a VMark tab; `javascript:`, `file:` and `data:` links are never opened.
+
 ### Sizing
 
 If your SVG doesn't include explicit `width`/`height` attributes, add a `viewBox` to control its aspect ratio:

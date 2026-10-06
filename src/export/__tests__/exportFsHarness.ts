@@ -81,7 +81,10 @@ export function createFsMock() {
   readTextFile: vi.fn(async (path: string) => {
     const text = files.get(path);
     if (text === undefined) throw new Error(`ENOENT: ${path}`);
-    return text;
+    // What tauri-plugin-fs returns: the UTF-8 bytes through
+    // `new TextDecoder("utf-8")`, which drops a leading BOM and turns a lone
+    // surrogate into U+FFFD (verified behaviour: src/test/statefulFsFake.ts).
+    return new TextDecoder("utf-8").decode(new TextEncoder().encode(text));
   }),
   rename: vi.fn(async (from: string, to: string) => {
     ops.push(["rename", from, to]);

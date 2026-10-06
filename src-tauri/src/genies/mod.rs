@@ -5,6 +5,7 @@
 
 pub mod commands;
 mod install;
+pub mod load;
 mod parsing;
 mod scanning;
 pub mod types;

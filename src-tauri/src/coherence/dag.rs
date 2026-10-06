@@ -47,15 +47,14 @@ impl RevisionDag {
     }
 
     /// Total revisions across all objects — the materialized size of the dag.
-    /// Used to prove a preview loads a BOUNDED sub-dag, not the whole corpus
-    /// (WI-3.4 perf).
+    /// Used to prove a preview loads a BOUNDED sub-dag, not the whole corpus.
     pub fn total_revisions(&self) -> usize {
         self.parents.values().map(|m| m.len()).sum()
     }
 
     /// Head set: revisions no other revision lists as a parent. Sorted for
     /// deterministic output. Empty ⇔ object unknown.
-    /// Parent links of one revision (WI-3.1 ancestry walk). `None` for
+    /// Parent links of one revision (ancestry walk). `None` for
     /// unknown revisions; a root revision returns an empty vector.
     pub fn parents_of(&self, object: &ObjectId, revision: &RevisionId) -> Option<Vec<RevisionId>> {
         self.parents.get(object)?.get(revision).cloned()

@@ -52,25 +52,29 @@ import { useFileTree } from "./useFileTree";
  */
 type RawEntry = { name: string; path: string; isDirectory: boolean; isHidden?: boolean };
 function mockTree(byDir: Record<string, RawEntry[]>) {
+  // The wire form names each node only; the fixture's `path` locates children.
   const build = (dir: string): unknown[] =>
-    (byDir[dir] ?? []).map((e) => ({
+    (byDir[dir] ?? []).map(({ path, ...e }) => ({
       ...e,
       isHidden: e.isHidden ?? false,
-      ...(e.isDirectory ? { children: build(e.path) } : {}),
+      ...(e.isDirectory ? { children: build(path) } : {}),
     }));
   invokeMock.mockImplementation(async (cmd: string, args?: unknown) => {
     if (cmd !== "list_directory_tree") return undefined;
     const root = (args as { path: string }).path;
-    if (!(root in byDir)) return { entries: [], truncated: false };
-    return { entries: build(root), truncated: false };
+    const wire = { rootPrefix: `${root}/`, separator: "/", truncated: false };
+    if (!(root in byDir)) return { ...wire, entries: [] };
+    return { ...wire, entries: build(root) };
   });
 }
 
+/** An empty listing in the walker's wire form. */
+const EMPTY_LISTING = { rootPrefix: "/root/", separator: "/", entries: [], truncated: false };
 
 beforeEach(() => {
   invokeMock.mockReset();
   invokeMock.mockImplementation(async (cmd: string) => {
-    if (cmd === "list_directory_tree") return { entries: [], truncated: false };
+    if (cmd === "list_directory_tree") return EMPTY_LISTING;
     return undefined;
   });
   onFocusChangedMock.mockClear();

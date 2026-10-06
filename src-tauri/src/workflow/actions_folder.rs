@@ -2,7 +2,7 @@
 //! workspace directory, concatenated in a deterministic order.
 //!
 //! Split from `actions.rs` at the file-size gate. Three properties hold here:
-//!   - Entries are ordered by their RAW names (#255) — `OsString`, which
+//!   - Entries are ordered by their RAW names — `OsString`, which
 //!     orders by bytes and needs no locale — so identical folders feed a
 //!     workflow identically on every filesystem and platform. A sort on the
 //!     lossy UTF-8 rendering could order two distinct non-UTF-8 names as
@@ -17,14 +17,14 @@
 //!     STORES names) would diverge. A name that is not valid Unicode cannot
 //!     exist on the other platform at all, so there is nothing to agree with.
 //!   - Each read is bounded by the smaller of the per-file cap and what is
-//!     left of the total budget (#254), on the bytes actually read: the last
+//!     left of the total budget, on the bytes actually read: the last
 //!     file cannot allocate a full 10 MB past the 100 MB total before it is
 //!     refused, and one that grows during the read cannot pass.
 //!
-//!     The budget charges **what is EMITTED**, not what was read (#256): a
+//!     The budget charges **what is EMITTED**, not what was read: a
 //!     file that is skipped is unpaid, or a folder would be refused over a
-//!     file that contributed nothing. Enforcing that consistently is what
-//!     #511 fixed: a file whose bytes are definitively not UTF-8 is skipped
+//!     file that contributed nothing. Enforcing that consistently means
+//!     a file whose bytes are definitively not UTF-8 is skipped
 //!     even when it is the read against the remaining budget that noticed,
 //!     so the same directory no longer succeeds or fails depending on
 //!     filename ORDER — which is what it did while a late non-UTF-8 file
@@ -34,11 +34,11 @@
 //!     charged: it is at most ~22 bytes × `MAX_FILES_PER_FOLDER`, ~22 KB
 //!     against 100 MB, and the file caps are pinned exactly by tests that
 //!     fill the budget to the byte.
-//!   - **One output buffer, not a `Vec<String>` joined at the end** (#507).
+//!   - **One output buffer, not a `Vec<String>` joined at the end**.
 //!     Each entry was formatted into its own `String` (a copy of the file) and
 //!     `join` then copied all of them again, so a 100 MB read peaked at
 //!     roughly 200 MB plus the per-entry buffers.
-//!   - Type and size are judged on the OPEN handle (#253, `bounded_read`),
+//!   - Type and size are judged on the OPEN handle (`bounded_read`),
 //!     so a FIFO planted between the listing and the read is refused by the
 //!     read, not waited on.
 //!
@@ -87,8 +87,8 @@ fn read_entry(path: &Path, remaining: u64) -> EntryRead {
     }
     if buf.len() as u64 > limit {
         // A file that is definitively not text contributes nothing, so it is
-        // SKIPPED rather than allowed to refuse the whole folder (#511). The
-        // budget charges what is emitted (#256), and enforcing that only when
+        // SKIPPED rather than allowed to refuse the whole folder. The
+        // budget charges what is emitted, and enforcing that only when
         // the decode is reached made the same directory succeed or fail on
         // filename ORDER: an early non-UTF-8 file was free, a late one hit the
         // remaining budget first and came back `OverBudget`.
@@ -111,7 +111,7 @@ fn read_entry(path: &Path, remaining: u64) -> EntryRead {
     EntryRead::Bytes(buf)
 }
 
-/// The accepted entries of `path`, in the deterministic RAW-name order (#255),
+/// The accepted entries of `path`, in the deterministic RAW-name order,
 /// refusing a directory with more of them than the cap allows.
 ///
 /// Split out of `read_folder` (audit 20260907 #506), which held enumeration,
@@ -154,7 +154,7 @@ async fn collect_candidates(
 /// replacement character, so two names differing only in their invalid bytes
 /// render IDENTICALLY — two sections a consumer cannot tell apart, in output
 /// whose whole structure is "this content came from that name". The ORDER was
-/// already fixed for exactly this (#255, header); the LABEL was not. A valid
+/// already fixed for exactly this (header); the LABEL was not. A valid
 /// name is unchanged, so only a name that cannot round-trip gains the byte
 /// suffix — and it gains it because nothing else distinguishes it.
 fn section_label(raw_name: &OsString) -> String {
@@ -185,7 +185,7 @@ struct SkippedEntry {
 /// unannounced subset. In band, in the same `--- name ---` vocabulary, and only
 /// when something WAS skipped, so a complete read is byte-identical to before;
 /// like the per-entry framing it is not charged against the budget (header).
-/// Refusing the folder instead — the finding's other option — is what #511
+/// Refusing the folder instead — the finding's other option — is what was
 /// removed: one binary file would refuse the lot.
 fn skipped_section(skipped: &[SkippedEntry]) -> String {
     let mut out = format!("--- skipped ({}) ---", skipped.len());
@@ -211,7 +211,7 @@ pub(super) async fn read_folder(
     let accept = params.get("accept").map(|s| s.as_str()).unwrap_or("*");
     let candidates = collect_candidates(path_str, path, accept).await?;
 
-    // One buffer, appended in place (#507).
+    // One buffer, appended in place.
     let mut out = String::new();
     let mut total_bytes: u64 = 0;
     let mut skipped: Vec<SkippedEntry> = Vec::new();
@@ -224,7 +224,7 @@ pub(super) async fn read_folder(
         let entry_path = match tokio::fs::canonicalize(&raw_path).await {
             Ok(p) => p,
             Err(e) => {
-                log::warn!("Skipping unresolvable entry '{}': {}", name, e);
+                log::warn!("Skipping unresolvable entry {:?}: {}", name, e);
                 skipped.push(SkippedEntry {
                     label,
                     reason: format!("could not be resolved: {e}"),
@@ -233,7 +233,7 @@ pub(super) async fn read_folder(
             }
         };
         if !entry_path.starts_with(&canonical_root) {
-            log::warn!("Skipping '{}': resolves outside the workspace", name);
+            log::warn!("Skipping {:?}: resolves outside the workspace", name);
             skipped.push(SkippedEntry {
                 label,
                 reason: "resolves outside the workspace".to_string(),
@@ -249,7 +249,7 @@ pub(super) async fn read_folder(
             EntryRead::Bytes(bytes) => match String::from_utf8(bytes) {
                 Ok(text) => text,
                 Err(e) => {
-                    log::warn!("Skipping unreadable file '{}': {}", name, e);
+                    log::warn!("Skipping unreadable file {:?}: {}", name, e);
                     skipped.push(SkippedEntry {
                         label,
                         reason: "not valid UTF-8".to_string(),
@@ -258,7 +258,7 @@ pub(super) async fn read_folder(
                 }
             },
             EntryRead::Oversized => {
-                log::warn!("Skipping oversized file '{}'", name);
+                log::warn!("Skipping oversized file {:?}", name);
                 skipped.push(SkippedEntry {
                     label,
                     reason: format!("over the per-file limit ({MAX_FILE_SIZE_BYTES} bytes)"),
@@ -272,7 +272,7 @@ pub(super) async fn read_folder(
                 ));
             }
             EntryRead::Skipped(reason) => {
-                log::warn!("Skipping '{}': {}", name, reason);
+                log::warn!("Skipping {:?}: {}", name, reason);
                 skipped.push(SkippedEntry { label, reason });
                 continue;
             }

@@ -2,6 +2,8 @@
  * Source Insertions for CodeMirror
  *
  * Provides block insertion helpers for details, alerts, and math blocks.
+ *
+ * @module plugins/sourceContextDetection/sourceInsertions
  */
 
 import { newDetailsMarkdown, newDetailsCursorOffset } from "@/plugins/shared/blockTemplates";

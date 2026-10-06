@@ -34,7 +34,7 @@
  * inline-code or link literal containing an empty line — invalid CommonMark)
  * strip per-block here rather than across blocks.
  *
- * @coordinates-with statusTextMetrics.ts — the per-segment metrics kernel
+ * @coordinates-with utils/markdownTextMetrics.ts — the per-segment metrics kernel
  * @coordinates-with StatusBarCounts.tsx — holds one cache per status bar
  * @module components/StatusBar/incrementalTextMetrics
  */
@@ -43,7 +43,7 @@ import {
   computeTextMetrics,
   stripMarkdown,
   type TextMetrics,
-} from "./statusTextMetrics";
+} from "@/utils/markdownTextMetrics";
 
 interface SegmentEntry {
   metrics: TextMetrics;
@@ -132,7 +132,7 @@ interface MetricsCacheOptions {
   /** Test hook: invoked once per kernel computation (i.e. per cache miss). */
   onSegmentComputed?: (segment: string) => void;
   /**
-   * The format's plain-text projection (WI-4.4).
+   * The format's plain-text projection.
    *
    * Defaults to `stripMarkdown`. When a format supplies a DIFFERENT projection
    * the segment cache is bypassed, because the segment splitting and

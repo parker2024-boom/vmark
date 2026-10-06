@@ -13,10 +13,15 @@
  *
  * Renders the PRODUCTION TiptapEditorInner with the real extension set,
  * editor.css and stores: the class decisions under test live in the component
- * and in the helpers it calls. Only hook wiring with app side effects is
- * replaced — document state (so the test owns the content), the store flush,
- * focus and scroll restore, drag-drop and editor registrations. Every
- * assertion reads the engine's computed style, not class names.
+ * and in the helpers it calls, and the real flush writes the document back.
+ * Only hook wiring with app side effects is replaced — document state (so the
+ * test owns the content), focus and scroll restore, drag-drop and editor
+ * registrations. Every assertion reads the engine's computed style, not class
+ * names.
+ *
+ * The idle window is a 500ms timer: once a test's editor is mounted, the
+ * timers are faked (animation frames stay real, so the engine still paints)
+ * and "after the idle window" is the moment every pending timer has run.
  */
 import "@/styles/index.css";
 import "@/components/Editor/editor.css";
@@ -30,23 +35,31 @@ const doc = vi.hoisted(() => {
   let content = "";
   const listeners = new Set<() => void>();
   const noop = () => {};
+  const set = (next: string) => {
+    content = next;
+    for (const listener of listeners) listener();
+  };
   return {
     editor: null as Editor | null,
-    /** The flush's sync guard, as useTiptapFlush sets it before writing the store. */
-    lastExternalContent: null as { current: string } | null,
+    /** Every markdown string the editor's flush wrote to the store. */
+    flushed: [] as string[],
     get: () => content,
-    set(next: string) {
-      content = next;
-      for (const listener of listeners) listener();
-    },
+    set,
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => {
         listeners.delete(listener);
       };
     },
-    actions: { setContent: noop, setCursorInfo: noop, setSelectedText: noop },
-    noop,
+    actions: {
+      // The store write the real useTiptapFlush ends in.
+      setContent(markdown: string) {
+        doc.flushed.push(markdown);
+        set(markdown);
+      },
+      setCursorInfo: noop,
+      setSelectedText: noop,
+    },
   };
 });
 
@@ -65,31 +78,10 @@ vi.mock("@/hooks/useTiptapSettingsSync", () => ({
     doc.editor = editor;
   },
 }));
-vi.mock("./useTiptapFlush", async () => {
-  const { useRef } = await import("react");
-  return {
-    useTiptapFlush: () => {
-      const lastExternalContent = useRef("");
-      doc.lastExternalContent = lastExternalContent;
-      return {
-        isInternalChange: useRef(false),
-        lastExternalContent,
-        pendingRaf: useRef<number | null>(null),
-        pendingDebounceTimeout: useRef<number | null>(null),
-        internalChangeRaf: useRef<number | null>(null),
-        flushToStore: doc.noop,
-        flushToStoreRef: useRef(null),
-        scheduleFlush: doc.noop,
-      };
-    },
-  };
-});
 vi.mock("@/services/editor/tiptapFocus", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/services/editor/tiptapFocus")>()),
   scheduleTiptapFocusAndRestore: () => {},
 }));
-vi.mock("./useWysiwygScrollMemory", () => ({ useWysiwygScrollMemory: () => {} }));
-vi.mock("./ImageContextMenu", () => ({ ImageContextMenu: () => null }));
 vi.mock("@/hooks/useImageContextMenu", () => ({ useImageContextMenu: () => () => {} }));
 vi.mock("@/hooks/useOutlineSync", () => ({ useOutlineSync: () => {} }));
 vi.mock("@/hooks/useImageDragDrop", () => ({ useImageDragDrop: () => {} }));
@@ -112,8 +104,21 @@ import { parseMarkdown } from "@/utils/markdownPipeline";
 import { TiptapEditorInner } from "./TiptapEditor";
 import { CV_IDLE_CHAR_THRESHOLD } from "./tiptapEditorHelpers";
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+/**
+ * Take over the clock once the editor is mounted (the mount's own deferred
+ * parse runs on the real one). Only timers are faked: frames are real.
+ */
+function fakeTheIdleTimer(): void {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+}
+
+/** Let the idle window elapse: run every timer pending now, the idle re-add among them. */
+async function passTheIdleWindow(): Promise<void> {
+  await vi.runOnlyPendingTimersAsync();
+  await nextFrame();
+}
 
 async function until<T>(probe: () => T | null | undefined, what: string, timeoutMs = 10_000): Promise<T> {
   const began = performance.now();
@@ -194,6 +199,7 @@ async function mount(markdown: string, props: EditorProps = {}): Promise<Mounted
   // onCreate parses the markdown in a deferred task after mount.
   const editor = await until(() => (doc.editor && doc.editor.state.doc.childCount > 1 ? doc.editor : null), "the initial parse");
   for (let i = 0; i < 3; i += 1) await nextFrame();
+  fakeTheIdleTimer();
   return { editor, scroller };
 }
 
@@ -201,22 +207,26 @@ async function mount(markdown: string, props: EditorProps = {}): Promise<Mounted
  * Replace the document's content from outside the editor, as a reload or
  * external change does. A store update inside flushSync renders on the sync
  * lane, whose passive effects (the content sync) React flushes before
- * returning — so the new blocks exist when this returns, and no timer has had
- * a chance to run.
+ * returning — so in an editable pane the new blocks exist when flushSync
+ * returns. A split preview re-parses a large document only once typing has
+ * settled (previewDebounce.ts): that wait is the one timer pending here, and
+ * it is run — nothing armed by the sync itself, such as the idle re-add.
  */
-function replaceContent(editor: Editor, markdown: string): void {
+async function replaceContent(editor: Editor, markdown: string, preview: boolean): Promise<void> {
   const before = editor.state.doc.childCount;
   flushSync(() => doc.set(markdown));
+  if (preview) await vi.runOnlyPendingTimersAsync();
   expect(Math.abs(editor.state.doc.childCount - before), "premise: the content sync ran").toBeGreaterThan(before / 2);
 }
 
-/** Type one character into a paragraph in view, with a real key. */
+/** Type one character into a paragraph in view (top-level, or a list's), with a real key. */
 async function typeInView({ editor, scroller }: Mounted): Promise<void> {
   const top = scroller.getBoundingClientRect().top;
-  const target = Array.from(editor.view.dom.children).find(
-    (block) => block.tagName === "P" && block.getBoundingClientRect().top - top > 40,
+  const block = Array.from(editor.view.dom.children).find(
+    (candidate) => /^(P|UL|OL)$/.test(candidate.tagName) && candidate.getBoundingClientRect().top - top > 40,
   );
-  expect(target, "premise: a paragraph in view").toBeDefined();
+  const target = block?.tagName === "P" ? block : block?.querySelector("p");
+  expect(target, "premise: a paragraph in view").toBeTruthy();
   editor.view.focus();
   const pos = editor.view.posAtDOM(target!, 0) + 1;
   editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, pos)));
@@ -225,8 +235,9 @@ async function typeInView({ editor, scroller }: Mounted): Promise<void> {
   expect(editor.state.doc.content.size, "premise: the keystroke reached the editor").toBe(sizeBefore + 1);
 }
 
-/** Wait until content-visibility is back on the blocks, then let it settle. */
+/** Pass the idle window, see content-visibility back on the blocks, then let it settle. */
 async function untilSkippableAgain(editor: Editor): Promise<void> {
+  await passTheIdleWindow();
   await until(() => census(editor).skippable > 0 || null, "content-visibility to return", 5_000);
   for (let i = 0; i < 10; i += 1) await nextFrame();
 }
@@ -238,10 +249,12 @@ function pinPlatform(platform: string): void {
 describe("content-visibility sizing scope (real engine, production editor)", () => {
   beforeEach(() => {
     doc.editor = null;
+    doc.flushed = [];
   });
   afterEach(() => {
     const unmounting = root;
     if (unmounting) flushSync(() => unmounting.unmount());
+    vi.useRealTimers();
     frame?.remove();
     root = null;
     frame = null;
@@ -261,9 +274,9 @@ describe("content-visibility sizing scope (real engine, production editor)", () 
 
     await typeInView(mounted);
     expect(census(editor), "right after a keystroke").toEqual({ ...none, blocks: editor.view.dom.children.length });
-    await wait(700);
+    await passTheIdleWindow();
     expect(census(editor), "after the idle window").toEqual({ ...none, blocks: editor.view.dom.children.length });
-  }, 30_000);
+  });
 
   it("keeps every block sized on Windows with a large document — at mount, through the edit-time strip and after the re-add", async () => {
     pinPlatform("Win32");
@@ -277,7 +290,7 @@ describe("content-visibility sizing scope (real engine, production editor)", () 
 
     await untilSkippableAgain(editor);
     expect(census(editor), "after the idle re-add").toEqual({ blocks: count(), sized: count(), skippable: count() });
-  }, 30_000);
+  });
 
   // A re-render that changes the container's other classes (code-block line
   // numbers) must neither bring content-visibility back in the middle of an
@@ -296,7 +309,7 @@ describe("content-visibility sizing scope (real engine, production editor)", () 
 
     await untilSkippableAgain(editor);
     expect(census(editor), "after the idle re-add").toEqual({ blocks: count(), sized: count(), skippable: count() });
-  }, 30_000);
+  });
 
   // A reload or external change sets preventUpdate and never reaches onUpdate,
   // and a split preview never handles onUpdate at all: the crossing has to be
@@ -308,7 +321,7 @@ describe("content-visibility sizing scope (real engine, production editor)", () 
       const { editor } = await mount(SMALL, preview ? { preview, readOnly: true } : {});
       expect(census(editor).sized, "premise: a small document is not sized").toBe(0);
 
-      replaceContent(editor, LARGE);
+      await replaceContent(editor, LARGE, preview);
       const count = editor.view.dom.children.length;
       expect(census(editor), "right after the sync").toEqual({ blocks: count, sized: count, skippable: 0 });
       const laidOut = editor.view.dom.getBoundingClientRect().height;
@@ -319,7 +332,6 @@ describe("content-visibility sizing scope (real engine, production editor)", () 
       expect(census(editor), "after the idle window").toEqual({ blocks: count, sized: count, skippable: count });
       expect(Math.abs(editor.view.dom.getBoundingClientRect().height - laidOut), "document height change (px)").toBeLessThanOrEqual(1);
     },
-    30_000,
   );
 
   it.each([{ preview: false }, { preview: true }])(
@@ -330,35 +342,38 @@ describe("content-visibility sizing scope (real engine, production editor)", () 
       const large = editor.view.dom.children.length;
       expect(census(editor), "premise: a large document uses content-visibility").toEqual({ blocks: large, sized: large, skippable: large });
 
-      replaceContent(editor, SMALL);
-      await wait(700);
+      await replaceContent(editor, SMALL, preview);
+      await passTheIdleWindow();
       expect(census(editor)).toEqual({ blocks: editor.view.dom.children.length, sized: 0, skippable: 0 });
     },
-    30_000,
   );
 
   // Near the threshold the serialized markdown and the ProseMirror document
   // differ in length. An edit decides from the document; the flush that
-  // follows must not overrule it. The flushed markdown here is shorter than
-  // the document's real serialization — it stands in for one that landed just
-  // below the threshold while the document stayed above it.
+  // follows must not overrule it. A run of one-item lists is that case for
+  // real: each item costs 5 markdown characters but 7 document positions, so
+  // the document sits above the threshold while its serialization — what the
+  // flush writes to the store — lands below it.
   it("keeps an edit's decision when the flushed markdown lands below the threshold", async () => {
     pinPlatform("Win32");
-    const mounted = await mount(LARGE);
+    const markers = ["-", "*"];
+    const items = Math.ceil(CV_IDLE_CHAR_THRESHOLD / 6);
+    const lists = Array.from({ length: items }, (_, i) => `${markers[i % 2]} a`).join("\n\n");
+    const mounted = await mount(lists);
     const { editor } = mounted;
     await typeInView(mounted);
     expect(editor.state.doc.content.size, "premise: the document stays above the threshold").toBeGreaterThanOrEqual(CV_IDLE_CHAR_THRESHOLD);
 
-    const flushed = LARGE.slice(0, CV_IDLE_CHAR_THRESHOLD - 1_000);
-    const guard = doc.lastExternalContent;
-    if (!guard) throw new Error("premise: the flush guard is wired");
-    guard.current = flushed; // as useTiptapFlush does before writing the store
-    flushSync(() => doc.set(flushed));
+    // The idle window runs the debounced flush along with the re-add.
+    await passTheIdleWindow();
+    const written = doc.flushed.at(-1);
+    expect(written, "premise: the edit was flushed to the store").toBeDefined();
+    expect(written!.length, "premise: the flushed markdown is below the threshold").toBeLessThan(CV_IDLE_CHAR_THRESHOLD);
+    await passTheIdleWindow();
 
-    await wait(700);
     const count = editor.view.dom.children.length;
     expect(census(editor), "after the edit's idle window").toEqual({ blocks: count, sized: count, skippable: count });
-  }, 30_000);
+  });
 
   // keepBothEditorsAlive: Source-mode typing reaches a hidden WYSIWYG editor's
   // store, but its document is synced only when it is shown — and a hidden
@@ -369,7 +384,7 @@ describe("content-visibility sizing scope (real engine, production editor)", () 
     const small = editor.view.dom.children.length;
     render({ hidden: true });
     flushSync(() => doc.set(LARGE));
-    await wait(700);
+    await passTheIdleWindow();
     expect(census(editor), "while hidden").toEqual({ blocks: small, sized: 0, skippable: 0 });
 
     render({ hidden: false });
@@ -381,7 +396,7 @@ describe("content-visibility sizing scope (real engine, production editor)", () 
     await untilSkippableAgain(editor);
     expect(census(editor), "after the idle window").toEqual({ blocks: count, sized: count, skippable: count });
     expect(Math.abs(editor.view.dom.getBoundingClientRect().height - laidOut), "document height change (px)").toBeLessThanOrEqual(1);
-  }, 30_000);
+  });
 
   // The content can change between mount and onCreate's deferred parse,
   // which then loads the latest content. The parse is not an edit, and no
@@ -402,12 +417,13 @@ describe("content-visibility sizing scope (real engine, production editor)", () 
     render({});
     flushSync(() => doc.set(LARGE)); // before the parse's task runs
     const editor = await until(() => (doc.editor && doc.editor.state.doc.content.size > CV_IDLE_CHAR_THRESHOLD ? doc.editor : null), "the parse of the latest content");
+    fakeTheIdleTimer();
     const count = editor.view.dom.children.length;
     expect(census(editor), "after the parse").toEqual({ blocks: count, sized: count, skippable: 0 });
 
     await untilSkippableAgain(editor);
     expect(census(editor), "after the idle window").toEqual({ blocks: count, sized: count, skippable: count });
-  }, 30_000);
+  });
 
   // A load's own transaction is not the final document: plugins append to it
   // (the footnote plugin deletes a definition whose reference is gone), and
@@ -422,9 +438,9 @@ describe("content-visibility sizing scope (real engine, production editor)", () 
 
     flushSync(() => doc.set(`A paragraph without it.\n\n${definition}\n`));
     expect(editor.state.doc.content.size, "premise: the orphaned definition was removed").toBeLessThan(CV_IDLE_CHAR_THRESHOLD);
-    await wait(700);
+    await passTheIdleWindow();
     expect(census(editor)).toEqual({ blocks: editor.view.dom.children.length, sized: 0, skippable: 0 });
-  }, 30_000);
+  });
 
   // An edit that takes the document past the threshold starts the idle
   // window; hiding the editor before one frame has rendered its blocks with
@@ -435,7 +451,7 @@ describe("content-visibility sizing scope (real engine, production editor)", () 
     const addition = parseMarkdown(editor.schema, LARGE).content;
     editor.view.dispatch(editor.state.tr.insert(editor.state.doc.content.size, addition)); // an edit, not a load
     render({ hidden: true }); // same task: no frame has rendered the new blocks
-    await wait(700);
+    await passTheIdleWindow();
     const count = editor.view.dom.children.length;
     expect(census(editor), "while hidden").toEqual({ blocks: count, sized: count, skippable: 0 });
 
@@ -447,5 +463,5 @@ describe("content-visibility sizing scope (real engine, production editor)", () 
     await untilSkippableAgain(editor);
     expect(census(editor), "after the idle window").toEqual({ blocks: count, sized: count, skippable: count });
     expect(Math.abs(editor.view.dom.getBoundingClientRect().height - laidOut), "document height change (px)").toBeLessThanOrEqual(1);
-  }, 30_000);
+  });
 });

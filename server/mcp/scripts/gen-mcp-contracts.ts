@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * MCP contract generator (WI-15) — `pnpm gen:mcp-contracts`.
+ * MCP contract generator — `pnpm gen:mcp-contracts`.
  *
  * Reads the per-operation zod schemas in `src/bridge/operationSchemas.ts` (the
  * single source of truth) and emits the two copies that used to be maintained

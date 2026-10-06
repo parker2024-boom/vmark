@@ -3,6 +3,8 @@
  *
  * Walks ProseMirror's depth tree to find the next meaningful container
  * that is strictly larger than the current selection.
+ *
+ * @module plugins/smartSelectAll/blockBounds
  */
 
 import type { EditorState } from "@tiptap/pm/state";

@@ -115,110 +115,23 @@ fn open_in_external_editor_rejects_unsupported_extension() {
     );
 }
 
+/// WI-RA4.2 — the whole command, not just the validator: a script VMark can
+/// open must not be runnable by naming a shell or interpreter as the editor.
+/// The script is harmless (`exit 0`) because without the guard this call
+/// executes it.
+#[cfg(unix)]
 #[test]
-fn validate_editor_override_accepts_empty_and_whitespace() {
-    assert_eq!(validate_editor_override("").unwrap(), "");
-    assert_eq!(validate_editor_override("   ").unwrap(), "");
-}
+fn open_in_external_editor_refuses_to_run_a_script_through_an_interpreter_override() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let script = dir.path().join("harmless.sh");
+    std::fs::write(&script, "exit 0\n").expect("write");
+    let script = script.to_string_lossy().into_owned();
 
-#[test]
-fn validate_editor_override_accepts_bare_command_names() {
-    assert_eq!(validate_editor_override("code").unwrap(), "code");
-    assert_eq!(validate_editor_override("subl").unwrap(), "subl");
-    assert_eq!(validate_editor_override("nvim").unwrap(), "nvim");
-}
-
-#[test]
-fn validate_editor_override_rejects_relative_with_whitespace() {
-    // Multi-token bare overrides (relative or PATH-resolved) belong
-    // in $VMARK_EXTERNAL_EDITOR env var — the env var isn't
-    // webview-supplied so XSS can't poison it.
-    for input in &["code --wait", "subl -n", "nvim +0", "python -c x"] {
-        let result = validate_editor_override(input);
+    for editor in ["sh", "bash", "/bin/sh", "/usr/bin/env", "python3", "node"] {
+        let result = open_in_external_editor_blocking(script.clone(), Some(editor.to_string()));
         assert!(
             result.is_err(),
-            "multi-token bare override must be rejected (XSS gate): {input:?}"
-        );
-    }
-}
-
-#[test]
-fn validate_editor_override_accepts_absolute_path_with_whitespace_when_real() {
-    // macOS `.app` bundles routinely have spaces in their names.
-    // We allow whitespace ONLY when the path exists on disk —
-    // /Applications/Calculator.app exists on every macOS install.
-    #[cfg(target_os = "macos")]
-    {
-        let bundle = "/Applications/Calculator.app";
-        if Path::new(bundle).is_dir() {
-            let result = validate_editor_override(bundle);
-            assert!(
-                result.is_ok(),
-                "real .app bundle path with no whitespace must validate; got {result:?}"
-            );
-        }
-        // Synthesize a real path with whitespace: /tmp/My Tool.app
-        let dir = tempfile::tempdir().expect("tempdir");
-        let with_space = dir.path().join("My App.app");
-        std::fs::create_dir(&with_space).expect("mkdir");
-        let path_str = with_space.to_string_lossy().into_owned();
-        let result = validate_editor_override(&path_str);
-        assert!(
-            result.is_ok(),
-            "real absolute path with whitespace must validate; got {result:?}"
-        );
-    }
-}
-
-#[test]
-fn validate_editor_override_rejects_absolute_path_with_whitespace_when_fake() {
-    let result = validate_editor_override("/tmp/Not Real.app");
-    assert!(
-        result.is_err(),
-        "absolute path with whitespace must NOT validate when it doesn't exist"
-    );
-}
-
-#[test]
-fn validate_editor_override_rejects_shell_metacharacters() {
-    // Quotes are also rejected to prevent any future shell-out path
-    // from being tricked into argv-injection.
-    for input in &[
-        "code;", "code|", "code&", "code`", "code$", "code>", "code\"", "code'", "code\nrm",
-    ] {
-        let result = validate_editor_override(input);
-        assert!(
-            result.is_err(),
-            "must reject shell metacharacters in: {input:?}"
-        );
-    }
-}
-
-#[test]
-fn validate_editor_override_rejects_flag_prefix() {
-    let result = validate_editor_override("-c");
-    assert!(result.is_err(), "must reject overrides that start with '-'");
-}
-
-#[test]
-fn validate_editor_override_rejects_nonexistent_absolute_paths() {
-    let result = validate_editor_override("/totally/not/a/real/path/code");
-    assert!(
-        result.is_err(),
-        "non-existent absolute paths must be rejected (XSS gate)"
-    );
-}
-
-#[test]
-fn validate_editor_override_accepts_existing_absolute_path() {
-    // /bin/sh exists on macOS / Linux; on Windows this branch is skipped
-    // since /bin/sh isn't a Windows path.
-    #[cfg(unix)]
-    {
-        let result = validate_editor_override("/bin/sh");
-        assert!(
-            result.is_ok(),
-            "existing absolute paths should validate; got {result:?}"
+            "editor override {editor:?} would have executed the file"
         );
     }
 }

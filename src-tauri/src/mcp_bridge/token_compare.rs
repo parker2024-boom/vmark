@@ -22,7 +22,7 @@ use sha2::{Digest, Sha256};
 /// asks the optimiser not to reintroduce an early exit. Hashing with the
 /// already-vendored `sha2` avoids adding a crate.
 ///
-/// What this is NOT (audit round 2, item 2): `black_box` is documented by the
+/// What this is NOT: `black_box` is documented by the
 /// language as a *hint* that guarantees nothing, explicitly not a
 /// cryptographic primitive, and it is applied once after the reduction rather
 /// than throughout. `subtle::ConstantTimeEq` keeps `Choice` optimisation
@@ -36,7 +36,7 @@ use sha2::{Digest, Sha256};
 /// token is always two hex UUIDs (`crate::secret_token`), a length fixed in
 /// source and therefore public. Short-circuiting on it leaks nothing about
 /// the secret, and it bounds the hashing work by the secret's size instead of
-/// by whatever the peer chose to send (audit round 1, out-of-scope item 2).
+/// by whatever the peer chose to send.
 /// What is NOT safe to short-circuit on is the token's *content* — that is
 /// the prefix oracle the fold below removes.
 pub(super) fn token_matches(presented: &str, expected: &str) -> bool {

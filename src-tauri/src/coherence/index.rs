@@ -17,7 +17,7 @@ use rusqlite::Connection;
 use super::types::{Envelope, ObjectId};
 
 // v2: applied keyed by idem; edges.confidence; held/disk_lag tables.
-// v3: check_results table (WI-2b.3 — D5.6 context-snapshot liveness).
+// v3: check_results table (D5.6 context-snapshot liveness).
 // v4: edges.edge_kind (Phase 2, ADR-P2 — additive, default 'dependency', so
 //     every legacy edge reads as a dependency; format stays 0, spec §13.6);
 //     edges_by_downstream index (Phase 3.0 bounded read-view, v4.4).

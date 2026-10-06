@@ -1,7 +1,7 @@
 //! Tests for `fs_scope.rs` — runtime fs + asset scope extension.
 //!
-//! Moved out of `file_open.test.rs` with the code they cover, when
-//! `file_open.rs` crossed the 300-line limit.
+//! Moved out of `files/open.test.rs` with the code they cover, when
+//! `files/open.rs` crossed the 300-line limit.
 
 // -- allow_fs_read runtime scope extension (mock Tauri app) --------------
 //

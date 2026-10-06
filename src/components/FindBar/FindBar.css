@@ -130,7 +130,7 @@
   white-space: nowrap;
 }
 
-/* The buttons are the canonical `.vm-icon-btn` (WI-UI2.3); only layout
+/* The buttons are the canonical `.vm-icon-btn`; only layout
    that the bar owns stays here. */
 .find-bar-close {
   margin-left: auto;

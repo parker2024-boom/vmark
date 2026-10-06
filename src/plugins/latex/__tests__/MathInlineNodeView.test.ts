@@ -35,7 +35,7 @@ const testRegistry = {
   isEditingAt: () => false,
   clear: mockClear,
 };
-vi.mock("../katexLoader", () => ({
+vi.mock("@/plugins/shared/katexLoader", () => ({
   loadKatex: (...args: unknown[]) => mockLoadKatex(...args),
   isKatexLoaded: () => mockIsKatexLoaded(),
   getKatexModule: () => null,
@@ -151,6 +151,8 @@ describe("MathInlineNodeView", () => {
   let getPos: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    // Renders are scheduled on idle (a zero-delay timer here) or a frame: the tests drive that clock.
+    vi.useFakeTimers();
     vi.clearAllMocks();
     document.body.textContent = "";
     mockIsKatexLoaded.mockReturnValue(false);
@@ -165,6 +167,7 @@ describe("MathInlineNodeView", () => {
   afterEach(() => {
     nodeView?.destroy();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   function createNodeView(attrs: Record<string, unknown> = {}) {
@@ -631,8 +634,7 @@ describe("MathInlineNodeView", () => {
 
       createNodeView({ content: "x^2" });
 
-      // Wait for requestIdleCallback/setTimeout
-      await new Promise((r) => setTimeout(r, 50));
+      await vi.advanceTimersByTimeAsync(50);
 
       expect(mockLoadKatex).toHaveBeenCalled();
     });
@@ -644,7 +646,7 @@ describe("MathInlineNodeView", () => {
 
       createNodeView({ content: "\\invalid" });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await vi.advanceTimersByTimeAsync(100);
 
       expect(nodeView.dom.classList.contains("math-error")).toBe(true);
     });
@@ -655,9 +657,11 @@ describe("MathInlineNodeView", () => {
 
       createNodeView({ content: "x^2" });
 
-      await new Promise((r) => setTimeout(r, 50));
+      await vi.advanceTimersByTimeAsync(50);
 
-      // Should still render without crashing, math-error may be added
+      // A failed load falls back to the source text, marked as an error.
+      expect(nodeView.dom.classList.contains("math-error")).toBe(true);
+      expect(nodeView.dom.textContent).toContain("x^2");
     });
 
     it("uses setTimeout when requestIdleCallback not available", async () => {
@@ -667,7 +671,7 @@ describe("MathInlineNodeView", () => {
 
       createNodeView({ content: "x^2" });
 
-      await new Promise((r) => setTimeout(r, 50));
+      await vi.advanceTimersByTimeAsync(50);
 
       expect(mockLoadKatex).toHaveBeenCalled();
     });
@@ -862,7 +866,7 @@ describe("MathInlineNodeView", () => {
       input.dispatchEvent(new Event("blur", { bubbles: true }));
 
       // Wait for rAF
-      await new Promise((r) => requestAnimationFrame(r));
+      await vi.advanceTimersByTimeAsync(16);
 
       // Should have committed changes
       expect(mockView.state.tr.setNodeMarkup).toHaveBeenCalled();
@@ -887,7 +891,7 @@ describe("MathInlineNodeView", () => {
       vi.clearAllMocks();
       input.dispatchEvent(new Event("blur", { bubbles: true }));
 
-      await new Promise((r) => requestAnimationFrame(r));
+      await vi.advanceTimersByTimeAsync(16);
 
       // Should NOT commit since input is still focused
       expect(mockView.state.tr.setNodeMarkup).not.toHaveBeenCalled();
@@ -1121,7 +1125,7 @@ describe("MathInlineNodeView", () => {
 
       createNodeView({ content: "x^2" });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await vi.advanceTimersByTimeAsync(100);
 
       // Should add math-error class and show text content
       expect(nodeView.dom.classList.contains("math-error")).toBe(true);
@@ -1174,25 +1178,17 @@ describe("MathInlineNodeView", () => {
       // Directly add class (simulates what PM decoration does)
       nodeView.dom.classList.add("editing");
 
-      // Wait for MutationObserver to fire
-      await new Promise((r) => setTimeout(r, 10));
-
-      const input = nodeView.dom.querySelector(".math-inline-input");
-      expect(input).not.toBeNull();
+      // The MutationObserver delivers its records asynchronously.
+      await vi.waitFor(() => expect(nodeView.dom.querySelector(".math-inline-input")).not.toBeNull());
     });
 
     it("exits edit mode via MutationObserver when editing class is removed", async () => {
       createNodeView({ content: "x^2" });
       nodeView.dom.classList.add("editing");
-      await new Promise((r) => setTimeout(r, 10));
-
-      // Verify in edit mode
-      expect(nodeView.dom.querySelector(".math-inline-input")).not.toBeNull();
+      await vi.waitFor(() => expect(nodeView.dom.querySelector(".math-inline-input")).not.toBeNull());
 
       nodeView.dom.classList.remove("editing");
-      await new Promise((r) => setTimeout(r, 10));
-
-      expect(nodeView.dom.querySelector(".math-inline-input")).toBeNull();
+      await vi.waitFor(() => expect(nodeView.dom.querySelector(".math-inline-input")).toBeNull());
     });
   });
 });

@@ -59,7 +59,7 @@ export const StatusBarCounts = memo(function StatusBarCounts() {
   // maps during render; that is safe under discarded/replayed concurrent
   // renders because a stale generation only costs a redundant recompute — it
   // can never produce wrong numbers.
-  // WI-4.4: counts use the FORMAT's plain-text projection. stripMarkdown runs
+  // Counts use the FORMAT's plain-text projection. stripMarkdown runs
   // 13 markdown regexes and previously ran for every format, so a .json tab
   // paid markdown's cost and had its braces treated as syntax. Rebuilt when the
   // file (and therefore the format) changes.

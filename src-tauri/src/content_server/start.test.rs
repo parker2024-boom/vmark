@@ -14,11 +14,11 @@ use super::*;
 /// `manager.test.rs`).
 fn spawn_sleeping() -> Child {
     let mut cmd = if cfg!(windows) {
-        let mut c = std::process::Command::new("powershell");
+        let mut c = crate::ai_provider::build_command("powershell", &[]);
         c.args(["-NoProfile", "-Command", "Start-Sleep -Seconds 30"]);
         c
     } else {
-        let mut c = std::process::Command::new("sleep");
+        let mut c = crate::ai_provider::build_command("sleep", &[]);
         c.arg("30");
         c
     };
@@ -28,11 +28,11 @@ fn spawn_sleeping() -> Child {
 /// A child that is already gone by the time it is polled.
 fn spawn_exiting() -> Child {
     let mut child = if cfg!(windows) {
-        std::process::Command::new("cmd")
+        crate::ai_provider::build_command("cmd", &[])
             .args(["/C", "exit"])
             .spawn()
     } else {
-        std::process::Command::new("true").spawn()
+        crate::ai_provider::build_command("true", &[]).spawn()
     }
     .expect("spawn exiting child");
     let _ = child.wait();

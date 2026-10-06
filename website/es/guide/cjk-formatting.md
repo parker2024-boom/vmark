@@ -2,6 +2,10 @@
 
 VMark incluye un conjunto completo de reglas de formato para texto en chino, japonés y coreano. Estas herramientas ayudan a mantener una tipografía coherente al mezclar caracteres CJK y latinos.
 
+::: info El coreano se deja intacto a propósito
+El coreano usa su propio espaciado entre palabras, y las partículas se unen directamente a la palabra anterior — `VMark에는`, nunca `VMark 에는`. Insertar un espacio ahí es un error gramatical, no una preferencia tipográfica, así que **el hangul queda excluido de todas las reglas de espaciado** y de la conversión a puntuación de ancho completo. El texto coreano pasa sin cambios; solo se formatean los caracteres han que contenga.
+:::
+
 ## Inicio Rápido
 
 Usa **Formato → CJK → Formatear archivo completo** o presiona `Alt + Mod + Shift + F` para formatear el documento completo.
@@ -16,13 +20,51 @@ Ambos comandos protegen exactamente lo mismo (ver [Contenido protegido](#conteni
 
 ### 1. Espaciado CJK-Latino
 
-Añade automáticamente espacios entre caracteres CJK y caracteres/números latinos.
+Añade automáticamente espacios entre caracteres CJK y caracteres/números latinos,
+incluidos los números con signo (negativo, positivo, más-menos) y los números con
+un prefijo de moneda.
 
 | Antes | Después |
 |-------|---------|
 | 学习Python编程 | 学习 Python 编程 |
 | 共100个 | 共 100 个 |
 | 使用macOS系统 | 使用 macOS 系统 |
+| 我有-1个 | 我有 -1 个 |
+| 我有+1个 | 我有 +1 个 |
+| 误差±5%范围 | 误差 ±5% 范围 |
+| 中文-$100元 | 中文 -$100 元 |
+| 范围-100到-200 | 范围 -100 到 -200 |
+
+Los caracteres de signo reconocidos son los ASCII `-` `+`, los de ancho completo
+`－` `＋`, el signo menos Unicode `−` y el más-menos `±`. Un signo solo se une al
+número cuando le sigue un dígito (o un símbolo de moneda seguido de un dígito), de
+modo que los identificadores CJK-latinos con guion (p. ej. `中文-Web`) y las
+expresiones CJK-CJK con guion (p. ej. `中文-我`) se mantienen intactos, y los
+rangos como `5-10` se conservan.
+
+**Qué cuenta como CJK y qué cuenta como latino.** Un carácter CJK es un carácter
+han, hiragana, katakana o bopomofo según su escritura Unicode. Eso incluye los
+bloques han menos comunes (Extensión A, las extensiones del plano suplementario y
+los ideogramas de compatibilidad), la marca de iteración `々`, el cero ideográfico
+`〇`, el katakana de medio ancho y la marca de sonido prolongado `ー`. Un carácter
+latino es cualquier letra de escritura latina, incluidas las letras acentuadas, así
+que se añade espacio a ambos lados de una palabra:
+
+| Antes | Después |
+|-------|---------|
+| 中文café中文 | 中文 café 中文 |
+| 中文𠀀abc | 中文𠀀 abc |
+| ｶﾀｶﾅabc | ｶﾀｶﾅ abc |
+| 日本・東京 | 日本・東京 |
+
+Las letras latinas de ancho completo (`Ａ`) llevan su propio espaciado y nunca se
+separan. El punto medio katakana `・` es puntuación, no una letra, así que no se
+añade espacio a su lado.
+
+**Enlaces.** El paréntesis de cierre de un enlace se separa del texto CJK que le
+sigue solo cuando el texto visible del enlace termina en una letra latina o un
+dígito — ese es el hueco que ve el lector. `参见[link](https://x.com)中文` se
+convierte en `参见[link](https://x.com) 中文`; `参见[中文](https://x.com)中文` no cambia.
 
 ### 2. Puntuación de Ancho Completo
 
@@ -45,7 +87,7 @@ Convierte letras y números de ancho completo a medio ancho.
 
 ### 4. Conversión de Paréntesis
 
-Convierte paréntesis de medio ancho a ancho completo cuando rodean contenido CJK.
+Convierte paréntesis de medio ancho a ancho completo cuando rodean contenido CJK. Ambos paréntesis deben estar en el mismo párrafo: separados por una línea en blanco, se quedan como se escribieron.
 
 | Antes | Después |
 |-------|---------|
@@ -78,6 +120,8 @@ VMark usa un **algoritmo de emparejamiento de comillas basado en pila** que gest
 | "don't worry" | “don't worry” |
 | 5'10" tall | 5'10" tall |
 
+No se inserta ningún espacio entre un carácter CJK y un glifo de comilla. `“ ”`, `‘ ’`, `「 」` y `『 』` son de ancho completo en contexto CJK — tanto GB/T 15834 como JLREQ les dan su propio margen lateral —, así que `他说“你好”然后走了` se queda exactamente como está escrito. El texto latino sí recibe un espacio: `word“text”` se convierte en `word “text”`.
+
 Con la opción de corchetes angulares activada:
 
 | Antes | Después |
@@ -87,7 +131,7 @@ Con la opción de corchetes angulares activada:
 
 ### 7. Normalización de Puntos Suspensivos
 
-Estandariza el formato de los puntos suspensivos.
+Estandariza el formato de los puntos suspensivos, con la forma que usa la escritura circundante. No hay una única respuesta correcta: el chino (GB/T 15834) y el japonés (JIS X 4051) usan los puntos suspensivos de seis puntos `……` y **no** llevan espacio después, el coreano usa `…`, y solo el texto latino usa `...` seguido de un espacio.
 
 | Antes | Después |
 |-------|---------|
@@ -96,6 +140,8 @@ Estandariza el formato de los puntos suspensivos.
 | そして...続く | そして……続く |
 | 그리고...계속 | 그리고…계속 |
 | wait...ok | wait... ok |
+
+La escritura se decide a partir de los caracteres inmediatamente contiguos a los puntos, no del documento, así que `...` dentro de una cita en inglés en un archivo chino conserva su forma latina.
 
 ### 8. Puntuación Repetida
 
@@ -111,7 +157,7 @@ Limita los signos de puntuación consecutivos (límite configurable).
 - Espacios múltiples comprimidos: `多个   空格` → `多个 空格`
 - Espacios al final de línea eliminados
 - Espaciado de barras: `A / B` → `A/B`
-- Espaciado de moneda: `$ 100` → `$100`
+- Unión de moneda y unidad: `$ 100` → `$100`, `100 %` → `100%`. Solo se eliminan espacios y tabulaciones: un número al final de una línea o párrafo nunca se une a una unidad o moneda de la línea siguiente, y se conserva un espacio de no separación que hayas escrito entre un número y su unidad
 
 ---
 
@@ -171,7 +217,7 @@ Añade `\` antes de cualquier signo de puntuación para evitar la conversión:
 
 Cuando el [servidor MCP](/es/guide/mcp-setup) está conectado, los asistentes de IA pueden aplicar el formateo CJK de forma programática a través de la herramienta `document.transform` con uno de tres valores de `kind`:
 
-- `"cjk-format"` — normalización CJK completa (espaciado + puntuación + comillas tipográficas), el mismo formateador que ejecuta el comando del menú, siguiendo tu configuración en Configuración → Idioma
+- `"cjk-format"` — normalización CJK completa (espaciado + puntuación + comillas tipográficas), el mismo formateador que ejecuta el comando del menú, siguiendo tu configuración en Ajustes → Idioma
 - `"cjk-spacing"` — inserta un espacio dondequiera que un carácter CJK se encuentre con una letra latina o un dígito, y nada más
 - `"cjk-punctuation"` — convierte `,` `.` `!` `?` `;` `:` `(` `)` de medio ancho junto a un carácter CJK en su forma de ancho completo; nunca convierte de ancho completo a medio ancho
 
@@ -181,7 +227,7 @@ Consulta la [Referencia de Herramientas MCP](/es/guide/mcp-tools#transform) para
 
 ## Configuración
 
-Las opciones de formato CJK se pueden configurar en Configuración → Idioma:
+Las opciones de formato CJK se pueden configurar en Ajustes → Idioma:
 
 - Activar/desactivar reglas específicas
 - Establecer el límite de repetición de puntuación
@@ -189,7 +235,7 @@ Las opciones de formato CJK se pueden configurar en Configuración → Idioma:
 
 ### Comillas Contextuales
 
-Cuando las **Comillas Contextuales** están activadas (predeterminado):
+Cuando las **Comillas contextuales** están activadas (predeterminado):
 
 - Las comillas alrededor de contenido CJK → comillas curvas `""`
 - Las comillas alrededor de contenido puramente latino → comillas rectas `""`
@@ -198,11 +244,11 @@ Esto preserva la apariencia natural del texto en inglés mientras formatea corre
 
 ### Corchetes Angulares CJK *(desactivados por defecto)*
 
-Cuando los **Corchetes Angulares CJK** están activados, las comillas curvas alrededor de contenido CJK se convierten en corchetes angulares (`「」` para el primario, `『』` para el anidado) — la forma de comillas tradicional tipográficamente para la composición CJK vertical. El contenido latino mantiene las comillas curvas estándar independientemente de esta configuración.
+Cuando las **Comillas angulares CJK** están activadas, las comillas curvas alrededor de contenido CJK se convierten en corchetes angulares (`「」` para el primario, `『』` para el anidado) — la forma de comillas tradicional tipográficamente para la composición CJK vertical. El contenido latino mantiene las comillas curvas estándar independientemente de esta configuración.
 
 ### Omisión de la Sección de Referencias
 
-El formateador CJK detecta los encabezados "References" / "参考文献" / "参考资料" / "Bibliography" y omite el reformateo en esas secciones — el texto con formato de citación a menudo depende de una puntuación específica que las reglas CJK normalizarían.
+Cuando **Omitir secciones de referencia** está activado en Ajustes → Idioma → Manejo de secciones (desactivado por defecto), el formateador CJK detecta los encabezados "References" / "Further Reading" / "参考文献" / "参考资料" / "Bibliography" y omite el reformateo en esas secciones — el texto con formato de citación a menudo depende de una puntuación específica que las reglas CJK normalizarían. Actívalo para documentos académicos; déjalo desactivado para formatear el archivo completo.
 
 ### Verificación de Integridad
 
@@ -218,7 +264,7 @@ VMark incluye una función dedicada de espaciado de caracteres para texto CJK qu
 
 ### Configuración
 
-Configúralo en **Configuración → Editor → Tipografía → Espaciado de Caracteres CJK**:
+Configúralo en **Ajustes → Editor → Tipografía → Espaciado de letras CJK**:
 
 | Opción | Valor | Descripción |
 |--------|-------|-------------|
@@ -227,6 +273,8 @@ Configúralo en **Configuración → Editor → Tipografía → Espaciado de Car
 | Ligero | 0.03em | Espaciado ligero |
 | Normal | 0.05em | Recomendado para la mayoría de los casos |
 | Amplio | 0.08em | Espaciado más pronunciado |
+| Más amplio | 0.10em | Aún más amplio, para tamaños de visualización grandes |
+| Extra | 0.12em | El ajuste más amplio |
 
 ### Cómo Funciona
 
@@ -268,7 +316,7 @@ VMark usa un sofisticado algoritmo basado en pila para el emparejamiento de comi
 3. **Detección de Apóstrofos**: Reconoce contracciones (don't, it's) y las conserva
 4. **Detección de Primos**: Reconoce medidas (5'10") y las conserva
 5. **Detección de Contexto CJK**: Comprueba si el contenido entre comillas involucra caracteres CJK
-6. **Limpieza de Huérfanos**: Gestiona correctamente las comillas sin pareja
+6. **Limpieza de Huérfanos**: Gestiona correctamente las comillas sin pareja; una comilla que sigue abierta al final de un párrafo queda sin pareja, así que las comillas nunca se emparejan a través de una línea en blanco
 
 ### Ejemplos
 
@@ -309,22 +357,23 @@ Puedes cambiar rápidamente el estilo de comillas de las comillas existentes sin
 **Detección inteligente**: Los apóstrofos (`don't`), los primos (`5'10"`) y las abreviaciones de décadas (`'90s`) nunca se tratan como pares de comillas.
 
 ::: tip
-Cambia entre el modo simple y el modo ciclo completo en Configuración → Idioma → Formato CJK → Modo de Alternancia de Comillas.
+Cambia entre el modo simple y el modo ciclo completo en Ajustes → Idioma → Formato CJK → Comportamiento de alternancia de comillas.
 :::
 
 ### Configuración
 
-Activa la Conversión de Comillas Tipográficas en Configuración → Idioma → Formato CJK. También puedes seleccionar tu estilo de comillas preferido en el menú desplegable.
+Activa la conversión de comillas tipográficas (**Convertir comillas rectas**) en Ajustes → Idioma → Formato CJK. También puedes seleccionar tu estilo de comillas preferido en el menú desplegable.
 
 ---
 
 ## Conversión de Corchetes Angulares CJK
 
-Cuando los **Corchetes Angulares CJK** están activados, las comillas curvas alrededor de contenido CJK se convierten automáticamente en corchetes angulares.
+Cuando las **Comillas angulares CJK** están activadas, las comillas curvas alrededor de contenido CJK se convierten automáticamente en corchetes angulares.
 
 ### Caracteres Admitidos
 
-La conversión a corchetes angulares se activa cuando el contenido entre comillas contiene **caracteres chinos** (Ideogramas Unificados CJK U+4E00–U+9FFF):
+La conversión a corchetes angulares se activa cuando el contenido entre comillas — o
+el texto inmediatamente contiguo — es han, hiragana, katakana o bopomofo:
 
 | Tipo de Contenido | Ejemplo | ¿Convierte? |
 |-------------------|---------|-------------|
@@ -335,7 +384,8 @@ La conversión a corchetes angulares se activa cuando el contenido entre comilla
 | Coreano | `"한글"` | ✗ permanece como `"한글"` |
 | Inglés | `"hello"` | ✗ permanece como `"hello"` |
 
-**Consejo:** Para texto japonés solo con Kana, usa manualmente los corchetes angulares `「」` o incluye al menos un carácter Kanji.
+El coreano queda excluido por el mismo motivo que en las reglas de espaciado: el
+coreano usa `“ ”`, no corchetes angulares.
 
 ---
 
@@ -375,7 +425,7 @@ Después del formato, el texto tendrá este aspecto:
 
 学习过程中遇到的最大挑战是 —— 状态管理。Redux 的概念……说实话有点难理解。后来换成了 Zustand，简单多了！
 
-老师说 "don't give up" 然后继续讲 "写代码要注重可读性"，我觉得很有道理。
+老师说“don't give up”然后继续讲“写代码要注重可读性”，我觉得很有道理。
 
 访问 https://example.com/docs 获取 v2.0.0 版本文档，价格 $99.99，时间 12:30 开始。
 
@@ -393,7 +443,14 @@ Después del formato, el texto tendrá este aspecto:
 - Espaciado CJK-Latino añadido (学习 TypeScript)
 - Puntuación de ancho completo convertida (，。！)
 - Números de ancho completo normalizados (３→3, １０００→1000, ２００→200)
-- Guiones dobles convertidos en rayas largas (-- → ——)
-- Puntos suspensivos normalizados (. . . → ...)
-- Comillas tipográficas aplicadas, apóstrofo conservado (don't)
+- Guiones dobles convertidos en rayas largas (是--状态 → 是 —— 状态)
+- Puntos suspensivos normalizados a la forma china, sin espacio después (. . . → ……)
+- Comillas tipográficas aplicadas sin espacio junto al texto CJK, apóstrofo conservado (don't)
 - Construcciones técnicas protegidas (https://example.com/docs, v2.0.0, $99.99, 12:30)
+
+**Y lo que _no_ cambia:** el `--` de `**Frontend**--React` se queda como guion
+doble. La conversión de guiones necesita un carácter CJK o un alfanumérico
+inmediatamente junto a los guiones, y `*` no es ninguna de las dos cosas. Activarla
+con los marcadores de énfasis convertiría el `--` de cada elemento de lista
+puramente en inglés de un documento chino, lo que es peor que dejar estos tres tal
+cual.

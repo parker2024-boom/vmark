@@ -2,12 +2,15 @@
  * Link Create Popup Tiptap Extension
  *
  * Registers the link create popup view with the editor.
+ *
+ * @module plugins/linkCreatePopup/tiptap
  */
 
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { StoreApi } from "@/plugins/shared/types";
 import { LinkCreatePopupView, type LinkCreatePopupState } from "./LinkCreatePopupView";
+import { requirePort } from "@/plugins/shared/requirePort";
 
 const linkCreatePopupPluginKey = new PluginKey("linkCreatePopup");
 
@@ -15,7 +18,7 @@ const linkCreatePopupPluginKey = new PluginKey("linkCreatePopup");
 /** Options for the link-create popup extension. */
 export interface LinkCreatePopupOptions {
   /** The popup state this plugin drives — a PORT, not the app's store. */
-  store: StoreApi<LinkCreatePopupState>;
+  store: StoreApi<LinkCreatePopupState> | undefined;
 }
 
 export const linkCreatePopupExtension = Extension.create<LinkCreatePopupOptions>({
@@ -23,16 +26,11 @@ export const linkCreatePopupExtension = Extension.create<LinkCreatePopupOptions>
 
   // No default: there is no sensible stand-in for the state a popup drives.
   addOptions() {
-    return { store: undefined as unknown as StoreApi<LinkCreatePopupState> };
+    return { store: undefined };
   },
 
   addProseMirrorPlugins() {
-    const { store } = this.options;
-    if (!store) {
-      throw new Error(
-        "linkCreatePopupExtension requires a `store` option — see services/assembly/tiptapExtensions.ts"
-      );
-    }
+    const store = requirePort(this.options.store, "linkCreatePopupExtension", "store");
     return [
       new Plugin({
         key: linkCreatePopupPluginKey,

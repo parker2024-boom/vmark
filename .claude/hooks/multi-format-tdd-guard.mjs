@@ -5,7 +5,7 @@
 // files unless tests exist (sibling .test.ts(x) for JS/TS; inline
 // #[cfg(test)] mod tests OR sibling <name>.test.rs for Rust).
 //
-// Scope (per dev-docs/plans/20260506-multi-format-rebrand.md
+// Scope (per .claude/adr/plans/20260506-multi-format-rebrand.md,
 // Verification gates → TDD hook):
 //
 //   Frontend (sibling .test.ts(x) required):
@@ -25,9 +25,9 @@
 //     src/utils/dropPaths.ts
 //     src/services/navigation/newFile.ts   (was utils/newFile.ts)
 //     src/services/macos/macQuarantineNotice.ts   (was utils/macQuarantineNotice.ts)
-//     (yamlOpenRouting.ts was deleted by WI-2.6 — scope removed)
+//     (yamlOpenRouting.ts was deleted — scope removed)
 //
-//   The 2026-07 refactors relocated four of these sites; the guard tracks
+//   Later refactors relocated four of these sites; the guard tracks
 //   their CURRENT paths. Pointing at the deleted originals silently disabled
 //   the gate for the moved code (representative edits exited 0) — the exact
 //   fail-open governance §9 forbids. Regression-tested in the sibling
@@ -188,7 +188,7 @@ if (inFrontendScope) {
     "  Per .claude/rules/10-tdd.md, RED comes before GREEN.",
     "  Write the failing test first, then this hook will allow the source edit.",
     "",
-    "  Scope: multi-format rebrand (dev-docs/plans/20260506-multi-format-rebrand.md).",
+    "  Scope: multi-format rebrand (.claude/adr/plans/20260506-multi-format-rebrand.md).",
     "",
   ].join("\n");
   process.stderr.write(msg);
@@ -213,7 +213,7 @@ if (inRustScope) {
   if (/#\[cfg\([^\]]*\btest\b[^\]]*\)\]/.test(content)) process.exit(0);
 
   // Sibling test file also satisfies the gate: the codebase migrated
-  // large modules to the sibling `.test.rs` convention (2026-07 lib.rs /
+  // large modules to the sibling `.test.rs` convention (the lib.rs /
   // window_manager decomposition), so "tests exist" is no longer
   // inline-only. The sibling must already exist — write it first (RED).
   {
@@ -232,7 +232,7 @@ if (inRustScope) {
     "  Add an inline `#[cfg(test)] mod tests { ... }` OR a sibling `<name>.test.rs`",
     "  with a failing test before modifying production code in this file.",
     "",
-    "  Scope: multi-format rebrand (dev-docs/plans/20260506-multi-format-rebrand.md).",
+    "  Scope: multi-format rebrand (.claude/adr/plans/20260506-multi-format-rebrand.md).",
     "  Note: this guard uses whole-file scope — once the file has any test block,",
     "  individual edits are allowed.",
     "",

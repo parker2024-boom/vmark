@@ -1,5 +1,5 @@
 /**
- * Cross-Window Live References (WI-9)
+ * Cross-Window Live References
  *
  * Purpose: the frontend half of the cross-window bridge. Zustand state is
  * per-webview, so another VMark window's unsaved buffer — possibly the SOLE
@@ -12,8 +12,8 @@
  *     window missing the deadline yields `complete: false`, which the scanner
  *     folds into `scanComplete: false` — and nothing is deleted on partial
  *     evidence. The single-window common case is a complete empty answer.
- *   - The responder flushes its editors before reading the store (WI-10
- *     applies across windows too) and sends extracted KEYS, not contents —
+ *   - The responder flushes its editors before reading the store (the
+ *     pre-read flush applies across windows too) and sends extracted KEYS, not contents —
  *     parsing happens where the buffer lives, and the IPC stays small.
  *
  * @coordinates-with src-tauri/src/live_docs.rs — the relay
@@ -45,11 +45,10 @@ interface LiveDocRefsWire {
  * Ask every OTHER document window for its live image-reference keys.
  * Never throws; failure is `complete: false`.
  */
-export async function collectRemoteLiveRefs(windowLabel: string): Promise<ExternalRefKeys> {
+export async function collectRemoteLiveRefs(): Promise<ExternalRefKeys> {
   try {
-    const wire = await invoke<LiveDocRefsWire>("collect_live_document_refs", {
-      requestingLabel: windowLabel,
-    });
+    // Rust asks every document window except the one that asks: this one.
+    const wire = await invoke<LiveDocRefsWire>("collect_live_document_refs");
     if (!wire || typeof wire.complete !== "boolean" || !Array.isArray(wire.refs)) {
       return { complete: false, keys: new Set() };
     }
@@ -67,6 +66,11 @@ export async function collectRemoteLiveRefs(windowLabel: string): Promise<Extern
  * UNTITLED documents count too: a never-saved buffer can hold an
  * absolute-path reference (drag-drop, MCP write), and it exists nowhere on
  * disk for any other evidence source to find. Extra keys only protect.
+ *
+ * That is also why this reads the document store whole rather than the open
+ * tabs: a document left without a tab can only ADD keys here, and a key can
+ * only keep an image. (The buffers that REPLACE files as evidence come from
+ * open tabs only — see `liveDocumentContents.ts`.)
  */
 export function localLiveRefKeys(): string[] {
   flushAllWysiwygNow();

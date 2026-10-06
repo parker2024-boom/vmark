@@ -1,5 +1,5 @@
 /**
- * Live-Docs Responder Hook (WI-9)
+ * Live-Docs Responder Hook
  *
  * Purpose: answer another window's `live-docs:request` with this window's
  * live image-reference keys. Mounted once per document window (via
@@ -29,13 +29,12 @@ export function useLiveDocsResponder(): void {
     webview
       .listen<string>("live-docs:request", voidAsync(async (event) => {
         try {
-          // The label identifies WHICH window answered: Rust counts answers
-          // by distinct expected label, so a duplicate listener (Strict Mode)
-          // or a stray echo can never stand in for a window that stayed
-          // silent — completeness would otherwise lie.
+          // Rust counts the answer for the window it came FROM, by distinct
+          // expected label, so a duplicate listener (Strict Mode), a stray
+          // echo or another window can never stand in for a window that
+          // stayed silent — completeness would otherwise lie.
           await invoke("live_docs_response", {
             requestId: event.payload,
-            label: webview.label,
             refs: localLiveRefKeys(),
           });
         } catch (error) {

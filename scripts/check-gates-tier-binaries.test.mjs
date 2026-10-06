@@ -17,8 +17,9 @@
 // RUNNER_PROVIDED is a claim about the runner image, so it stays short:
 // anything not plainly guaranteed belongs in the install step instead.
 import { describe, it, expect } from "vitest";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { gitIn, repoFiles } from "./lib/featureMapInputs.mjs";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const CI = readFileSync(join(ROOT, ".github/workflows/ci.yml"), "utf8");
@@ -46,21 +47,15 @@ function feStaticBlock() {
   return end === -1 ? rest : rest.slice(0, end);
 }
 
-/** Gates-tier test sources, which is where these programs are executed from. */
+/**
+ * Gates-tier test sources, which is where these programs are executed from.
+ * Listed by git, not walked on disk: other tests create and delete gitignored
+ * scratch trees (a Stryker sandbox) under scripts/ while this one runs.
+ */
 function gatesTierSources() {
-  const out = [];
-  const walk = (dir) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const p = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name !== "node_modules") walk(p);
-      } else if (/\.test\.mjs$/.test(entry.name)) {
-        out.push(readFileSync(p, "utf8"));
-      }
-    }
-  };
-  walk(join(ROOT, "scripts"));
-  return out;
+  return repoFiles(ROOT, gitIn(ROOT))
+    .filter((f) => f.startsWith("scripts/") && f.endsWith(".test.mjs"))
+    .map((f) => readFileSync(join(ROOT, f), "utf8"));
 }
 
 /** Does any gates-tier test name this program as a quoted argument? */

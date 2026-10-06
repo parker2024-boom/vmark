@@ -17,7 +17,7 @@ import {
   wrapCommand,
   wrapViewCommand,
 } from "../keymap";
-import { MultiSelection } from "../MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 import { multiCursorPlugin } from "../multiCursorPlugin";
 import { collapseMultiSelection } from "../commands";
 import { useShortcutsStore } from "@/stores/settingsStore";

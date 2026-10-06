@@ -1,21 +1,25 @@
-// WI-4.1 — Code-viewer adapters.
-//
-// Per ADR-3, code formats are READ-ONLY by default. The "Enable editing"
-// toggle (WI-4.3) promotes a tab to read-write; "Open in external
-// editor" (WI-4.4) deep-links to $EDITOR.
-//
-// Language packs:
-//   - TypeScript / TSX: @codemirror/lang-javascript with jsx + typescript flags
-//   - JavaScript / JSX: @codemirror/lang-javascript with jsx flag
-//   - Python: @codemirror/lang-python
-//   - Rust: @codemirror/lang-rust
-//   - Go: @codemirror/lang-go
-//   - CSS: @codemirror/lang-css
-//   - Shell (.sh / .bash): @codemirror/legacy-modes/mode/shell
-//   - Ruby: @codemirror/legacy-modes/mode/ruby
-//   - Lua: @codemirror/legacy-modes/mode/lua
-//
-// .zig is deliberately out of v1 scope (no maintained pack — ADR-3).
+/**
+ * Code-viewer adapters — register the programming-language formats that open in the source pane.
+ *
+ * Per ADR-3, code formats are READ-ONLY by default. The "Enable editing"
+ * toggle promotes a tab to read-write; "Open in external
+ * editor" deep-links to $EDITOR.
+ *
+ * Language packs:
+ *   - TypeScript / TSX: @codemirror/lang-javascript with jsx + typescript flags
+ *   - JavaScript / JSX: @codemirror/lang-javascript with jsx flag
+ *   - Python: @codemirror/lang-python
+ *   - Rust: @codemirror/lang-rust
+ *   - Go: @codemirror/lang-go
+ *   - CSS: @codemirror/lang-css
+ *   - Shell (.sh / .bash): @codemirror/legacy-modes/mode/shell
+ *   - Ruby: @codemirror/legacy-modes/mode/ruby
+ *   - Lua: @codemirror/legacy-modes/mode/lua
+ *
+ * .zig is deliberately out of v1 scope (no maintained pack — ADR-3).
+ *
+ * @module lib/formats/adapters/code
+ */
 
 import type { Extension } from "@codemirror/state";
 import { registerFormat } from "../registry";

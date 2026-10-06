@@ -4,7 +4,7 @@
  * Purpose: Right-hand section of the status bar — word/char count, lint badge,
  * AI status indicator (running/error/success), MCP connection status, terminal
  * toggle, and editor mode toggle. Rare states (update lifecycle, auto-save
- * paused, divergent) are TOASTS since WI-UB3 — see hooks/useStatusToasts.
+ * paused, divergent) are TOASTS — see hooks/useStatusToasts.
  *
  * Key decisions:
  *   - Split from StatusBar.tsx to isolate re-renders: props like wordCount
@@ -21,7 +21,7 @@
  *     and SR users aren't spammed every second.
  *
  * @coordinates-with StatusBar.tsx — parent passes all props
- * @coordinates-with hooks/useStatusToasts.ts — rare states toast instead (WI-UB3)
+ * @coordinates-with hooks/useStatusToasts.ts — rare states toast instead
  * @module components/StatusBar/StatusBarRight
  */
 import { useTranslation } from "react-i18next";
@@ -79,7 +79,8 @@ interface StatusBarRightProps {
   aiError: string | null;
   showSuccess: boolean;
   onCancelAi: () => void;
-  onRetryAi: () => void;
+  /** Absent when the failure has nothing to re-run; hides the Retry button. */
+  onRetryAi?: (() => void) | undefined;
   onDismissError: () => void;
   mcpRunning: boolean;
   mcpLoading: boolean;
@@ -140,8 +141,8 @@ export function StatusBarRight({
   const { t } = useTranslation("statusbar");
   return (
     <div className="status-bar-right">
-      {/* Auto-save-paused and divergent are TOASTS now (WI-UB3,
-          useStatusToasts) — the props survive only to suppress a stale
+      {/* Auto-save-paused and divergent are TOASTS now
+          (useStatusToasts) — the props survive only to suppress a stale
           "saved Xs ago" chip while either state is telling a truer story. */}
       {showAutoSave && lastAutoSave && !showAutoSavePaused && !isDivergent && (
         <span className="status-autosave" title={t("autoSavedAt", { time: formatExactTime(lastAutoSave) })}>
@@ -154,7 +155,7 @@ export function StatusBarRight({
 
       <LintBadge />
 
-      {/* WI-UA11 (audit 20260901): hairline dividers split the cluster into
+      {/* Hairline dividers split the cluster into
           role groups — document signals | connectivity | editor state. */}
       <span className="status-bar-divider" aria-hidden="true" />
 
@@ -172,14 +173,14 @@ export function StatusBarRight({
         className={`status-mcp ${mcpRunning ? "connected" : ""} ${mcpLoading ? "loading" : ""} ${mcpError ? "error" : ""}`}
         onClick={openMcpSettings}
         title={formatMcpTooltip(mcpRunning, mcpLoading, mcpError, mcpClients)}
-        // R13 (WI-UI4.5): the STATE rides in the accessible name, not colour.
+        // R13: the STATE rides in the accessible name, not colour.
         aria-label={formatMcpTooltip(mcpRunning, mcpLoading, mcpError, mcpClients)}
       >
         <Satellite size={ICON_SM} />
-        {/* Second channel beside colour: a state WORD (WI-UA10), but only
+        {/* Second channel beside colour: a state WORD, but only
             when something needs saying — connected already speaks through
-            the tinted badge, so its "on" was redundant (maintainer,
-            2026-09-02). off/starting/error still carry their word. */}
+            the tinted badge, so its "on" was redundant (maintainer).
+            off/starting/error still carry their word. */}
         {(mcpError || mcpLoading || !mcpRunning) && (
           <span className="status-mcp__state" aria-hidden="true">
             {mcpError ? t("mcpStateError") : mcpLoading ? t("mcpStateStarting") : t("mcpStateOff")}

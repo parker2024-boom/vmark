@@ -1,5 +1,5 @@
 /**
- * MCP v2 console tool (WI-P7.1): `console` — read the tab's captured `console.*`
+ * MCP v2 console tool: `console` — read the tab's captured `console.*`
  * output for debugging a page the AI is driving.
  *
  * READ-CLASS: it reads the shared DOM ring buffer (populated by the page-world
@@ -18,13 +18,14 @@ import { wrapHandler } from "./wrapHandler";
 import { buildConsoleReadScript } from "@/lib/browser/agent/consoleShim";
 import { urlForAgent } from "@/lib/browser/url";
 import { runReadClass, parseEvalResult } from "./browserReadClass";
-import { readOperationArgs } from "./readOperationArgs";
+import { readOperationArgsChecked } from "./readOperationArgs";
 
 /** `vmark.browser.console` — return the captured console ring buffer (read-class). */
 export async function handleBrowserConsole(id: string, args: Record<string, unknown>): Promise<void> {
-  const clear = readOperationArgs("vmark.browser.console", args).clear === true;
+  const read = readOperationArgsChecked("vmark.browser.console", args);
+  const clear = read.wire.clear === true;
   return wrapHandler(id, () =>
-    runReadClass<string>(id, args, {
+    runReadClass<string>(id, read, {
       invoke: (tab) =>
         invoke<string>("browser_eval", {
           tabId: tab.tabId,

@@ -103,12 +103,12 @@ function buildFormatCommandSpecs(): CommandDefinition[] {
 }
 
 /**
- * Register the three override commands as ONE owner batch (audit #906).
+ * Register the three override commands as ONE owner batch.
  *
  * Checking only the first id could not detect foreign ownership, and a
  * `registerCommand` that threw part-way left an incomplete batch that every
  * later retry skipped. `registerCommands` preflights all three and replaces
- * its own previous batch (#459).
+ * its own previous batch.
  */
 export function registerFormatCommands(): void {
   registerCommands(FORMAT_COMMANDS_OWNER, buildFormatCommandSpecs());

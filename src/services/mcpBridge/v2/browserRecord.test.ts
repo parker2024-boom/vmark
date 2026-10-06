@@ -1,6 +1,7 @@
 // @vitest-environment node
 // WI-NB7.3 — the workflow_record MCP handler: consent-gated start, drain-and-
 // finalize stop. Mocks the approval store, the recorder session, and the bridge.
+// WI-RA18.7 — the site id is cut to its budget without splitting a character.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const respondMock = vi.fn<(...a: unknown[]) => Promise<void>>(async () => {});
@@ -114,6 +115,19 @@ describe("workflow_record — start (consent-gated)", () => {
       expect.objectContaining({ tabId: "t1", site: "blog", generation: 5, startUrl: "https://x.test/app" }),
     );
     expect(lastRespond()).toMatchObject({ success: true, data: { status: "recording", tabId: "t1" } });
+  });
+
+  it.each([
+    ["an emoji straddling the budget", `${"a".repeat(63)}😀tail`, "a".repeat(63)],
+    ["a family emoji straddling the budget", `${"a".repeat(60)}👨‍👩‍👧tail`, "a".repeat(60)],
+    ["CJK text over the budget", "中".repeat(70), "中".repeat(64)],
+    ["a name within the budget", "博客 😀", "博客 😀"],
+  ])("cuts the site id without splitting a character: %s", async (_label, site, expected) => {
+    seedRecordOneShot();
+    await handleBrowserWorkflowRecord("1", { recordOp: "start", site });
+    const started = startRecorderSession.mock.calls.at(-1)?.[0];
+    expect(started?.site).toBe(expected);
+    expect(started?.site.isWellFormed()).toBe(true);
   });
 
   it("consumes the one-shot against the tab's generation (#63)", async () => {

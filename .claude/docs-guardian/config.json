@@ -11,7 +11,7 @@
     { "code": "src/plugins/multiCursor", "doc": "website/guide/multi-cursor.md" },
     { "code": "src-tauri/src/mcp_bridge", "doc": "website/guide/mcp-tools.md" },
     { "code": "src-tauri/src/mcp_config", "doc": "website/guide/mcp-tools.md" },
-    { "code": "src-tauri/src/mcp_server.rs", "doc": "website/guide/mcp-tools.md" },
+    { "code": "src-tauri/src/mcp_bridge/control.rs", "doc": "website/guide/mcp-tools.md" },
     { "code": "src/hooks/mcpBridge", "doc": "website/guide/mcp-tools.md" },
     { "code": "server/mcp/src", "doc": "website/guide/mcp-setup.md" },
     { "code": "src/plugins/mermaid*", "doc": "website/guide/mermaid.md" },

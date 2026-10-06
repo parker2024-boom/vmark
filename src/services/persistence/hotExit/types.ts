@@ -3,6 +3,8 @@
  *
  * TypeScript definitions mirroring Rust structs in src-tauri/src/hot_exit/session.rs
  * These types define the complete application session state for save/restore.
+ *
+ * @module services/persistence/hotExit/types
  */
 
 export const SCHEMA_VERSION = 5;
@@ -39,11 +41,11 @@ export interface WindowState {
   workspace_instance_ids?: string[];
   active_workspace_instance_id?: string | null;
   workspace_instances?: HotExitWorkspaceInstanceState[];
-  /** WI-9.4: per-instance UI state (opaque to Rust). */
+  /** Per-instance UI state (opaque to Rust). */
   ui_state_by_instance?: Record<string, unknown>;
-  /** WI-9.4: scoped closed-tab reopen history for this window. */
+  /** Scoped closed-tab reopen history for this window. */
   closed_tab_scopes?: Record<string, unknown>;
-  /** WI-9.4/8.2: window-global human browser records. */
+  /** Window-global human browser records. */
   browser_session?: unknown;
 }
 
@@ -74,7 +76,7 @@ export interface TabState {
   is_pinned: boolean;
   document: DocumentState;
   /**
-   * Format registry id for this tab — added in v3 (WI-1A.13).
+   * Format registry id for this tab — added in v3.
    *
    * Persisted directly rather than derived at restore: derivation
    * requires re-running content schemaDetectors (pure-but-paid) and
@@ -86,13 +88,13 @@ export interface TabState {
   format_id: string;
   /**
    * Whether the user has explicitly enabled editing on a viewer-mode
-   * format (e.g. read-only `.json`). Added in v3 (WI-1A.13).
+   * format (e.g. read-only `.json`). Added in v3.
    * Pre-v3 sessions backfill to `true` (markdown is editable by default).
    */
   editing_enabled: boolean;
   /**
    * Active schema renderer id when the format supports multiple
-   * (e.g. yaml-gha-workflow vs generic yaml tree). Added in v3 (WI-1A.13).
+   * (e.g. yaml-gha-workflow vs generic yaml tree). Added in v3.
    * Null/undefined means "use format default schema dispatch".
    */
   active_schema_id: string | null;

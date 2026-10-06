@@ -1,3 +1,11 @@
+/**
+ * dragDropLegacyWindows — opens drag-dropped paths in new windows: paths under
+ * a workspace root open together in one workspace window per root, the rest
+ * open one window each, with a toast on failure.
+ *
+ * @module services/navigation/dragDropLegacyWindows
+ */
+
 import { invoke } from "@tauri-apps/api/core";
 import { imeToast as toast } from "@/services/ime/imeToast";
 import i18n from "@/i18n";

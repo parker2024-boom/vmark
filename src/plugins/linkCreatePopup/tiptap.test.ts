@@ -1,4 +1,3 @@
-// @vitest-environment node
 /**
  * The link-create popup extension's wiring.
  *
@@ -10,16 +9,6 @@
  * @module plugins/linkCreatePopup/tiptap.test
  */
 import { describe, it, expect, vi } from "vitest";
-
-const constructed: unknown[] = [];
-vi.mock("./LinkCreatePopupView", () => ({
-  LinkCreatePopupView: class {
-    constructor(_view: unknown, store: unknown) {
-      constructed.push(store);
-    }
-    destroy() {}
-  },
-}));
 
 import { linkCreatePopupExtension } from "./tiptap";
 
@@ -35,17 +24,29 @@ function pluginFor(store: unknown) {
   return plugins[0];
 }
 
+/** A store port that records who subscribed and whether they let go. */
+function portStore() {
+  const unsubscribe = vi.fn();
+  return {
+    getState: () => ({ isOpen: false, anchorRect: null }),
+    subscribe: vi.fn(() => unsubscribe),
+    unsubscribe,
+  };
+}
+
 describe("the injected store reaches the view", () => {
-  it("passes the option through, not a store it imported", () => {
-    const store = { getState: () => ({}), subscribe: () => () => {} };
-    pluginFor(store).spec.view!({} as never);
-    expect(constructed.at(-1)).toBe(store);
+  it("the real view subscribes to the option's store, not one it imported", () => {
+    const store = portStore();
+    pluginFor(store).spec.view!({ dom: document.createElement("div") } as never);
+    expect(store.subscribe).toHaveBeenCalledTimes(1);
   });
 
-  it("destroys the view with the editor", () => {
-    const store = { getState: () => ({}), subscribe: () => () => {} };
-    const handle = pluginFor(store).spec.view!({} as never);
-    expect(() => handle.destroy()).not.toThrow();
+  it("destroys the view with the editor, releasing the store", () => {
+    const store = portStore();
+    const handle = pluginFor(store).spec.view!({ dom: document.createElement("div") } as never);
+    expect(store.unsubscribe).not.toHaveBeenCalled();
+    handle.destroy();
+    expect(store.unsubscribe).toHaveBeenCalledTimes(1);
   });
 
   it("tells a host that forgot the store, by name", () => {

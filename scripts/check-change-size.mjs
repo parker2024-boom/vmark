@@ -13,7 +13,7 @@
  * control would be the kind of fiction this plan exists to delete. See
  * .claude/rules/60-ai-governance.md §13.
  *
- * Motivating case: the 2026-08-03 architecture review landed as ONE commit of
+ * Motivating case: an architecture review landed as ONE commit of
  * 652 files (+33,935/−6,466) against its own plan's "no big-bang commit"
  * criterion. Nothing objected, because nothing was watching the size.
  *

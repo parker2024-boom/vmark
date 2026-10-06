@@ -1,4 +1,4 @@
-//! The nav delegate's bridge to the `Send` registry (WI-1.7 / WI-1.8). Split from
+//! The nav delegate's bridge to the `Send` registry. Split from
 //! nav_delegate_macos.rs to keep it under the file-size limit; a `#[path]`
 //! submodule of `nav_delegate`, adding inherent methods to `NavDelegate`.
 //!
@@ -18,9 +18,14 @@ use objc2_web_kit::{WKNavigationDelegate, WKUIDelegate, WKWebView};
 use tauri::{AppHandle, Manager};
 
 use super::NavDelegate;
+use crate::browser::locks;
 use crate::browser::recovery::RecoveryAction;
 use crate::browser::registry::Lifecycle;
 use crate::browser::surface::BrowserSurface;
+use crate::lock_policy::lock_or_refuse;
+
+/// What the crash-budget lock is called when it is refused.
+const CRASH_BUDGET: &str = "the browser crash budget";
 
 #[path = "nav_failure_macos.rs"]
 mod failure;
@@ -34,7 +39,7 @@ mod identity;
 pub struct NavDelegateIvars {
     pub(super) tab_id: String,
     pub(super) app: AppHandle,
-    /// Did the CURRENT provisional navigation follow a server redirect (WI-S2.2)?
+    /// Did the CURRENT provisional navigation follow a server redirect?
     ///
     /// History folds a redirect chain into one entry — the user went to one place, even
     /// though every hop commits. Knowing that requires the real signal, not a timing
@@ -81,35 +86,25 @@ impl NavDelegate {
     pub(super) fn commit_navigation(&self, url: &str, navigation_id: &str) -> Option<u64> {
         let ivars = self.ivars();
         let state = ivars.app.try_state::<BrowserSurface>()?;
-        if state.registry.lock().ok().and_then(|reg| {
+        if locks::registry(&state).and_then(|reg| {
             reg.navigation_ticket(&ivars.tab_id)
                 .map(|ticket| ticket.id == navigation_id)
         }) != Some(true)
         {
             return None;
         }
-        let mode = state
-            .registry
-            .lock()
-            .ok()
-            .and_then(|reg| reg.automation_mode(&ivars.tab_id));
+        let mode = locks::registry(&state).and_then(|reg| reg.automation_mode(&ivars.tab_id));
         if let Some(mode) = mode {
             if !ai_commit_allowed(&state, mode, &ivars.tab_id, url) {
-                // Committed page and authority go together, under one guard (#35).
-                if let Ok(mut reg) = state.registry.lock() {
+                // Committed page and authority go together, under one guard.
+                if let Some(mut reg) = locks::registry(&state) {
                     let _ = reg.clear_committed_url(&ivars.tab_id);
                     state.clear_tab_authority_in(&mut reg, &ivars.tab_id);
                 }
                 return None;
             }
         }
-        let mut reg = match state.registry.lock() {
-            Ok(reg) => reg,
-            Err(e) => {
-                log::warn!("[browser] registry lock poisoned on commit: {e}");
-                return None;
-            }
-        };
+        let mut reg = locks::registry(&state)?;
         let generation = match reg.bump_generation(&ivars.tab_id) {
             Ok(g) => g,
             Err(e) => {
@@ -117,9 +112,9 @@ impl NavDelegate {
                 // the last one, so nothing stamped for the old page may stay fresh:
                 // the commit is refused and the tab's authority dropped, the same
                 // fail-closed shape as a disallowed destination. Substituting 0 used
-                // to commit anyway while every stale stamp remained valid (#28).
+                // to commit anyway while every stale stamp remained valid.
                 log::warn!(
-                    "[browser] generation bump refused for {}: {e:?}; commit refused",
+                    "[browser] generation bump refused for {:?}: {e:?}; commit refused",
                     ivars.tab_id
                 );
                 let _ = reg.clear_committed_url(&ivars.tab_id);
@@ -129,13 +124,13 @@ impl NavDelegate {
         };
         if let Err(e) = reg.transition(&ivars.tab_id, Lifecycle::Navigating) {
             log::warn!(
-                "[browser] commit transition refused for {}: {e:?}",
+                "[browser] commit transition refused for {:?}: {e:?}",
                 ivars.tab_id
             );
         }
         if let Err(e) = reg.set_committed_url(&ivars.tab_id, url) {
             log::warn!(
-                "[browser] committed-url write refused for {}: {e:?}",
+                "[browser] committed-url write refused for {:?}: {e:?}",
                 ivars.tab_id
             );
         }
@@ -143,7 +138,7 @@ impl NavDelegate {
     }
 
     /// A load STARTED: the committed page and the authority granted against it go
-    /// together, under ONE registry guard (#35) — a command that reads the registry
+    /// together, under ONE registry guard — a command that reads the registry
     /// in a gap between the two would see a page with no authority, or authority
     /// with no page.
     pub(super) fn revoke_for_new_load(&self) {
@@ -151,7 +146,7 @@ impl NavDelegate {
         let Some(state) = ivars.app.try_state::<BrowserSurface>() else {
             return;
         };
-        let Ok(mut reg) = state.registry.lock() else {
+        let Some(mut reg) = locks::registry(&state) else {
             return;
         };
         let _ = reg.clear_committed_url(&ivars.tab_id);
@@ -162,7 +157,7 @@ impl NavDelegate {
     pub(super) fn record_load_success(&self) {
         let ivars = self.ivars();
         if let Some(state) = ivars.app.try_state::<BrowserSurface>() {
-            if let Ok(mut trackers) = state.crash_trackers.lock() {
+            if let Some(mut trackers) = lock_or_refuse(&state.crash_trackers, CRASH_BUDGET) {
                 trackers
                     .entry(ivars.tab_id.clone())
                     .or_default()
@@ -179,13 +174,7 @@ impl NavDelegate {
         ivars
             .app
             .try_state::<BrowserSurface>()
-            .and_then(|state| {
-                state
-                    .registry
-                    .lock()
-                    .ok()
-                    .and_then(|reg| reg.generation(&ivars.tab_id))
-            })
+            .and_then(|state| locks::registry(&state).and_then(|reg| reg.generation(&ivars.tab_id)))
             .unwrap_or(0)
     }
 
@@ -222,14 +211,11 @@ impl NavDelegate {
         let Some(state) = ivars.app.try_state::<BrowserSurface>() else {
             return;
         };
-        let locked = state.registry.lock();
-        match locked {
-            Ok(mut reg) => {
-                if let Err(e) = reg.transition(&ivars.tab_id, to) {
-                    log::warn!("[browser] {} → {to:?} refused: {e:?}", ivars.tab_id);
-                }
-            }
-            Err(e) => log::warn!("[browser] registry lock poisoned: {e}"),
+        let Some(mut reg) = locks::registry(&state) else {
+            return;
+        };
+        if let Err(e) = reg.transition(&ivars.tab_id, to) {
+            log::warn!("[browser] {:?} → {to:?} refused: {e:?}", ivars.tab_id);
         }
     }
 
@@ -240,9 +226,7 @@ impl NavDelegate {
         let Some(state) = ivars.app.try_state::<BrowserSurface>() else {
             return RecoveryAction::ManualOnly;
         };
-        let action = state
-            .crash_trackers
-            .lock()
+        let action = lock_or_refuse(&state.crash_trackers, CRASH_BUDGET)
             .map(|mut t| t.entry(ivars.tab_id.clone()).or_default().on_crash())
             .unwrap_or(RecoveryAction::ManualOnly);
         self.set_state(Lifecycle::Crashed);
@@ -257,11 +241,11 @@ impl NavDelegate {
     pub(super) fn try_reload(&self, web_view: &WKWebView) -> bool {
         // A reload restarts loading, so the entry moves back through `Creating`.
         self.set_state(Lifecycle::Creating);
-        if unsafe { web_view.reload() }.is_some() {
+        if super::super::webkit_calls::reload(web_view) {
             return true;
         }
         log::warn!(
-            "[browser] reload produced no navigation for {}",
+            "[browser] reload produced no navigation for {:?}",
             self.ivars().tab_id
         );
         self.set_state(Lifecycle::Crashed);

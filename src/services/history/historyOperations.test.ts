@@ -10,10 +10,14 @@
  *   - markAsDeleted / deleteSnapshot
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+/** The fixed "now" every test runs at; snapshot ages are measured from it. */
+const NOW = Date.UTC(2026, 0, 15, 12, 0, 0);
+
 
 const mockMkdir = vi.fn();
-const mockExists = vi.fn(() => Promise.resolve(false));
+const mockExists = vi.fn((..._args: unknown[]) => Promise.resolve(false));
 const mockReadTextFile = vi.fn();
 const mockWriteTextFile = vi.fn();
 const mockRemove = vi.fn();
@@ -36,12 +40,19 @@ vi.mock("@/utils/debug", () => ({
   historyError: vi.fn(),
 }));
 
-vi.mock("@/utils/historyTypes", () => ({
+// A non-English UI: the stored name of a document with no file name must be
+// the translation, not a hard-coded "Untitled" (WI-RA26.6).
+vi.mock("@/i18n", () => ({
+  default: { t: (key: string) => (key === "common:untitled" ? "未命名" : key) },
+}));
+
+vi.mock("@/utils/historyTypes", async (importOriginal) => ({
   HISTORY_FOLDER: "history",
   INDEX_FILE: "index.json",
+  // Pure constructor: the real one, so the stored index is what production writes.
+  createHistoryIndex: (await importOriginal<typeof import("@/utils/historyTypes")>()).createHistoryIndex,
   generatePreview: vi.fn((c: string) => c.slice(0, 50)),
   getByteSize: vi.fn((c: string) => c.length),
-  getDocumentName: vi.fn((p: string) => p.split("/").pop()),
   hashPath: vi.fn((p: string) => Promise.resolve("hash_" + p.replace(/\//g, "_"))),
   parseHistoryIndex: vi.fn((obj: unknown) => obj),
 }));
@@ -79,12 +90,17 @@ function makeIndex(overrides = {}) {
 
 describe("useHistoryOperations", () => {
   beforeEach(() => {
+    vi.setSystemTime(NOW);
     vi.clearAllMocks();
     mockExists.mockResolvedValue(false);
     mockReadTextFile.mockResolvedValue("{}");
     mockWriteTextFile.mockResolvedValue(undefined);
     mockMkdir.mockResolvedValue(undefined);
     mockRemove.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe("getHistoryIndex", () => {
@@ -126,6 +142,14 @@ describe("useHistoryOperations", () => {
       expect(mockWriteTextFile).toHaveBeenCalledTimes(2); // snapshot file + index
     });
 
+    // WI-RA26.6 — a path with no file name is stored under the translated name.
+    it("names a document with no file name in the UI language", async () => {
+      mockExists.mockResolvedValue(false);
+      await createSnapshot("/test/folder/", "content", "manual", defaultSettings);
+      const indexWrite = mockWriteTextFile.mock.calls.find(([path]) => String(path).endsWith("index.json"));
+      expect(JSON.parse(String(indexWrite?.[1])).documentName).toBe("未命名");
+    });
+
     it("skips auto-save when file size exceeds limit", async () => {
       await createSnapshot("/test/doc.md", "x".repeat(2000), "auto", {
         ...defaultSettings,
@@ -144,8 +168,34 @@ describe("useHistoryOperations", () => {
       expect(mockWriteTextFile).toHaveBeenCalled();
     });
 
-    it("merges with previous auto snapshot within merge window", async () => {
+    // WI-RA18.11 — an AI client's save keeps a manual save's guarantees.
+    it("does NOT skip an mcp snapshot when file size exceeds limit", async () => {
+      mockExists.mockResolvedValue(false);
+      await createSnapshot("/test/doc.md", "x".repeat(2000), "mcp", {
+        ...defaultSettings,
+        maxFileSizeKB: 1,
+      });
+      expect(mockWriteTextFile).toHaveBeenCalled();
+    });
+
+    it.each([
+      ["an mcp snapshot into a previous auto one", "auto", "mcp"],
+      ["an auto snapshot into a previous mcp one", "mcp", "auto"],
+    ] as const)("does not merge %s", async (_label, previousType, type) => {
       const now = Date.now();
+      const index = makeIndex({
+        snapshots: [{ id: "prev-id", timestamp: now - 10000, type: previousType, size: 100, preview: "old" }],
+      });
+      mockExists.mockResolvedValue(true);
+      mockReadTextFile.mockResolvedValue(JSON.stringify(index));
+
+      await createSnapshot("/test/doc.md", "new content", type, { ...defaultSettings, mergeWindowSeconds: 60 });
+
+      expect(mockRemove).not.toHaveBeenCalled();
+    });
+
+    it("merges with previous auto snapshot within merge window", async () => {
+      const now = NOW;
       const prevSnapshot = {
         id: "prev-id",
         timestamp: now - 10000, // 10 seconds ago
@@ -255,7 +305,7 @@ describe("useHistoryOperations", () => {
     });
 
     it("removes snapshots exceeding max count", async () => {
-      const now = Date.now();
+      const now = NOW;
       const snapshots = Array.from({ length: 5 }, (_, i) => ({
         id: `snap-${i}`,
         timestamp: now - i * 1000,
@@ -278,7 +328,7 @@ describe("useHistoryOperations", () => {
     });
 
     it("removes snapshots older than maxAgeDays", async () => {
-      const now = Date.now();
+      const now = NOW;
       const oldTime = now - 60 * 24 * 60 * 60 * 1000; // 60 days ago
       const snapshots = [
         { id: "new", timestamp: now, type: "auto" as const, size: 10, preview: "" },
@@ -365,7 +415,7 @@ describe("useHistoryOperations", () => {
 
   describe("createSnapshot — merge window old snapshot does not exist (branch 12, line 189)", () => {
     it("pops last snapshot from index even when old file does not exist on disk", async () => {
-      const now = Date.now();
+      const now = NOW;
       const prevSnapshot = {
         id: "prev-id",
         timestamp: now - 5000,
@@ -398,7 +448,7 @@ describe("useHistoryOperations", () => {
 
   describe("pruneSnapshots — snapshot file does not exist during prune (branch 17, line 313)", () => {
     it("skips remove when snapshot file does not exist on disk", async () => {
-      const now = Date.now();
+      const now = NOW;
       const snapshots = Array.from({ length: 5 }, (_, i) => ({
         id: `snap-${i}`,
         timestamp: now - i * 1000,
@@ -433,7 +483,7 @@ describe("useHistoryOperations", () => {
 
   describe("pruneSnapshots — individual snapshot deletion error (line 316-318)", () => {
     it("continues pruning when individual snapshot file deletion throws", async () => {
-      const now = Date.now();
+      const now = NOW;
       const snapshots = Array.from({ length: 4 }, (_, i) => ({
         id: `snap-${i}`,
         timestamp: now - i * 1000,
@@ -459,7 +509,7 @@ describe("useHistoryOperations", () => {
 
   describe("createSnapshot — merge window sort (line 179)", () => {
     it("sorts snapshots when merge window is active but last snapshot is outside window", async () => {
-      const now = Date.now();
+      const now = NOW;
       // Two snapshots: one old auto (outside merge window), one manual
       const snapshots = [
         { id: "snap-manual", timestamp: now - 5000, type: "manual", size: 10, preview: "" },

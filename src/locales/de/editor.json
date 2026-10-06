@@ -333,7 +333,6 @@
   "terminal.restarting": "Shell wird neu gestartet …",
   "media.cannotPreview": "Dieses Format kann nicht in der Vorschau angezeigt werden",
   "media.openExternally": "Mit Standard-App öffnen",
-  "media.revealInFinder": "Im Finder anzeigen",
   "preview.surfaceFailed": "Der {{format}}-Editor funktioniert nicht mehr.",
   "splitPane.errorCount_one": "{{count}} Fehler",
   "splitPane.errorCount_other": "{{count}} Fehler",

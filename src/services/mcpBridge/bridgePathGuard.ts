@@ -8,7 +8,9 @@
  *   Allowed roots = the open workspace root (when in workspace mode) ∪ the
  *   parent directory of every currently open document. This encodes the
  *   guarantee "the agent may act only within what the user has already
- *   opened" — consent by user action, not an arbitrary fixed boundary. A
+ *   opened" — consent by user action, not an arbitrary fixed boundary.
+ *   "Open" means a live tab (`services/tabs/openDocuments`): a document left
+ *   in the store with no tab is invisible to the user, so it grants nothing. A
  *   maintainer who later wants to tighten (workspace-root only) or widen
  *   (a user-configured allowlist) edits `collectAllowedRoots` here; the pure
  *   policy and its tests stay untouched.
@@ -25,14 +27,15 @@
  *
  * @coordinates-with utils/mcpBridgePathPolicy.ts — pure decision function
  * @coordinates-with stores/workspaceStore.ts — rootPath / isWorkspaceMode
- * @coordinates-with stores/documentStore.ts — open documents' filePaths
+ * @coordinates-with services/tabs/openDocuments.ts — the documents of live tabs
  * @module services/mcpBridge/bridgePathGuard
  */
 
 import { useWorkspaceStore } from "@/stores/workspaceStore";
-import { useDocumentStore } from "@/stores/documentStore";
+import { openDocuments } from "@/services/tabs/openDocuments";
 import { invoke } from "@tauri-apps/api/core";
 import { getParentDir } from "@/utils/paths";
+import { commandErrorMessage } from "@/services/commands/commandError";
 import {
   resolveBridgePathDecision,
   type BridgePathDecision,
@@ -41,7 +44,7 @@ import {
 /**
  * Collect the directories the bridge may read/write within, from current
  * app state: the workspace root (if in workspace mode) plus the parent of
- * every open document.
+ * the document of every live tab, in every window.
  */
 export function collectAllowedRoots(): string[] {
   const roots = new Set<string>();
@@ -51,8 +54,7 @@ export function collectAllowedRoots(): string[] {
     roots.add(ws.rootPath);
   }
 
-  const docs = useDocumentStore.getState().documents;
-  for (const doc of Object.values(docs)) {
+  for (const { doc } of openDocuments()) {
     if (doc.filePath) {
       const parent = getParentDir(doc.filePath);
       if (parent) roots.add(parent);
@@ -65,7 +67,8 @@ export function collectAllowedRoots(): string[] {
 /**
  * Decide whether the bridge may touch `filePath`. Pulls allowed roots from
  * the stores, delegates to the pure policy for cheap lexical rejection, then
- * asks Rust to resolve symlinks for existing paths / ancestors.
+ * asks Rust to resolve symlinks for existing paths / ancestors. A Rust
+ * rejection becomes a denial whose reason is the error's message.
  */
 export async function checkBridgePath(
   filePath: string,
@@ -78,9 +81,8 @@ export async function checkBridgePath(
     await invoke("mcp_bridge_check_path", { filePath, allowedRoots });
     return { allowed: true };
   } catch (error) {
-    return {
-      allowed: false,
-      reason: error instanceof Error ? error.message : String(error),
-    };
+    // The command rejects with a typed CommandError (an object); its message
+    // is the agent-facing reason.
+    return { allowed: false, reason: commandErrorMessage(error) };
   }
 }

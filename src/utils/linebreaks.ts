@@ -9,11 +9,19 @@
  * Key decisions:
  *   - "preserve" preference defers to the document's detected style
  *   - New/unknown documents default to LF and two-spaces (widest compatibility)
- *   - Conversion skips fenced code blocks to avoid corrupting code content
+ *   - Hard-break conversion rewrites only what the PARSER reads as a hard
+ *     break. A line ending in a backslash or in two spaces is also a LaTeX row
+ *     separator, a table row, a line of HTML or code, or a literal backslash,
+ *     and rewriting those is silent data loss on save — so no line pattern
+ *     decides. The algorithm, its verification and its size limit live in
+ *     markdownPipeline/hardBreakRespell.ts; this file owns the line-ending
+ *     contract around it (input in any convention, LF out).
  *   - softContentEquals folds benign differences that cloud-sync daemons
  *     (OneDrive/iCloud/Dropbox) introduce without changing semantic content
  *
  * @coordinates-with utils/linebreakDetection.ts — provides the detection inputs
+ * @coordinates-with utils/markdownPipeline/hardBreakRespell.ts — respells hard
+ *   breaks, from the parser's reading of where they are
  * @coordinates-with hooks/useExternalFileChanges.ts — uses softContentEquals to
  *   suppress spurious external-change prompts from sync-daemon rewrites
  * @module utils/linebreaks
@@ -25,6 +33,9 @@ import type {
   LineEnding,
   LineEndingOnSave,
 } from "@/utils/linebreakDetection";
+import { respellHardBreaks } from "@/utils/markdownPipeline/hardBreakRespell";
+
+export { HARD_BREAK_NORMALIZE_LIMIT } from "@/utils/markdownPipeline/hardBreakRespell";
 
 /** Resolve user preference and detected doc style into a concrete hard break style. */
 export function resolveHardBreakStyle(
@@ -51,62 +62,18 @@ export function resolveLineEndingOnSave(
   return docLineEnding === "crlf" ? "crlf" : "lf";
 }
 
-function isFenceLine(line: string): { fenceChar: "`" | "~"; fenceLength: number } | null {
-  const match = line.match(/^\s*([`~]{3,})/);
-  if (!match) return null;
-  const fence = match[1];
-  const fenceChar = fence[0] as "`" | "~";
-  return { fenceChar, fenceLength: fence.length };
-}
-
-/** Convert hard breaks between backslash and two-space styles, skipping fenced code blocks. */
+/**
+ * Convert hard breaks to `target` spelling, touching only what the parser
+ * reads as a hard break. Accepts any line-ending convention; returns LF text.
+ *
+ * Left exactly as written: anything that is not a hard break (math, tables,
+ * HTML, code, frontmatter, a literal backslash, a paragraph's last line), a
+ * break that cannot take the target spelling without changing meaning, and
+ * text that is too large or too deeply nested to parse on a save.
+ */
 export function normalizeHardBreaks(text: string, target: "backslash" | "twoSpaces"): string {
   const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const lines = normalized.split("\n");
-  const hasFinalNewline = normalized.endsWith("\n");
-  const lastIndex = hasFinalNewline ? lines.length - 1 : lines.length;
-
-  let inFence = false;
-  let fenceChar: "`" | "~" | null = null;
-  let fenceLength = 0;
-
-  for (let i = 0; i < lastIndex; i += 1) {
-    /* v8 ignore next -- @preserve loop bound i < lastIndex < lines.length guarantees lines[i] is defined */
-    const line = lines[i] ?? "";
-    const fence = isFenceLine(line);
-    if (fence) {
-      if (!inFence) {
-        inFence = true;
-        fenceChar = fence.fenceChar;
-        fenceLength = fence.fenceLength;
-      } else if (fence.fenceChar === fenceChar && fence.fenceLength >= fenceLength) {
-        inFence = false;
-        fenceChar = null;
-        fenceLength = 0;
-      }
-      continue;
-    }
-
-    if (inFence) continue;
-
-    if (target === "twoSpaces") {
-      const trimmedEnd = line.replace(/[ \t]+$/, "");
-      if (trimmedEnd.endsWith("\\")) {
-        lines[i] = `${trimmedEnd.slice(0, -1)}  `;
-      }
-      continue;
-    }
-
-    const trailingMatch = line.match(/[ \t]+$/);
-    if (trailingMatch && trailingMatch[0].length >= 2) {
-      const before = line.slice(0, -trailingMatch[0].length);
-      if (before.trim().length > 0) {
-        lines[i] = `${before}\\`;
-      }
-    }
-  }
-
-  return lines.join("\n");
+  return respellHardBreaks(normalized, target);
 }
 
 /** Normalize all line endings in text to the target style (LF or CRLF). */

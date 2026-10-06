@@ -56,7 +56,8 @@ vi.mock("@/services/persistence/hotExit/restartWithHotExit", () => ({
   restartWithHotExit: () => mockRestartWithHotExit(),
 }));
 
-vi.mock("@/utils/debug", () => ({
+vi.mock("@/utils/debug", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/utils/debug")>()),
   updateCheckerLog: vi.fn(),
 }));
 
@@ -68,6 +69,14 @@ import { useUpdateChecker, shouldCheckNow } from "./useUpdateChecker";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useMcpStore } from "@/stores/mcpStore";
 import { useDocumentStore } from "@/stores/documentStore";
+import { useTabStore } from "@/stores/tabStore";
+
+/** An open tab whose document has unsaved changes. */
+function openDirtyTab(): void {
+  const tabId = useTabStore.getState().createTab("main", null);
+  useDocumentStore.getState().initDocument(tabId, "", null);
+  useDocumentStore.getState().setEditorContent(tabId, "dirty");
+}
 
 const ONE_DAY = 24 * 60 * 60 * 1000;
 const ONE_WEEK = 7 * ONE_DAY;
@@ -100,6 +109,8 @@ describe("useUpdateChecker hook", () => {
     vi.clearAllMocks();
     vi.useFakeTimers({ shouldAdvanceTime: true });
     listenHandlers.clear();
+    useTabStore.setState({ tabs: {}, activeTabId: {}, untitledCounter: 0 });
+    useDocumentStore.setState({ documents: {} });
 
     // Reset stores to defaults
     useMcpStore.getState().resetUpdate();
@@ -290,41 +301,28 @@ describe("useUpdateChecker hook", () => {
     expect(mockDoDownloadAndInstall).not.toHaveBeenCalled();
   });
 
-  it("handles restart request with no dirty tabs", async () => {
-    vi.spyOn(useDocumentStore.getState(), "getAllDirtyDocuments").mockReturnValue([]);
-
+  /** Mount the hook, deliver a restart request and let its handler settle. */
+  async function requestRestart(): Promise<void> {
     renderHook(() => useUpdateChecker());
-
     const handler = listenHandlers.get("app:restart-for-update");
     expect(handler).toBeDefined();
-
     await act(async () => {
       handler!();
-      // Flush promises
-      await Promise.resolve();
-      await Promise.resolve();
+      for (let turn = 0; turn < 4; turn++) await Promise.resolve();
     });
+  }
+
+  it("handles restart request with no dirty tabs", async () => {
+    await requestRestart();
 
     expect(mockRestartWithHotExit).toHaveBeenCalled();
     expect(mockAsk).not.toHaveBeenCalled();
   });
 
   it("handles restart request with dirty tabs — user confirms", async () => {
-    vi.spyOn(useDocumentStore.getState(), "getAllDirtyDocuments").mockReturnValue([
-      { tabId: "t1", content: "dirty" },
-    ] as never);
+    openDirtyTab();
     mockAsk.mockResolvedValue(true);
-
-    renderHook(() => useUpdateChecker());
-
-    const handler = listenHandlers.get("app:restart-for-update");
-
-    await act(async () => {
-      handler!();
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await requestRestart();
 
     expect(mockAsk).toHaveBeenCalled();
     expect(mockRestartWithHotExit).toHaveBeenCalled();
@@ -459,40 +457,17 @@ describe("useUpdateChecker hook", () => {
   });
 
   it("handles restart request error gracefully", async () => {
-    vi.spyOn(useDocumentStore.getState(), "getAllDirtyDocuments").mockReturnValue([]);
     mockRestartWithHotExit.mockRejectedValue(new Error("restart failed"));
-
-    renderHook(() => useUpdateChecker());
-
-    const handler = listenHandlers.get("app:restart-for-update");
-
-    await act(async () => {
-      handler!();
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await requestRestart();
 
     // Should emit restart-cancelled on error
     expect(mockEmit).toHaveBeenCalledWith("update:restart-cancelled");
   });
 
   it("handles restart request with dirty tabs — user cancels", async () => {
-    vi.spyOn(useDocumentStore.getState(), "getAllDirtyDocuments").mockReturnValue([
-      { tabId: "t1", content: "dirty" },
-    ] as never);
+    openDirtyTab();
     mockAsk.mockResolvedValue(false);
-
-    renderHook(() => useUpdateChecker());
-
-    const handler = listenHandlers.get("app:restart-for-update");
-
-    await act(async () => {
-      handler!();
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await requestRestart();
 
     expect(mockRestartWithHotExit).not.toHaveBeenCalled();
     expect(mockEmit).toHaveBeenCalledWith("update:restart-cancelled");
@@ -859,21 +834,9 @@ describe("useUpdateChecker hook", () => {
   });
 
   it("handles emit rejection in restart error path (nested catch path)", async () => {
-    vi.spyOn(useDocumentStore.getState(), "getAllDirtyDocuments").mockReturnValue([]);
     mockRestartWithHotExit.mockRejectedValue(new Error("restart failed"));
     mockEmit.mockRejectedValueOnce(new Error("emit also failed"));
-
-    renderHook(() => useUpdateChecker());
-
-    const handler = listenHandlers.get("app:restart-for-update");
-
-    await act(async () => {
-      handler!();
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await requestRestart();
 
     // Should not throw even if emit fails in the catch block
     expect(mockRestartWithHotExit).toHaveBeenCalled();

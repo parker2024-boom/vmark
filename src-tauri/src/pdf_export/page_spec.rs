@@ -56,7 +56,6 @@ pub struct PageSpec {
 impl PageSpec {
     /// Geometry with no margins — the shape every caller used before margins
     /// existed, and what the smoke fixtures still want.
-    #[allow(dead_code)]
     pub const fn new(width_pt: f64, height_pt: f64) -> Self {
         Self {
             width_pt,
@@ -119,11 +118,9 @@ impl PageSpec {
 
     /// Width and height in inches — the unit WebView2's print settings take.
     ///
-    /// Unused in the library build until WI-PDF2.1 calls it; the conversion is
-    /// written and tested now because it is where a wrong page size would come
-    /// from, and a units bug is far cheaper to catch here than through a
-    /// remote render loop. `page_spec.test.rs` exercises it.
-    #[allow(dead_code)]
+    /// Only the Windows renderer calls it. It lives here, with a unit test in
+    /// `page_spec.test.rs` that runs on every platform, because a units bug is
+    /// far cheaper to catch in a pure conversion than through a render.
     pub fn inches(&self) -> (f64, f64) {
         (self.width_pt / 72.0, self.height_pt / 72.0)
     }

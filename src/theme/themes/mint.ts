@@ -1,10 +1,17 @@
+/**
+ * mint — design tokens for the Mint light theme, authored against its
+ * green-tinted backgrounds.
+ *
+ * @module theme/themes/mint
+ */
+
 import type { ThemeTokens } from "../tokens";
 import { sharedPrimitives, lightShadows, subtleLight, hoverLight } from "../tokens";
 
 /**
  * Mint theme — green-tinted background.
  *
- * WI-UI1.2: mint's page (#CCE6D0, L≈0.74) is the darkest light paper, so the
+ * Mint's page (#CCE6D0, L≈0.74) is the darkest light paper, so the
  * old shared grey ramp and GitHub-derived palette failed hardest here (51
  * baselined pairs). Everything below is authored against mint's own three
  * backgrounds and the check-theme-contrast floors.

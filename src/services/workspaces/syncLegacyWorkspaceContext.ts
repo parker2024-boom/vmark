@@ -1,5 +1,5 @@
 /**
- * Legacy workspace-store sync on rail activation (WI-5R).
+ * Legacy workspace-store sync on rail activation.
  *
  * Purpose: the sidebar file tree (and exclude-folders / hidden-files
  * filtering) reads the LEGACY `useWorkspaceStore`. Activating a rail instance
@@ -39,7 +39,7 @@ export interface LegacySyncTarget {
  * Synchronous re-root happens before this returns; the returned promise
  * settles when the async config refresh completed (or was discarded).
  *
- * `preloadedConfig` (WI-13.3): the OPEN path already read the config from
+ * `preloadedConfig`: the OPEN path already read the config from
  * disk — passing it (config object, or null for "no config file") applies it
  * synchronously and skips the duplicate disk read entirely. `undefined`
  * means "not preloaded" (rail click) → async refresh from disk.
@@ -63,7 +63,7 @@ export function syncLegacyWorkspaceContext(
 
   const rootPath = target.rootPath;
   if (preloadedConfig !== undefined) {
-    // Defense in depth (audit R2-F9): callers validate, but this is
+    // Defense in depth: callers validate, but this is
     // disk-derived data — re-check before applying; malformed → defaults.
     const valid = preloadedConfig === null || isValidWorkspaceConfig(preloadedConfig);
     if (!valid) workspaceError("Malformed preloaded config; applying defaults:", preloadedConfig);

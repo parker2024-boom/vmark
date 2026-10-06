@@ -1,4 +1,4 @@
-//! Frames written to a bridge socket before the peer has a queue (WI-9).
+//! Frames written to a bridge socket before the peer has a queue.
 //!
 //! During the auth phase there is no per-client mpsc channel and no writer
 //! task, so `connection.rs` writes straight to the split sink. These are the

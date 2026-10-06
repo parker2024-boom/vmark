@@ -109,3 +109,18 @@ pub(crate) fn route_ack(ack: TabRemovalAck) {
         let _ = sender.send(ack);
     }
 }
+
+/// Route one `tab:remove-ack` event payload: parse it and deliver the ack, or
+/// say that it was malformed.
+///
+/// The payload is whatever a webview emitted, and a parse error quotes the
+/// value it choked on, so the error is logged as bounded, escaped text.
+pub(crate) fn route_ack_payload(payload: &str) {
+    match serde_json::from_str::<TabRemovalAck>(payload) {
+        Ok(ack) => route_ack(ack),
+        Err(e) => log::error!(
+            "[TabTransfer] Malformed tab-removal ack: {}",
+            crate::peer_text::peer_message(&e.to_string())
+        ),
+    }
+}

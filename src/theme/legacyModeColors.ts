@@ -31,7 +31,7 @@ const lightModeColors = legacyLight;
  * straight from `night`; values that intentionally diverge live in
  * `night.color.legacy`.
  *
- * Since WI-UI1.1 this table is a fallback for a FUTURE dark theme that omits
+ * This table is now only a fallback for a FUTURE dark theme that omits
  * an optional key — the six shipped themes provide every projected family
  * through the adapter, and `legacyModeColors.test.ts` pins that. The old
  * "warning/subtle/contrast-text intentionally absent — behavior preserved"
@@ -67,12 +67,12 @@ const darkModeColors = {
   // Highlight mark (darker background for dark mode)
   "--highlight-bg": nightLegacy.highlightBg ?? "#5c5c00",
   "--highlight-text": nightLegacy.highlightText ?? "#fff3a3",
-  // Hover feedback (audit 20260612 H15): dark mode previously inherited the
+  // Hover feedback: dark mode previously inherited the
   // light rgba(0,0,0,…) tints — a black tint on a dark background is barely
   // perceivable, and only 17 of 40+ consumers carried manual per-file
   // overrides. The strong tint mirrors what index.css's --hover-bg-dark
   // declares for the base tint (its old --hover-bg-dark-strong sibling had
-  // zero consumers and was deleted in WI-UI0.2).
+  // zero consumers and was deleted).
   "--hover-bg": "rgba(255, 255, 255, 0.08)",
   "--hover-bg-strong": "rgba(255, 255, 255, 0.12)",
 };
@@ -103,8 +103,8 @@ export type ModeColorResult = {
 /**
  * Values that are MODE-structural rather than per-theme: identical for every
  * theme of a mode, not worth a catalog field. `--warning-bg-hover/-active`
- * are slated for deletion in WI-UI4.10; `--block-bg-subtle` is an alias-debt
- * pair the same WI resolves.
+ * are slated for deletion; `--block-bg-subtle` is an alias-debt pair slated
+ * for the same cleanup.
  */
 const MODE_STATIC = {
   light: {
@@ -124,7 +124,7 @@ const MODE_STATIC = {
 /** Compute mode-specific (dark/light) color CSS vars. Pure — no DOM access.
  *  Returns the vars plus a `__isDark` flag for class toggling.
  *
- *  WI-UI1.1 (R2 — theme-keyed emission): BOTH branches emit the SAME key set.
+ *  R2 (theme-keyed emission): BOTH branches emit the SAME key set.
  *  `isDark` selects the fallback table and the class, never which keys exist —
  *  the old asymmetry left dark themes rendering :root's light `--warning-color`
  *  at 3.1:1 and left stale branch-only inline vars behind on theme switches.

@@ -319,10 +319,10 @@ describe("canTabEscapeMulti — selections in ranges (line 280)", () => {
 
 describe("canTabEscape with MultiSelection", () => {
   // Import the MultiSelection class to test multi-cursor escape
-  let MultiSelection: typeof import("@/plugins/multiCursor/MultiSelection").MultiSelection;
+  let MultiSelection: typeof import("@/plugins/shared/MultiSelection").MultiSelection;
 
   beforeAll(async () => {
-    const mod = await import("@/plugins/multiCursor/MultiSelection");
+    const mod = await import("@/plugins/shared/MultiSelection");
     MultiSelection = mod.MultiSelection;
   });
 
@@ -478,7 +478,7 @@ describe("getLinkEndPos — cursor iterates past children without matching link 
 
 describe("calculateEscapeForPosition — link child without link mark (line 227 false branch)", () => {
   it("falls through when cursor is in a child without link mark during multi-cursor escape", async () => {
-    const mod = await import("@/plugins/multiCursor/MultiSelection");
+    const mod = await import("@/plugins/shared/MultiSelection");
     const MultiSelection = mod.MultiSelection;
 
     // Create: linkedText "ab" + bold "cd"
@@ -507,7 +507,7 @@ describe("calculateEscapeForPosition — link child without link mark (line 227 
 
 describe("calculateEscapeForPosition — mark child without matching mark (line 258 false branch)", () => {
   it("falls through children that don't have the escapable mark type", async () => {
-    const mod = await import("@/plugins/multiCursor/MultiSelection");
+    const mod = await import("@/plugins/shared/MultiSelection");
     const MultiSelection = mod.MultiSelection;
 
     // Create: italic "ab" + bold "cd"
@@ -681,7 +681,7 @@ describe("getLinkEndPos — false arm of inner link marks check (line 180)", () 
 
 describe("calculateEscapeForPosition — link child false arm (line 231)", () => {
   it("visits link node then plain node where plain is in range but has no link mark", async () => {
-    const mod = await import("@/plugins/multiCursor/MultiSelection");
+    const mod = await import("@/plugins/shared/MultiSelection");
     const MultiSelection = mod.MultiSelection;
 
     // Create: link"ab" + plain"cd" + link"ef"

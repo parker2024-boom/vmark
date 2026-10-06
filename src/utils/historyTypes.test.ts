@@ -15,6 +15,7 @@ import {
   parseHistoryIndex,
   generatePreview,
   getDocumentName,
+  createHistoryIndex,
   getByteSize,
   buildHistorySettings,
   hashPath,
@@ -174,36 +175,89 @@ describe("generatePreview", () => {
     // Slice happens first (200 chars), then \n -> space
     expect(preview.length).toBe(PREVIEW_LENGTH);
   });
+
+  // WI-RA10A.12 — the preview is cut on a character boundary.
+  it("drops an emoji that straddles PREVIEW_LENGTH instead of halving it", () => {
+    const preview = generatePreview(`${"a".repeat(PREVIEW_LENGTH - 1)}\u{1F600}tail`);
+    expect(preview).toBe("a".repeat(PREVIEW_LENGTH - 1));
+  });
+
+  it("is well-formed when the limit falls inside a surrogate pair", () => {
+    // One leading unit puts every two-unit character on an odd offset, so the
+    // even limit lands between the halves of one of them.
+    const preview = generatePreview(`a${"\u{20BB7}".repeat(PREVIEW_LENGTH)}`);
+    expect(preview).toBe(`a${"\u{20BB7}".repeat(PREVIEW_LENGTH / 2 - 1)}`);
+    expect(preview).not.toMatch(
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/,
+    );
+  });
+
+  it("does not separate a combining accent from its letter at the limit", () => {
+    const preview = generatePreview(`${"a".repeat(PREVIEW_LENGTH - 1)}é`);
+    expect(preview).toBe("a".repeat(PREVIEW_LENGTH - 1));
+  });
 });
 
 // ---- getDocumentName ----
 
 describe("getDocumentName", () => {
+  // WI-RA26.6 — the name for a path with no file name is the caller's
+  // translated "Untitled": utils are leaf-pure and cannot reach i18n.
+  const UNTITLED = "未命名";
+
   it("extracts filename from path", () => {
-    expect(getDocumentName("/Users/test/docs/notes.md")).toBe("notes.md");
+    expect(getDocumentName("/Users/test/docs/notes.md", UNTITLED)).toBe("notes.md");
   });
 
-  it("returns 'Untitled' for empty path", () => {
-    expect(getDocumentName("")).toBe("Untitled");
+  it("returns the caller's untitled name for an empty path", () => {
+    expect(getDocumentName("", UNTITLED)).toBe(UNTITLED);
   });
 
   it("handles Windows-style paths", () => {
     // getFileName uses the last / segment
-    expect(getDocumentName("C:/Users/test/doc.md")).toBe("doc.md");
+    expect(getDocumentName("C:/Users/test/doc.md", UNTITLED)).toBe("doc.md");
   });
 
   it("handles path with only filename", () => {
-    expect(getDocumentName("readme.md")).toBe("readme.md");
+    expect(getDocumentName("readme.md", UNTITLED)).toBe("readme.md");
   });
 
   it("handles CJK filenames", () => {
-    expect(getDocumentName("/docs/\u7b14\u8bb0.md")).toBe("\u7b14\u8bb0.md");
+    expect(getDocumentName("/docs/\u7b14\u8bb0.md", UNTITLED)).toBe("\u7b14\u8bb0.md");
   });
 
-  it("handles path ending with slash", () => {
+  it("returns the caller's untitled name for a path ending with a slash", () => {
     // getFileName returns empty string for trailing slash
-    const result = getDocumentName("/docs/folder/");
-    expect(result).toBe("Untitled");
+    expect(getDocumentName("/docs/folder/", UNTITLED)).toBe(UNTITLED);
+  });
+
+  it("never falls back to hard-coded English", () => {
+    expect(getDocumentName("", "Sans titre")).toBe("Sans titre");
+  });
+});
+
+// ---- createHistoryIndex ----
+
+describe("createHistoryIndex", () => {
+  const settings = { maxSnapshots: 50, maxAgeDays: 7, mergeWindowSeconds: 30, maxFileSizeKB: 512 };
+
+  it("builds an empty, active index named after the file", () => {
+    expect(createHistoryIndex("/docs/notes.md", "abc", settings, "\u672a\u547d\u540d")).toEqual({
+      documentPath: "/docs/notes.md",
+      documentName: "notes.md",
+      pathHash: "abc",
+      status: "active",
+      deletedAt: null,
+      snapshots: [],
+      settings,
+    });
+  });
+
+  // WI-RA26.6 — the caller's translated name, never hard-coded English.
+  it("names a path with no file name with the caller's untitled name", () => {
+    expect(createHistoryIndex("/docs/", "abc", settings, "\u672a\u547d\u540d").documentName).toBe(
+      "\u672a\u547d\u540d",
+    );
   });
 });
 

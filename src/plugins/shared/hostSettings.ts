@@ -1,9 +1,3 @@
-import type { HtmlAllowlistLevel } from "@/utils/htmlAllowlists";
-import type { CJKFormattingSettings } from "@/lib/cjkFormatter/types";
-import { DEFAULT_CJK_FORMATTING } from "@/lib/cjkFormatter/types";
-import type { PasteMode } from "./pasteSettings";
-import type { HardBreakStyleOnSave } from "@/utils/linebreakDetection";
-
 /**
  * Purpose: the editor settings plugins need, bound once by the host.
  *
@@ -29,6 +23,12 @@ import type { HardBreakStyleOnSave } from "@/utils/linebreakDetection";
  * @coordinates-with services/assembly/bindHostSettings.ts — the app's binding
  * @module plugins/shared/hostSettings
  */
+
+import type { HtmlAllowlistLevel } from "@/utils/htmlAllowlists";
+import type { CJKFormattingSettings } from "@/lib/cjkFormatter/types";
+import { DEFAULT_CJK_FORMATTING } from "@/lib/cjkFormatter/types";
+import type { PasteMode } from "./pasteSettings";
+import type { HardBreakStyleOnSave } from "@/utils/linebreakDetection";
 
 /**
  * How raw HTML is rendered, as the PLUGINS declare it.

@@ -1,4 +1,4 @@
-/* Breakdown panel (WI-1.9b). Tokens only — see .claude/rules/31-design-tokens.md */
+/* Breakdown panel. Tokens only — see .claude/rules/31-design-tokens.md */
 .breakdown-panel {
   /* Component-internal one-off dimension — local var per rule 31. */
   --breakdown-panel-width: 460px;
@@ -20,7 +20,7 @@
   box-shadow: var(--popup-shadow-dark);
 }
 
-/* `.vm-panel__header` (WI-UI3.4); residual = split layout + stickiness. */
+/* `.vm-panel__header`; residual = split layout + stickiness. */
 .breakdown-panel__header {
   justify-content: space-between;
   position: sticky;
@@ -42,7 +42,7 @@
   gap: var(--space-half);
 }
 
-/* Header buttons are canonical `.vm-icon-btn--sm` (WI-UI2.3). */
+/* Header buttons are canonical `.vm-icon-btn--sm`. */
 
 .breakdown-panel__loading,
 .breakdown-panel__empty,
@@ -180,7 +180,7 @@
 }
 
 /* Dialog-input pattern (rule 33): bottom border, highlighted on focus. */
-/* `.vm-input` (WI-UI3.3). */
+/* Base input styling comes from the shared `.vm-input` primitive. */
 .breakdown-row__waive-input {
   flex: 1;
   padding: var(--space-half) 0;
@@ -272,7 +272,7 @@
   color: var(--warning-color);
 }
 
-/* WI-2b.7: context bar — picker, create, enforcement (D1/D4.3). */
+/* Context bar — picker, create, enforcement (D1/D4.3). */
 .breakdown-context-bar {
   display: flex;
   align-items: center;
@@ -299,7 +299,7 @@
   padding: 0 var(--spacing-1);
 }
 
-/* `.vm-input` (WI-UI3.3). */
+/* Base input styling comes from the shared `.vm-input` primitive. */
 .breakdown-context-bar__input {
   flex: 1;
   min-width: 90px;
@@ -316,7 +316,7 @@
   font-size: var(--font-size-xs);
 }
 
-/* WI-3.2: provenance-unknown group — lazy suggest → confirm (D1.5). */
+/* Provenance-unknown group — lazy suggest → confirm (D1.5). */
 .provenance-group {
   border-top: 1px solid var(--border-color);
   padding: var(--spacing-2) var(--spacing-3);
@@ -385,7 +385,7 @@
   color: var(--text-tertiary);
 }
 
-/* WI-3.4: agent delegations — explicit grant/revoke (D2.2). */
+/* Agent delegations — explicit grant/revoke (D2.2). */
 .delegations-section {
   border-top: 1px solid var(--border-color);
   padding: var(--spacing-2) var(--spacing-3);
@@ -443,7 +443,7 @@
   margin-left: auto;
 }
 
-/* `.vm-input.--mono` (WI-UI3.3). */
+/* Base input styling comes from the shared `.vm-input--mono` primitive. */
 .delegations-section__input {
   /* Own full-width row; the scope toggles, days and Grant wrap beneath it
      instead of all cramming into one clipped strip. */
@@ -480,7 +480,7 @@
   border-bottom-color: var(--primary-color);
 }
 
-/* WI-3.6: pull-only branch-context chip — never auto-selects (D3.2). */
+/* Pull-only branch-context chip — never auto-selects (D3.2). */
 .breakdown-branch-chip {
   padding: var(--spacing-1) var(--spacing-3);
   border-bottom: 1px solid var(--border-color);
@@ -507,7 +507,7 @@
   color: var(--warning-color);
 }
 
-/* WI-3.7: dismissible, pull-only merge banner (D3.3). */
+/* Dismissible, pull-only merge banner (D3.3). */
 .breakdown-merge-banner {
   display: flex;
   align-items: center;
@@ -660,26 +660,26 @@
   font-size: var(--font-size-xs);
 }
 
-/* WI-UI1.8 (C10/rule 33 §4): visible keyboard focus. */
+/* Visible keyboard focus (C10/rule 33 §4). */
 .breakdown-branch-chip__create:focus-visible,
 .breakdown-branch-chip__switch:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 1px;
 }
 
-/* WI-UI1.8 (C10/rule 33 §4): visible keyboard focus. */
+/* Visible keyboard focus (C10/rule 33 §4). */
 .breakdown-context-bar__select:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 1px;
 }
 
-/* WI-UI1.8 (C10/rule 33 §4): visible keyboard focus. */
+/* Visible keyboard focus (C10/rule 33 §4). */
 .breakdown-merge-banner__dismiss:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 1px;
 }
 
-/* WI-UI1.8 (C10/rule 33 §6): content-widget checkboxes define their own focus
+/* C10/rule 33 §6: content-widget checkboxes define their own focus
    — the global reset removed the UA outline. */
 .breakdown-checkbox:focus-visible {
   outline: 2px solid var(--accent-primary);

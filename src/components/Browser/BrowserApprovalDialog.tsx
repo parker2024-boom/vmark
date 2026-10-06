@@ -1,5 +1,5 @@
 /**
- * BrowserApprovalDialog — the human half of the browser security model (WI-S0.8).
+ * BrowserApprovalDialog — the human half of the browser security model.
  *
  * Purpose: render the queue of approval requests the MCP browser tools raise before
  * the AI acts, and let the user resolve them. The enforcement half of this model
@@ -124,8 +124,7 @@ export function BrowserApprovalDialog(): React.ReactElement | null {
   const origin = displayOrigin(request.targetUrl);
   const operation = t(`browser.approval.operation.${request.operation}`, request.operation);
   const attachment = request.operation === "attach";
-  // The user MUST see the exact payload they authorize, not just the op
-  // (Security review P5, High #1; WI-P6.3).
+  // The user MUST see the exact payload they authorize, not just the op.
   //
   // Driven by PRESENCE, not by a hardcoded operation list. The list said
   // ["eval","session"] while the store records a script for `style` too, so an
@@ -140,7 +139,7 @@ export function BrowserApprovalDialog(): React.ReactElement | null {
   const payloadIsScript = request.operation !== "session";
   // A never-grantable operation (eval) cannot become a standing grant — offering
   // "Allow on this site" would be a button that silently does nothing (the grant is
-  // sanitized away), which is misleading security UX (Security review P5, Low #5).
+  // sanitized away), which is misleading security UX.
   const grantable = !NEVER_GRANTABLE.has(request.operation);
   // An attach approval is an IPC in flight until it is confirmed; while it is, a
   // second click must not start a concurrent attach (the store guards it too).
@@ -232,7 +231,7 @@ export function BrowserApprovalDialog(): React.ReactElement | null {
           {grantable && !attachment ? ` ${t("browser.approval.sessionNote")}` : ""}
         </p>
 
-        {/* The last attach attempt failed (#153). A live region, so assistive tech
+        {/* The last attach attempt failed. A live region, so assistive tech
             hears the retry offer; the buttons below are enabled again by then. */}
         {request.attachError !== undefined && (
           <p className="browser-approval-error" role="alert">

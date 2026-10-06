@@ -1,3 +1,10 @@
+/**
+ * useObservedHeight — React hook that measures an element's content-box
+ * height with a ResizeObserver, for sizing the virtualized file tree.
+ *
+ * @module components/Sidebar/FileExplorer/useObservedHeight
+ */
+
 import { useCallback, useRef, useState } from "react";
 
 type CallbackRef<T extends HTMLElement> = (node: T | null) => void;

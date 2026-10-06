@@ -18,12 +18,6 @@ vi.mock("@/stores/settingsStore", () => ({
   },
 }));
 
-// Mock structuralCharProtection patterns
-vi.mock("../structuralCharProtection", () => ({
-  LIST_ITEM_PATTERN: /^\s*[-*+]\s/,
-  TASK_ITEM_PATTERN: /^\s*[-*+]\s\[[ xX]\]\s/,
-}));
-
 function createView(content: string, cursorPos: number): EditorView {
   const state = EditorState.create({
     doc: content,

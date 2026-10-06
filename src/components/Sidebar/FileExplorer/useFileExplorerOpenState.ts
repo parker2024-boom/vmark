@@ -3,7 +3,7 @@
  *
  * Purpose: Persist FileExplorer folder open/closed state across sidebar view-mode
  * switches (Files ↔ Outline ↔ History), which unmount/remount the tree — and,
- * with a `workspaceInstanceId` (WI-9.2), per WORKSPACE INSTANCE so folder state
+ * with a `workspaceInstanceId`, per WORKSPACE INSTANCE so folder state
  * and scroll offset switch with the workspace rail. Snapshots the backing map at
  * mount, mirrors single toggles back, and coalesces bulk collapse/expand into a
  * single store write.
@@ -221,7 +221,7 @@ export function useFileExplorerOpenState(
  * of those raises and drops `isLoading`. Restoring whenever a load finished
  * therefore yanked the user back to the persisted offset after any external
  * file change — over a position they had scrolled to and the throttle had not
- * written yet (audit R2, #635).
+ * written yet.
  *
  * `ready` is the caller's "this instance's rows are on screen", not merely
  * "not loading": on the first render after a rail switch `isLoading` is still

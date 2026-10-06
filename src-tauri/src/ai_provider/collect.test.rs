@@ -19,37 +19,28 @@ fn write_shim(dir: &tempfile::TempDir, body: &str) -> std::path::PathBuf {
 
 /// A successful CLI provider completion returns the collected text.
 ///
-/// Unix-only: relies on `/bin/echo` ignoring unknown flags. Windows has
-/// no `/bin/echo` (echo is a cmd.exe builtin) so this path can't be
-/// exercised cross-platform. macOS BSD echo and Linux GNU echo both
-/// pass the test — they print all positional args including the prompt.
+/// Unix-only: the stand-in CLI is a `/bin/sh` shim running `cat`. A CLI
+/// provider is given its prompt on stdin, so what `cat` sends back — and what
+/// the collector must return — is the prompt itself.
 #[cfg(unix)]
 #[tokio::test]
 async fn collect_returns_text_on_done() {
+    let dir = tempfile::tempdir().unwrap();
+    let shim = write_shim(&dir, "exec cat");
     let cancel = CancellationToken::new();
     let result = run_ai_prompt_collect(
         cancel,
         "claude",
-        "ignored",
+        "the prompt, echoed back",
         None,
         None,
         None,
-        // Force cli_path to /bin/echo. The args list emitted by
-        // dispatch_to_provider for "claude" is not what `echo` expects,
-        // but echo prints all its args verbatim. We assert "ignored"
-        // appears in the captured stdout.
-        Some("/bin/echo"),
+        Some(shim.to_str().unwrap()),
         None,
     )
     .await;
 
-    assert!(result.is_ok(), "expected Ok got {:?}", result);
-    let text = result.unwrap();
-    assert!(
-        text.contains("ignored"),
-        "expected echoed prompt in {}",
-        text
-    );
+    assert_eq!(result, Ok("the prompt, echoed back\n".to_string()));
 }
 
 /// Cancellation aborts the collect with the canonical error.

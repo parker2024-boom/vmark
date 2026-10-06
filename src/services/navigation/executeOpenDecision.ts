@@ -18,6 +18,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { imeToast as toast } from "@/services/ime/imeToast";
 import i18n from "@/i18n";
+import { openFailureDetail } from "@/services/files/openFailureDetail";
 import { openWorkspaceWithConfig } from "@/services/workspaces/openWorkspaceWithConfig";
 import { activateTabWithWorkspaceContext } from "@/services/workspaces/activateTabWithWorkspaceContext";
 import { replaceTabWithFile } from "@/services/navigation/replaceTabWithFile";
@@ -58,7 +59,7 @@ export async function executeOpenDecision(
 ): Promise<void> {
   switch (decision.action) {
     case "activate_tab":
-      // WI-12.2 (from main): ownership-aware — the visible workspace follows
+      // Ownership-aware — the visible workspace follows
       // the tab's owner. A plain setActiveTab leaves the sidebar on the
       // previous workspace while the editor shows a file from another one.
       activateTabWithWorkspaceContext(windowLabel, decision.tabId);
@@ -94,9 +95,9 @@ export async function executeOpenDecision(
         perfMark("handleOpen:replaceTabRefusedOrCancelled");
       } else {
         fileOpsError("Failed to replace tab with file:", replaceResult.error);
-        // Raw error — errorDetail owns the normalization.
-        // Two-line toast (WI-UI4.4): paths/codes as the detail.
-        toast.errorDetail(i18n.t("dialog:toast.fileOpenFailed"), replaceResult.error);
+        // A cause VMark diagnosed is translated; any other error goes through raw and errorDetail normalizes it.
+        // Two-line toast: paths/codes as the detail.
+        toast.errorDetail(i18n.t("dialog:toast.fileOpenFailed"), openFailureDetail(replaceResult.error));
       }
       break;
     }

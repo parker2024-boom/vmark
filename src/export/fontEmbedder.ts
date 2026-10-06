@@ -3,6 +3,8 @@
  *
  * Embeds user-configured fonts into exported HTML.
  * Ensures consistent typography across different machines.
+ *
+ * @module export/fontEmbedder
  */
 
 import { exportWarn } from "@/utils/debug";

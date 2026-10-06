@@ -1,5 +1,5 @@
 /**
- * Canonical value encoding (WI-4.2 / R8; split out of safety.ts in audit r3 #140)
+ * Canonical value encoding (R8; split out of safety.ts)
  * — a deterministic, order-independent text form for a value, so equal inputs get
  * equal keys and different inputs never share one.
  *

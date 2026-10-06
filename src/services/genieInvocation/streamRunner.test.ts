@@ -122,11 +122,13 @@ function suggestions() {
 }
 
 beforeEach(() => {
+  // Cancel FIRST: it releases any listener a previous case left running, and
+  // that release must not be counted against this case's mocks.
+  useAiInvocationStore.getState().cancel();
   vi.clearAllMocks();
   bridge.handler = null;
   bridge.listenError = null;
   mockInvoke.mockReset().mockResolvedValue(undefined);
-  useAiInvocationStore.getState().cancel();
   // No document state leaks between cases (the read-only case below writes one).
   useDocumentStore.setState({ documents: {} });
   useGeniePickerStore.getState().closePicker();

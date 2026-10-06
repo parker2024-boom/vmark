@@ -2,15 +2,18 @@
  * Tests for sourceFootnotePopupPlugin — footnote detection and data extraction.
  *
  * Tests findFootnoteAtPos, detectFootnoteTrigger, extractFootnoteData,
- * and the plugin factory createSourceFootnotePopupPlugin.
+ * and the plugin factory createSourceFootnotePopupPlugin. The real footnote
+ * finders and the real popup view run against real CodeMirror documents.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { createStore } from "zustand/vanilla";
+import type { FootnotePopupState } from "@/plugins/shared/popupPorts";
 
 // Mock dependencies
-vi.mock("@/plugins/sourcePopup", () => ({
+vi.mock("@/plugins/shared/createSourcePopupPlugin", () => ({
   createSourcePopupPlugin: vi.fn((config) => {
     // Capture config for inspection
     (createSourcePopupPlugin as ReturnType<typeof vi.fn>).__lastConfig = config;
@@ -34,28 +37,27 @@ vi.mock("@/stores/footnotePopupStore", () => {
   };
 });
 
-vi.mock("./SourceFootnotePopupView", () => {
-  const SourceFootnotePopupView = vi.fn(function(this: Record<string, unknown>) {
-    this.destroy = vi.fn();
-    this.setOpenedOnReference = vi.fn();
-  });
-  return { SourceFootnotePopupView };
-});
-
-vi.mock("./sourceFootnoteActions", () => ({
-  findFootnoteDefinition: vi.fn(),
-  findFootnoteDefinitionAtPos: vi.fn(),
-  findFootnoteReference: vi.fn(),
-}));
-
-import { createSourcePopupPlugin } from "@/plugins/sourcePopup";
+import { createSourcePopupPlugin } from "@/plugins/shared/createSourcePopupPlugin";
 import { useFootnotePopupStore } from "@/stores/footnotePopupStore";
 import { createSourceFootnotePopupPlugin } from "./sourceFootnotePopupPlugin";
-import {
-  findFootnoteDefinition,
-  findFootnoteDefinitionAtPos,
-  findFootnoteReference,
-} from "./sourceFootnoteActions";
+import { SourceFootnotePopupView } from "./SourceFootnotePopupView";
+
+/** A real popup store satisfying the footnote PORT. */
+function footnoteStore(initial: Partial<FootnotePopupState> = {}) {
+  return createStore<FootnotePopupState>()((set) => ({
+    isOpen: false,
+    anchorRect: null,
+    content: "",
+    label: "",
+    definitionPos: null,
+    referencePos: null,
+    autoFocus: false,
+    closePopup: () => set({ isOpen: false, anchorRect: null }),
+    setContent: (content: string) => set({ content }),
+    openPopup: () => undefined,
+    ...initial,
+  }));
+}
 
 // Helper to create a real CM6 view for trigger/extract testing
 function createView(doc: string, cursorPos?: number): EditorView {
@@ -103,8 +105,6 @@ describe("detectFootnoteTrigger (via plugin config)", () => {
 
   it("detects footnote reference [^label]", () => {
     const view = createView("Some text [^1] more text", 12);
-    // findFootnoteDefinitionAtPos returns null (not a definition)
-    vi.mocked(findFootnoteDefinitionAtPos).mockReturnValue(null);
 
     const result = detectTrigger(view);
 
@@ -113,7 +113,6 @@ describe("detectFootnoteTrigger (via plugin config)", () => {
 
   it("returns null when cursor is not on a footnote", () => {
     const view = createView("Some plain text", 5);
-    vi.mocked(findFootnoteDefinitionAtPos).mockReturnValue(null);
 
     const result = detectTrigger(view);
 
@@ -137,12 +136,6 @@ describe("detectFootnoteTrigger (via plugin config)", () => {
   it("detects footnote definition [^label]: content", () => {
     const doc = "[^note]: This is the content";
     const view = createView(doc, 3);
-    vi.mocked(findFootnoteDefinitionAtPos).mockReturnValue({
-      from: 0,
-      to: 28,
-      label: "note",
-      content: "This is the content",
-    });
 
     const result = detectTrigger(view);
 
@@ -155,12 +148,6 @@ describe("detectFootnoteTrigger (via plugin config)", () => {
     // [^label]: should be caught by definition detection, not reference regex
     const doc = "[^note]: definition text";
     const view = createView(doc, 3);
-    vi.mocked(findFootnoteDefinitionAtPos).mockReturnValue({
-      from: 0,
-      to: 24,
-      label: "note",
-      content: "definition text",
-    });
 
     const result = detectTrigger(view);
 
@@ -170,7 +157,6 @@ describe("detectFootnoteTrigger (via plugin config)", () => {
   it("detects reference at start of match boundary", () => {
     const doc = "Text [^abc] end";
     const view = createView(doc, 5); // At the '['
-    vi.mocked(findFootnoteDefinitionAtPos).mockReturnValue(null);
 
     const result = detectTrigger(view);
 
@@ -180,7 +166,6 @@ describe("detectFootnoteTrigger (via plugin config)", () => {
   it("detects reference at end of match boundary", () => {
     const doc = "Text [^abc] end";
     const view = createView(doc, 11); // At the ']'
-    vi.mocked(findFootnoteDefinitionAtPos).mockReturnValue(null);
 
     const result = detectTrigger(view);
 
@@ -190,7 +175,6 @@ describe("detectFootnoteTrigger (via plugin config)", () => {
   it("handles multiple references on same line", () => {
     const doc = "See [^1] and [^2] here";
     const view = createView(doc, 15); // Inside [^2]
-    vi.mocked(findFootnoteDefinitionAtPos).mockReturnValue(null);
 
     const result = detectTrigger(view);
 
@@ -210,7 +194,6 @@ describe("detectTriggerAtPos (via plugin config)", () => {
 
   it("detects footnote at arbitrary position", () => {
     const view = createView("Text [^1] end", 0);
-    vi.mocked(findFootnoteDefinitionAtPos).mockReturnValue(null);
 
     const result = detectTriggerAtPos(view, 7); // Inside [^1]
 
@@ -219,7 +202,6 @@ describe("detectTriggerAtPos (via plugin config)", () => {
 
   it("returns null when no footnote at position", () => {
     const view = createView("Plain text", 0);
-    vi.mocked(findFootnoteDefinitionAtPos).mockReturnValue(null);
 
     const result = detectTriggerAtPos(view, 3);
 
@@ -233,29 +215,37 @@ describe("createView callback (via plugin config)", () => {
     createSourceFootnotePopupPlugin(useFootnotePopupStore as never);
     const config = (createSourcePopupPlugin as ReturnType<typeof vi.fn>).mock.calls[0][0];
     const view = createView("test", 0);
-    const store = { getState: () => ({}) };
-    const popupView = config.createView(view, store);
-    expect(popupView).toBeDefined();
-    expect(popupView.destroy).toBeDefined();
+    const popupView = config.createView(view, footnoteStore());
+    expect(popupView).toBeInstanceOf(SourceFootnotePopupView);
+    popupView.destroy();
     view.destroy();
   });
 });
 
 describe("onOpen callback (via plugin config)", () => {
-  it("calls setOpenedOnReference on SourceFootnotePopupView", async () => {
+  it("opened on a definition, the popup's goto targets the reference", () => {
     vi.clearAllMocks();
     createSourceFootnotePopupPlugin(useFootnotePopupStore as never);
     const config = (createSourcePopupPlugin as ReturnType<typeof vi.fn>).mock.calls[0][0];
 
-    const { SourceFootnotePopupView: _SourceFootnotePopupView } = await import("./SourceFootnotePopupView");
-    const view = createView("test", 0);
-    const store = { getState: () => ({}) };
+    const doc = "See [^1] here\n\n[^1]: The note";
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = new EditorView({ state: EditorState.create({ doc }), parent });
+    const store = footnoteStore({ label: "1", content: "The note", referencePos: 4, definitionPos: 15 });
     const popupView = config.createView(view, store);
 
-    config.onOpen({ popupView, data: { openedOnReference: true } });
-    expect(popupView.setOpenedOnReference).toHaveBeenCalledWith(true);
+    config.onOpen({ popupView, data: { openedOnReference: false } });
+    store.setState({ isOpen: true, anchorRect: { top: 0, left: 0, bottom: 10, right: 10 } });
 
+    const gotoBtn = parent.querySelector(".source-footnote-popup-btn-goto") as HTMLButtonElement;
+    expect(gotoBtn.getAttribute("aria-label")).toBe("Go to reference");
+    gotoBtn.click();
+    expect(view.state.selection.main.head).toBe(4);
+
+    popupView.destroy();
     view.destroy();
+    parent.remove();
   });
 
   it("does nothing when popupView is not SourceFootnotePopupView instance", () => {
@@ -263,11 +253,10 @@ describe("onOpen callback (via plugin config)", () => {
     createSourceFootnotePopupPlugin(useFootnotePopupStore as never);
     const config = (createSourcePopupPlugin as ReturnType<typeof vi.fn>).mock.calls[0][0];
 
-    const fakePopupView = { setOpenedOnReference: vi.fn() };
-    // This is not an instanceof SourceFootnotePopupView since it's a plain object
-    config.onOpen({ popupView: fakePopupView, data: { openedOnReference: true } });
-    // The check `popupView instanceof SourceFootnotePopupView` will fail for plain objects
-    // depending on mock impl; the key point is it shouldn't crash
+    const otherPopupView = { setOpenedOnReference: vi.fn() };
+    // Not a SourceFootnotePopupView, so the instanceof guard skips it
+    config.onOpen({ popupView: otherPopupView, data: { openedOnReference: true } });
+    expect(otherPopupView.setOpenedOnReference).not.toHaveBeenCalled();
   });
 });
 
@@ -316,12 +305,6 @@ describe("extractFootnoteData (via plugin config)", () => {
   it("extracts data for a footnote reference with existing definition", () => {
     const doc = "See [^note] here\n\n[^note]: The definition";
     const view = createView(doc, 6);
-    vi.mocked(findFootnoteDefinitionAtPos).mockReturnValue(null);
-    vi.mocked(findFootnoteDefinition).mockReturnValue({
-      from: 18,
-      to: 42,
-      content: "The definition",
-    });
 
     const result = extractData(view, { from: 4, to: 11 });
 
@@ -335,8 +318,6 @@ describe("extractFootnoteData (via plugin config)", () => {
   it("extracts data for a footnote reference without definition", () => {
     const doc = "See [^orphan] here";
     const view = createView(doc, 6);
-    vi.mocked(findFootnoteDefinitionAtPos).mockReturnValue(null);
-    vi.mocked(findFootnoteDefinition).mockReturnValue(null);
 
     const result = extractData(view, { from: 4, to: 13 });
 
@@ -347,15 +328,8 @@ describe("extractFootnoteData (via plugin config)", () => {
   });
 
   it("extracts data for a footnote definition", () => {
-    const doc = "[^note]: Definition content";
+    const doc = "[^note]: Definition content\n\nSee [^note].";
     const view = createView(doc, 3);
-    vi.mocked(findFootnoteDefinitionAtPos).mockReturnValue({
-      from: 0,
-      to: 27,
-      label: "note",
-      content: "Definition content",
-    });
-    vi.mocked(findFootnoteReference).mockReturnValue({ from: 50, to: 57 });
 
     const result = extractData(view, { from: 0, to: 27 });
 
@@ -363,13 +337,12 @@ describe("extractFootnoteData (via plugin config)", () => {
     expect(result.openedOnReference).toBe(false);
     expect(result.content).toBe("Definition content");
     expect(result.definitionPos).toBe(0);
-    expect(result.referencePos).toBe(50);
+    expect(result.referencePos).toBe(doc.indexOf("See [^note]") + 4);
   });
 
   it("returns defaults when no footnote found at range", () => {
     const doc = "Plain text no footnotes";
     const view = createView(doc, 5);
-    vi.mocked(findFootnoteDefinitionAtPos).mockReturnValue(null);
 
     const result = extractData(view, { from: 5, to: 10 });
 
@@ -383,13 +356,6 @@ describe("extractFootnoteData (via plugin config)", () => {
   it("extracts definition data with no reference found", () => {
     const doc = "[^lonely]: No reference points here";
     const view = createView(doc, 3);
-    vi.mocked(findFootnoteDefinitionAtPos).mockReturnValue({
-      from: 0,
-      to: 35,
-      label: "lonely",
-      content: "No reference points here",
-    });
-    vi.mocked(findFootnoteReference).mockReturnValue(null);
 
     const result = extractData(view, { from: 0, to: 35 });
 

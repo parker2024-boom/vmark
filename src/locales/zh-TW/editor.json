@@ -333,7 +333,6 @@
   "terminal.restarting": "正在重新啟動 shell……",
   "media.cannotPreview": "無法預覽此格式",
   "media.openExternally": "以預設應用程式開啟",
-  "media.revealInFinder": "在 Finder 中顯示",
   "preview.surfaceFailed": "{{format}} 編輯器停止運作。",
   "splitPane.errorCount_one": "{{count}} 個錯誤",
   "splitPane.errorCount_other": "{{count}} 個錯誤",

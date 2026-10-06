@@ -58,5 +58,5 @@ describe("HTML validation scales linearly on hostile input", () => {
       `${c.name}: ${small.length} chars → ${cost.smallMs.toFixed(1)}ms, ${large.length} chars → ${cost.largeMs.toFixed(1)}ms ` +
         `(exponent ${exponent.toFixed(2)} on the ${cost.clock} clock; 1 is linear, 2 is quadratic)`,
     ).toBeLessThan(MAX_EXPONENT);
-  }, 120_000);
+  });
 });

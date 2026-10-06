@@ -21,7 +21,7 @@ const {
   mockFindPrevious: vi.fn(),
   mockReplaceNext: vi.fn(),
   mockReplaceAll: vi.fn(),
-  mockCountMatches: vi.fn(() => 0),
+  mockCountMatches: vi.fn((..._args: unknown[]) => 0),
 }));
 
 vi.mock("@codemirror/search", () => ({
@@ -38,8 +38,10 @@ vi.mock("@/utils/imeGuard", () => ({
   runOrQueueCodeMirrorAction: vi.fn((_view: unknown, action: () => void) => action()),
 }));
 
-vi.mock("@/utils/sourceEditorSearch", () => ({
-  countMatches: (...args: unknown[]) => mockCountMatches(...args),
+type Params = { query: string; replaceText: string; caseSensitive: boolean; wholeWord: boolean; useRegex: boolean };
+vi.mock("@/utils/sourceEditorSearch", () => ({ // counts come from mockCountMatches; real ones: utils/sourceEditorSearch.test.ts
+  buildSourceSearchQuery: (p: Params) => new mockSearchQuery({ search: p.query, replace: p.replaceText, caseSensitive: p.caseSensitive, wholeWord: p.wholeWord, regexp: p.useRegex }),
+  findSourceMatches: (s: { doc: { toString(): string } }, p: Params) => (p.query ? Array.from({ length: mockCountMatches(s.doc.toString(), p.query, p.caseSensitive, p.wholeWord, p.useRegex) }, (_, i) => ({ from: i, to: i + 1 })) : []),
 }));
 
 import { renderHook, act } from "@testing-library/react";
@@ -50,9 +52,8 @@ import { useSourceEditorSearch } from "./useSourceEditorSearch";
 function createMockView(docText = "hello world") {
   return {
     state: {
-      doc: {
-        toString: () => docText,
-      },
+      doc: { toString: () => docText },
+      selection: { main: { from: 0, to: 0 } },
     },
     dispatch: vi.fn(),
   } as unknown;
@@ -684,7 +685,7 @@ describe("useSourceEditorSearch", () => {
     });
 
     expect(mockReplaceNext).toHaveBeenCalledWith(mockView);
-    // After double-rAF, recomputeMatches should be called with preserveIndex=true
+    // After the double rAF the matches are recounted
     expect(mockCountMatches).toHaveBeenCalled();
 
     mockRaf.mockRestore();
@@ -717,7 +718,7 @@ describe("useSourceEditorSearch", () => {
     mockRaf.mockRestore();
   });
 
-  it("preserves currentIndex when it is valid after replace-current", () => {
+  it("updates the match count after replace-current", () => {
     const mockView = createMockView("hello world hello");
     viewRef.current = mockView;
 
@@ -738,7 +739,7 @@ describe("useSourceEditorSearch", () => {
       window.dispatchEvent(new Event("search:replace-current"));
     });
 
-    // The recomputeMatches with preserveIndex=true should keep index at 1
+    // The replace recount reports the new total
     const state = useUIStore.getState().search;
     expect(state.matchCount).toBe(2);
 
@@ -800,8 +801,7 @@ describe("useSourceEditorSearch", () => {
   });
 
   it("sets matchCount to 0 and index to -1 when recomputeMatches is called with empty query (direct path)", () => {
-    // This covers the !state.query branch (line 58) in recomputeMatches when called
-    // after replace-current with an empty query in the store.
+    // A Replace with an empty query in the store counts nothing and consults no counter.
     const mockView = createMockView("hello world");
     viewRef.current = mockView;
 

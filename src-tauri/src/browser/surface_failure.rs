@@ -1,11 +1,11 @@
-//! Classifying a native surface failure (audit 20260803 §7), split out of
+//! Classifying a native surface failure, split out of
 //! `ai_guards.rs` at the file-size limit. A `#[path]` child of that module, so the
 //! function keeps its `ai_guards::surface_failure` address.
 //!
 //! The vocabulary is [`NativeSurfaceError`] (`native_failure.rs`), and [`classify`]
 //! is an EXHAUSTIVE match over it — a class added there without a decision about
-//! its code, key and token does not compile into a silent `internal` (round 3,
-//! #31; this used to be a nine-way prefix chain over strings). Since round 4 the
+//! its code, key and token does not compile into a silent `internal` (this
+//! used to be a nine-way prefix chain over strings). Now the
 //! surface fails with the typed error end to end, so the usual argument IS the
 //! enum; a caller still holding its rendering — the seams `native_failure.rs`
 //! names — hands the string in and it is parsed once, to the same class

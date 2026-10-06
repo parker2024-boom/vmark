@@ -1,3 +1,10 @@
+/**
+ * Image view extension — extends Tiptap's Image node with reference-identity
+ * and title attributes and renders it through the custom `ImageNodeView`.
+ *
+ * @module plugins/imageView/tiptap
+ */
+
 import Image from "@tiptap/extension-image";
 import { referenceIdentityAttrs } from "@/utils/referenceIdentity";
 import { ImageNodeView } from "./index";

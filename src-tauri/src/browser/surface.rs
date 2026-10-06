@@ -1,4 +1,4 @@
-//! Native browser surface — a VMark-owned WKWebView (WI-1.2, macOS).
+//! Native browser surface — a VMark-owned WKWebView (macOS).
 //!
 //! VMark constructs the `WKWebView` itself (fresh `WKWebViewConfiguration`,
 //! ADR-B2) and adds it as an `NSView` subview of the Tauri window's content
@@ -33,6 +33,7 @@ use crate::browser::origin_guard::{self, StandingGrant};
 use crate::browser::profile_open::ProfileOpen;
 use crate::browser::recovery::CrashTracker;
 use crate::browser::registry::BrowserRegistry;
+use crate::lock_policy::lock_or_refuse;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -49,7 +50,7 @@ pub use attachment_state::AttachmentState;
 #[derive(Default)]
 pub struct BrowserSurface {
     pub registry: Mutex<BrowserRegistry>,
-    /// Per-tab consecutive-crash state (WI-1.8). The navigation delegate records
+    /// Per-tab consecutive-crash state. The navigation delegate records
     /// crashes/clean-loads here to decide auto-reload vs. manual (recovery.rs).
     pub crash_trackers: Mutex<HashMap<String, CrashTracker>>,
     /// Standing origin grants (R4/R5), mirrored from each window's frontend
@@ -59,7 +60,7 @@ pub struct BrowserSurface {
     /// owns it, per the registry. **Default-deny**: an absent or empty slice
     /// authorizes nothing, so a driver command is refused until the user has
     /// actually granted the origin+operation. This is the authoritative copy — the
-    /// TS store is a cache for UX, not the enforcement point (WI-2.1).
+    /// TS store is a cache for UX, not the enforcement point.
     pub grants: Mutex<HashMap<String, Vec<StandingGrant>>>,
     /// Single-use authorizations from the user's "Allow once" (R5). They live here
     /// rather than only in the TS store because the driver is the authority: a
@@ -74,14 +75,13 @@ pub struct BrowserSurface {
     /// an approval from following a page navigation or a reused tab id; written
     /// and cleared under the registry guard (`tab_attachments.rs`).
     pub attachments: Mutex<Vec<TabAttachment>>,
-    /// Single-use grants to open a named persistent context (WI-P6.1 H1). Bound to
+    /// Single-use grants to open a named persistent context. Bound to
     /// (profile, destination origin); minted from the user's per-use approval,
     /// consumed authoritatively in `browser_ai_create` before the profile is applied.
     pub profile_opens: Mutex<Vec<ProfileOpen>>,
 }
 
-/// The wire spelling of each `NativeSurfaceError` class (audit 20260803 §7;
-/// typed in 20260903 rounds 3–4).
+/// The wire spelling of each `NativeSurfaceError` class.
 ///
 /// The native surface fails with `native_failure::NativeSurfaceError` end to end,
 /// so no producer spells one of these itself: `Display` renders `TOKEN: detail`
@@ -99,7 +99,7 @@ pub mod fail {
     pub const NO_WEBVIEW: &str = "NO_WEBVIEW";
     /// The platform URL type rejected the string.
     pub const INVALID_URL: &str = "INVALID_URL";
-    /// The named-profile data-store cap is exhausted (WI-P6.1 H2).
+    /// The named-profile data-store cap is exhausted.
     pub const PROFILE_STORE_LIMIT: &str = "PROFILE_STORE_LIMIT";
     /// This build has no native browser surface.
     pub const UNSUPPORTED_PLATFORM: &str = "UNSUPPORTED_PLATFORM";
@@ -129,6 +129,9 @@ pub(crate) fn grants_of<'a>(
         .unwrap_or(&[])
 }
 
+/// What the attachments lock is called when it is refused.
+const ATTACHMENTS: &str = "the browser tab attachments";
+
 impl BrowserSurface {
     /// Does the window `window_label` grant `operation` on `url`? The navigation
     /// delegate's question, asked with the registry guard held (registry → grants
@@ -139,16 +142,9 @@ impl BrowserSurface {
         url: &str,
         operation: &str,
     ) -> bool {
-        self.grants
-            .lock()
-            .map(|by_window| {
-                origin_guard::is_operation_granted(
-                    url,
-                    operation,
-                    grants_of(&by_window, window_label),
-                )
-            })
-            .unwrap_or(false)
+        lock_or_refuse(&self.grants, "the browser grants").is_some_and(|by_window| {
+            origin_guard::is_operation_granted(url, operation, grants_of(&by_window, window_label))
+        })
     }
 
     /// Drop every trace of a tab: its registry entry, its crash budget, its
@@ -174,7 +170,7 @@ impl BrowserSurface {
 
     /// `forget_tab`'s body, on a registry guard the caller already holds —
     /// `teardown::forget_window` forgets every tab of a closing window under ONE
-    /// guard this way (round 4, #35). Taking `&mut BrowserRegistry` makes holding
+    /// guard this way. Taking `&mut BrowserRegistry` makes holding
     /// the guard a type-level requirement rather than a comment. Lock order:
     /// registry → crash_trackers / one_shots / attachments, so nothing can hold
     /// one of those and wait for the registry.
@@ -194,7 +190,7 @@ impl BrowserSurface {
     }
 
     /// Drop every "Allow once" and the human-tab attachment of `tab_id` while the
-    /// caller HOLDS the registry guard (round 4, #35): the guard is taken by `&mut`
+    /// caller HOLDS the registry guard: the guard is taken by `&mut`
     /// so holding it is a type-level requirement, and the lock order — registry
     /// outermost, then one-shots, then attachments — is the one every other path
     /// uses. Clearing with the guard released left a gap in which a `create` +
@@ -209,7 +205,7 @@ impl BrowserSurface {
     /// new navigation and when it is forgotten, so an approval never outlives the
     /// page it was granted on. Best-effort: a poisoned lock leaves nothing to leak.
     pub fn clear_tab_one_shots(&self, tab_id: &str) {
-        if let Ok(mut shots) = self.one_shots.lock() {
+        if let Some(mut shots) = lock_or_refuse(&self.one_shots, "the browser one-shot approvals") {
             crate::browser::one_shot::clear_one_shots_for_tab(&mut shots, tab_id);
         }
     }
@@ -235,14 +231,12 @@ impl BrowserSurface {
     }
 
     pub fn is_tab_attached(&self, tab_id: &str, generation: u64) -> bool {
-        self.attachments
-            .lock()
-            .map(|attachments| attachment_present(&attachments, tab_id, generation))
-            .unwrap_or(false)
+        lock_or_refuse(&self.attachments, ATTACHMENTS)
+            .is_some_and(|attachments| attachment_present(&attachments, tab_id, generation))
     }
 
     pub fn clear_tab_attachment(&self, tab_id: &str) {
-        if let Ok(mut attachments) = self.attachments.lock() {
+        if let Some(mut attachments) = lock_or_refuse(&self.attachments, ATTACHMENTS) {
             attachments.retain(|attachment| attachment.tab_id != tab_id);
         }
     }
@@ -254,7 +248,7 @@ mod imp;
 
 // --- Cross-platform command-facing API -------------------------------------
 // macOS delegates to `imp`; other platforms return an explicit "unsupported"
-// (their native backends land in WI-5.1 / WI-5.2).
+// (their native backends are not built yet).
 
 #[cfg(all(target_os = "macos", debug_assertions))]
 pub use imp::{debug_attached_webviews, debug_hit_test, debug_native_tab_ids};

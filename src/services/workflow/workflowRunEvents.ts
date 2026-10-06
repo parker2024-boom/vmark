@@ -3,7 +3,7 @@
  *
  * Purpose: route `workflow:step-update`, `workflow:complete` and
  * `workflow:approval-request` into the workflow store — once per window, not
- * once per mounted panel (audit 20260928 #115). Every run panel and the
+ * once per mounted panel. Every run panel and the
  * always-mounted approval dialog used to subscribe its own copy through
  * `useWorkflowExecution`, so every frame was handled several times.
  *
@@ -16,12 +16,12 @@
  *     held subscription is live — awaiting one in flight, retrying one that
  *     failed — and REJECTS when nothing holds it: a run started then would
  *     emit frames nobody routes, and a quiet start would hide that.
- *   - Subscription is TRANSACTIONAL (#764): a failed `listen` releases the ones
+ *   - Subscription is TRANSACTIONAL: a failed `listen` releases the ones
  *     already acquired. A subscription that completes after its last holder
- *     left drops itself (#768).
+ *     left drops itself.
  *   - Every frame is matched against the CURRENT execution id by exact,
- *     non-null equality (#765); completion keeps the step statuses and records
- *     how the run ended (#767).
+ *     non-null equality; completion keeps the step statuses and records
+ *     how the run ended.
  *
  * @coordinates-with hooks/useWorkflowExecution.ts — the lifecycle hook and the run commands
  * @coordinates-with services/workflow/dispatchWorkflowRun.ts — awaits `workflowEventsReady`
@@ -121,7 +121,7 @@ function ensure(): Promise<void> {
   const started = generation;
   const attempt = acquire()
     .then((fns) => {
-      // Every holder left while this was registering (#768).
+      // Every holder left while this was registering.
       if (holders === 0 || started !== generation) release(fns);
       else live = fns;
     })
@@ -159,7 +159,7 @@ export function retainWorkflowEvents(): () => void {
 
 /**
  * Resolve once the held subscription is live — the precondition for starting
- * a run, whose first frames can arrive before `run_workflow` resolves (#769).
+ * a run, whose first frames can arrive before `run_workflow` resolves.
  * Rejects when nothing holds the events; never subscribes on its own.
  */
 export function workflowEventsReady(): Promise<void> {

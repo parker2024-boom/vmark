@@ -1,7 +1,7 @@
 /**
- * Browser UX surface policy — the decided R12 per-surface matrix (WI-1.7).
+ * Browser UX surface policy — the decided R12 per-surface matrix.
  *
- * WIRED (WI-NB8): `aiMayChooseUploadFile()` is the source for `grants.ts`'s
+ * WIRED: `aiMayChooseUploadFile()` is the source for `grants.ts`'s
  * `NEVER_AUTOMATED` upload prohibition — a real production consumer, not a
  * dormant record. And `__tests__/uxPolicyLedger.ts` states the shipped
  * conformance of each surface against these decisions, with a two-way identity
@@ -16,7 +16,7 @@
  * TLS errors, permission prompts, history/find/zoom, context menu, print,
  * devtools. R12 requires a *decided* disposition for each (no "TBD"): this module
  * encodes that matrix, and the native `WKUIDelegate`/`WKNavigationDelegate`/
- * `WKDownloadDelegate` handlers (WI-1.7 Rust) implement each row against it.
+ * `WKDownloadDelegate` handlers (Rust) implement each row against it.
  *
  * Security-load-bearing rules live here as functions so they cannot drift: the
  * AI may NEVER choose an upload file (exfiltration path), TLS/cert errors are a
@@ -96,7 +96,7 @@ export function isPermissionSurface(surface: UxSurface): boolean {
   return surface.startsWith(PERMISSION_PREFIX);
 }
 
-/** The AI may never choose an upload file (WI-1.7 / R12). Unconditional in v1: there
+/** The AI may never choose an upload file (R12). Unconditional in v1: there
  *  is no "ai-upload" disposition, so the answer is always no. This must NOT be derived
  *  from the matrix with a negative check (`!== "human-picker"`) — that inverts the
  *  invariant: any future retint of `file-upload` to another disposition would silently

@@ -363,7 +363,7 @@ describe("debug loggers — no-throw guarantee", () => {
     [{ circular: null as unknown }],
     [new Map([["a", 1]])],
     [new Set([1, 2, 3])],
-    [new Date()],
+    [new Date(Date.UTC(2026, 0, 2))],
     [/regex/gi],
     [new ArrayBuffer(8)],
     [new Uint8Array([1, 2, 3])],

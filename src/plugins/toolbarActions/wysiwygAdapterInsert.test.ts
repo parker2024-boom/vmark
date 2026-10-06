@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(),
@@ -49,11 +49,6 @@ vi.mock("@/utils/debug", () => ({
   wysiwygAdapterError: vi.fn(),
 }));
 
-vi.mock("./wysiwygAdapterUtils", () => ({
-  isViewConnected: vi.fn(() => true),
-  getActiveFilePath: vi.fn(() => "/path/to/doc.md"),
-}));
-
 import {
   handleInsertImage,
   insertInlineMath,
@@ -68,8 +63,24 @@ import { copyMediaToAssets, insertBlockVideoNode, insertBlockAudioNode } from "@
 import { readClipboardImagePath } from "@/services/media/clipboardImagePath";
 import { withReentryGuard } from "@/utils/reentryGuard";
 import { wysiwygAdapterWarn } from "@/utils/debug";
-import { isViewConnected, getActiveFilePath } from "./wysiwygAdapterUtils";
+import { bindHostDocument, resetHostDocument } from "@/plugins/shared/hostDocument";
 import type { WysiwygToolbarContext } from "./types";
+
+/**
+ * The active document path, supplied through the real host-document seam that
+ * the adapter's path lookup reads — not by replacing the lookup itself.
+ */
+function setActiveFilePath(path: string | null): void {
+  bindHostDocument({ currentWindowLabel: () => "main", activeFilePath: () => path });
+}
+
+beforeEach(() => {
+  setActiveFilePath("/path/to/doc.md");
+});
+
+afterEach(() => {
+  resetHostDocument();
+});
 
 function createBaseContext(overrides?: Partial<WysiwygToolbarContext>): WysiwygToolbarContext {
   return {
@@ -472,8 +483,7 @@ describe("handleInsertImage — async paths", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(withReentryGuard).mockImplementation((_label, _guard, fn) => fn());
-    vi.mocked(isViewConnected).mockReturnValue(true);
-    vi.mocked(getActiveFilePath).mockReturnValue("/path/to/doc.md");
+    setActiveFilePath("/path/to/doc.md");
   });
 
   it("inserts image from clipboard when clipboard has valid image URL", async () => {
@@ -703,7 +713,7 @@ describe("handleInsertImage — async paths", () => {
       path: "/Users/test/photo.png",
       needsCopy: true,
     } as never);
-    vi.mocked(getActiveFilePath).mockReturnValue(null);
+    setActiveFilePath(null);
     vi.mocked(open).mockResolvedValue(null as never);
 
     const mockView = {
@@ -762,7 +772,6 @@ describe("handleInsertImage — async paths", () => {
       path: "https://example.com/img.png",
       needsCopy: false,
     } as never);
-    vi.mocked(isViewConnected).mockReturnValue(false);
 
     const imageCreate = vi.fn();
     const mockView = {
@@ -788,8 +797,7 @@ describe("handleInsertImage — file picker paths", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(withReentryGuard).mockImplementation((_label, _guard, fn) => fn());
-    vi.mocked(isViewConnected).mockReturnValue(true);
-    vi.mocked(getActiveFilePath).mockReturnValue("/path/to/doc.md");
+    setActiveFilePath("/path/to/doc.md");
   });
 
   it("inserts image from file picker and copies to assets", async () => {
@@ -819,7 +827,7 @@ describe("handleInsertImage — file picker paths", () => {
   it("shows warning when file picker selected but no active file path", async () => {
     vi.mocked(readClipboardImagePath).mockResolvedValue(null);
     vi.mocked(open).mockResolvedValue("/Users/test/photo.png" as never);
-    vi.mocked(getActiveFilePath).mockReturnValue(null);
+    setActiveFilePath(null);
 
     const mockView = {
       state: {
@@ -872,8 +880,7 @@ describe("handleInsertVideo — async paths", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(withReentryGuard).mockImplementation((_label, _guard, fn) => fn());
-    vi.mocked(isViewConnected).mockReturnValue(true);
-    vi.mocked(getActiveFilePath).mockReturnValue("/path/to/doc.md");
+    setActiveFilePath("/path/to/doc.md");
   });
 
   it("inserts video from file picker", async () => {
@@ -904,7 +911,7 @@ describe("handleInsertVideo — async paths", () => {
 
   it("shows warning when no active file path for video", async () => {
     vi.mocked(open).mockResolvedValue("/Users/test/video.mp4" as never);
-    vi.mocked(getActiveFilePath).mockReturnValue(null);
+    setActiveFilePath(null);
 
     const mockView = { dom: { isConnected: true } };
     const context = createBaseContext({ view: mockView as never });
@@ -924,8 +931,7 @@ describe("handleInsertAudio — async paths", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(withReentryGuard).mockImplementation((_label, _guard, fn) => fn());
-    vi.mocked(isViewConnected).mockReturnValue(true);
-    vi.mocked(getActiveFilePath).mockReturnValue("/path/to/doc.md");
+    setActiveFilePath("/path/to/doc.md");
   });
 
   it("inserts audio from file picker", async () => {
@@ -956,7 +962,7 @@ describe("handleInsertAudio — async paths", () => {
 
   it("shows warning when no active file path for audio", async () => {
     vi.mocked(open).mockResolvedValue("/Users/test/audio.mp3" as never);
-    vi.mocked(getActiveFilePath).mockReturnValue(null);
+    setActiveFilePath(null);
 
     const mockView = { dom: { isConnected: true } };
     const context = createBaseContext({ view: mockView as never });
@@ -974,7 +980,6 @@ describe("handleInsertAudio — async paths", () => {
   it("does not insert if view disconnects after media copy", async () => {
     vi.mocked(open).mockResolvedValue("/Users/test/audio.mp3" as never);
     vi.mocked(copyMediaToAssets).mockResolvedValue("assets/audio.mp3");
-    vi.mocked(isViewConnected).mockReturnValue(false);
 
     const mockView = { dom: { isConnected: false } };
     const context = createBaseContext({ view: mockView as never });
@@ -1006,7 +1011,7 @@ describe("handleInsertImage — view disconnect after copy", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(withReentryGuard).mockImplementation((_label, _guard, fn) => fn());
-    vi.mocked(getActiveFilePath).mockReturnValue("/path/to/doc.md");
+    setActiveFilePath("/path/to/doc.md");
   });
 
   it("does not insert when view disconnects after image copy to assets", async () => {
@@ -1017,11 +1022,6 @@ describe("handleInsertImage — view disconnect after copy", () => {
       needsCopy: true,
       resolvedPath: "/Users/test/photo.png",
     } as never);
-    vi.mocked(copyImageToAssets).mockResolvedValue("assets/photo.png");
-    // Connected initially, disconnected after copy
-    vi.mocked(isViewConnected)
-      .mockReturnValueOnce(true)  // first check after clipboard read
-      .mockReturnValueOnce(false); // second check after image copy
 
     const imageCreate = vi.fn();
     const mockView = {
@@ -1034,6 +1034,11 @@ describe("handleInsertImage — view disconnect after copy", () => {
       focus: vi.fn(),
       dom: { isConnected: true },
     };
+    // Connected after the clipboard read; the editor unmounts while the copy runs.
+    vi.mocked(copyImageToAssets).mockImplementation(async () => {
+      mockView.dom.isConnected = false;
+      return "assets/photo.png";
+    });
     const context = createBaseContext({ view: mockView as never });
 
     handleInsertImage(context);
@@ -1049,13 +1054,12 @@ describe("handleInsertVideo — view disconnect after copy", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(withReentryGuard).mockImplementation((_label, _guard, fn) => fn());
-    vi.mocked(getActiveFilePath).mockReturnValue("/path/to/doc.md");
+    setActiveFilePath("/path/to/doc.md");
   });
 
   it("does not insert when view disconnects after video copy", async () => {
     vi.mocked(open).mockResolvedValue("/Users/test/video.mp4" as never);
     vi.mocked(copyMediaToAssets).mockResolvedValue("assets/video.mp4");
-    vi.mocked(isViewConnected).mockReturnValue(false);
 
     const mockView = { dom: { isConnected: false } };
     const context = createBaseContext({ view: mockView as never });
@@ -1070,8 +1074,7 @@ describe("handleInsertVideo — view disconnect after copy", () => {
 describe("handleInsertImage — error handling", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(isViewConnected).mockReturnValue(true);
-    vi.mocked(getActiveFilePath).mockReturnValue("/path/to/doc.md");
+    setActiveFilePath("/path/to/doc.md");
   });
 
   it("handles error in async image insertion with non-Error throw", async () => {
@@ -1271,8 +1274,7 @@ describe("handleInsertImage — image type missing in schema (line 36)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(withReentryGuard).mockImplementation((_label, _guard, fn) => fn());
-    vi.mocked(isViewConnected).mockReturnValue(true);
-    vi.mocked(getActiveFilePath).mockReturnValue("/path/to/doc.md");
+    setActiveFilePath("/path/to/doc.md");
   });
 
   it("returns early when image node type is missing from schema", async () => {
@@ -1311,14 +1313,13 @@ describe("handleInsertImage — file picker view disconnect (line 151)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(withReentryGuard).mockImplementation((_label, _guard, fn) => fn());
-    vi.mocked(getActiveFilePath).mockReturnValue("/path/to/doc.md");
+    setActiveFilePath("/path/to/doc.md");
   });
 
   it("does not insert when view disconnects after file picker copy", async () => {
     vi.mocked(readClipboardImagePath).mockResolvedValue(null);
     vi.mocked(open).mockResolvedValue("/Users/test/photo.png" as never);
     vi.mocked(copyImageToAssets).mockResolvedValue("assets/photo.png");
-    vi.mocked(isViewConnected).mockReturnValue(false);
 
     const mockView = {
       state: {
@@ -1342,7 +1343,6 @@ describe("handleInsertImage — file picker view disconnect (line 151)", () => {
 describe("handleInsertVideo/Audio — error with non-Error throw (line 170/391/431)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(isViewConnected).mockReturnValue(true);
   });
 
   it("handles non-Error throw in video insertion", async () => {

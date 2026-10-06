@@ -1,5 +1,5 @@
 /**
- * Purpose: WI-B.2 helper — open a workspace-local action / reusable
+ * Purpose: open a workspace-local action / reusable
  *   workflow file in a new tab when the user Cmd-Clicks a `uses:`
  *   reference. If a tab already exists for that filePath, focuses it
  *   instead of duplicating.

@@ -646,7 +646,7 @@ describe("fixDoubleQuoteSpacing", () => {
       // asserted the opposite. Full rationale: __tests__/quoteAndSlashSpacing.
       expect(fixDoubleQuoteSpacing(`中文${OQ}text${CQ}`)).toBe(`中文${OQ}text${CQ}`);
       expect(fixDoubleQuoteSpacing(`日本語${OQ}text${CQ}`)).toBe(`日本語${OQ}text${CQ}`);
-      // Korean is excluded from CJK_NO_KOREAN, so it was never spaced either.
+      // Korean is excluded from CJK_LETTER_CLASS, so it was never spaced either.
       expect(fixDoubleQuoteSpacing(`한글${OQ}text${CQ}`)).toBe(`한글${OQ}text${CQ}`);
     });
 
@@ -1227,10 +1227,10 @@ describe("convertToCJKCornerQuotes", () => {
       expect(convertToCJKCornerQuotes(`${OQ}什么？${CQ}`)).toBe("「什么？」");
     });
 
-    // NOTE: CJK Extension A (U+3400-U+4DBF) is NOT detected by this function
-    // Only basic CJK Unified Ideographs (U+4E00-U+9FFF) are detected
-    it("does NOT convert CJK Extension A characters (limitation)", () => {
-      expect(convertToCJKCornerQuotes(`${OQ}㐀㐁${CQ}`)).toBe(`${OQ}㐀㐁${CQ}`);
+    // Han is decided by script, the same definition every other rule uses, so
+    // Extension A and the supplementary-plane extensions count.
+    it("converts CJK Extension A and supplementary-plane Han", () => {
+      expect(convertToCJKCornerQuotes(`${OQ}㐀㐁${CQ}`)).toBe("「㐀㐁」");
     });
 
     it("converts when Extension A is mixed with basic CJK", () => {

@@ -1,4 +1,4 @@
-//! Supervise a registered content-server child (Phase 1 WI-1.2, ADR-10).
+//! Supervise a registered content-server child (Phase 1, ADR-10).
 //!
 //! Purpose: one thread per registered (workspace, generation) polls the
 //! manager every `MONITOR_INTERVAL`. An unexpected exit is logged and emitted
@@ -8,7 +8,7 @@
 //! the thread quietly. Split from `spawn.rs` at the file-size gate, and so
 //! that the loop is `supervise`: generic over the poll and the exit hook,
 //! pinned by `supervisor.test.rs` without a thread, a live child or the
-//! 2-second interval (#136); the thread and the emit are pinned there too,
+//! 2-second interval; the thread and the emit are pinned there too,
 //! against the mock runtime.
 //!
 //! @coordinates-with manager_poll.rs — `poll_current_child`, the one decision
@@ -40,14 +40,14 @@ pub(super) struct ExitedEvent {
 /// Supervise the child for (root, generation). Polls every `MONITOR_INTERVAL`;
 /// on an unexpected exit it logs a warning and emits `content-server:exited`
 /// once. An intentional stop (entry removed / generation bumped) ends the loop
-/// silently. The frontend owns the bounded restart policy (WI-1.2).
+/// silently. The frontend owns the bounded restart policy.
 pub fn monitor_child(app: AppHandle, root: String, generation: u64) {
     if let Err(e) = monitor_child_every(app, root.clone(), generation, MONITOR_INTERVAL) {
         // The server is registered and running; only the watch is missing, so
         // an unexpected exit will not reach the frontend. Say so loudly
-        // rather than unwind the start that just succeeded (#331).
+        // rather than unwind the start that just succeeded.
         log::error!(
-            "[content-server {root}] could not start the supervisor thread for generation {generation}: {e}"
+            "[content-server {root:?}] could not start the supervisor thread for generation {generation}: {e}"
         );
     }
 }
@@ -55,7 +55,7 @@ pub fn monitor_child(app: AppHandle, root: String, generation: u64) {
 /// `monitor_child` with the interval injected, returning the thread so a test
 /// can prove it ends. Production never joins it.
 ///
-/// `thread::Builder`, not `thread::spawn` (#331): the latter PANICS when the
+/// `thread::Builder`, not `thread::spawn`: the latter PANICS when the
 /// OS refuses a thread, and the panic would unwind the caller — `start_once`,
 /// which has just registered a live server — turning a missing supervisor
 /// into a failed start over a server that is running fine. A refusal is
@@ -89,13 +89,13 @@ pub(super) fn report_exit<E: std::fmt::Display>(
     code: Option<i32>,
     emit: impl FnOnce(&str, ExitedEvent) -> Result<(), E>,
 ) {
-    log::warn!("[content-server {root}] exited unexpectedly (code {code:?})");
+    log::warn!("[content-server {root:?}] exited unexpectedly (code {code:?})");
     let event = ExitedEvent {
         workspace_root: root.to_string(),
         code,
     };
     if let Err(e) = emit(EXITED_EVENT, event) {
-        log::error!("[content-server {root}] could not emit {EXITED_EVENT}: {e}");
+        log::error!("[content-server {root:?}] could not emit {EXITED_EVENT}: {e}");
     }
 }
 
@@ -103,7 +103,7 @@ pub(super) fn report_exit<E: std::fmt::Display>(
 /// polls; `Running` polls again, `NotCurrent` ends the loop silently, and
 /// `Exited` calls `on_exit` exactly once and ends it.
 ///
-/// The first poll is immediate (#333). Sleeping first made the failure this
+/// The first poll is immediate. Sleeping first made the failure this
 /// supervisor is most likely to meet — a child that dies in the moment after
 /// it reported its port, on a missing dependency or a port it cannot rebind —
 /// invisible for a whole interval, during which the registry still named it

@@ -1,195 +1,108 @@
 // @vitest-environment node
+// WI-RA24.2 — Source-mode matches come from CodeMirror's own search engine, so
+// the counter agrees with Next, Previous and Replace.
 import { describe, it, expect } from "vitest";
-import { escapeRegExp, countMatches } from "./sourceEditorSearch";
+import { EditorState } from "@codemirror/state";
+import {
+  buildSourceSearchQuery,
+  findSourceMatches,
+  type SourceSearchParams,
+} from "./sourceEditorSearch";
 
-describe("escapeRegExp", () => {
-  it("returns empty string unchanged", () => {
-    expect(escapeRegExp("")).toBe("");
+function params(query: string, options: Partial<SourceSearchParams> = {}): SourceSearchParams {
+  return { query, replaceText: "", caseSensitive: false, wholeWord: false, useRegex: false, ...options };
+}
+
+const find = (doc: string, query: string, options: Partial<SourceSearchParams> = {}) =>
+  findSourceMatches(EditorState.create({ doc }), params(query, options));
+
+const count = (doc: string, query: string, options: Partial<SourceSearchParams> = {}) =>
+  find(doc, query, options).length;
+
+describe("findSourceMatches", () => {
+  it.each([
+    ["an empty query", "hello world", ""],
+    ["a query that is not there", "hello world", "xyz"],
+    ["an empty document", "", "hello"],
+    ["a query longer than the document", "hi", "hello world"],
+  ])("finds nothing for %s", (_label, doc, query) => {
+    expect(find(doc, query)).toEqual([]);
   });
 
-  it("returns plain text unchanged", () => {
-    expect(escapeRegExp("hello world")).toBe("hello world");
+  it("returns positions in document order", () => {
+    expect(find("abc abc", "abc")).toEqual([
+      { from: 0, to: 3 },
+      { from: 4, to: 7 },
+    ]);
   });
 
-  it("escapes dot", () => {
-    expect(escapeRegExp("file.txt")).toBe("file\\.txt");
+  it("does not overlap matches", () => {
+    expect(count("aaa", "aa")).toBe(1);
   });
 
-  it("escapes all special regex characters", () => {
-    const specials = ".*+?^${}()|[]\\";
-    const escaped = escapeRegExp(specials);
-    expect(escaped).toBe("\\.\\*\\+\\?\\^\\$\\{\\}\\(\\)\\|\\[\\]\\\\");
+  it.each([
+    ["folds case by default", "Hello HELLO hello", "hello", {}, 3],
+    ["keeps case when asked", "Hello HELLO hello", "hello", { caseSensitive: true }, 1],
+    ["folds non-ASCII case", "Ärger ärger ÄRGER", "ärger", {}, 3],
+    ["respects Whole Word", "cat concatenate category cat", "cat", { wholeWord: true }, 2],
+    ["takes regex metacharacters literally outside regex mode", "file.txt filetxt $100 func()", "file.txt", {}, 1],
+    ["matches CJK", "你好世界你好", "你好", {}, 2],
+    ["matches astral characters", "hello 🎉 world 🎉", "🎉", {}, 2],
+    ["counts every space", "   ", " ", {}, 3],
+  ] as const)("%s", (_label, doc, query, options, expected) => {
+    expect(count(doc, query, options)).toBe(expected);
   });
 
-  it("escapes special characters mixed with normal text", () => {
-    expect(escapeRegExp("price: $100 (USD)")).toBe(
-      "price: \\$100 \\(USD\\)"
-    );
+  describe("agrees with the engine where a hand-built RegExp did not", () => {
+    it("anchors ^ and $ at every line, as CodeMirror does", () => {
+      expect(count("cat\ncat\na cat", "^cat", { useRegex: true })).toBe(2);
+      expect(count("a cat\nthe cat\ncats", "cat$", { useRegex: true })).toBe(2);
+    });
+
+    it("applies Whole Word in regex mode too", () => {
+      expect(count("cat concat cat", "c.t", { useRegex: true, wholeWord: true })).toBe(2);
+    });
+
+    it("reads a typed \\n in a plain query as a line break", () => {
+      expect(find("cat\ndog\ncat\\ndog", "cat\\ndog")).toEqual([{ from: 0, to: 7 }]);
+    });
+
+    it("crosses a line break only where the pattern names one: a dot does not, \\n does", () => {
+      expect(count("abc\ndef", "abc.def", { useRegex: true })).toBe(0);
+      expect(count("abc\ndef", "abc\\ndef", { useRegex: true })).toBe(1);
+    });
   });
 
-  it("escapes pipe character", () => {
-    expect(escapeRegExp("a|b")).toBe("a\\|b");
+  it("finds nothing for an unfinished regex instead of throwing", () => {
+    expect(find("cat (cat", "(cat", { useRegex: true })).toEqual([]);
+    expect(find("cat [x", "[x", { useRegex: true })).toEqual([]);
   });
 
-  it("handles string with only special characters", () => {
-    expect(escapeRegExp("^$")).toBe("\\^\\$");
+  it("counts zero-length regex matches as the engine yields them", () => {
+    expect(find("abxc", "x*", { useRegex: true })).toEqual([
+      { from: 0, to: 0 },
+      { from: 1, to: 1 },
+      { from: 2, to: 3 },
+      { from: 4, to: 4 },
+    ]);
   });
 });
 
-describe("countMatches", () => {
-  // --- Empty / no-match cases ---
-
-  it("returns 0 for empty query", () => {
-    expect(countMatches("hello world", "", false, false, false)).toBe(0);
-  });
-
-  it("returns 0 when text has no matches", () => {
-    expect(countMatches("hello world", "xyz", false, false, false)).toBe(0);
-  });
-
-  it("returns 0 for empty text with non-empty query", () => {
-    expect(countMatches("", "hello", false, false, false)).toBe(0);
-  });
-
-  it("returns 0 for both empty text and query", () => {
-    expect(countMatches("", "", false, false, false)).toBe(0);
-  });
-
-  // --- Basic matching ---
-
-  it("counts single match", () => {
-    expect(countMatches("hello world", "hello", false, false, false)).toBe(1);
-  });
-
-  it("counts multiple matches", () => {
-    expect(countMatches("abcabc", "abc", false, false, false)).toBe(2);
-  });
-
-  it("counts overlapping occurrences as non-overlapping (regex exec behavior)", () => {
-    // "aaa" searching for "aa" finds 1 match (positions 0-1), then continues at index 2
-    expect(countMatches("aaa", "aa", false, false, false)).toBe(1);
-  });
-
-  // --- Case sensitivity ---
-
-  it("matches case-insensitively by default", () => {
-    expect(countMatches("Hello HELLO hello", "hello", false, false, false)).toBe(3);
-  });
-
-  it("respects case-sensitive flag", () => {
-    expect(countMatches("Hello HELLO hello", "hello", true, false, false)).toBe(1);
-  });
-
-  it("case-sensitive matches exact case only", () => {
-    expect(countMatches("Hello HELLO hello", "HELLO", true, false, false)).toBe(1);
-  });
-
-  // --- Whole word ---
-
-  it("matches whole word only", () => {
-    expect(countMatches("cat concatenate category", "cat", false, true, false)).toBe(1);
-  });
-
-  it("whole word matches multiple occurrences", () => {
-    expect(
-      countMatches("the cat sat on the mat with the cat", "cat", false, true, false)
-    ).toBe(2);
-  });
-
-  it("whole word with case sensitivity", () => {
-    expect(countMatches("Cat cat CAT", "cat", true, true, false)).toBe(1);
-  });
-
-  it("whole word returns 0 when only partial matches exist", () => {
-    expect(countMatches("caterpillar", "cat", false, true, false)).toBe(0);
-  });
-
-  // --- Regex mode ---
-
-  it("uses regex pattern when useRegex is true", () => {
-    expect(countMatches("abc 123 def 456", "\\d+", false, false, true)).toBe(2);
-  });
-
-  it("regex mode ignores wholeWord flag", () => {
-    // wholeWord is true but in regex mode it should be ignored
-    expect(countMatches("abc 123 def 456", "\\d+", false, true, true)).toBe(2);
-  });
-
-  it("regex mode respects case sensitivity", () => {
-    expect(countMatches("Abc abc ABC", "abc", true, false, true)).toBe(1);
-  });
-
-  it("regex mode case-insensitive", () => {
-    expect(countMatches("Abc abc ABC", "abc", false, false, true)).toBe(3);
-  });
-
-  it("returns 0 for invalid regex", () => {
-    expect(countMatches("hello world", "[invalid", false, false, true)).toBe(0);
-  });
-
-  it("returns 0 for another invalid regex pattern", () => {
-    expect(countMatches("test", "(unclosed", false, false, true)).toBe(0);
-  });
-
-  it("handles zero-length regex matches without infinite loop", () => {
-    // Pattern that matches empty string — should not loop forever
-    expect(countMatches("abc", "", false, false, false)).toBe(0); // empty query short-circuits
-  });
-
-  it("handles zero-length regex match (lookahead)", () => {
-    // (?=a) is a zero-length match before each 'a'
-    const count = countMatches("aaa", "(?=a)", false, false, true);
-    expect(count).toBe(3);
-  });
-
-  // --- Special characters in non-regex mode ---
-
-  it("escapes special regex chars in literal mode", () => {
-    expect(countMatches("price is $100", "$100", false, false, false)).toBe(1);
-  });
-
-  it("escapes dots in literal mode", () => {
-    expect(countMatches("file.txt and filetxt", "file.txt", false, false, false)).toBe(1);
-  });
-
-  it("literal mode with parentheses", () => {
-    expect(countMatches("func() and func()", "func()", false, false, false)).toBe(2);
-  });
-
-  // --- Unicode / CJK ---
-
-  it("matches CJK characters", () => {
-    expect(countMatches("你好世界你好", "你好", false, false, false)).toBe(2);
-  });
-
-  it("matches emoji", () => {
-    expect(countMatches("hello 🎉 world 🎉", "🎉", false, false, false)).toBe(2);
-  });
-
-  // --- Multiline ---
-
-  it("counts matches across multiple lines", () => {
-    const text = "line one\nline two\nline three";
-    expect(countMatches(text, "line", false, false, false)).toBe(3);
-  });
-
-  it("regex dot does not match newline by default", () => {
-    const text = "abc\ndef";
-    // . does not match \n without s flag
-    expect(countMatches(text, "abc.def", false, false, true)).toBe(0);
-  });
-
-  // --- Boundary cases ---
-
-  it("query longer than text returns 0", () => {
-    expect(countMatches("hi", "hello world", false, false, false)).toBe(0);
-  });
-
-  it("query equal to text returns 1", () => {
-    expect(countMatches("exact", "exact", false, false, false)).toBe(1);
-  });
-
-  it("handles text with only whitespace", () => {
-    expect(countMatches("   ", " ", false, false, false)).toBe(3);
+describe("buildSourceSearchQuery", () => {
+  it("carries every setting and the replacement into CodeMirror's query", () => {
+    const query = buildSourceSearchQuery({
+      query: "猫",
+      replaceText: "狗",
+      caseSensitive: true,
+      wholeWord: true,
+      useRegex: true,
+    });
+    expect([query.search, query.replace, query.caseSensitive, query.wholeWord, query.regexp]).toEqual([
+      "猫",
+      "狗",
+      true,
+      true,
+      true,
+    ]);
   });
 });

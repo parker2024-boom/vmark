@@ -29,7 +29,6 @@ const mocks = vi.hoisted(() => ({
   checkFrequency: "startup" as string,
   lastCheckTimestamp: null as number | null,
   dismiss: vi.fn(),
-  getAllDirtyDocuments: vi.fn(() => []),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -45,18 +44,22 @@ vi.mock("sonner", () => ({
   toast: mocks.toast,
 }));
 
-vi.mock("@/stores/settingsStore", () => ({
-  useSettingsStore: (sel: (s: unknown) => unknown) =>
-    sel({
-      update: {
-        autoCheckEnabled: mocks.autoCheckEnabled,
-        checkFrequency: mocks.checkFrequency,
-        lastCheckTimestamp: mocks.lastCheckTimestamp,
-        skipVersion: mocks.skipVersion,
-        autoDownload: mocks.autoDownload,
-      },
-    }),
-}));
+vi.mock("@/stores/settingsStore", () => {
+  const storeData = () => ({
+    update: {
+      autoCheckEnabled: mocks.autoCheckEnabled,
+      checkFrequency: mocks.checkFrequency,
+      lastCheckTimestamp: mocks.lastCheckTimestamp,
+      skipVersion: mocks.skipVersion,
+      autoDownload: mocks.autoDownload,
+    },
+  });
+  const useSettingsStore = (sel: (s: unknown) => unknown) => sel(storeData());
+  // The real document store reads and subscribes to settings when it loads.
+  useSettingsStore.getState = storeData;
+  useSettingsStore.subscribe = () => () => {};
+  return { useSettingsStore };
+});
 
 vi.mock("@/stores/mcpStore", () => {
   const storeData = () => ({
@@ -73,12 +76,6 @@ vi.mock("@/stores/mcpStore", () => {
   useMcpStore.getState = storeData;
   return { useMcpStore };
 });
-
-vi.mock("@/stores/documentStore", () => ({
-  useDocumentStore: {
-    getState: () => ({ getAllDirtyDocuments: mocks.getAllDirtyDocuments }),
-  },
-}));
 
 vi.mock("./useUpdateOperations", () => ({
   useUpdateOperationHandler: () => ({
@@ -98,7 +95,8 @@ vi.mock("@/services/persistence/hotExit/restartWithHotExit", () => ({
   restartWithHotExit: (...args: unknown[]) => mocks.restartWithHotExit(...args),
 }));
 
-vi.mock("@/utils/debug", () => ({
+vi.mock("@/utils/debug", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/utils/debug")>()),
   updateCheckerLog: (...args: unknown[]) => mocks.updateCheckerLog(...args),
 }));
 
@@ -108,6 +106,15 @@ vi.mock("@/utils/safeUnlisten", () => ({
 
 import { renderHook, act } from "@testing-library/react";
 import { shouldCheckNow, useUpdateChecker } from "./useUpdateChecker";
+import { useDocumentStore } from "@/stores/documentStore";
+import { useTabStore } from "@/stores/tabStore";
+
+/** Leave a document with unsaved changes, in an open tab or with no tab at all. */
+function dirtyDocument(where: "in-a-tab" | "without-a-tab"): void {
+  const tabId = where === "in-a-tab" ? useTabStore.getState().createTab("main", null) : "ghost";
+  useDocumentStore.getState().initDocument(tabId, "", null);
+  useDocumentStore.getState().setEditorContent(tabId, "unsaved");
+}
 
 const ONE_DAY = 24 * 60 * 60 * 1000;
 const ONE_WEEK = 7 * ONE_DAY;
@@ -663,7 +670,8 @@ describe("useUpdateChecker — event listeners (lines 222-316)", () => {
     mocks.lastCheckTimestamp = null;
     mocks.doCheckForUpdates.mockResolvedValue(undefined);
     mocks.doDownloadAndInstall.mockResolvedValue(undefined);
-    mocks.getAllDirtyDocuments.mockReturnValue([]);
+    useTabStore.setState({ tabs: {}, activeTabId: {}, untitledCounter: 0 });
+    useDocumentStore.setState({ documents: {} });
   });
 
   afterEach(() => {
@@ -765,94 +773,68 @@ describe("useUpdateChecker — event listeners (lines 222-316)", () => {
     unmount();
   });
 
-  it("REQUEST_RESTART with no dirty docs calls restartWithHotExit directly", async () => {
-    mocks.getAllDirtyDocuments.mockReturnValue([]);
+  /** Mount the hook, deliver a restart request and let its handler settle. */
+  async function requestRestart(): Promise<void> {
     const listeners = captureListeners();
     const { unmount } = renderHook(() => useUpdateChecker());
-
     await act(async () => {
       listeners["update:request-restart"]({});
-      await Promise.resolve();
-      await Promise.resolve();
+      for (let turn = 0; turn < 4; turn++) await Promise.resolve();
     });
+    unmount();
+  }
+
+  it("REQUEST_RESTART with no dirty docs calls restartWithHotExit directly", async () => {
+    await requestRestart();
 
     expect(mocks.restartWithHotExit).toHaveBeenCalled();
     expect(mocks.ask).not.toHaveBeenCalled();
-    unmount();
+  });
+
+  // WI-RA1C.4 — a document with no tab is not open: nothing to ask about.
+  it("REQUEST_RESTART does not ask about a dirty document that has no tab", async () => {
+    dirtyDocument("without-a-tab");
+    await requestRestart();
+
+    expect(mocks.ask).not.toHaveBeenCalled();
+    expect(mocks.restartWithHotExit).toHaveBeenCalled();
   });
 
   it("REQUEST_RESTART with dirty docs and user confirms calls restartWithHotExit", async () => {
-    mocks.getAllDirtyDocuments.mockReturnValue([{ id: "tab-1" }]);
+    dirtyDocument("in-a-tab");
     mocks.ask.mockResolvedValue(true);
-    const listeners = captureListeners();
-    const { unmount } = renderHook(() => useUpdateChecker());
-
-    await act(async () => {
-      listeners["update:request-restart"]({});
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await requestRestart();
 
     expect(mocks.ask).toHaveBeenCalledWith(
       expect.stringContaining("1 unsaved"),
       expect.objectContaining({ title: "Unsaved Changes" }),
     );
     expect(mocks.restartWithHotExit).toHaveBeenCalled();
-    unmount();
   });
 
   it("REQUEST_RESTART emits cancel event when user declines", async () => {
-    mocks.getAllDirtyDocuments.mockReturnValue([{ id: "tab-1" }]);
+    dirtyDocument("in-a-tab");
     mocks.ask.mockResolvedValue(false);
-    const listeners = captureListeners();
-    const { unmount } = renderHook(() => useUpdateChecker());
-
-    await act(async () => {
-      listeners["update:request-restart"]({});
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await requestRestart();
 
     expect(mocks.emit).toHaveBeenCalledWith("update:restart-cancelled");
     expect(mocks.restartWithHotExit).not.toHaveBeenCalled();
-    unmount();
   });
 
   it("REQUEST_RESTART logs error and emits cancel on failure", async () => {
-    mocks.getAllDirtyDocuments.mockImplementation(() => { throw new Error("store err"); });
-    const listeners = captureListeners();
-    const { unmount } = renderHook(() => useUpdateChecker());
-
-    await act(async () => {
-      listeners["update:request-restart"]({});
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    mocks.restartWithHotExit.mockRejectedValueOnce(new Error("restart err"));
+    await requestRestart();
 
     expect(mocks.updateCheckerLog).toHaveBeenCalledWith("Restart request failed:", expect.any(Error));
     expect(mocks.emit).toHaveBeenCalledWith("update:restart-cancelled");
-    unmount();
   });
 
   it("REQUEST_RESTART error handler logs if cancel emit also fails", async () => {
-    mocks.getAllDirtyDocuments.mockImplementation(() => { throw new Error("store err"); });
+    mocks.restartWithHotExit.mockRejectedValueOnce(new Error("restart err"));
     mocks.emit.mockRejectedValueOnce(new Error("emit fail"));
-    const listeners = captureListeners();
-    const { unmount } = renderHook(() => useUpdateChecker());
-
-    await act(async () => {
-      listeners["update:request-restart"]({});
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await requestRestart();
 
     expect(mocks.updateCheckerLog).toHaveBeenCalledWith("Restart request failed:", expect.any(Error));
-    unmount();
   });
 
   it("calls safeUnlistenAsync on unmount for all listeners", () => {

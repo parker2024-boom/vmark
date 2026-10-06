@@ -4,6 +4,8 @@
  * Purpose: Flag headings that skip levels (e.g., h1 → h3).
  * Decreasing levels (e.g., h3 → h1) are always fine.
  * The first heading sets the baseline — no prior context to compare.
+ *
+ * @module lib/lintEngine/rules/headingIncrement
  */
 
 import { visit } from "unist-util-visit";

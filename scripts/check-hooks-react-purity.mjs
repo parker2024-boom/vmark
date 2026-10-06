@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * Hooks-tier purity gate (WI-10, B1).
+ * Hooks-tier purity gate (B1).
  *
  * ADR-013: `src/hooks/` is the React-adapter tier over `src/services/`. The
- * 20260722 tier restoration and the WI-10 migration moved every non-React
- * business module out (74 files, 8.4k lines had accumulated); this gate makes
- * the regression class structural instead of review-dependent.
+ * tier restoration (`.claude/adr/plans/20260722-tier-boundary-restoration.md`)
+ * and its hooks migration moved every non-React business module out (74 files,
+ * 8.4k lines had accumulated); this gate makes the regression class structural
+ * instead of review-dependent.
  *
  * MECHANISM CHOICE (decided + documented per the WI): dependency-cruiser's
  * `required` rule can only assert "module imports react", which would force
@@ -41,8 +42,14 @@
  * appears, extend the evidence rules here with a stated reason — do not add a
  * baseline file for business modules; those belong in src/services/<domain>/.
  *
+ * A missing `src/hooks/`, or one with no file to examine, is a FAILURE: the
+ * gate reports only on what it scanned, and says how many files that was.
+ *
  * Usage: node scripts/check-hooks-react-purity.mjs [--root <dir>]
- * (--root exists for the gate-sensitivity meta-test's fixture trees.)
+ * (--root exists for the fixture trees of this gate's own tests.)
+ *
+ * @coordinates-with scripts/check-hooks-react-purity.test.mjs — the evidence rules, case by case
+ * @coordinates-with scripts/depcruise-sensitivity.test.mjs — runs this beside the dependency rules
  */
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -171,13 +178,22 @@ function walk(dir, rootLen, out) {
   return out;
 }
 
-/** Scan <root>/src/hooks and return the offending repo-relative paths. */
+/**
+ * Scan <root>/src/hooks.
+ *
+ * Returns the offending repo-relative paths AND how many files were examined,
+ * or `null` when the directory does not exist. The count is part of the result
+ * because an empty offender list means "clean" only if something was scanned;
+ * with the directory renamed or the filter wrong it means "looked at nothing".
+ */
 export function scanHooksTier(root) {
   const hooksDir = path.join(root, "src", "hooks");
-  if (!existsSync(hooksDir)) return [];
+  if (!existsSync(hooksDir)) return null;
   const offenders = [];
+  let scanned = 0;
   for (const rel of walk(hooksDir, root.length + 1, [])) {
     if (isTestAdjacent(rel)) continue;
+    scanned += 1;
     try {
       if (!isReactAdapter(readFileSync(path.join(root, rel), "utf8"), rel)) offenders.push(rel);
     } catch (error) {
@@ -185,7 +201,7 @@ export function scanHooksTier(root) {
       offenders.push(`${rel} (does not parse: ${error.message})`);
     }
   }
-  return offenders.sort();
+  return { offenders: offenders.sort(), scanned };
 }
 
 function main() {
@@ -199,9 +215,21 @@ function main() {
     }
   }
 
-  const offenders = scanHooksTier(root);
+  const result = scanHooksTier(root);
+  // Fail closed on a tier the gate could not see. Neither case is "clean".
+  if (result === null) {
+    console.error(`❌ src/hooks/ not found under ${root} — the hooks-tier gate has nothing to verify.`);
+    process.exit(1);
+  }
+  const { offenders, scanned } = result;
+  if (scanned === 0) {
+    console.error("❌ Hooks-tier purity scanned 0 files in src/hooks/ — refusing to pass vacuously.");
+    process.exit(1);
+  }
   if (offenders.length === 0) {
-    console.log("✅ Hooks-tier purity held (every non-test file in src/hooks/ is a React adapter).");
+    console.log(
+      `✅ Hooks-tier purity held (every non-test file in src/hooks/ is a React adapter; ${scanned} files scanned).`,
+    );
     return;
   }
   console.error(`\n❌ ${offenders.length} non-React business module(s) in src/hooks/:\n`);

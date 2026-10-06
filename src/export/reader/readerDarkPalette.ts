@@ -8,10 +8,10 @@
  * from the app for months and the only symptom was an exported document that
  * looked subtly wrong in dark mode — the most public artefact VMark produces.
  *
- * Measured drift at the time this was written (WI-DS3): eight tokens, including
+ * Measured drift at the time this was written: eight tokens, including
  * `--strong-color` #569cd6 vs #6cb6ff and `--md-char-color` #6a9955 vs #7aa874
  * (the reader still carried VS Code Dark+ values), plus `--hover-bg` at 0.06
- * against the app's 0.08 — a fix the app made in audit 20260612 H15, on the
+ * against the app's 0.08 — a fix the app made on the
  * grounds that a black tint on a dark background is barely perceivable, which
  * never reached the export bundle. Two more had been corrected by hand days
  * earlier and would have drifted again.

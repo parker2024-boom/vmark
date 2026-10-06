@@ -1,14 +1,13 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+/**
+ * main — the webview entry point: loads i18n, global styles and KaTeX CSS,
+ * then bootstraps the app and lazily imports App.
+ *
+ * @module main
+ */
+
 import "./i18n";
 import "./services/menu/startupMenuSync";
-import { initSecureStorage } from "@/services/secrets/secureStorage";
-import { bootstrapFormats } from "./lib/formats";
-import { useSettingsStore } from "./stores/settingsStore";
-import { setTabExistenceGuard } from "./stores/documentStore";
-import { bindPluginHostSettings } from "./services/assembly/bindHostSettings";
-import { useTabStore } from "./stores/tabStore";
+import { bootstrap } from "./bootstrap";
 import "./styles/index.css";
 // Canonical `.vm-btn` text button. Global so any surface can use it instead of
 // hand-rolling another bespoke `__btn` class (see the file header).
@@ -18,74 +17,14 @@ import "./styles/overlay-shared.css";
 import "./styles/input-shared.css";
 import "./styles/panel-shared.css";
 import "./styles/select-shared.css";
-// Shared syntax-highlight palette (source-syntax.css + json-view-theme.css
-// both consume these vars). Global so the vars resolve wherever either renders.
 // KaTeX CSS must load AFTER Tailwind (so preflight runs first).
 // KaTeX fixes must load AFTER KaTeX CSS to restore border-widths reset by Tailwind.
 import "katex/dist/katex.min.css";
 import "./styles/katexFixes.css";
 import { appError } from "@/utils/debug";
-import { platformRootClass } from "@/utils/platform";
 
-// Pre-load secure storage cache BEFORE importing App.
-// App → aiProviderStore → Zustand persist() hydrates at module evaluation time.
-// If App is imported statically, hydration reads an empty cache.
-const SECURE_KEYS = ["vmark-ai-providers"];
-
-async function bootstrap() {
-  // WI-UA15: platform root class, before first paint — index.css keys the
-  // D7 cursor split off it (arrow on macOS, pointer elsewhere).
-  document.documentElement.classList.add(platformRootClass());
-
-  await initSecureStorage(SECURE_KEYS);
-
-  // C1 defense-in-depth: teach documentStore.initDocument to skip writes for
-  // tabs that no longer exist (closed mid-file-read). Wired here at the
-  // composition root so documentStore stays decoupled from tabStore and pure
-  // store unit tests remain permissive.
-  setTabExistenceGuard((tabId) => useTabStore.getState().findTabById(tabId) !== null);
-
-  // ADR-015: point the plugins' host-settings seam at the real store. Plugins
-  // depend on that seam, not on `@/stores`, so they still run when lifted out
-  // of this repo — this is what makes them read the USER's preferences here.
-  // Bound at the composition root, not at editor creation: the Source-mode
-  // plugins that read it are not built by the Tiptap factory.
-  bindPluginHostSettings();
-
-  // ADR-011: register every plugin's manifest with the central registry
-  // so palette / debug / dependency tooling sees the full plugin set.
-
-  // Register every format adapter before App imports any store that
-  // calls dispatchEditor() (e.g., tabStore.createTab). Honor the user's
-  // opt-in toggles — markdown, txt, and yaml always register; the rest
-  // depend on `settings.formats.*`. The runtime re-bootstrap subscription
-  // is mounted by document windows only (see useFormatSettingsBridge in
-  // App.tsx) so non-document windows like Settings / PDF Export don't
-  // pull tabStore + registry orchestration.
-  const initialFormats = useSettingsStore.getState().formats;
-  bootstrapFormats({
-    dataFormats: initialFormats.dataFormats,
-    diagrams: initialFormats.diagrams,
-    htmlPreview: initialFormats.htmlPreview,
-    codeViewers: initialFormats.codeViewers,
-  });
-
-  // Dynamic import: App (and its transitive Zustand stores) only evaluate
-  // AFTER the secure storage cache is populated.
-  const { default: App } = await import("./App");
-
-  const rootElement = document.getElementById("root");
-  if (!rootElement) {
-    throw new Error("Root element not found");
-  }
-
-  ReactDOM.createRoot(rootElement).render(
-    <React.StrictMode>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </React.StrictMode>
-  );
-}
-
-void bootstrap().catch((e) => appError("App bootstrap failed:", e));
+// The startup sequence lives in ./bootstrap. The App import stays HERE, in the
+// entry: it is the boot chunk the eager-chunk gate seeds from, and it must be
+// a dynamic import so App's stores evaluate only after bootstrap has filled
+// the secure-storage cache.
+void bootstrap(() => import("./App")).catch((e) => appError("App bootstrap failed:", e));

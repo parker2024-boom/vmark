@@ -6,12 +6,21 @@
 // not just opening any file. Cargo.toml is the second schema POC
 // (after WI-2.4 GHA workflows).
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { __resetRegistry } from "../registry";
 import {
   cargoTomlSchemaDetector,
   collectCargoDependencies,
 } from "./cargoToml";
+import { loadTomlParser, type TomlParse } from "./tomlParser";
+
+// The parser loads on first use (tomlParser.ts); these call the adapter
+// synchronously, so load it first.
+let parseToml: TomlParse;
+beforeAll(async () => {
+  parseToml = await loadTomlParser();
+});
+const collectCargoDependenciesWith = (content: string) => collectCargoDependencies(content, parseToml);
 
 describe("cargoToml schema detector", () => {
   beforeEach(() => __resetRegistry());
@@ -83,7 +92,7 @@ members = ["crate-a", "crate-b"]
 
 describe("collectCargoDependencies", () => {
   it("returns empty arrays for a manifest with no dep tables", () => {
-    const result = collectCargoDependencies(`
+    const result = collectCargoDependenciesWith(`
 [package]
 name = "vmark"
 version = "0.7.0"
@@ -94,7 +103,7 @@ version = "0.7.0"
   });
 
   it("collects [dependencies] entries", () => {
-    const result = collectCargoDependencies(`
+    const result = collectCargoDependenciesWith(`
 [package]
 name = "x"
 
@@ -109,7 +118,7 @@ tokio = { version = "1", features = ["rt"] }
   });
 
   it("collects [dev-dependencies]", () => {
-    const result = collectCargoDependencies(`
+    const result = collectCargoDependenciesWith(`
 [dev-dependencies]
 tempfile = "3.0"
     `.trim());
@@ -119,7 +128,7 @@ tempfile = "3.0"
   });
 
   it("collects [build-dependencies]", () => {
-    const result = collectCargoDependencies(`
+    const result = collectCargoDependenciesWith(`
 [build-dependencies]
 cc = "1.0"
     `.trim());
@@ -129,7 +138,7 @@ cc = "1.0"
   });
 
   it("handles git + path deps without throwing", () => {
-    const result = collectCargoDependencies(`
+    const result = collectCargoDependenciesWith(`
 [dependencies]
 local = { path = "../sibling" }
 upstream = { git = "https://example.com/repo" }
@@ -142,7 +151,7 @@ upstream = { git = "https://example.com/repo" }
   });
 
   it("returns empty result on syntax error rather than throwing", () => {
-    const result = collectCargoDependencies("[unclosed");
+    const result = collectCargoDependenciesWith("[unclosed");
     expect(result.runtime).toEqual([]);
     expect(result.dev).toEqual([]);
     expect(result.build).toEqual([]);
@@ -150,7 +159,7 @@ upstream = { git = "https://example.com/repo" }
   });
 
   it("returns features for inline-table deps", () => {
-    const result = collectCargoDependencies(`
+    const result = collectCargoDependenciesWith(`
 [dependencies]
 serde = { version = "1", features = ["derive", "rc"] }
     `.trim());

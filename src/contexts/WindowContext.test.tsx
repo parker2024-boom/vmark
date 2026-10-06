@@ -3,13 +3,14 @@
  *
  * Tests for the WindowProvider, useWindowLabel, and useIsDocumentWindow hooks.
  * Covers: context provider/consumer pattern, label detection, error boundaries,
- * and settings/doc-window branching.
+ * and settings/doc-window branching. What a window opens from its `file`,
+ * `files` and `workspaceRoot` params runs against the real opener and stores in
+ * WindowContext.startupFiles.test.tsx.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, renderHook } from "@testing-library/react";
 import type { TabRemovalRequestEvent } from "@/types/tabTransfer";
-import { useUIStore } from "../stores/uiStore";
 
 // --- Mocks (must precede imports) ---
 
@@ -21,8 +22,6 @@ const {
   mockCreateTab,
   mockGetTabsByWindow,
   mockInitDocument,
-  mockSetLineMetadata,
-  mockAddFile,
   mockRehydrate,
   mockCloseWorkspace,
   mockDetachTab,
@@ -39,8 +38,6 @@ const {
   mockCreateTab: vi.fn((_windowLabel: string, _filePath: string | null) => "tab-1"),
   mockGetTabsByWindow: vi.fn(() => [] as unknown[]),
   mockInitDocument: vi.fn(),
-  mockSetLineMetadata: vi.fn(),
-  mockAddFile: vi.fn(),
   mockRehydrate: vi.fn(),
   mockCloseWorkspace: vi.fn(),
   mockDetachTab: vi.fn(),
@@ -80,7 +77,7 @@ vi.mock("../stores/documentStore", () => ({
   useDocumentStore: {
     getState: () => ({
       initDocument: mockInitDocument,
-      setLineMetadata: mockSetLineMetadata,
+      setLineMetadata: vi.fn(),
       removeDocument: mockRemoveDocument,
     }),
   },
@@ -114,7 +111,7 @@ vi.mock("../stores/tabStore", () => ({
 
 vi.mock("../stores/workspaceStore", () => ({
   useRecentFilesStore: {
-    getState: () => ({ addFile: mockAddFile }),
+    getState: () => ({ addFile: vi.fn() }),
   },
   useWorkspaceStore: {
     getState: () => ({
@@ -134,61 +131,12 @@ vi.mock("@/services/persistence/workspaceStorage", () => ({
   findActiveWorkspaceLabel: vi.fn(() => null),
 }));
 
-vi.mock("../utils/openPolicy", () => ({
-  resolveWorkspaceRootForExternalFile: vi.fn(() => null),
-}));
-
-vi.mock("../utils/paths", () => ({
-  isWithinRoot: vi.fn(() => false),
-}));
-
 vi.mock("@/services/workspaces/openWorkspaceWithConfig", () => ({
   openWorkspaceWithConfig: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock("@/hooks/useWorkspaceSync", () => ({
   useWorkspaceSync: vi.fn(),
-}));
-
-vi.mock("../utils/linebreakDetection", () => ({
-  detectLinebreaks: vi.fn(() => ({ type: "lf" })),
-}));
-
-// startupFileOpen delegates to openFileInNewTabCore; its mechanics are covered
-// by its own tests. Mocked here (parse behavior real) so the orchestration
-// assertions (which path opens which file) stay meaningful.
-type StartupParams = { filePaths?: string[] | null; filePath?: string | null;
-  workspaceRoot?: string | null; lastOpenTabs?: string[] };
-
-async function loadFiles(label: string, paths: readonly string[]) {
-  const { readTextFile } = await import("@tauri-apps/plugin-fs");
-  const { toast } = await import("sonner");
-  for (const path of paths) {
-    const tabId = mockCreateTab(label, path);
-    try {
-      mockInitDocument(tabId, await readTextFile(path), path);
-      mockSetLineMetadata(tabId, { type: "lf" });
-      mockAddFile(path);
-    } catch {
-      mockInitDocument(tabId, "", null);
-      toast.error(`Failed to open ${path.split("/").pop() ?? path}`);
-    }
-  }
-}
-
-// `importActual` for the parser: a hand-written copy would let the real one drift
-// while these tests stayed green. Only opening is stubbed.
-vi.mock("./startupFileOpen", async (importActual) => ({
-  parseStartupFilesParam: (await importActual<typeof import("./startupFileOpen")>())
-    .parseStartupFilesParam,
-  openStartupContent: vi.fn(async (label: string, p: StartupParams) => {
-    const paths = p.filePaths?.length ? p.filePaths
-      : p.filePath ? [p.filePath]
-      : p.workspaceRoot ? (p.lastOpenTabs ?? [])
-      : null;
-    if (paths) return loadFiles(label, paths);
-    if (label !== "main") mockInitDocument(mockCreateTab(label, null), "", null);
-  }),
 }));
 
 vi.mock("@/utils/debug", () => ({
@@ -487,235 +435,6 @@ describe("WindowContext", () => {
     });
   });
 
-  describe("WindowProvider — file loading from URL params", () => {
-    it("loads file content from URL file param", async () => {
-      const { readTextFile } = await import("@tauri-apps/plugin-fs");
-      vi.mocked(readTextFile).mockResolvedValue("# File Content");
-
-      Object.defineProperty(globalThis, "location", {
-        value: { search: "?file=/docs/test.md" },
-        writable: true,
-        configurable: true,
-      });
-
-      render(
-        <WindowProvider>
-          <div data-testid="child">content</div>
-        </WindowProvider>,
-      );
-
-      await waitFor(() => {
-        expect(mockCreateTab).toHaveBeenCalledWith("main", "/docs/test.md");
-      });
-
-      await waitFor(() => {
-        expect(readTextFile).toHaveBeenCalledWith("/docs/test.md");
-        expect(mockInitDocument).toHaveBeenCalled();
-        expect(mockSetLineMetadata).toHaveBeenCalled();
-        expect(mockAddFile).toHaveBeenCalledWith("/docs/test.md");
-      });
-    });
-
-    it("initializes empty document when file read fails", async () => {
-      const { readTextFile } = await import("@tauri-apps/plugin-fs");
-      vi.mocked(readTextFile).mockRejectedValue(new Error("not found"));
-      const { toast } = await import("sonner");
-
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      Object.defineProperty(globalThis, "location", {
-        value: { search: "?file=/docs/missing.md" },
-        writable: true,
-        configurable: true,
-      });
-
-      render(
-        <WindowProvider>
-          <div data-testid="child">content</div>
-        </WindowProvider>,
-      );
-
-      await waitFor(() => {
-        expect(mockInitDocument).toHaveBeenCalledWith(expect.any(String), "", null);
-        expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("missing.md"));
-      });
-
-      errorSpy.mockRestore();
-    });
-
-    it("opens workspace from workspaceRoot URL param", async () => {
-      const { openWorkspaceWithConfig } = await import("@/services/workspaces/openWorkspaceWithConfig");
-
-      Object.defineProperty(globalThis, "location", {
-        value: { search: "?workspaceRoot=/projects/myapp&file=/projects/myapp/README.md" },
-        writable: true,
-        configurable: true,
-      });
-
-      const { readTextFile } = await import("@tauri-apps/plugin-fs");
-      vi.mocked(readTextFile).mockResolvedValue("# README");
-
-      render(
-        <WindowProvider>
-          <div data-testid="child">content</div>
-        </WindowProvider>,
-      );
-
-      await waitFor(() => {
-        expect(openWorkspaceWithConfig).toHaveBeenCalledWith("/projects/myapp", {
-          windowLabel: "main",
-        });
-      });
-
-      // The file tab MUST still be created when workspaceRoot AND file are
-      // both present — guards against the workspace-mode skip in the
-      // else-branch ever bleeding into the file-loading paths.
-      await waitFor(() => {
-        expect(mockCreateTab).toHaveBeenCalledWith("main", "/projects/myapp/README.md");
-        expect(mockInitDocument).toHaveBeenCalledWith(
-          "tab-1",
-          "# README",
-          "/projects/myapp/README.md",
-        );
-      });
-    });
-
-    it("does NOT create a blank untitled tab when entering a workspace with no file", async () => {
-      // Dock-icon reopen flow: Rust passes ?workspaceRoot=... with no
-      // file. The file explorer is the entry point; a forced blank tab
-      // would feel orphaned. Hot-exit / lastOpenTabs restore can still
-      // populate tabs after init.
-      const { openWorkspaceWithConfig } = await import("@/services/workspaces/openWorkspaceWithConfig");
-
-      Object.defineProperty(globalThis, "location", {
-        value: { search: "?workspaceRoot=/projects/myapp" },
-        writable: true,
-        configurable: true,
-      });
-
-      render(
-        <WindowProvider>
-          <div data-testid="child">content</div>
-        </WindowProvider>,
-      );
-
-      await waitFor(() => {
-        expect(openWorkspaceWithConfig).toHaveBeenCalledWith("/projects/myapp", {
-          windowLabel: "main",
-        });
-      });
-
-      // The else-branch blank-tab fallback must be skipped in workspace mode
-      expect(mockCreateTab).not.toHaveBeenCalled();
-      expect(mockInitDocument).not.toHaveBeenCalled();
-    });
-
-    it("reveals the file explorer when opening a workspace from a URL param (#1005)", async () => {
-      // Regression: the new-window Open Workspace flow opened the workspace in
-      // the store but never showed the file tree, so a new window looked empty.
-      useUIStore.setState({ sidebarVisible: false, sidebarViewMode: "outline" });
-
-      Object.defineProperty(globalThis, "location", {
-        value: { search: "?workspaceRoot=/projects/myapp" },
-        writable: true,
-        configurable: true,
-      });
-
-      render(
-        <WindowProvider>
-          <div data-testid="child">content</div>
-        </WindowProvider>,
-      );
-
-      await waitFor(() => {
-        expect(useUIStore.getState().sidebarVisible).toBe(true);
-        expect(useUIStore.getState().sidebarViewMode).toBe("files");
-      });
-    });
-
-    it("handles multiple files from files URL param", async () => {
-      const { readTextFile } = await import("@tauri-apps/plugin-fs");
-      vi.mocked(readTextFile).mockResolvedValue("# content");
-
-      const files = JSON.stringify(["/docs/a.md", "/docs/b.md"]);
-      Object.defineProperty(globalThis, "location", {
-        value: { search: `?files=${encodeURIComponent(files)}` },
-        writable: true,
-        configurable: true,
-      });
-
-      render(
-        <WindowProvider>
-          <div data-testid="child">content</div>
-        </WindowProvider>,
-      );
-
-      await waitFor(() => {
-        expect(mockCreateTab).toHaveBeenCalledTimes(2);
-        expect(readTextFile).toHaveBeenCalledWith("/docs/a.md");
-        expect(readTextFile).toHaveBeenCalledWith("/docs/b.md");
-      });
-    });
-
-    it("handles invalid JSON in files param gracefully", async () => {
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      Object.defineProperty(globalThis, "location", {
-        value: { search: "?files=not-json" },
-        writable: true,
-        configurable: true,
-      });
-
-      render(
-        <WindowProvider>
-          <div data-testid="child">content</div>
-        </WindowProvider>,
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("child")).toBeInTheDocument();
-      });
-
-      // Subject: malformed JSON does not crash init (#1313: no tab now).
-      expect(mockCreateTab).not.toHaveBeenCalled();
-
-      errorSpy.mockRestore();
-    });
-
-    it("handles file read failure in multi-file mode", async () => {
-      const { readTextFile } = await import("@tauri-apps/plugin-fs");
-      vi.mocked(readTextFile)
-        .mockResolvedValueOnce("# good content")
-        .mockRejectedValueOnce(new Error("read error"));
-      const { toast } = await import("sonner");
-
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      const files = JSON.stringify(["/docs/good.md", "/docs/bad.md"]);
-      Object.defineProperty(globalThis, "location", {
-        value: { search: `?files=${encodeURIComponent(files)}` },
-        writable: true,
-        configurable: true,
-      });
-
-      render(
-        <WindowProvider>
-          <div data-testid="child">content</div>
-        </WindowProvider>,
-      );
-
-      await waitFor(() => {
-        // First file succeeded, second failed
-        expect(mockCreateTab).toHaveBeenCalledTimes(2);
-        expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("bad.md"));
-        // Failed file still gets empty document
-        expect(mockInitDocument).toHaveBeenCalledWith(expect.any(String), "", null);
-      });
-
-      errorSpy.mockRestore();
-    });
-  });
-
   describe("WindowProvider — doc-* window clears localStorage", () => {
     it("clears persisted workspace state for doc-* window", async () => {
       mockWindowLabel = "doc-789";
@@ -785,7 +504,7 @@ describe("WindowContext", () => {
 
       await vi.advanceTimersByTimeAsync(200);
 
-      expect(invoke).toHaveBeenCalledWith("claim_tab_transfer", { windowLabel: "doc-new" });
+      expect(vi.mocked(invoke).mock.calls).toContainEqual(["claim_tab_transfer"]);
 
       vi.useRealTimers();
     });
@@ -931,7 +650,7 @@ describe("WindowContext", () => {
       removeHandler({ payload: { requestId: "req-1", tabId: "last-tab", phase: "commit" } });
 
       await waitFor(() => {
-        expect(invoke).toHaveBeenCalledWith("close_window", { label: "doc-close" });
+        expect(invoke).toHaveBeenCalledWith("close_window");
       });
     });
 
@@ -945,12 +664,12 @@ describe("WindowContext", () => {
         </WindowProvider>,
       );
 
-      // Wait for listen() promises to resolve so unlisten refs are stored
+      // Wait for both listen() calls, then flush the microtask in which their
+      // .then() callbacks store unlisten/unlistenRemove.
       await waitFor(() => {
         expect(mockListen).toHaveBeenCalledTimes(2);
       });
-      // Flush microtasks so .then() callbacks assign unlisten/unlistenRemove
-      await new Promise((r) => setTimeout(r, 0));
+      await Promise.resolve();
 
       unmount();
 
@@ -964,8 +683,6 @@ describe("WindowContext", () => {
       vi.useFakeTimers();
       mockWindowLabel = "doc-fb";
       const { invoke } = await import("@tauri-apps/api/core");
-      const { resolveWorkspaceRootForExternalFile } = await import("../utils/openPolicy");
-      vi.mocked(resolveWorkspaceRootForExternalFile).mockReturnValue("/docs");
       const { openWorkspaceWithConfig } = await import("@/services/workspaces/openWorkspaceWithConfig");
 
       vi.mocked(invoke).mockResolvedValue({
@@ -991,8 +708,7 @@ describe("WindowContext", () => {
 
       await vi.advanceTimersByTimeAsync(200);
 
-      // Should derive workspace from file path
-      expect(resolveWorkspaceRootForExternalFile).toHaveBeenCalledWith("/docs/file.md");
+      // The real open policy derives the workspace from the file's folder.
       expect(openWorkspaceWithConfig).toHaveBeenCalledWith("/docs", {
         windowLabel: "doc-fb",
       });
@@ -1036,70 +752,6 @@ describe("WindowContext", () => {
     });
   });
 
-  describe("WindowProvider — file within active workspace", () => {
-    it("skips workspace resolution when file is within active workspace root", async () => {
-      const { readTextFile } = await import("@tauri-apps/plugin-fs");
-      vi.mocked(readTextFile).mockResolvedValue("# Inside workspace");
-      const { isWithinRoot } = await import("../utils/paths");
-      vi.mocked(isWithinRoot).mockReturnValue(true);
-
-      // Set workspace store to have an active root
-      mockWorkspaceState.rootPath = "/projects";
-      mockWorkspaceState.isWorkspaceMode = true;
-
-      Object.defineProperty(globalThis, "location", {
-        value: { search: "?file=/projects/src/test.md" },
-        writable: true,
-        configurable: true,
-      });
-
-      const { openWorkspaceWithConfig } = await import("@/services/workspaces/openWorkspaceWithConfig");
-
-      render(
-        <WindowProvider>
-          <div data-testid="child">content</div>
-        </WindowProvider>,
-      );
-
-      await waitFor(() => {
-        expect(isWithinRoot).toHaveBeenCalledWith("/projects", "/projects/src/test.md");
-        // Should NOT call openWorkspaceWithConfig since file is within active workspace
-        expect(openWorkspaceWithConfig).not.toHaveBeenCalled();
-        expect(mockCloseWorkspace).not.toHaveBeenCalled();
-      });
-
-      // Restore
-      mockWorkspaceState.rootPath = null;
-      mockWorkspaceState.isWorkspaceMode = false;
-    });
-
-    it("does not close workspace for doc-* windows when no derived root", async () => {
-      mockWindowLabel = "doc-ext";
-      const { readTextFile } = await import("@tauri-apps/plugin-fs");
-      vi.mocked(readTextFile).mockResolvedValue("# External");
-      const { resolveWorkspaceRootForExternalFile } = await import("../utils/openPolicy");
-      vi.mocked(resolveWorkspaceRootForExternalFile).mockReturnValue(null);
-
-      Object.defineProperty(globalThis, "location", {
-        value: { search: "?file=/tmp/external.md" },
-        writable: true,
-        configurable: true,
-      });
-
-      render(
-        <WindowProvider>
-          <div data-testid="child">content</div>
-        </WindowProvider>,
-      );
-
-      await waitFor(() => {
-        // For doc-* windows (not main), closeWorkspace should NOT be called
-        // when resolveWorkspaceRootForExternalFile returns null
-        expect(mockCloseWorkspace).not.toHaveBeenCalled();
-      });
-    });
-  });
-
   describe("WindowProvider — openWorkspaceWithConfig failure", () => {
     it("continues when workspace config open fails for URL param", async () => {
       const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -1126,58 +778,6 @@ describe("WindowContext", () => {
       });
 
       errorSpy.mockRestore();
-    });
-  });
-
-  describe("WindowProvider — workspace resolution for external file", () => {
-    it("derives workspace root from file path when no workspace is active", async () => {
-      const { resolveWorkspaceRootForExternalFile } = await import("../utils/openPolicy");
-      vi.mocked(resolveWorkspaceRootForExternalFile).mockReturnValue("/docs");
-      const { openWorkspaceWithConfig } = await import("@/services/workspaces/openWorkspaceWithConfig");
-      const { readTextFile } = await import("@tauri-apps/plugin-fs");
-      vi.mocked(readTextFile).mockResolvedValue("# content");
-
-      Object.defineProperty(globalThis, "location", {
-        value: { search: "?file=/docs/test.md" },
-        writable: true,
-        configurable: true,
-      });
-
-      render(
-        <WindowProvider>
-          <div data-testid="child">content</div>
-        </WindowProvider>,
-      );
-
-      await waitFor(() => {
-        expect(resolveWorkspaceRootForExternalFile).toHaveBeenCalledWith("/docs/test.md");
-        expect(openWorkspaceWithConfig).toHaveBeenCalledWith("/docs", {
-          windowLabel: "main",
-        });
-      });
-    });
-
-    it("closes workspace for main window when file resolves to no workspace root", async () => {
-      const { resolveWorkspaceRootForExternalFile } = await import("../utils/openPolicy");
-      vi.mocked(resolveWorkspaceRootForExternalFile).mockReturnValue(null);
-      const { readTextFile } = await import("@tauri-apps/plugin-fs");
-      vi.mocked(readTextFile).mockResolvedValue("# content");
-
-      Object.defineProperty(globalThis, "location", {
-        value: { search: "?file=/tmp/orphan.md" },
-        writable: true,
-        configurable: true,
-      });
-
-      render(
-        <WindowProvider>
-          <div data-testid="child">content</div>
-        </WindowProvider>,
-      );
-
-      await waitFor(() => {
-        expect(mockCloseWorkspace).toHaveBeenCalled();
-      });
     });
   });
 
@@ -1241,20 +841,20 @@ describe("WindowContext", () => {
         expect(screen.getByTestId("child")).toBeInTheDocument();
       });
 
-      // Give time for the listen promise to reject
-      await new Promise((r) => setTimeout(r, 150));
-
-      expect(mockWindowContextError).toHaveBeenCalledWith(
-        expect.stringContaining("tab removal listener"),
-        expect.any(Error),
-      );
+      // The listen promise rejects asynchronously; wait for its .catch to log.
+      await waitFor(() => {
+        expect(mockWindowContextError).toHaveBeenCalledWith(
+          expect.stringContaining("tab removal listener"),
+          expect.any(Error),
+        );
+      });
 
       consoleSpy.mockRestore();
     });
   });
 
-  describe("removeTabFromWindow — close_window error path", () => {
-    it("logs warning when close_window invoke fails", async () => {
+  describe("closeWindowIfEmpty — close_window error path", () => {
+    it("logs warning when close_window invoke fails, and still acks the commit", async () => {
       mockWindowLabel = "doc-1";
       const { invoke } = await import("@tauri-apps/api/core");
       vi.mocked(invoke).mockImplementation((cmd: string) => {
@@ -1265,31 +865,28 @@ describe("WindowContext", () => {
       // After removing a tab, getTabsByWindow returns empty -> triggers close_window
       mockGetTabsByWindow.mockReturnValue([]);
 
-      // Need to render and trigger removeTabFromWindow via the tab-removed event
       render(
         <WindowProvider>
           <div data-testid="child">content</div>
         </WindowProvider>,
       );
 
+      // A removal arrives as the commit phase of the tab:remove-by-id listener.
       await waitFor(() => {
-        expect(screen.getByTestId("child")).toBeInTheDocument();
+        expect(mockListen).toHaveBeenCalledWith("tab:remove-by-id", expect.any(Function));
       });
+      const removeCall = mockListen.mock.calls.find((call) => call[0] === "tab:remove-by-id");
+      removeCall![1]({ payload: { requestId: "req-1", tabId: "tab-1", phase: "commit" } });
 
-      // Find the tab-removed listener callback
-      const tabRemovedCall = mockListen.mock.calls.find(
-        (call: unknown[]) => call[0] === "tab-removed",
-      );
-      if (tabRemovedCall) {
-        const handler = tabRemovedCall[1] as (event: { payload: { windowLabel: string; tabId: string } }) => void;
-        await handler({ payload: { windowLabel: "doc-1", tabId: "tab-1" } });
-
-        // Give time for async operations
-        await new Promise((r) => setTimeout(r, 50));
-
-        const { windowCloseWarn } = await import("../utils/debug");
-        expect(windowCloseWarn).toHaveBeenCalled();
-      }
+      const { windowCloseWarn } = await import("../utils/debug");
+      await waitFor(() => {
+        expect(windowCloseWarn).toHaveBeenCalledWith("Failed to close window:", "close failed");
+      });
+      // A window that cannot close has still detached the tab and answered the source.
+      expect(mockDetachTab).toHaveBeenCalledWith("doc-1", "tab-1");
+      expect(mockEmit).toHaveBeenCalledWith("tab:remove-ack", {
+        requestId: "req-1", tabId: "tab-1", phase: "commit", accepted: true,
+      });
 
       vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
     });
@@ -1372,9 +969,9 @@ describe("WindowContext", () => {
         held.cb({ payload: { requestId: "req-1", tabId: "stale-tab", phase: "commit" } });
       }
 
-      // removeTransferredTabData calls detachTab internally
-      // Since cancelled=true, it returns early so detachTab is not called
-      await new Promise((r) => setTimeout(r, 50));
+      // A live handler detaches synchronously on commit; cancelled=true returns
+      // first. Flush a microtask so a deferred detach would show here too.
+      await Promise.resolve();
       expect(mockDetachTab).not.toHaveBeenCalled();
     });
 
@@ -1397,16 +994,15 @@ describe("WindowContext", () => {
         </WindowProvider>,
       );
 
-      await new Promise((r) => setTimeout(r, 30));
-
-      // Unmount before the tab:remove-by-id promise resolves
+      // Unmount once the listener is requested, before its promise resolves
+      await waitFor(() => {
+        expect(mockListen).toHaveBeenCalledWith("tab:remove-by-id", expect.any(Function));
+      });
       unmount();
 
       // Now resolve — the `if (cancelled) { fn(); }` branch fires
       resolveRemove(unlistenRemoveFn);
-      await new Promise((r) => setTimeout(r, 50));
-
-      expect(unlistenRemoveFn).toHaveBeenCalled();
+      await waitFor(() => expect(unlistenRemoveFn).toHaveBeenCalled());
     });
   });
 
@@ -1433,7 +1029,7 @@ describe("WindowContext", () => {
       await vi.advanceTimersByTimeAsync(200);
 
       // invoke was called for claim_tab_transfer (returned null)
-      expect(invoke).toHaveBeenCalledWith("claim_tab_transfer", { windowLabel: "doc-nulltransfer" });
+      expect(vi.mocked(invoke).mock.calls).toContainEqual(["claim_tab_transfer"]);
       // Should fall through to normal init and create a tab
       expect(mockCreateTab).toHaveBeenCalled();
 
@@ -1499,19 +1095,17 @@ describe("WindowContext", () => {
         </WindowProvider>,
       );
 
-      // Wait for initial render
-      await new Promise((r) => setTimeout(r, 50));
-
-      // Unmount BEFORE the listen promise resolves (cancelled = true)
+      // Unmount once the listener is requested, BEFORE its promise resolves (cancelled = true)
+      await waitFor(() => {
+        expect(mockListen).toHaveBeenCalledWith("tab:transfer", expect.any(Function));
+      });
       unmount();
 
       // Now resolve the listen promise - the cancelled branch should call fn() immediately
       resolveTransfer(unlistenFn);
 
-      await new Promise((r) => setTimeout(r, 50));
-
       // The unlisten function should have been called because cancelled was true
-      expect(unlistenFn).toHaveBeenCalled();
+      await waitFor(() => expect(unlistenFn).toHaveBeenCalled());
     });
   });
 
@@ -1532,24 +1126,22 @@ describe("WindowContext", () => {
         </WindowProvider>,
       );
 
-      await new Promise((r) => setTimeout(r, 100));
-
-      // Find and invoke the tab:remove-by-id handler
+      // Find and invoke the tab:remove-by-id handler once it is registered
+      await waitFor(() => {
+        expect(mockListen).toHaveBeenCalledWith("tab:remove-by-id", expect.any(Function));
+      });
       const removeCall = mockListen.mock.calls.find(
         (call: unknown[]) => call[0] === "tab:remove-by-id",
       );
-      if (removeCall) {
-        const removeHandler = removeCall![1];
-        removeHandler({ payload: { requestId: "req-1", tabId: "last-tab", phase: "commit" } });
+      removeCall![1]({ payload: { requestId: "req-1", tabId: "last-tab", phase: "commit" } });
 
-        await new Promise((r) => setTimeout(r, 100));
-
-        const { windowCloseWarn } = await import("../utils/debug");
+      const { windowCloseWarn } = await import("../utils/debug");
+      await waitFor(() => {
         expect(windowCloseWarn).toHaveBeenCalledWith(
           "Failed to close window:",
           expect.stringMatching(/cannot close|string/),
         );
-      }
+      });
 
       vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
     });

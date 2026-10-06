@@ -295,6 +295,24 @@ fn failed_manifest_write_cleans_up_its_temp() {
     assert!(temps.is_empty(), "a failed write leaves no orphan temp");
 }
 
+// WI-RA11.2 (class sweep) — a manifest is replaced by rename, and the rename
+// is an edit of the contexts directory: it is durable only once that
+// directory is synced. The manifest write did neither the file nor the
+// directory sync.
+#[cfg(unix)]
+#[test]
+fn a_manifest_write_syncs_its_directory() {
+    use crate::atomic_persist::SYNCED_DIRECTORIES;
+
+    let (_td, dir) = ctx_dir();
+    SYNCED_DIRECTORIES.with(|synced| synced.borrow_mut().clear());
+
+    write_manifest(&dir, &manifest(Uuid::now_v7(), "durable", None)).unwrap();
+
+    let synced = SYNCED_DIRECTORIES.with(|synced| synced.borrow().clone());
+    assert_eq!(synced, vec![dir.clone()]);
+}
+
 // Helper so Selection comparisons read naturally above.
 trait IntoObject {
     fn into_object(self) -> ObjectId;

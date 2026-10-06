@@ -78,6 +78,17 @@ vi.mock("@/utils/imeGuard", () => ({
 import { initImagePasteToast, destroyImagePasteToast } from "../ImagePasteToastView";
 import { useImagePasteToastStore } from "@/stores/imagePasteToastStore";
 
+// The mock store notifies subscribers synchronously and show()/hide() write the
+// DOM synchronously, so no test waits for them. The view's deferred work — the
+// rAF focus and the 5 s auto-dismiss — runs on a fake clock: it fires only when
+// a test advances it, never on the wall clock and never inside the next test.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame", "cancelAnimationFrame"] });
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 // Helper to create mock DOMRect
 const createMockRect = (overrides: Partial<DOMRect> = {}): DOMRect => ({
   top: 100,
@@ -126,7 +137,7 @@ describe("ImagePasteToastView mounting", () => {
     container.remove();
   });
 
-  it("mounts inside editor-container when editorDom provided", async () => {
+  it("mounts inside editor-container when editorDom provided", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -139,15 +150,12 @@ describe("ImagePasteToastView mounting", () => {
       editorDom,
     });
 
-    // Wait for the subscription to trigger
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
     const popup = container.querySelector(".image-paste-toast");
     expect(popup).not.toBeNull();
     expect(container.contains(popup)).toBe(true);
   });
 
-  it("falls back to document.body when no editorDom", async () => {
+  it("falls back to document.body when no editorDom", () => {
     initImagePasteToast(useImagePasteToastStore as never);
 
     // Trigger show via store without editorDom
@@ -159,13 +167,11 @@ describe("ImagePasteToastView mounting", () => {
       editorDom: null,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
     const popup = document.body.querySelector(":scope > .image-paste-toast");
     expect(popup).not.toBeNull();
   });
 
-  it("uses absolute positioning when mounted in editor-container", async () => {
+  it("uses absolute positioning when mounted in editor-container", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -177,13 +183,11 @@ describe("ImagePasteToastView mounting", () => {
       editorDom,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
     const popup = container.querySelector(".image-paste-toast") as HTMLElement;
     expect(popup.style.position).toBe("absolute");
   });
 
-  it("uses fixed positioning when mounted in document.body", async () => {
+  it("uses fixed positioning when mounted in document.body", () => {
     initImagePasteToast(useImagePasteToastStore as never);
 
     (useImagePasteToastStore as unknown as { _setState: (s: object) => void })._setState({
@@ -194,13 +198,11 @@ describe("ImagePasteToastView mounting", () => {
       editorDom: null,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
     const popup = document.querySelector(".image-paste-toast") as HTMLElement;
     expect(popup.style.position).toBe("fixed");
   });
 
-  it("cleans up properly on destroy", async () => {
+  it("cleans up properly on destroy", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -212,7 +214,6 @@ describe("ImagePasteToastView mounting", () => {
       editorDom,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
     expect(container.querySelector(".image-paste-toast")).not.toBeNull();
 
     destroyImagePasteToast();
@@ -235,7 +236,7 @@ describe("ImagePasteToastView keyboard navigation", () => {
     container.remove();
   });
 
-  it("Enter on insert button calls confirm", async () => {
+  it("Enter on insert button calls confirm", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -248,12 +249,12 @@ describe("ImagePasteToastView keyboard navigation", () => {
       editorDom,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    vi.advanceTimersToNextFrame();
 
-    // Focus should be on insert button by default
+    // Focus should be on insert button by default (show() focuses it in a rAF)
     const insertBtn = container.querySelector(".image-paste-toast-btn-insert") as HTMLElement;
     expect(insertBtn).not.toBeNull();
-    insertBtn.focus();
+    expect(document.activeElement).toBe(insertBtn);
 
     // Dispatch Enter keydown
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
@@ -261,7 +262,7 @@ describe("ImagePasteToastView keyboard navigation", () => {
     expect(store.getState().confirm).toHaveBeenCalled();
   });
 
-  it("Escape closes the toast", async () => {
+  it("Escape closes the toast", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -274,14 +275,12 @@ describe("ImagePasteToastView keyboard navigation", () => {
       editorDom,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 
     expect(store.getState().hideToast).toHaveBeenCalled();
   });
 
-  it("Tab cycles focus between buttons", async () => {
+  it("Tab cycles focus between buttons", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -292,8 +291,6 @@ describe("ImagePasteToastView keyboard navigation", () => {
       imageType: "url" as const,
       editorDom,
     });
-
-    await new Promise((resolve) => setTimeout(resolve, 20));
 
     const insertBtn = container.querySelector(".image-paste-toast-btn-insert") as HTMLElement;
     const dismissBtn = container.querySelector(".image-paste-toast-btn-dismiss") as HTMLElement;
@@ -324,7 +321,7 @@ describe("ImagePasteToastView actions", () => {
     container.remove();
   });
 
-  it("clicking insert button calls confirm", async () => {
+  it("clicking insert button calls confirm", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -337,15 +334,13 @@ describe("ImagePasteToastView actions", () => {
       editorDom,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
     const insertBtn = container.querySelector(".image-paste-toast-btn-insert") as HTMLElement;
     insertBtn.click();
 
     expect(store.getState().confirm).toHaveBeenCalled();
   });
 
-  it("clicking dismiss button calls dismiss", async () => {
+  it("clicking dismiss button calls dismiss", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -358,15 +353,13 @@ describe("ImagePasteToastView actions", () => {
       editorDom,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
     const dismissBtn = container.querySelector(".image-paste-toast-btn-dismiss") as HTMLElement;
     dismissBtn.click();
 
     expect(store.getState().dismiss).toHaveBeenCalled();
   });
 
-  it("click outside closes toast", async () => {
+  it("click outside closes toast", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -378,8 +371,6 @@ describe("ImagePasteToastView actions", () => {
       imageType: "url" as const,
       editorDom,
     });
-
-    await new Promise((resolve) => setTimeout(resolve, 10));
 
     // Click outside
     const outside = document.createElement("div");
@@ -407,7 +398,7 @@ describe("ImagePasteToastView message display", () => {
     container.remove();
   });
 
-  it("shows 'Image URL' for url type", async () => {
+  it("shows 'Image URL' for url type", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -419,13 +410,11 @@ describe("ImagePasteToastView message display", () => {
       editorDom,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
     const message = container.querySelector(".image-paste-toast-message");
     expect(message?.textContent).toBe("Image URL");
   });
 
-  it("shows 'Image path' for localPath type", async () => {
+  it("shows 'Image path' for localPath type", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -437,13 +426,11 @@ describe("ImagePasteToastView message display", () => {
       editorDom,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
     const message = container.querySelector(".image-paste-toast-message");
     expect(message?.textContent).toBe("Image path");
   });
 
-  it("shows count for multiple images", async () => {
+  it("shows count for multiple images", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -457,13 +444,11 @@ describe("ImagePasteToastView message display", () => {
       imageCount: 5,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
     const message = container.querySelector(".image-paste-toast-message");
     expect(message?.textContent).toBe("5 images");
   });
 
-  it("shows 'Insert All' button title for multiple images", async () => {
+  it("shows 'Insert All' button title for multiple images", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -477,13 +462,11 @@ describe("ImagePasteToastView message display", () => {
       imageCount: 3,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
     const insertBtn = container.querySelector(".image-paste-toast-btn-insert") as HTMLButtonElement;
     expect(insertBtn?.title).toBe("Insert All");
   });
 
-  it("shows single image message for isMultiple with count 1", async () => {
+  it("shows single image message for isMultiple with count 1", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -496,8 +479,6 @@ describe("ImagePasteToastView message display", () => {
       isMultiple: true,
       imageCount: 1,
     });
-
-    await new Promise((resolve) => setTimeout(resolve, 10));
 
     const message = container.querySelector(".image-paste-toast-message");
     // isMultiple=true but imageCount=1 should show "Image URL"
@@ -520,7 +501,7 @@ describe("ImagePasteToastView keyboard edge cases", () => {
     container.remove();
   });
 
-  it("Enter on dismiss button calls dismiss", async () => {
+  it("Enter on dismiss button calls dismiss", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -533,8 +514,6 @@ describe("ImagePasteToastView keyboard edge cases", () => {
       editorDom,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
     // Focus the dismiss button
     const dismissBtn = container.querySelector(".image-paste-toast-btn-dismiss") as HTMLElement;
     expect(dismissBtn).not.toBeNull();
@@ -545,7 +524,7 @@ describe("ImagePasteToastView keyboard edge cases", () => {
     expect(store.getState().dismiss).toHaveBeenCalled();
   });
 
-  it("Enter with no button focused defaults to insert", async () => {
+  it("Enter with no button focused defaults to insert", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -558,17 +537,17 @@ describe("ImagePasteToastView keyboard edge cases", () => {
       editorDom,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
-    // Focus something outside the toast buttons
+    // Focus something outside the toast buttons; no frame has run, so the
+    // rAF default focus has not landed on a button either
     document.body.focus();
+    expect(document.activeElement).toBe(document.body);
 
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
 
     expect(store.getState().confirm).toHaveBeenCalled();
   });
 
-  it("Shift+Tab cycles focus backwards", async () => {
+  it("Shift+Tab cycles focus backwards", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -579,8 +558,6 @@ describe("ImagePasteToastView keyboard edge cases", () => {
       imageType: "url" as const,
       editorDom,
     });
-
-    await new Promise((resolve) => setTimeout(resolve, 20));
 
     const insertBtn = container.querySelector(".image-paste-toast-btn-insert") as HTMLElement;
     const dismissBtn = container.querySelector(".image-paste-toast-btn-dismiss") as HTMLElement;
@@ -593,7 +570,7 @@ describe("ImagePasteToastView keyboard edge cases", () => {
     expect(document.activeElement).toBe(dismissBtn);
   });
 
-  it("Shift+Tab from non-first button moves to previous (currentIndex - 1 branch)", async () => {
+  it("Shift+Tab from non-first button moves to previous (currentIndex - 1 branch)", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -604,8 +581,6 @@ describe("ImagePasteToastView keyboard edge cases", () => {
       imageType: "url" as const,
       editorDom,
     });
-
-    await new Promise((resolve) => setTimeout(resolve, 20));
 
     const insertBtn = container.querySelector(".image-paste-toast-btn-insert") as HTMLElement;
     const dismissBtn = container.querySelector(".image-paste-toast-btn-dismiss") as HTMLElement;
@@ -618,9 +593,7 @@ describe("ImagePasteToastView keyboard edge cases", () => {
     expect(document.activeElement).toBe(insertBtn);
   });
 
-  it("auto-dismiss timer hides toast after timeout", async () => {
-    vi.useFakeTimers();
-
+  it("auto-dismiss timer hides toast after timeout", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -637,8 +610,6 @@ describe("ImagePasteToastView keyboard edge cases", () => {
     vi.advanceTimersByTime(5100);
 
     expect(store.getState().hideToast).toHaveBeenCalled();
-
-    vi.useRealTimers();
   });
 });
 
@@ -657,7 +628,7 @@ describe("ImagePasteToastView — hide on close transition", () => {
     container.remove();
   });
 
-  it("hides toast when store transitions from open to closed", async () => {
+  it("hides toast when store transitions from open to closed", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -675,8 +646,6 @@ describe("ImagePasteToastView — hide on close transition", () => {
       editorDom,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
     const popup = container.querySelector(".image-paste-toast") as HTMLElement;
     expect(popup).not.toBeNull();
     expect(popup.style.display).toBe("flex");
@@ -690,13 +659,11 @@ describe("ImagePasteToastView — hide on close transition", () => {
       editorDom: null,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
     // The hide() method sets display to none
     expect(popup.style.display).toBe("none");
   });
 
-  it("keyboard handler ignores IME key events (isComposing=true)", async () => {
+  it("keyboard handler ignores IME key events (isComposing=true)", () => {
     // isImeKeyEvent checks isComposing flag among other things
     // The mock returns false for all events; test IME via Process key (common IME indicator)
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
@@ -715,8 +682,6 @@ describe("ImagePasteToastView — hide on close transition", () => {
       editorDom,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
     // The keyboard handler is attached; verify it doesn't crash on any key
     // (IME guard coverage is exercised by the isImeKeyEvent mock returning false,
     //  meaning the code flow proceeds normally past the guard)
@@ -726,7 +691,7 @@ describe("ImagePasteToastView — hide on close transition", () => {
     expect(store.getState().confirm).not.toHaveBeenCalled();
   });
 
-  it("keyboard handler ignores events when popup is already closed", async () => {
+  it("keyboard handler ignores events when popup is already closed", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -744,8 +709,6 @@ describe("ImagePasteToastView — hide on close transition", () => {
       editorDom,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
     // Now simulate the store saying isOpen=false (but keyboard handler is still active)
     store._setState({
       isOpen: false,
@@ -754,8 +717,6 @@ describe("ImagePasteToastView — hide on close transition", () => {
       imageType: "url" as const,
       editorDom: null,
     });
-
-    await new Promise((resolve) => setTimeout(resolve, 10));
 
     // Fire Enter — keyboard handler checks isOpen and should return early
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
@@ -812,7 +773,7 @@ describe("ImagePasteToastView — IME guard (line 190)", () => {
     mockIsImeKeyEvent.mockReturnValue(false);
   });
 
-  it("keyboard handler returns early for IME composing events", async () => {
+  it("keyboard handler returns early for IME composing events", () => {
     mockIsImeKeyEvent.mockReturnValue(true);
 
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
@@ -830,8 +791,6 @@ describe("ImagePasteToastView — IME guard (line 190)", () => {
       imageType: "url" as const,
       editorDom,
     });
-
-    await new Promise((resolve) => setTimeout(resolve, 20));
 
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
 
@@ -854,7 +813,7 @@ describe("ImagePasteToastView — CodeMirror bounds (lines 141-143)", () => {
     container.remove();
   });
 
-  it("uses .cm-content for horizontal bounds when present", async () => {
+  it("uses .cm-content for horizontal bounds when present", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     const cmContent = document.createElement("div");
@@ -872,8 +831,6 @@ describe("ImagePasteToastView — CodeMirror bounds (lines 141-143)", () => {
       imageType: "url" as const,
       editorDom,
     });
-
-    await new Promise((resolve) => setTimeout(resolve, 10));
 
     const popup = container.querySelector(".image-paste-toast") as HTMLElement;
     expect(popup).not.toBeNull();
@@ -925,7 +882,7 @@ describe("ImagePasteToastView — click inside toast does not close", () => {
     container.remove();
   });
 
-  it("does not close when clicking inside the toast container", async () => {
+  it("does not close when clicking inside the toast container", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -941,8 +898,6 @@ describe("ImagePasteToastView — click inside toast does not close", () => {
       imageType: "url" as const,
       editorDom,
     });
-
-    await new Promise((resolve) => setTimeout(resolve, 10));
 
     const toastEl = container.querySelector(".image-paste-toast") as HTMLElement;
     const event = new MouseEvent("mousedown", { bubbles: true });
@@ -968,7 +923,7 @@ describe("ImagePasteToastView — host container already mounted (line 127)", ()
     container.remove();
   });
 
-  it("does not re-append when container is already mounted to same host", async () => {
+  it("does not re-append when container is already mounted to same host", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -985,15 +940,11 @@ describe("ImagePasteToastView — host container already mounted (line 127)", ()
       editorDom,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
     // Close
     store._setState({
       isOpen: false,
       anchorRect: null,
     });
-
-    await new Promise((resolve) => setTimeout(resolve, 10));
 
     // Re-open — container.parentElement should already be the host
     store._setState({
@@ -1003,8 +954,6 @@ describe("ImagePasteToastView — host container already mounted (line 127)", ()
       imageType: "localPath" as const,
       editorDom,
     });
-
-    await new Promise((resolve) => setTimeout(resolve, 10));
 
     const popup = container.querySelector(".image-paste-toast") as HTMLElement;
     expect(popup).not.toBeNull();
@@ -1027,7 +976,7 @@ describe("ImagePasteToastView — editorDom without editor-container (line 138)"
     container.remove();
   });
 
-  it("uses viewport bounds when editorDom has no editor-container ancestor", async () => {
+  it("uses viewport bounds when editorDom has no editor-container ancestor", () => {
     // Create an editorDom without editor-container parent
     const standaloneEditor = document.createElement("div");
     standaloneEditor.className = "ProseMirror";
@@ -1044,8 +993,6 @@ describe("ImagePasteToastView — editorDom without editor-container (line 138)"
       imageType: "url" as const,
       editorDom: standaloneEditor,
     });
-
-    await new Promise((resolve) => setTimeout(resolve, 10));
 
     // Should still show (using viewport bounds fallback)
     const popup = document.querySelector(".image-paste-toast") as HTMLElement;
@@ -1071,7 +1018,7 @@ describe("ImagePasteToastView — single image with isMultiple=false button titl
     container.remove();
   });
 
-  it("shows 'Insert as Image' title for single non-multiple image", async () => {
+  it("shows 'Insert as Image' title for single non-multiple image", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     initImagePasteToast(useImagePasteToastStore as never);
 
@@ -1084,8 +1031,6 @@ describe("ImagePasteToastView — single image with isMultiple=false button titl
       isMultiple: false,
       imageCount: 1,
     });
-
-    await new Promise((resolve) => setTimeout(resolve, 10));
 
     const insertBtn = container.querySelector(".image-paste-toast-btn-insert") as HTMLButtonElement;
     expect(insertBtn?.title).toBe("Insert as Image");

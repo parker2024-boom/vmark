@@ -51,7 +51,7 @@ KI-Clients, die Dokumente über MCP öffnen, reißen Ihren sichtbaren Arbeitsber
 | Neu anordnen | Ein Symbol über ein anderes ziehen |
 | In ein eigenes Fenster verschieben | Ein Symbol aus dem Fenster herausziehen |
 | In ein neues Fenster duplizieren | Die Schaltfläche **⧉** beim Überfahren mit der Maus |
-| Arbeitsbereich schließen | Rechtsklick → Schließen (fragt pro Tab mit ungespeicherten Änderungen nach) |
+| Arbeitsbereich schließen | Rechtsklick → Schließen. Alle seine Tabs werden mit geschlossen, auch angeheftete; jeder Tab mit ungespeicherten Änderungen fragt zuerst nach, und Abbrechen behält den Arbeitsbereich |
 
 ## Terminalsitzungen
 

@@ -1,5 +1,5 @@
 //! Human-tab attachments: the ephemeral, generation-bound consent that lets the
-//! AI act on a HUMAN tab (WI-2.1). Split from `surface.rs` at the file-size limit;
+//! AI act on a HUMAN tab. Split from `surface.rs` at the file-size limit;
 //! a `#[path]` child of it, re-exported from there so callers keep the
 //! `surface::` address.
 //!

@@ -24,7 +24,7 @@ import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { createWorkspaceInstance, createWorkspaceRootIdentity } from "@/utils/workspaceIdentity";
 import { resetContextGenerations } from "./workspaceContextGeneration";
 import { orderedWindowInstances } from "./workspaceContextOwnership";
-import { resetTerminalSessionStore, useUIStore } from "@/stores/uiStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import { hydrateWorkspaceInstanceContext } from "./hydrateWorkspaceInstanceContext";
 import { sanitizeSplitForInstance } from "./restoreInstanceContext";
 import { switchWorkspaceInstance } from "./switchWorkspaceInstance";
@@ -284,16 +284,16 @@ describe("sanitizeSplitForInstance (audit R2-F3)", () => {
 });
 
 describe("terminal scope wiring (WI-TS2.2)", () => {
-  const term = () => useUIStore.getState().terminal;
+  const term = () => useTerminalStore.getState();
   const createTerm = (owner?: string) =>
-    useUIStore
+    useTerminalStore
       .getState()
       .terminalCreateSession(owner ? { ownerInstanceId: owner } : undefined)!;
 
   it("A→B hides A's set: active swaps, membership UNCHANGED (invariant 1)", () => {
     const sa = createTerm("wsi-a");
     const sb = createTerm("wsi-b");
-    useUIStore.getState().terminalSetActiveSession(sa.id);
+    useTerminalStore.getState().terminalSetActiveSession(sa.id);
 
     switchWorkspaceInstance(W, "wsi-b");
     expect(term().sessions.map((s) => s.id).sort()).toEqual([sa.id, sb.id].sort());

@@ -10,10 +10,10 @@
  * toggles (explorerCommands.ts).
  *
  * The specs are built by FOUR cohesive builders — mode, sidebar/panel, display,
- * zoom (audit #942). One 229-line function is not more atomic than four short
+ * zoom. One 229-line function is not more atomic than four short
  * ones concatenated, and the zoom family, which is the only one with real
  * arithmetic in it, now lives in `viewZoomCommands.ts` with its bounds and the
- * monotonicity rule (#941) beside it.
+ * monotonicity rule beside it.
  *
  * @coordinates-with services/commands/viewZoomCommands.ts — the zoom family
  * @module services/commands/viewCommands
@@ -96,7 +96,7 @@ function modeCommandSpecs(): CommandDefinition[] {
       category: "view",
       run: (_args, ctx: Ctx) => {
         const windowLabel = ctx.windowLabel ?? "main";
-        // EFFECTIVE source, not the global flag (audit #945). A large file puts
+        // EFFECTIVE source, not the global flag. A large file puts
         // its tab in forced source with `sourceMode` still false, so this
         // returned early and the menu item did nothing on exactly the documents
         // whose forced state the user most wants to leave —
@@ -109,7 +109,7 @@ function modeCommandSpecs(): CommandDefinition[] {
           toggleSourceModeWithCheckpoint(windowLabel);
           return;
         }
-        // NO cleanup call here (audit #946): `toggleMarkdownSplitWithCheckpoint`
+        // NO cleanup call here: `toggleMarkdownSplitWithCheckpoint`
         // runs `cleanupBeforeModeSwitch` itself, and running it twice meant two
         // popup resets and two WYSIWYG flushes for one mode switch.
         toggleMarkdownSplitWithCheckpoint(windowLabel);
@@ -272,13 +272,13 @@ function buildViewCommandSpecs(): CommandDefinition[] {
 /**
  * Register the view/lint/pane/explorer command sets.
  *
- * An OWNER BATCH, not a first-id sentinel (audit #459). `hasCommand("view.
+ * An OWNER BATCH, not a first-id sentinel. `hasCommand("view.
  * toggleSourceMode")` answered "is this id taken?", which is not the question:
  * a foreign registrar holding it made the guard report the whole set as
  * installed, so the other 32 commands were never registered and nothing said
  * so. `registerCommands` PREFLIGHTS every id — a foreign owner fails loudly,
  * before anything is written — and replaces its own previous batch, which is
- * what makes an HMR reload and the registerAllCommands retry converge (#514).
+ * what makes an HMR reload and the registerAllCommands retry converge.
  */
 export function registerViewCommands(): void {
   registerCommands(VIEW_COMMANDS_OWNER, buildViewCommandSpecs());

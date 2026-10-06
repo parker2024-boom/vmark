@@ -101,7 +101,7 @@ export async function exportViaPandoc(options: {
     return true;
   } catch (error) {
     exportError("Pandoc export failed:", error);
-    // Two-line toast (WI-UI4.4): pandoc's multi-line stderr is the detail.
+    // Two-line toast: pandoc's multi-line stderr is the detail.
     // Raw error — errorDetail owns the normalization (commandErrorMessage);
     // errorMessage() here re-created the "[object Object]" class it feeds.
     toast.errorDetail(i18n.t("dialog:toast.pandocExportError"), error);

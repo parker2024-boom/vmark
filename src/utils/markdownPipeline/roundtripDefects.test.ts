@@ -11,6 +11,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { parseMarkdown, serializeMarkdown } from "./adapter";
+import { parseMarkdownToMdast } from "./parser";
 import { getProductionSchema } from "@/test/productionSchema";
 
 const schema = getProductionSchema();
@@ -210,4 +211,59 @@ describe("round-trip defects", () => {
       expect(isStillALink(out)).toBe(true);
     });
   });
+
+  // WI-RA18.3 — found by a random-document harness (messy lines of markers,
+  // words and break look-alikes). Each must read back as the same document,
+  // and a second round trip must not change the first one's output.
+  describe("D8 — literal `$$` at the start of a line must stay literal", () => {
+    it.each([
+      ["before inline math", "$$*i $m$\n"],
+      ["with strong text", "$$**s $m$\n"],
+      ["after a hard break", "x\\\n$$ y $z$\n"],
+      ["after a two-space hard break", "x  \n$$ y $z$\n"],
+      // The harness's counterexample: the unclosed fence is read as text, the
+      // backslash before it is a hard break, and a bare `$` on the next line
+      // opened inline math that swallowed the break.
+      ["after a break, before an unclosed fence", "$$*i\\\n$$ \\\n   "],
+      ["mid-line, which already worked", "a $$b $m$\n"],
+      ["with CJK", "$$中 $m$\n"],
+    ])("%s", (_label, src) => {
+      for (const style of ["backslash", "twoSpaces"] as const) {
+        const out = serializeMarkdown(schema, parseMarkdown(schema, src), { hardBreakStyle: style });
+        expect(meaning(out)).toBe(meaning(src));
+        expect(serializeMarkdown(schema, parseMarkdown(schema, out), { hardBreakStyle: style })).toBe(out);
+      }
+    });
+  });
+
+  describe("D9 — a heading's style must not depend on line endings the output flattens", () => {
+    it("writes the same heading on every round trip when its inline math spans lines", () => {
+      const once = roundTrip("$$\\ \n| - |$m$\n---");
+      expect(roundTrip(once)).toBe(once);
+      expect(parseMarkdown(schema, once).firstChild?.type.name).toBe("heading");
+    });
+
+    it("still writes a heading whose TEXT spans lines as setext, the only spelling that can", () => {
+      expect(roundTrip("a\nb\n---\n")).toBe("a\nb\n-");
+    });
+  });
+
+  describe("D10 — a block after a nested list stays in its item", () => {
+    it.each([
+      ["a paragraph after a nested bullet list", "1. - a\n\n   b\n"],
+      ["a paragraph after a nested ordered list", "- 1. a\n\n  b\n"],
+      ["CJK text", "1. - 甲\n\n   乙\n"],
+    ])("%s", (_label, src) => {
+      const once = roundTrip(src);
+      expect(meaning(once)).toBe(meaning(src));
+      expect(roundTrip(once)).toBe(once);
+    });
+  });
 });
+
+/** The document parse, positions removed: what the editor reads the text as. */
+function meaning(markdown: string): string {
+  return JSON.stringify(parseMarkdownToMdast(markdown), (key, value: unknown) =>
+    key === "position" ? undefined : value,
+  );
+}

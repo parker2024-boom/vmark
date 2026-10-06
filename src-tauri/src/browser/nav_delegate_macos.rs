@@ -11,6 +11,7 @@ use objc2_web_kit::{
     WKUIDelegate, WKWebView, WKWebViewConfiguration, WKWindowFeatures,
 };
 
+use super::webkit_calls::{action_url, stop_loading, targets_main_frame};
 use crate::browser::recovery::RecoveryAction;
 use crate::browser::redact;
 use crate::browser::registry::Lifecycle;
@@ -21,7 +22,7 @@ use payloads::{CrashPayload, DialogPayload, LoadedPayload, NavPayload, PopupPayl
 
 #[path = "nav_webview_macos.rs"]
 mod webview;
-use webview::{current_title, current_url, history_state};
+use webview::{current_title, current_url, history_state, observed_web_view};
 
 #[path = "nav_emit_macos.rs"]
 mod emit;
@@ -55,7 +56,13 @@ define_class!(
                 return;
             }
             let Some(object) = object else { return };
-            let web_view: &WKWebView = unsafe { &*(object as *const AnyObject).cast() };
+            let Some(web_view) = observed_web_view(object) else {
+                log::error!(
+                    "[browser] {:?}: URL observation for an object that is not a webview; ignored",
+                    self.ivars().tab_id
+                );
+                return;
+            };
             self.same_document_navigated(web_view);
         }
     }
@@ -67,23 +74,16 @@ define_class!(
             navigation_action: &WKNavigationAction,
             decision_handler: &block2::DynBlock<dyn Fn(WKNavigationActionPolicy)>,
         ) {
-            let request = unsafe { navigation_action.request() };
-            let url = request.URL()
-                .and_then(|url| url.absoluteString())
-                .map(|url| url.to_string())
-                .unwrap_or_default();
+            let url = action_url(navigation_action);
             // Nil target frames are blocked popups; they must not mint navigation tickets.
             // A SUBFRAME on an AI-owned tab meets the same destination policy as the
             // main frame (audit 20260903 P-01) — no ticket, no failure event, just a
             // cancelled frame load.
-            let target_frame = unsafe { navigation_action.targetFrame() };
-            let main_frame = target_frame
-                .as_ref()
-                .map(|frame| unsafe { frame.isMainFrame() })
-                .unwrap_or(false);
-            let allowed = match target_frame.as_ref() {
-                Some(_) if main_frame => self.prepare_navigation_action(&url),
-                Some(_) => self.subframe_load_allowed(&url),
+            let target = targets_main_frame(navigation_action);
+            let main_frame = target == Some(true);
+            let allowed = match target {
+                Some(true) => self.prepare_navigation_action(&url),
+                Some(false) => self.subframe_load_allowed(&url),
                 None => false,
             };
             if !allowed {
@@ -91,7 +91,7 @@ define_class!(
                     self.emit_policy_failed("navigation destination blocked by policy");
                 } else {
                     log::debug!(
-                        "[browser] navigation policy cancelled for {}: {}",
+                        "[browser] navigation policy cancelled for {:?}: {}",
                         self.ivars().tab_id,
                         redact::redact(&url)
                     );
@@ -132,7 +132,7 @@ define_class!(
             ivars.loading.set(false); // committed: a URL change after this is same-document
             let url = current_url(web_view);
             let Some(generation) = self.commit_navigation(&url, &navigation_id) else {
-                unsafe { web_view.stopLoading() };
+                stop_loading(web_view);
                 self.emit_policy_failed("AI navigation destination blocked by policy");
                 return;
             };
@@ -163,7 +163,11 @@ define_class!(
             let title = current_title(web_view);
             self.set_state(Lifecycle::Live);
             self.record_load_success();
-            log::debug!("[browser] loaded {} ({title})", ivars.tab_id);
+            log::debug!(
+                "[browser] loaded {:?} ({})",
+                ivars.tab_id,
+                crate::peer_text::peer_text(&title)
+            );
             let (can_go_back, can_go_forward) = history_state(web_view);
             let generation = self.committed_generation();
             let _ = self.emit_owned(
@@ -198,7 +202,7 @@ define_class!(
             super::dialogs::drain_for(&ivars.tab_id);
             let action = self.record_crash();
             log::warn!(
-                "[browser] content process terminated for {} → {action:?}",
+                "[browser] content process terminated for {:?} → {action:?}",
                 ivars.tab_id
             );
             let reloading = action == RecoveryAction::AutoReload && self.try_reload(web_view);
@@ -221,13 +225,9 @@ define_class!(
             _features: &WKWindowFeatures,
         ) -> Option<Retained<WKWebView>> {
             let ivars = self.ivars();
-            let url = unsafe { action.request() }
-                .URL()
-                .and_then(|u| u.absoluteString())
-                .map(|s| s.to_string())
-                .unwrap_or_default();
+            let url = action_url(action);
             log::debug!(
-                "[browser] popup blocked for {} → {}",
+                "[browser] popup blocked for {:?} → {}",
                 ivars.tab_id,
                 redact::redact(&url)
             );
@@ -250,7 +250,11 @@ define_class!(
         ) {
             let ivars = self.ivars();
             let msg = message.to_string();
-            log::debug!("[browser] alert on {}: {msg}", ivars.tab_id);
+            log::debug!(
+                "[browser] alert on {:?}: {}",
+                ivars.tab_id,
+                crate::peer_text::peer_message(&msg)
+            );
             let _ = self.emit_owned(
                 "browser://dialog",
                 DialogPayload {
@@ -273,7 +277,11 @@ define_class!(
             let ivars = self.ivars();
             let msg = message.to_string();
             let id = super::dialogs::park_confirm(ivars.tab_id.clone(), completion_handler.copy());
-            log::debug!("[browser] confirm on {} (#{id}): {msg}", ivars.tab_id);
+            log::debug!(
+                "[browser] confirm on {:?} (#{id}): {}",
+                ivars.tab_id,
+                crate::peer_text::peer_message(&msg)
+            );
             let emitted = self.emit_owned(
                 "browser://dialog",
                 DialogPayload {

@@ -1,3 +1,11 @@
+/**
+ * browserWorkspace — pure projection that splits a window's flat tab list
+ * into document tabs and the browser workspace's webpage tabs, with the
+ * active and return pages.
+ *
+ * @module components/Browser/browserWorkspace
+ */
+
 import type { BrowserTab, DocumentTab, Tab } from "@/stores/tabStoreTypes";
 
 export interface BrowserWorkspaceView {

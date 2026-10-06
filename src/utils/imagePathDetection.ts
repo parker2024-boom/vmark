@@ -3,13 +3,15 @@
  *
  * Detects image URLs and local file paths in text.
  * Used for smart image insertion from clipboard.
+ *
+ * @module utils/imagePathDetection
  */
 
 import { IMAGE_EXTENSIONS_DOTTED } from "./mediaExtensions";
 
 /**
  * Supported image file extensions (dotted form). Single source of truth so
- * every detection path agrees (WI-0.6, D3).
+ * every detection path agrees.
  */
 export const IMAGE_EXTENSIONS = IMAGE_EXTENSIONS_DOTTED;
 

@@ -143,11 +143,11 @@ fn reregister_replaces_and_bumps_generation() {
 /// so nothing local could see it.
 fn spawn_exiting() -> Child {
     let mut cmd = if cfg!(windows) {
-        let mut c = std::process::Command::new("cmd");
+        let mut c = crate::ai_provider::build_command("cmd", &[]);
         c.args(["/C", "exit", "0"]);
         c
     } else {
-        std::process::Command::new("true")
+        crate::ai_provider::build_command("true", &[])
     };
     cmd.spawn().expect("spawn exiting child")
 }
@@ -157,11 +157,11 @@ fn spawn_sleeping() -> Child {
     let mut cmd = if cfg!(windows) {
         // PowerShell rather than `timeout`, which needs a console and fails
         // with "input redirection is not supported" when spawned detached.
-        let mut c = std::process::Command::new("powershell");
+        let mut c = crate::ai_provider::build_command("powershell", &[]);
         c.args(["-NoProfile", "-Command", "Start-Sleep -Seconds 30"]);
         c
     } else {
-        let mut c = std::process::Command::new("sleep");
+        let mut c = crate::ai_provider::build_command("sleep", &[]);
         c.arg("30");
         c
     };
@@ -233,6 +233,8 @@ fn poisoned_lock_recovers_instead_of_panicking() {
 /// probes for existence without sending a signal.
 #[cfg(unix)]
 fn pid_alive(pid: u32) -> bool {
+    // SAFETY: `kill` with signal 0 sends nothing and touches no memory; it only
+    // reports whether the pid exists.
     unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
 }
 

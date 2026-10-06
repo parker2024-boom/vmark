@@ -27,8 +27,8 @@ const AUTOMATION_MODES = new Set(["human", "ai-sandbox", "ai-shared"]);
 const PERSIST_POLICIES = new Set(["restore-human", "transient-ai"]);
 
 /**
- * Shape guard for a persisted closed-tab entry (audit R2-F13/F14, tightened
- * by R3-2): a hydrated entry is restored VERBATIM into tabStore on reopen, so
+ * Shape guard for a persisted closed-tab entry:
+ * a hydrated entry is restored VERBATIM into tabStore on reopen, so
  * it must satisfy the full required `Tab` shape per kind — not merely the
  * fields the original guard sampled. A document needs title/isPinned/formatId
  * plus a string-or-null filePath; a browser entry needs title/isPinned, the

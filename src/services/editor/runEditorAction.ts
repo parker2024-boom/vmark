@@ -17,7 +17,7 @@
  *   focus inside the palette's own `.quick-open` container, so pulling it into
  *   the executor would make the palette block its own commands. It stays at the
  *   native-menu boundary; the executor is invocation-source agnostic.
- *   (ADR-017 / command-registry WI-1.2.)
+ *   (ADR-017.)
  *
  * @coordinates-with commands/commandContext.ts — the resolved gate context
  * @coordinates-with commands/actionAvailability.ts — isActionExecutable gate
@@ -69,7 +69,7 @@ export function runEditorAction(actionId: ActionId, options: RunEditorActionOpti
     return;
   }
 
-  // Single shared gate (WI-2.3): resolve the context once, then apply the
+  // Single shared gate: resolve the context once, then apply the
   // executor's correctness policy — live document + mode capability + format.
   // (Node/selection are the palette's discoverability concern, not enforced
   // here; the executor's retry handles a not-yet-mounted editor.)
@@ -86,7 +86,7 @@ export function runEditorAction(actionId: ActionId, options: RunEditorActionOpti
   // They still run behind the active surface's IME guard: a native accelerator
   // can deliver undo/redo while the editor is composing, and running history
   // against an in-progress composition reorders content — so defer to
-  // compositionend like every other mutating action (audit-fix #3).
+  // compositionend like every other mutating action.
   if (actionId === "undo" || actionId === "redo") {
     runUnifiedHistoryImeSafe(actionId, windowLabel, sourceMode);
     return;

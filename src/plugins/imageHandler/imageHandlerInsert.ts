@@ -8,70 +8,33 @@
  * @coordinates-with plugins/imageHandler/imageHandlerUtils.ts — shared utilities
  * @coordinates-with plugins/imageHandler/imageHandlerToast.ts — toast UI
  * @coordinates-with services/media/imageOperations.ts — copyImageToAssets, insertBlockImageNode
+ * @coordinates-with plugins/shared/imagePasteResolve.ts — path resolution shared with Source mode
  * @module plugins/imageHandler/imageHandlerInsert
  */
 
 import { TextSelection } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
-import { message } from "@tauri-apps/plugin-dialog";
-import { imeToast as toast } from "@/services/ime/imeToast";
 import i18n from "@/i18n";
 import { copyImageToAssets, insertBlockImageNode } from "@/services/media/imageOperations";
+import { hostNotify } from "@/plugins/shared/hostNotify";
 import { hostSettings } from "@/plugins/shared/hostSettings";
+import {
+  resolveImagePathForInsert,
+  resolveImagePathsForInsert,
+  type ImageInsertHost,
+} from "@/plugins/shared/imagePasteResolve";
 import type { ImagePathResult } from "@/utils/imagePathDetection";
 import { imageHandlerWarn, imageHandlerError } from "@/utils/debug";
-import {
-  isViewConnected,
-  getActiveFilePathForCurrentWindow,
-  showUnsavedDocWarning,
-  expandHomePath,
-} from "./imageHandlerUtils";
+import { isViewConnected, getActiveFilePathForCurrentWindow } from "./imageHandlerUtils";
 
-/**
- * Resolve a single image detection to its final path.
- * Handles home path expansion and optional copy-to-assets.
- * Returns null if resolution fails (caller should abort).
- */
-async function resolveImagePath(
-  detection: ImagePathResult,
-  filePath: string | null,
-  copyToAssets: boolean
-): Promise<string | null> {
-  if (detection.needsCopy && copyToAssets) {
-    if (!filePath) {
-      await showUnsavedDocWarning();
-      return null;
-    }
-    try {
-      let sourcePath = detection.path;
-      if (detection.type === "homePath") {
-        const expanded = await expandHomePath(detection.path);
-        if (!expanded) {
-          await message(i18n.t("dialog:toast.failedToResolveHomePath"), { kind: "error" });
-          return null;
-        }
-        sourcePath = expanded;
-      }
-      return await copyImageToAssets(sourcePath, filePath);
-    } catch (error) {
-      imageHandlerError("Failed to copy image to assets:", error);
-      await message(i18n.t("dialog:toast.failedToCopyToAssets"), { kind: "error" });
-      return null;
-    }
-  }
-
-  if (detection.needsCopy && !copyToAssets) {
-    if (detection.type === "homePath") {
-      const expanded = await expandHomePath(detection.path);
-      if (!expanded) {
-        await message(i18n.t("dialog:toast.failedToResolveHomePath"), { kind: "error" });
-        return null;
-      }
-      return expanded;
-    }
-  }
-
-  return detection.path;
+/** What resolving a confirmed image needs from the host, read at insert time. */
+function insertHost(): ImageInsertHost {
+  return {
+    documentPath: getActiveFilePathForCurrentWindow(),
+    copyToAssets: hostSettings.copyImagesToAssets(),
+    copyImage: copyImageToAssets,
+    logError: imageHandlerError,
+  };
 }
 
 /**
@@ -92,10 +55,7 @@ export async function insertImageFromPath(
     return;
   }
 
-  const filePath = getActiveFilePathForCurrentWindow();
-  const copyToAssets = hostSettings.copyImagesToAssets();
-
-  const imagePath = await resolveImagePath(detection, filePath, copyToAssets);
+  const imagePath = await resolveImagePathForInsert(detection, insertHost());
   if (imagePath === null) return;
 
   // Re-verify view is still connected after async operations
@@ -138,16 +98,8 @@ export async function insertMultipleImages(
     return;
   }
 
-  const filePath = getActiveFilePathForCurrentWindow();
-  const copyToAssets = hostSettings.copyImagesToAssets();
-
-  // Process all images and collect final paths
-  const imagePaths: string[] = [];
-  for (const detection of results) {
-    const resolved = await resolveImagePath(detection, filePath, copyToAssets);
-    if (resolved === null) return;
-    imagePaths.push(resolved);
-  }
+  const imagePaths = await resolveImagePathsForInsert(results, insertHost());
+  if (imagePaths === null) return;
 
   // Re-verify view is still connected after async operations
   if (!isViewConnected(view)) {
@@ -162,7 +114,7 @@ export async function insertMultipleImages(
   const blockImageType = state.schema.nodes.block_image;
   if (!blockImageType) {
     imageHandlerWarn("block_image node type not found");
-    toast.error(i18n.t("dialog:toast.imageSchemaUnavailable"));
+    hostNotify.error(i18n.t("dialog:toast.imageSchemaUnavailable"));
     return;
   }
 

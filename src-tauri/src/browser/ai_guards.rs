@@ -1,8 +1,8 @@
-//! Refusal guards for the AI browser commands (WI-14).
+//! Refusal guards for the AI browser commands.
 //!
 //! Split out of `ai_commands.rs` so each policy decision is unit-testable
 //! without a mock Tauri app — the commands become composition, and every
-//! refusal has a test naming its `code`. Before WI-14 these were bare
+//! refusal has a test naming its `code`. These used to be bare
 //! `"APPROVAL_REQUIRED"`-style strings that the MCP bridge recovered with
 //! `String(error).includes(...)`; the security-load-bearing distinction is
 //! `approval-required` (raise a prompt, then retry) versus `permission-denied`
@@ -27,7 +27,7 @@ pub(super) use surface_failure_impl::surface_failure;
 /// The token the MCP client already knows this refusal by.
 ///
 /// `code` is VMark's internal error class; `detail.mcpCode` is the MCP tool
-/// protocol's own vocabulary, which predates WI-14 and is finer-grained in
+/// protocol's own vocabulary, which predates these typed codes and is finer-grained in
 /// places (`SSRF_BLOCKED` and `PROFILE_NOT_APPROVED` are both
 /// `permission-denied`). Keeping them as separate channels means the frontend
 /// branches on the class while the AI client keeps the exact token it has been
@@ -45,7 +45,7 @@ pub(super) fn with_mcp_code(error: CommandError, mcp_code: &str) -> CommandError
 
 /// A poisoned mutex is a bug in this process, not something the caller did.
 ///
-/// RESERVED for exactly that (audit 20260803 §7). It used to double as the
+/// RESERVED for exactly that. It used to double as the
 /// catch-all for native creation and navigation failures, so a closed window or
 /// a URL WebKit rejected was reported as an internal state-read failure — see
 /// [`surface_failure`], which is what those callers use now.
@@ -58,7 +58,7 @@ pub(super) fn lock_failure(error: impl std::fmt::Display) -> CommandError {
 }
 
 /// The AI handed us something that is not a destination at all — a typo, an
-/// empty string, a truncated paste (audit 20260803 §6).
+/// empty string, a truncated paste.
 ///
 /// Split out of [`blocked_destination`], which used to swallow every
 /// `AiUrlError`: a malformed URL reached the caller as `permission-denied` +
@@ -83,7 +83,7 @@ pub(super) fn rejected_destination(error: AiUrlError, url: &str) -> CommandError
 
 /// The AI named a profile that is not a legal profile name. Caller-side
 /// validation, so `invalid-input` — but it must still be a TRANSLATED error
-/// carrying an `i18nKey` (audit 20260803 §10): it reaches the user through the
+/// carrying an `i18nKey`: it reaches the user through the
 /// same surface as every other refusal, and a raw English validator sentence
 /// was the one string in this module that `lint:i18n` could not see.
 pub(super) fn invalid_profile_name(profile: &str, reason: &str) -> CommandError {
@@ -92,8 +92,8 @@ pub(super) fn invalid_profile_name(profile: &str, reason: &str) -> CommandError 
     )
 }
 
-/// The embedded browser is off in Settings. WI-19's dark-feature gates return
-/// this same code, which is why `FeatureDisabled` shipped with WI-14.
+/// The embedded browser is off in Settings. The dark-feature gates return
+/// this same code, so `FeatureDisabled` covers both.
 pub(super) fn require_browser_enabled(policy: &AiBrowserPolicy) -> Result<(), CommandError> {
     if policy.enabled {
         Ok(())
@@ -213,8 +213,8 @@ pub(super) fn ai_policy(state: &BrowserSurface) -> Result<AiBrowserPolicy, Comma
     state
         .ai_policy
         .lock()
-        .map(|policy| *policy)
         .map_err(lock_failure)
+        .map(|policy| *policy)
 }
 
 /// May a shared-posture tab navigate to `url` without a prompt? Standing

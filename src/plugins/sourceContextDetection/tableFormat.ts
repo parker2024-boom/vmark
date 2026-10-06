@@ -5,6 +5,7 @@
  * the formatting arithmetic is testable without an EditorView.
  *
  * @coordinates-with sourceContextDetection/tableActions.ts — dispatches these results into the editor
+ * @module plugins/sourceContextDetection/tableFormat
  */
 
 import { getDisplayWidth, padToWidth } from "@/utils/stringWidth";

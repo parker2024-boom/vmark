@@ -1,8 +1,12 @@
-// WI-1A.1 — Format registry types (multi-format rebrand Phase 1A).
-//
-// Source of truth for FormatConfig, FormatAdapters, ValidationDiagnostic,
-// and TabFormatState. Plan reference:
-// dev-docs/plans/20260506-multi-format-rebrand.md § Format registry contract.
+/**
+ * Format registry types — the shared contract every format adapter implements.
+ *
+ * Source of truth for FormatConfig, FormatAdapters, ValidationDiagnostic,
+ * and TabFormatState. Contract:
+ * .claude/adr/plans/20260506-multi-format-rebrand.md § Format registry contract.
+ *
+ * @module lib/formats/types
+ */
 
 import type { Extension } from "@codemirror/state";
 import type { LintDiagnostic } from "@/lib/lintEngine";
@@ -14,7 +18,7 @@ type FormatKind =
   | "viewer"
   // Binary media (image/audio/video). Rendered full-width by a dedicated
   // surface via the asset protocol — no CodeMirror source pane, never read as
-  // UTF-8 text, never editable. See dev-docs/plans/20260703-media-viewer.md.
+  // UTF-8 text, never editable. See .claude/adr/plans/20260703-media-viewer.md.
   | "media";
 
 /**
@@ -26,7 +30,7 @@ type FormatKind =
  *
  * Only meaningful when the format actually declares a preview; formats without
  * one always render source-only regardless of this value. See
- * dev-docs/plans/20260703-split-pane-view-modes.md.
+ * .claude/adr/plans/20260703-split-pane-view-modes.md.
  */
 export type SplitViewMode = "source" | "split" | "preview";
 
@@ -158,7 +162,7 @@ interface FormatAdapters {
    * `prompt-on-close` was named `markdown-default` — a format's own name inside
    * a format-neutral contract, which every adapter had to set including `txt`
    * and the read-only code viewers. The value describes a BEHAVIOUR, not a
-   * format (ADR-015 Phase 4B, WI-4.2).
+   * format (ADR-015 Phase 4B).
    */
   closeSavePolicy: "prompt-on-close" | "save-as-only";
 }
@@ -169,11 +173,11 @@ export interface FormatConfig {
   extensions: string[];
   kind: FormatKind;
   /**
-   * The WYSIWYG editing surface, as an IMPORT THUNK (WI-13).
+   * The WYSIWYG editing surface, as an IMPORT THUNK.
    *
    * `bootstrapFormats()` runs in every window — Settings, PDF export — before
-   * `import("./App")`, so a direct `ComponentType` reference here (the shape
-   * before WI-13) meant every window statically imported the Tiptap surface at
+   * `import("./App")`, so a direct `ComponentType` reference here (the earlier
+   * shape) meant every window statically imported the Tiptap surface at
    * cold start whether or not it would ever show an editor. The registry now
    * registers METADATA eagerly and loads the surface at first mount, through
    * `resolveFormatSurface` (`lib/formats/lazySurfaces.ts`), which owns caching
@@ -189,7 +193,7 @@ export interface FormatConfig {
    *
    * Was `() => Extension` — synchronous, on the argument that markdown's pack
    * is "bundled regardless" so the primary format's source mode never mounts
-   * unhighlighted. WI-13 removed the premise: it was bundled regardless
+   * unhighlighted. Lazy loading removed the premise: it was bundled regardless
    * BECAUSE this field forced a static import from the adapter, and that
    * import is exactly what put ~1.6 MB of CodeMirror on the cold start of
    * windows with no editor in them.
@@ -220,7 +224,7 @@ export interface FormatConfig {
    * `useLintStore` previously carried a two-format branch — a `runLint` action
    * wired to `lintMarkdown` and a `runYamlLint` action wired to `lintYaml` —
    * so adding a third linted format meant editing the store. A format now
-   * supplies its own (ADR-015 Phase 4B, WI-4.3).
+   * supplies its own (ADR-015 Phase 4B).
    *
    * Distinct from `validator`: that produces `ValidationDiagnostic[]` for the
    * split-pane gutter, this produces the richer `LintDiagnostic[]` the lint
@@ -228,7 +232,7 @@ export interface FormatConfig {
    */
   lint?: (source: string) => LintDiagnostic[];
   /**
-   * Document outline, contributed by the format (WI-4.4).
+   * Document outline, contributed by the format.
    *
    * `extractHeadings` is a markdown ATX scanner with fence handling, and it ran
    * for EVERY format — a YAML or JSON tab was scanned for `#` headings. A format
@@ -237,7 +241,7 @@ export interface FormatConfig {
   outline?: (content: string) => OutlineHeading[];
 
   /**
-   * Plain-text projection for status-bar word/character counts (WI-4.4).
+   * Plain-text projection for status-bar word/character counts.
    *
    * `stripMarkdown` runs 13 markdown regexes and ran for every format, so a
    * `.json` tab paid markdown's cost and had its braces treated as syntax.
@@ -247,6 +251,15 @@ export interface FormatConfig {
   toPlainText?: (content: string) => string;
 
   validator?: Validator;
+
+  /**
+   * Subscribe to the moments `validator` (and `schemaDetector`) may answer
+   * differently for the SAME content — a validator whose parser loads on
+   * first use answers with no findings until the parser arrives. The source
+   * pane re-lints and the preview re-validates when the listener fires.
+   * Returns the unsubscribe. Omit for a validator that is ready from the start.
+   */
+  validatorUpdates?: (listener: () => void) => () => void;
 
   /**
    * Rule ids whose findings are SHOWN as `info` once the user has trusted the

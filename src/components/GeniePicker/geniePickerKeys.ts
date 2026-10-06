@@ -1,5 +1,5 @@
 /**
- * The genie picker's input-mode key map (audit R3 #614).
+ * The genie picker's input-mode key map.
  *
  * Purpose: the picker's `onKeyDown` was a 76-line callback holding a mode
  * branch, a control-ownership guard and an eight-arm `else if` chain over key

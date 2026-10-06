@@ -5,7 +5,9 @@
  * link…) for the toolbar adapters and the expanded mark toggles. The decoration
  * half that once lived beside them — syntax widgets rendered at mark
  * boundaries — was never registered as an extension and was deleted under the
- * feature-ledger plan (WI-FL3.1); only these helpers were ever wired.
+ * feature-ledger plan; only these helpers were ever wired.
+ *
+ * @module plugins/syntaxReveal/marks
  */
 
 import type { Node, Mark, ResolvedPos } from "@tiptap/pm/model";

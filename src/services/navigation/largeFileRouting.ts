@@ -17,7 +17,7 @@
  *
  * Errors from `get_file_size_bytes` (missing file, permission denied) are NOT
  * surfaced here — we resolve as a best-effort "small" and let the caller's
- * existing error path (the `readTextFile` that follows) report the failure
+ * existing error path (the `readDocumentText` that follows) report the failure
  * with its richer context. This avoids double error toasts.
  *
  * @coordinates-with stores/settingsStore.ts — reads `largeFile.autoSourceMode`

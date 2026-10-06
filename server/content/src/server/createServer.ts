@@ -16,6 +16,7 @@ import { searchWorkspace } from "./search";
 import { buildCsp, SECURITY_HEADERS } from "./headers";
 import { KB_CSS, KB_JS } from "./assets";
 import { assetHref, createAssetHandler } from "./assetRoute";
+import { escapeHtml, htmlShell } from "./pageShell";
 import { containedAbsPath, containedDeck, realContainedPath } from "./pathContainment";
 import { noopLogger, type Logger } from "./logger";
 import { SlidevManager } from "../slidev/manager";
@@ -47,28 +48,6 @@ export interface ContentServer {
   stopSlidev: () => Promise<void>;
 }
 
-function htmlShell(title: string, body: string, sessionToken: string): string {
-  // Asset URLs carry ?s so the cookie-blocked in-app iframe can load them
-  // (grill M2). kb.js propagates ?s to in-page links + the SSE stream.
-  const q = `?s=${encodeURIComponent(sessionToken)}`;
-  return `<!doctype html><html><head><meta charset="utf-8">` +
-    `<meta name="viewport" content="width=device-width, initial-scale=1">` +
-    `<title>${escapeHtml(title)}</title>` +
-    `<link rel="stylesheet" href="/__assets/kb.css${q}">` +
-    `</head><body><main class="kb-content">${body}</main>` +
-    `<script src="/__assets/kb.js${q}"></script></body></html>`;
-}
-
-// grill M14 — strip Unicode bidi-control chars (RTL override etc.) so a crafted
-// filename can't visually spoof entries in the served index list.
-const BIDI_CONTROLS = /[‪-‮⁦-⁩‎‏]/g;
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(BIDI_CONTROLS, "")
-    .replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
-}
-
 /**
  * Build a `/note/<relPath>` URL with each path segment percent-encoded.
  * `encodeURI` leaves `?` and `#` intact, which would corrupt links to notes
@@ -84,8 +63,7 @@ export function createContentServer(options: ContentServerOptions): ContentServe
   const csp = buildCsp(options.trusted ?? false);
   // Namespaced by workspace root: every workspace server shares the
   // `127.0.0.1` host and cookies are not port-scoped, so one shared cookie
-  // name meant opening a second workspace logged the first one out (audit
-  // 20260906, MCP-C05).
+  // name meant opening a second workspace logged the first one out.
   const auth = createAuthGuard({ bootstrapToken, cookieNamespace: root });
   const app = new Hono();
   const sseClients = new Set<(relPath?: string) => Promise<void>>();
@@ -167,7 +145,7 @@ export function createContentServer(options: ContentServerOptions): ContentServe
     }
     try {
       // Wire the request's abort signal so a disconnected caller cancels the
-      // export child instead of leaving it running until the timeout (WI-7.3).
+      // export child instead of leaving it running until the timeout.
       const out = await runSlidevExport(deck, body.format, body.output, {
         ...options.exportDeps,
         signal: options.exportDeps?.signal ?? c.req.raw.signal,
@@ -225,14 +203,13 @@ export function createContentServer(options: ContentServerOptions): ContentServe
       htmlShell(
         "Workspace",
         `<h1>Workspace</h1><p><a href="/graph">Relationship graph →</a></p><ul class="kb-index">${items}</ul>`,
-        auth.sessionToken
+        auth.urlTokenFor(c)
       )
     );
   });
 
   // Local media, on its own route with its own narrow policy — see
-  // assetRoute.ts for why relaxing /note/'s index gate would be wrong
-  // (audit 20260906, MCP-C03).
+  // assetRoute.ts for why relaxing /note/'s index gate would be wrong.
   app.get("/asset/*", createAssetHandler({ root }));
 
   // Render a note.
@@ -251,17 +228,21 @@ export function createContentServer(options: ContentServerOptions): ContentServe
     // Only serve docs the walker admitted (markdown, non-hidden, not
     // .gitignore'd). Without this, path-containment alone would still expose
     // hidden/ignored/non-markdown files via a direct /note/ URL, defeating the
-    // walk policy (Codex audit; pairs with WI-2.1 .gitignore honoring).
+    // walk policy (Codex audit; pairs with the walker's .gitignore honoring).
     if (!getIndex().refs.has(fromRel)) return c.json({ error: "not found" }, 404);
+    // The rendered page embeds asset URLs, which differ by whether this
+    // request needs the token in them, so the cache holds each form apart.
+    const urlToken = auth.urlTokenFor(c);
+    const cacheKey = `${urlToken === null ? "cookie" : "token"}:${fromRel}`;
     let content: string;
     let mtimeMs: number;
     try {
       const stat = await fs.stat(real);
       mtimeMs = stat.mtimeMs;
-      const cached = renderCache.get(fromRel);
+      const cached = renderCache.get(cacheKey);
       if (cached && cached.mtimeMs === mtimeMs) {
         const title = getIndex().refs.get(fromRel)?.title ?? path.basename(real);
-        return c.html(htmlShell(title, cached.html, auth.sessionToken));
+        return c.html(htmlShell(title, cached.html, urlToken));
       }
       content = await fs.readFile(real, "utf8");
     } catch (err) {
@@ -279,23 +260,22 @@ export function createContentServer(options: ContentServerOptions): ContentServe
           : { href: `#${encodeURIComponent(target)}`, exists: false };
       },
       // Local media resolved against /note/ hits the markdown-only index gate
-      // and 404s; point it at the asset route instead (audit 20260906,
-      // MCP-C03).
-      resolveAssetUrl: (url) => assetHref(fromRel, url, auth.sessionToken),
+      // and 404s; point it at the asset route instead.
+      resolveAssetUrl: (url) => assetHref(fromRel, url, urlToken),
     });
     // Store in the render cache (simple FIFO eviction at the cap).
     if (renderCache.size >= RENDER_CACHE_MAX) {
       const oldest = renderCache.keys().next().value;
       if (oldest !== undefined) renderCache.delete(oldest);
     }
-    renderCache.set(fromRel, { mtimeMs, html });
+    renderCache.set(cacheKey, { mtimeMs, html });
     const title = idx.refs.get(fromRel)?.title ?? path.basename(real);
-    return c.html(htmlShell(title, html, auth.sessionToken));
+    return c.html(htmlShell(title, html, urlToken));
   });
 
   app.get("/api/graph", (c) => c.json(getIndex().graph));
 
-  // Server-rendered relationship graph (WI-4.4 / M-4). A navigable, no-JS view
+  // Server-rendered relationship graph. A navigable, no-JS view
   // of every doc's outgoing edges + backlinks, built from the index. The
   // in-app panel renders the same data as an interactive force layout; this is
   // the browser-served, accessible counterpart.
@@ -330,7 +310,7 @@ export function createContentServer(options: ContentServerOptions): ContentServe
         );
       })
       .join("");
-    return c.html(htmlShell("Graph", `<h1>Relationship graph</h1>${sections}`, auth.sessionToken));
+    return c.html(htmlShell("Graph", `<h1>Relationship graph</h1>${sections}`, auth.urlTokenFor(c)));
   });
 
   app.get("/api/backlinks/*", (c) => {

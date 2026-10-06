@@ -505,7 +505,7 @@ describe("settingsStore — corrupted config recovery", () => {
       return opts.migrate!(persistedState, version);
     }
 
-    it("returns the persisted state unchanged for the current version (1)", () => {
+    it("returns a version-1 blob unchanged when it carries no link-protocol list", () => {
       const blob = { general: { autoSaveEnabled: false } };
       expect(migrate(blob, 1)).toEqual(blob);
     });
@@ -518,10 +518,10 @@ describe("settingsStore — corrupted config recovery", () => {
     });
 
     it("drops the persisted state when the version is from the future", () => {
-      // Downgrade scenario: a newer build wrote shape v2; current binary
-      // doesn't know v2. Returning undefined tells zustand to keep the
+      // Downgrade scenario: a newer build wrote shape v3; current binary
+      // doesn't know v3. Returning undefined tells zustand to keep the
       // in-memory defaults instead of merging a possibly-corrupt blob.
-      expect(migrate({ general: { autoSaveEnabled: false } }, 2)).toBeUndefined();
+      expect(migrate({ general: { autoSaveEnabled: false } }, 3)).toBeUndefined();
       expect(migrate({ general: { autoSaveEnabled: false } }, 99)).toBeUndefined();
     });
 

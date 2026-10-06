@@ -1,5 +1,5 @@
 /**
- * Drive the real `BrowserApprovalDialog` from an E2E journey (WI-3.3).
+ * Drive the real `BrowserApprovalDialog` from an E2E journey.
  *
  * ADR-BR2: the approval flow is SEQUENTIAL, not a held-open request. `browserAct.ts`
  * responds immediately with a refusal and queues a prompt; the user's decision mints

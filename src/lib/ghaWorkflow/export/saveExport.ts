@@ -1,14 +1,18 @@
-// RW-7 (L3) — wire GHA workflow export to UI
-//
-// Side-effecting helpers that turn the pure export functions
-// (toMermaid / exportCanvas) into real user actions:
-//   - copyMermaid: write a Mermaid flowchart string to the clipboard.
-//   - saveImage:   render the live canvas to SVG/PNG and write it to a
-//                  user-chosen path via the Tauri save dialog.
-//
-// Kept separate from the React control so the I/O glue is unit-testable
-// without mounting xyflow. Mirrors the save flow in
-// src/plugins/mermaid/mermaidExport.ts (Tauri save dialog → writeFile).
+/**
+ * GHA workflow export wiring — connects the pure export functions to UI actions.
+ *
+ * Side-effecting helpers that turn the pure export functions
+ * (toMermaid / exportCanvas) into real user actions:
+ *   - copyMermaid: write a Mermaid flowchart string to the clipboard.
+ *   - saveImage:   render the live canvas to SVG/PNG and write it to a
+ *                  user-chosen path via the Tauri save dialog.
+ *
+ * Kept separate from the React control so the I/O glue is unit-testable
+ * without mounting xyflow. Mirrors the save flow in
+ * src/plugins/mermaid/mermaidExport.ts (Tauri save dialog → writeFile).
+ *
+ * @module lib/ghaWorkflow/export/saveExport
+ */
 
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";

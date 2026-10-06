@@ -11,9 +11,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock imeGuard before importing the extension
 const mockFlushProseMirrorCompositionQueue = vi.fn();
-const mockGetImeCleanupPrefixLength = vi.fn(() => 0);
-const mockIsImeKeyEvent = vi.fn(() => false);
-const mockIsProseMirrorInCompositionGrace = vi.fn(() => false);
+const mockGetImeCleanupPrefixLength = vi.fn((..._args: unknown[]): number | null => 0);
+const mockIsImeKeyEvent = vi.fn((..._args: unknown[]) => false);
+const mockIsProseMirrorInCompositionGrace = vi.fn((..._args: unknown[]) => false);
 const mockMarkProseMirrorCompositionEnd = vi.fn();
 
 vi.mock("@/utils/imeGuard", () => ({
@@ -24,12 +24,6 @@ vi.mock("@/utils/imeGuard", () => ({
   isImeKeyEvent: (...args: unknown[]) => mockIsImeKeyEvent(...args),
   isProseMirrorInCompositionGrace: (...args: unknown[]) => mockIsProseMirrorInCompositionGrace(...args),
   markProseMirrorCompositionEnd: (...args: unknown[]) => mockMarkProseMirrorCompositionEnd(...args),
-}));
-
-// Mock splitBlockFix
-const mockFixCompositionSplitBlock = vi.fn(() => null);
-vi.mock("../splitBlockFix", () => ({
-  fixCompositionSplitBlock: (...args: unknown[]) => mockFixCompositionSplitBlock(...args),
 }));
 
 // Mock splitBlock from ProseMirror commands (used for Korean deferred Enter)
@@ -63,7 +57,7 @@ describe("compositionGuard scheduleImeCleanup", () => {
       type: undefined,
       parent: undefined,
     } as never);
-    const plugin = plugins[0] as {
+    const plugin = plugins[0] as unknown as {
       props: {
         handleDOMEvents: Record<string, (view: unknown, event?: unknown) => boolean>;
       };
@@ -170,7 +164,6 @@ describe("compositionGuard scheduleImeCleanup", () => {
 
   it("split-block fix is handled by appendTransaction (not rAF)", () => {
     // After compositionend, splitBlockFix returns null (no split yet in rAF)
-    mockFixCompositionSplitBlock.mockReturnValue(null);
 
     const events = getFullPlugin();
     const mockResolve = () => ({
@@ -274,33 +267,33 @@ describe("compositionGuard scheduleImeCleanup", () => {
     // The key assertion is that it doesn't throw
   });
 
-  it("scheduleImeCleanup handles resolve throwing during rAF fallback cleanup", () => {
-    // splitBlockFix returns null so appendTransaction doesn't consume pendingSplitFix
-    mockFixCompositionSplitBlock.mockReturnValue(null);
+  it("scheduleImeCleanup skips cleanup when the document shrank under the anchor before the frame", () => {
+    // Capture rAF so the document can change between compositionend and the
+    // frame, as it does when a remote write or undo lands in between.
+    let capturedRafCb: FrameRequestCallback | null = null;
+    globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
+      capturedRafCb = cb;
+      return 0;
+    };
 
     const events = getFullPlugin();
-    // First resolve (during compositionend for findTableCellDepth) should work,
-    // but a later resolve (during scheduleImeCleanup in rAF) should throw
-    let callCount = 0;
-    const mockResolve = () => {
-      callCount++;
-      if (callCount > 4) {
-        throw new Error("Invalid position");
-      }
-      return {
-        depth: 1,
-        node: (d: number) => ({ type: { name: d === 1 ? "paragraph" : "doc" } }),
-        end: () => 10,
-      };
+    // Resolve like ProseMirror does: a position past the content is a RangeError.
+    const doc = {
+      content: { size: 20 },
+      resolve(pos: number) {
+        if (pos < 0 || pos > doc.content.size) throw new RangeError(`Position ${pos} out of range`);
+        return {
+          depth: 1,
+          node: (d: number) => ({ type: { name: d === 1 ? "paragraph" : "doc" } }),
+          end: () => doc.content.size,
+        };
+      },
+      textBetween: () => "",
     };
     const mockView = {
       state: {
         selection: { from: 5 },
-        doc: {
-          resolve: mockResolve,
-          textBetween: () => "",
-          content: { size: 20 },
-        },
+        doc,
         tr: {
           delete: vi.fn().mockReturnThis(),
           setMeta: vi.fn().mockReturnThis(),
@@ -312,13 +305,20 @@ describe("compositionGuard scheduleImeCleanup", () => {
     events.compositionstart(mockView);
     events.compositionupdate(mockView, { data: "ni" });
     events.compositionend(mockView, { data: "你" });
+    expect(capturedRafCb).not.toBeNull();
 
-    // Should not throw even if resolve fails during rAF callback
-    expect(() => vi.runAllTimers()).not.toThrow();
+    // The document shrinks below the composition anchor before the frame.
+    doc.content.size = 3;
+    mockView.state.selection.from = 2;
+
+    expect(() => capturedRafCb!(0)).not.toThrow();
+    expect(mockView.dispatch).not.toHaveBeenCalled();
+
+    // Restore synchronous rAF for other tests
+    globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => { cb(0); return 0; };
   });
 
   it("scheduleImeCleanup returns early when resolve throws (line 73)", () => {
-    mockFixCompositionSplitBlock.mockReturnValue(null);
 
     // Capture rAF callback instead of running it synchronously
     let capturedRafCb: FrameRequestCallback | null = null;

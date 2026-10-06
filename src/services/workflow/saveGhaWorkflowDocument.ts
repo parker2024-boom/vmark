@@ -12,20 +12,20 @@
  *   - Disk write FIRST (`saveToPath`): if it fails the queue stays intact for a
  *     retry — clearing it and mutating the document pre-write loses the user's
  *     work on a disk-full / permission-denied / parent-missing failure.
- *   - Serialization is non-throwing and now DISCRIMINATED (#991/#1006):
+ *   - Serialization is non-throwing and now DISCRIMINATED:
  *     `serializeWorkflowEdits` says whether the document failed to parse, a
  *     patch would not apply, the binding had moved to another pane, or the
  *     edits genuinely changed nothing. All four still surface as
  *     `nothing-applied` — one user-facing message covers them, and the
  *     workbench's toast already says "did not change the YAML, or it could not
  *     be parsed" — but the reason is now LOGGED instead of being unknowable.
- *     Nothing is written or cleared in any of them (#297).
+ *     Nothing is written or cleared in any of them.
  *   - The store has ONE active binding; the pipeline rebinds to THIS tab's
  *     document before reading the queue and again before committing, so a
  *     workbench in the other pane that took the binding meanwhile is never
- *     saved through (#296).
+ *     saved through.
  *   - After the write, the editor is overwritten only if the user did not type
- *     meanwhile, and only the patches that were written are cleared (#298).
+ *     meanwhile, and only the patches that were written are cleared.
  *   - `saveToPath` is imported lazily so it stays out of the eager App bundle.
  *
  * @coordinates-with src/components/Editor/WorkflowPanel/GhaWorkflowWorkbench.tsx — the caller
@@ -44,8 +44,8 @@ export type SaveGhaWorkflowOutcome =
   /** Nothing queued for this document. */
   | "nothing-pending"
   /** The queue changed nothing — a parse failure, a patch that would not
-   *  apply, a stale binding, or a genuine no-op. Which one is in the log
-   *  (#991); the user-facing message is deliberately one for all four. */
+   *  apply, a stale binding, or a genuine no-op. Which one is in the log;
+   *  the user-facing message is deliberately one for all four. */
   | "nothing-applied"
   /** `saveToPath` reported failure (and has surfaced it); queue and document untouched. */
   | "write-failed"
@@ -71,7 +71,7 @@ export function workflowDocumentIdFor(tabId: string): string {
  * binding while the write was in flight.
  *
  * It rebinds to `documentId` — the id whose queue was WRITTEN — not to whatever
- * the tab resolves to now (audit #988). `workflowDocumentIdFor` is derived from
+ * the tab resolves to now. `workflowDocumentIdFor` is derived from
  * the live document, so a tab closed or renamed during the write returned a
  * DIFFERENT id: the store was bound to a phantom (`untitled:<closed tab>`) or to
  * another document, and the `clearPatches` that followed emptied a queue that
@@ -93,13 +93,13 @@ function commit(
   for (const patch of remaining) useWorkflowStore.getState().queuePatch(patch);
 }
 
-/** Saves in flight, keyed by tab — one at a time per document (audit #990). */
+/** Saves in flight, keyed by tab — one at a time per document. */
 const inFlight = new Map<string, Promise<SaveGhaWorkflowOutcome>>();
 
 /**
  * Save the pending patches of `tabId`'s workflow document; see the header.
  *
- * SINGLE-FLIGHT per tab (audit #990). Two overlapping saves each captured their
+ * SINGLE-FLIGHT per tab. Two overlapping saves each captured their
  * own patch snapshot; the first commit changed the document's content, so the
  * second's `content === before` check failed and it skipped the editor update —
  * while still clearing patches that existed only in ITS serialized result. A
@@ -116,7 +116,7 @@ export function saveGhaWorkflowDocument(tabId: string): Promise<SaveGhaWorkflowO
 }
 
 async function runSave(tabId: string): Promise<SaveGhaWorkflowOutcome> {
-  // The lazy import comes FIRST (audit #992). It is the only await between
+  // The lazy import comes FIRST. It is the only await between
   // reading the document and handing it to `saveToPath`, and `saveToPath`
   // orders competing writes by a per-DOCUMENT save-target claim taken when it
   // is called — so waiting for a module here let a Save As issued afterwards
@@ -135,7 +135,7 @@ async function runSave(tabId: string): Promise<SaveGhaWorkflowOutcome> {
   // and serializing another pane's queue is the defect the assertion names.
   const result = editStore.serializeWorkflowEdits(tabDoc.content, documentId);
   if (result.status !== "applied") {
-    // WHICH failure, in the log the user can send with a bug report (#991).
+    // WHICH failure, in the log the user can send with a bug report.
     // String equality against the input could not tell a document that will
     // never parse from an edit that legitimately changes nothing, so a queue
     // that could never be saved looked exactly like one with nothing to do.
@@ -154,7 +154,7 @@ async function runSave(tabId: string): Promise<SaveGhaWorkflowOutcome> {
   return "updated-in-editor";
 }
 
-/** One log-line reason for a serialization that produced nothing (#991). */
+/** One log-line reason for a serialization that produced nothing. */
 function describeSerializeFailure(
   result: Exclude<WorkflowEditsResult, { status: "applied" }>,
 ): string {

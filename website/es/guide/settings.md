@@ -244,13 +244,13 @@ El ajuste no aparece en macOS ni en Linux.
 | Configuración | Descripción | Predeterminado | Opciones |
 |---------------|-------------|----------------|---------|
 | Habilitar guardado automático | Guarda automáticamente los archivos después de editar | Activado | Activado / Desactivado |
-| Insertar bloque de identidad al guardar | Permite que VMark inserte un bloque de identidad `vmark:` en el frontmatter de un archivo y cree una carpeta `.vmark` en el espacio de trabajo, para que la capa de coherencia pueda seguir el documento. Se aplica a toda escritura: guardados, ediciones de IA y MCP, restauraciones de versiones anteriores y archivos nuevos. Si está desactivado, no se inserta nada ni se crea ninguna carpeta `.vmark`; un espacio de trabajo que ya tenga una sigue registrando los cambios de los documentos que sigue — uno que ya ha registrado antes, o uno que ya lleva su propia identidad `vmark:`, como un archivo con seguimiento que moviste o que trajiste con un checkout de git. Consulta [Coherencia](/es/guide/coherence) | Desactivado | Activado / Desactivado |
+| Insertar bloque de identidad al guardar | Permite que VMark inserte un bloque de identidad `vmark:` en el frontmatter de un archivo y cree una carpeta `.vmark` en el espacio de trabajo, para que la capa de coherencia pueda seguir el documento. Se aplica a toda escritura: guardados, ediciones de IA y MCP, restauraciones de versiones anteriores y archivos nuevos. Si está desactivado, no se inserta nada ni se crea ninguna carpeta `.vmark`; un espacio de trabajo que ya tenga una sigue registrando los cambios de los documentos que sigue — uno que ya ha registrado antes, o uno que ya lleva su propia identidad `vmark:`, como un archivo con seguimiento que moviste o que trajiste con un checkout de git. Consulta [Coherencia](/es/guide/coherence#como-funciona-30-segundos) | Desactivado | Activado / Desactivado |
 | Intervalo de guardado | Tiempo entre guardados automáticos. Solo disponible cuando el guardado automático está habilitado | 30 segundos | 10s, 30s, 1 min, 2 min, 5 min |
 | Conservar historial del documento | Rastrea las versiones del documento para deshacer y recuperación | Activado | Activado / Desactivado |
 | Versiones máximas | Número de instantáneas del historial a conservar por documento | 50 versiones | 10, 25, 50, 100 |
 | Conservar versiones durante | Antigüedad máxima de las instantáneas del historial antes de ser eliminadas | 7 días | 1 día, 7 días, 14 días, 30 días |
 | Ventana de fusión | Los guardados automáticos consecutivos dentro de esta ventana se consolidan en una única instantánea, reduciendo el ruido de almacenamiento | 30 segundos | Desactivado, 10s, 30s, 1 min, 2 min |
-| Tamaño máximo de archivo para el historial | Omite las instantáneas del historial para archivos más grandes que este umbral | 512 KB | 256 KB, 512 KB, 1 MB, 5 MB, Ilimitado |
+| Tamaño máximo de archivo para el historial | Omite las instantáneas del historial del autoguardado para archivos más grandes que este umbral. Los guardados manuales, los guardados por MCP y la copia de seguridad que se toma antes de restaurar una versión se conservan siempre | 512 KB | 256 KB, 512 KB, 1 MB, 5 MB, Ilimitado |
 
 ### Imágenes
 
@@ -280,8 +280,8 @@ El servidor MCP (Model Context Protocol) permite que los asistentes de IA extern
 
 | Configuración | Descripción | Predeterminado |
 |---------------|-------------|----------------|
-| Habilitar Servidor MCP | Inicia o detiene el servidor MCP. Cuando está en ejecución, una insignia de estado muestra el puerto y los clientes conectados | Activado (alternador) |
-| Iniciar al abrir | Inicia automáticamente el servidor MCP cuando se abre VMark | Activado |
+| Activar servidor MCP | Inicia o detiene el servidor MCP. Cuando está en ejecución, una insignia de estado muestra el puerto y los clientes conectados | Activado (alternador) |
+| Iniciar al arrancar | Inicia automáticamente el servidor MCP cuando se abre VMark | Activado |
 | Aprobar automáticamente guardados en una ubicación nueva y resultados de genios | Permite que un cliente MCP guarde un documento en una ubicación nueva sin preguntar, y que un genio aplique su resultado directamente en lugar de mostrar una vista previa. Cuando está desactivado, una solicitud MCP de guardar en una ruta nueva se rechaza y una notificación te avisa. Las escrituras de documentos por MCP nunca dependen de esto — cada una se guarda como punto de control y puede restaurarse desde el historial de la barra de estado | Desactivado |
 
 Cuando el servidor está en ejecución, el panel también muestra:
@@ -339,7 +339,7 @@ puedes cambiar cualquier pestaña con el conmutador en pantalla o `F6` / `Shift 
 
 ### Editor externo
 
-Para el botón **Abrir en editor externo** de las pestañas de código de solo lectura, elige el editor que debe lanzarse. Un paquete de aplicación (p. ej. `/Applications/Visual Studio Code.app`) o un ejecutable.
+Para el botón **Abrir en editor externo** de las pestañas de código de solo lectura, elige el editor que debe lanzarse: el nombre de un editor conocido (`code`, `zed`, `subl`, `vim`, …) o la ruta completa de un paquete de aplicación (p. ej. `/Applications/Visual Studio Code.app`) o de un ejecutable. Los shells, los intérpretes y los emuladores de terminal se rechazan, igual que una ruta que no existe.
 
 La configuración de la interfaz tiene prioridad sobre cualquier variable de entorno — lo explícito supera a lo implícito. Déjalo vacío para usar la cadena de reserva de variables de entorno `$VMARK_EXTERNAL_EDITOR → $VISUAL → $EDITOR → valor predeterminado de la plataforma`. Consulta [Abrir en editor externo](/es/guide/formats#abrir-en-editor-externo) para el orden de resolución completo y la puerta de seguridad.
 
@@ -439,7 +439,7 @@ Configura el panel del terminal integrado. Abre el terminal con `` Ctrl + ` ``.
 
 | Configuración | Descripción | Predeterminado | Opciones |
 |---------------|-------------|----------------|---------|
-| Shell | Qué shell usar. Requiere reiniciar el terminal para que surta efecto | System Default | Shells detectados automáticamente en tu sistema (por ejemplo, zsh, bash, fish) |
+| Shell | Qué shell usar. Requiere reiniciar el terminal para que surta efecto. Un shell guardado que ya no está disponible se muestra como *(no disponible)* y se usa el predeterminado | System Default | Shells detectados automáticamente en tu sistema (por ejemplo, zsh, bash, fish) |
 | Posición del Panel | Dónde colocar el panel del terminal | Auto | Auto (basado en la relación de aspecto de la ventana), Arriba, Abajo, Izquierda, Derecha |
 | Tamaño del Panel | Proporción del espacio disponible que ocupa el terminal. Arrastrar para redimensionar el panel también actualiza este valor | 40% | 10% a 80% |
 | Tamaño de Fuente | Tamaño del texto en el terminal | 13px | 10px a 24px |
@@ -448,7 +448,7 @@ Configura el panel del terminal integrado. Abre el terminal con `` Ctrl + ` ``.
 | Cursor Parpadeante | Si el cursor del terminal parpadea | Activado | Activado / Desactivado |
 | Copiar al Seleccionar | Copia automáticamente el texto del terminal seleccionado al portapapeles | Desactivado | Activado / Desactivado |
 | Mostrar transcripciones automáticamente | Muestra Markdown, tablas y diagramas Mermaid de Claude/Codex junto a la CLI del terminal. Añade un hook SessionStart local a la configuración de Claude Code y Codex; reinicia las sesiones CLI activas después de habilitarlo | Desactivado | Activado / Desactivado |
-| Renderizador WebGL | Usa renderizado acelerado por GPU para el terminal. Desactívalo si experimentas problemas de entrada IME. Requiere reiniciar el terminal | Activado | Activado / Desactivado |
+| Renderizador WebGL | Usa renderizado acelerado por GPU para el terminal. Desactívalo si experimentas problemas de entrada IME. Requiere reiniciar el terminal. Solo macOS y Windows — Linux usa siempre el renderizador DOM | Activado | Activado / Desactivado |
 | Portapapeles remoto (OSC 52) | Permite que los programas que se ejecutan en el terminal — por ssh, dentro de tmux — copien al portapapeles del sistema. El canal es solo de escritura: la lectura del portapapeles siempre se rechaza, ya que cualquier salida impresa en el terminal podría solicitarla | Activado | Activado / Desactivado |
 | Historial de desplazamiento | Número de líneas de salida que cada sesión conserva en su historial de desplazamiento. Los valores más altos usan más memoria | 5.000 | 1.000 / 5.000 / 10.000 / 50.000 |
 | Modo lector de pantalla | Expone la salida del terminal a las tecnologías de asistencia (VoiceOver). Desactivado por defecto por rendimiento | Desactivado | Activado / Desactivado |
@@ -467,7 +467,7 @@ Consulta [Terminal Integrado](/es/guide/terminal) para más información sobre s
 
 ## Acerca de
 
-Muestra la versión de la app, enlaces al sitio web y al repositorio de GitHub, y gestión de actualizaciones.
+Muestra la versión de la app, enlaces al sitio web y al repositorio de GitHub, y gestión de actualizaciones. El enlace **Avisos de terceros** abre los textos de licencia del software de código abierto incluido con VMark en la app predeterminada del sistema para archivos de texto.
 
 ### Actualizaciones
 
@@ -539,7 +539,22 @@ Los cuatro valores predeterminados siempre se incluyen: quitar uno solo dura has
 |---------------|-------------|----------------|
 | Mantener ambos editores activos | Monta tanto el editor WYSIWYG como el modo Fuente simultáneamente para un cambio de modo más rápido. Aumenta el uso de memoria | Desactivado |
 
-### Motor de Workflow
+### Coherencia
+
+| Configuración | Descripción | Predeterminado | Opciones |
+|---------------|-------------|----------------|---------|
+| Confianza de la comprobación semántica | Qué seguridad debe tener una comprobación antes de que su respuesta se registre como veredicto. Por debajo de este valor, la respuesta se conserva pero se marca como desconocida | 0.9 | 0.7, 0.8, 0.9, 0.95 |
+
+Consulta [Coherencia](/es/guide/coherence) para saber qué es una comprobación y cómo se registran los veredictos.
+
+### Archivos de flujo de trabajo
+
+| Configuración | Descripción | Predeterminado | Opciones |
+|---------------|-------------|----------------|---------|
+| Obtener metadatos de acciones | Permite que VMark obtenga `action.yml` de las GitHub Actions referenciadas para rellenar el formulario `with:` del editor estructurado. Desactívalo para mantener el editor de flujos de trabajo totalmente sin conexión | Activado | Activado / Desactivado |
+| Usar actionlint cuando esté disponible | Si el binario `actionlint` está en tu PATH, se ejecuta sobre los archivos de flujo de trabajo para obtener diagnósticos más ricos. No tiene efecto si el binario no está instalado | Activado | Activado / Desactivado |
+
+### Flujo de trabajo
 
 El visor de GitHub Actions no tiene interruptor: al abrir un archivo bajo
 `.github/workflows/` se muestran el grafo y el editor de formularios, y las

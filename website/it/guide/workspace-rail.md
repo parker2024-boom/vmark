@@ -51,7 +51,7 @@ I client IA che aprono documenti tramite MCP non strappano mai via il tuo worksp
 | Riordinare | Trascina un glifo sopra un altro |
 | Spostare in una finestra propria | Trascina un glifo fuori dalla finestra |
 | Duplicare in una nuova finestra | Il pulsante **⧉** al passaggio del mouse |
-| Chiudere un workspace | Clic destro → Chiudi (chiede conferma per ogni scheda non salvata) |
+| Chiudere un workspace | Clic destro → Chiudi. Tutte le sue schede si chiudono insieme al workspace, comprese quelle fissate; ogni scheda non salvata chiede prima conferma, e annullando il workspace resta aperto |
 
 ## Sessioni del terminale
 

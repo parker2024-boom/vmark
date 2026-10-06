@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Extension-boundary budget gate — WI-1.8.
+ * Extension-boundary budget gate.
  *
  * `plugin-isolation` is now severity `error`, with today's violations frozen in
  * `.dependency-cruiser-known-violations.json` so the gate can fail on anything
@@ -15,6 +15,8 @@
  * down only. Lower the budget when you fix violations; never raise it.
  *
  * Usage: node scripts/check-extension-budget.mjs
+ *
+ * @coordinates-with scripts/check-extension-budget.test.mjs — runs this against fixture trees
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -85,11 +87,23 @@ if (actual < limit) {
  * diff, which is the difference between debt and drift.
  */
 const exemptionBudget = budget.maxRuleExemptions;
-if (exemptionBudget && typeof exemptionBudget === "object") {
+// REQUIRED. This count used to run only when the key was present, so deleting
+// `maxRuleExemptions` from the budget file switched half the gate off and the
+// run still ended on the success line below.
+if (typeof exemptionBudget !== "object" || exemptionBudget === null || Array.isArray(exemptionBudget)) {
+  console.error("❌ extension-budget.json needs a `maxRuleExemptions` object (rule name -> pathNot count).");
+  process.exit(1);
+}
+{
   const { forbidden } = await import(join(root, ".dependency-cruiser.cjs"))
     .then((m) => m.default ?? m);
+  if (!Array.isArray(forbidden)) {
+    // No rules means no exemptions to count, which would satisfy any budget.
+    console.error("❌ .dependency-cruiser.cjs has no `forbidden` array — cannot count rule exemptions.");
+    process.exit(1);
+  }
   const counted = {};
-  for (const rule of forbidden ?? []) {
+  for (const rule of forbidden) {
     const list = (value) => (Array.isArray(value) ? value : value ? [value] : []);
     const n = list(rule.from?.pathNot).length + list(rule.to?.pathNot).length;
     if (n > 0) counted[rule.name] = n;
@@ -98,7 +112,9 @@ if (exemptionBudget && typeof exemptionBudget === "object") {
   const problems = [];
   for (const [name, allowed] of Object.entries(exemptionBudget)) {
     const found = counted[name] ?? 0;
-    if (found > allowed) {
+    if (!Number.isInteger(allowed) || allowed < 0) {
+      problems.push(`   ${name}: budget must be a non-negative integer, got ${JSON.stringify(allowed)}.`);
+    } else if (found > allowed) {
       problems.push(`   ${name}: ${found} exemptions, budget ${allowed} — an exemption was ADDED.`);
     } else if (found < allowed) {
       problems.push(`   ${name}: only ${found} exemptions but budget says ${allowed} — lower it to lock the win in.`);

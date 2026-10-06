@@ -82,7 +82,7 @@ export function buildWysiwygContext(): WysiwygToolbarContext {
  * IME-queued, or awaiting the mount retry); false for unknown action ids.
  */
 export function dispatchEditorAction(action: string, surface: EditorDispatchSurface): boolean {
-  // Boundary guard (WI-4): consumers are typed against AdapterAction, but
+  // Boundary guard: consumers are typed against AdapterAction, but
   // this entry still takes `string` for callers outside the typed surface —
   // an unknown id is refused here instead of silently falling through the
   // adapter switches.

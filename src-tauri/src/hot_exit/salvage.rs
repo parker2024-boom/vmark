@@ -10,7 +10,7 @@
 //! (`sessionSalvage.ts`: one invalid tab must not cost its healthy siblings,
 //! and a cosmetic field must not block document recovery) — but it never got
 //! the chance, because Rust returned `None`, the same shape as "no session at
-//! all" (audit 20260906, B6).
+//! all".
 //!
 //! The order here is the point: inspect as raw JSON, drop or repair individual
 //! items, and only then build the typed structure. Salvage must come BEFORE the
@@ -206,7 +206,7 @@ pub(super) struct ReadSession {
 /// parse means one `null` in the tab array — or a cosmetic
 /// `sidebar_width: 260.5` against a `u32` — discarded every healthy unsaved
 /// document beside it, and returned the same `None` as "there is no session",
-/// so the frontend's own per-tab salvage never ran (audit 20260906, B6).
+/// so the frontend's own per-tab salvage never ran.
 pub(super) async fn read_session_file_with_salvage(
     path: &std::path::Path,
 ) -> Result<Option<ReadSession>, String> {
@@ -225,8 +225,8 @@ pub(super) async fn read_session_file_with_salvage(
             Some(salvaged) => {
                 let summary = salvaged.summary();
                 log::warn!(
-                    "[HotExit] Strict parse of {} failed ({strict_error}); salvaged: {summary}",
-                    path.display()
+                    "[HotExit] Strict parse of {:?} failed ({strict_error}); salvaged: {summary}",
+                    path
                 );
                 // Only a repair that LOST something needs the original
                 // preserved. Normalizing a fractional panel width is not a

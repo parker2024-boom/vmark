@@ -17,7 +17,6 @@ const mockEncodeMarkdownUrl = vi.fn((url: string) => url.replace(/ /g, "%20"));
 const mockMessage = vi.fn(() => Promise.resolve());
 const mockGenerateClipboardImageFilename = vi.fn(() => "img-123.png");
 const mockGetWindowLabel = vi.fn(() => "main");
-const mockIsViewConnected = vi.fn(() => true);
 
 vi.mock("@/services/media/imageOperations", () => ({
   saveImageToAssets: (...args: unknown[]) => mockSaveImageToAssets(...args),
@@ -54,16 +53,14 @@ vi.mock("@/i18n", () => ({
   default: { t: (key: string) => key },
 }));
 
-vi.mock("./smartPasteUtils", () => ({
-  isViewConnected: (...args: unknown[]) => mockIsViewConnected(...args),
-}));
-
 import type { EditorView } from "@codemirror/view";
 import { handleClipboardImagePaste } from "./smartPasteClipboardImage";
 
 // ── Helpers ──────────────────────────────────────────────────────
 
 interface FakeView {
+  // The real connectivity check reads `dom.isConnected`.
+  dom: { isConnected: boolean };
   dispatch: ReturnType<typeof vi.fn>;
   focus: ReturnType<typeof vi.fn>;
   state: {
@@ -74,6 +71,7 @@ interface FakeView {
 
 function createFakeView(from = 0, to = 0, docLength = Math.max(from, to)): FakeView {
   return {
+    dom: { isConnected: true },
     dispatch: vi.fn(),
     focus: vi.fn(),
     state: {
@@ -109,7 +107,6 @@ function createClipboardEvent(files: File[]): ClipboardEvent {
 describe("handleClipboardImagePaste", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockIsViewConnected.mockReturnValue(true);
     mockActiveFilePath = "/docs/test.md";
     mockSaveImageToAssets.mockResolvedValue("assets/image.png");
   });
@@ -155,8 +152,11 @@ describe("handleClipboardImagePaste", () => {
     const view = createFakeView(0, 0);
     const event = createClipboardEvent([createImageFile()]);
 
-    // View is connected at handler entry, but disconnects before final dispatch.
-    mockIsViewConnected.mockReturnValueOnce(false);
+    // View is connected at handler entry, but disconnects while the save awaits.
+    mockSaveImageToAssets.mockImplementationOnce(() => {
+      view.dom.isConnected = false;
+      return Promise.resolve("assets/image.png");
+    });
 
     const result = handleClipboardImagePaste(view as unknown as EditorView, event);
     expect(result).toBe(true);

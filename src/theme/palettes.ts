@@ -1,12 +1,12 @@
 /**
- * Syntax and ANSI palette shapes — split out of `tokens.ts` (WI-UI2.3, the
- * 300-line gate). These are the two fixed-role color vocabularies inside
+ * Syntax and ANSI palette shapes — split out of `tokens.ts` (the 300-line
+ * gate). These are the two fixed-role color vocabularies inside
  * `ThemeTokens`; the contract itself stays in `theme/tokens.ts`.
  *
  * @module theme/palettes
  */
 
-/** 16-role syntax palette (D11, WI-UI1.5). Emitted as `--syntax-<role>` by
+/** 16-role syntax palette (D11). Emitted as `--syntax-<role>` by
  * `applyTheme`'s flatten and consumed by source-syntax.css, hljs-syntax.css
  * and json-view-theme.css. AUTHORED per theme (not derived from ANSI at
  * runtime — 17 of 42 ANSI-as-syntax candidates fail 4.5:1 because ANSI was

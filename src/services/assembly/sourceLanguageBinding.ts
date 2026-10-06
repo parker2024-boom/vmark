@@ -3,7 +3,7 @@
  *
  * Purpose: give the CodeMirror source editor the language pack the format
  *   registry names for a file, now that `FormatConfig.language` is an import
- *   thunk (WI-13) rather than a synchronous factory.
+ *   thunk rather than a synchronous factory.
  *
  *   The field was synchronous so the primary format would never paint an
  *   unhighlighted frame. That premise cost more than it bought: synchronous
@@ -23,14 +23,14 @@
  *     in SourceEditor.tsx would spread the view's lifecycle across two files.
  *   - Failure resolves to null rather than throwing. Imperfect highlighting is
  *     recoverable; an exception out of the mount path is not.
- *   - Resolution goes through `resolveFormatSurface` (audit 20260804-F6). This
+ *   - Resolution goes through `resolveFormatSurface`. This
  *     module used to invoke the thunk directly, which meant the SHARED cache
  *     that exists precisely to make "one evaluation per format" true was
  *     bypassed on the production path: two panes, a split view, or a remount
  *     each rebuilt the CodeMirror language pack — megabytes of grammar work
  *     per mount, and two module instances live at once.
  *   - A REJECTED thunk is distinguished from "no pack declared" and from "no
- *     format registered" (audit 20260804-F14). All three keep the markdown
+ *     format registered". All three keep the markdown
  *     fallback, but only the rejection is a malfunction, and collapsing them
  *     into one silent `null` left a user with mis-highlighted source and no
  *     trace of why. Logged once per format so a retrying mount cannot spam.

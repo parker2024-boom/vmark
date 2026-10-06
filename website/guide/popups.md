@@ -99,7 +99,9 @@ A unified popup for editing all media types — images, video, and audio.
 
 ### Source Mode
 
-In Source mode, clicking on image syntax `![alt](path)` opens the same media popup. Media files (video/audio extensions) show a floating preview with native playback controls on hover.
+In Source mode, clicking on image syntax `![alt](path)` opens the same media popup.
+
+Source mode also shows a floating **preview** of the media — an image, or a video or audio player with native playback controls. It appears while the cursor is inside `![alt](path)` (with no text selected), and when the mouse hovers over the syntax; the cursor's preview wins over the hover one. The path must end in a recognized image, video or audio extension (or be a `data:image/` URL). The preview hides while the media popup is open.
 
 ## Image Context Menu
 
@@ -151,6 +153,7 @@ Edit footnote content inline.
 
 **Trigger:**
 - **WYSIWYG:** Hover over footnote reference `[^1]`
+- **Source:** Hover over or click a footnote reference or definition
 
 **Fields:**
 - **Content** — Multi-line footnote text (auto-resizing)

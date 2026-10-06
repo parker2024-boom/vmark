@@ -1,10 +1,14 @@
-// WI-1A.4 — SourcePane.
-//
-// CodeMirror-backed source editor for split-pane / viewer formats.
-// Phase 1A delivers raw CodeMirror with line numbers, undo, find,
-// keyboard editing, and the basic keymap. Phase 2 adapters wire
-// language packs (loadLanguage), validators (linter → ValidationGutter),
-// and per-format extras (loadExtraExtensions).
+/**
+ * SourcePane.
+ *
+ * CodeMirror-backed source editor for split-pane / viewer formats.
+ * It provides raw CodeMirror with line numbers, undo, find,
+ * keyboard editing, and the basic keymap. Format adapters wire
+ * language packs (loadLanguage), validators (linter → ValidationGutter),
+ * and per-format extras (loadExtraExtensions).
+ *
+ * @module components/Editor/SplitPaneEditor/SourcePane
+ */
 
 import { useCallback, useEffect, useRef } from "react";
 import {
@@ -21,7 +25,8 @@ import { detectSourceLanguage } from "@/lib/formats/sourceLanguage";
 // Side-effect import: ships the `.cm-hl-*` color rules (scoped to
 // `.source-editor`/`.source-pane`) used by the shared source theme.
 import "@/plugins/codemirror/source-syntax.css";
-import { buildSourcePaneExtensions, reconfigureWhenLoaded } from "./sourcePaneExtensions";
+import { buildSourcePaneExtensions, reconfigureWhenLoaded, revalidate } from "./sourcePaneExtensions";
+import { runOrQueueCodeMirrorAction } from "@/utils/imeGuard";
 import { useTrustedSeveritySync } from "./useTrustedSeveritySync";
 import type {
   FormatConfig,
@@ -38,7 +43,7 @@ export interface SourcePaneProps {
    *  SourcePane installs a callback that focuses the editor and moves the
    *  cursor to (line, column). Used by ValidationGutter row clicks. */
   onJumpHandleReady?: (jump: (line: number, column: number) => void) => void;
-  /** WI-4.3 — per-tab override. When true, the editor mounts in
+  /** Per-tab override. When true, the editor mounts in
    *  read-write mode regardless of formatConfig.adapters.readOnlyDefault. */
   editingEnabled?: boolean;
 }
@@ -83,7 +88,7 @@ export function SourcePane({
   // mount-effect dependency. Parent code commonly passes inline (non-
   // memoized) handlers — without this indirection every parent re-render
   // would tear down and rebuild the CodeMirror view, blowing away undo
-  // history and the user's selection. (Audit finding H3.)
+  // history and the user's selection.
   const onDiagnosticsRef = useRef(onDiagnostics);
   // Synced after commit (read only from the CodeMirror diagnostics callback). #1063
   useEffect(() => {
@@ -92,8 +97,8 @@ export function SourcePane({
 
   // Stable jump-to-position handle, safe to re-emit whenever the parent's
   // callback prop changes identity. Lives outside the mount effect so a
-  // late or swapped `onJumpHandleReady` still receives the handle (audit
-  // Round A H1). Reading `viewRef.current` defers binding until the view
+  // late or swapped `onJumpHandleReady` still receives the handle.
+  // Reading `viewRef.current` defers binding until the view
   // exists, so calls before mount no-op cleanly.
   const jumpTo = useCallback((line: number, column: number) => {
     const v = viewRef.current;
@@ -120,6 +125,7 @@ export function SourcePane({
     (docSnapshot?.readOnly ?? false) ||
     (formatConfig.adapters.readOnlyDefault && !editingEnabled);
   const validator = formatConfig.validator;
+  const validatorUpdates = formatConfig.validatorUpdates;
   const filePath = docSnapshot?.filePath ?? null;
   // A format may ship its own language pack (json/yaml/code viewers). When
   // it doesn't (plain text), fall back to filename-based highlighting so a
@@ -141,7 +147,7 @@ export function SourcePane({
     // (e.g. switching from json → txt). Without this, the preview pane's
     // "fix syntax errors" indicator would survive from the previous format
     // since the validator-backed linter is the only thing that calls
-    // `onDiagnostics`. (Audit finding H4.)
+    // `onDiagnostics`.
     if (!validator) onDiagnosticsRef.current?.([]);
 
     const persistOnUpdate = EditorView.updateListener.of((update) => {
@@ -152,7 +158,7 @@ export function SourcePane({
       useDocumentStore.getState().setEditorContent(tabId, next);
     });
 
-    // WI-2.4 — the validator-backed lint gutter and the rest of the base
+    // The validator-backed lint gutter and the rest of the base
     // extension list are assembled by the pure builder; the linter hoists
     // diagnostics via onDiagnostics so the preview pane can surface
     // "fix syntax errors at line:column". Reading the callback through the ref
@@ -198,8 +204,15 @@ export function SourcePane({
       reconfigureWhenLoaded(viewRef, extrasCompartmentRef.current, load, isCancelled);
     }
 
+    // A validator whose answer changed for the same content (its parser just
+    // loaded) is re-run now, not on the next edit.
+    const stopValidatorUpdates = validatorUpdates?.(() => {
+      if (!cancelled) runOrQueueCodeMirrorAction(view, () => revalidate(view));
+    });
+
     return () => {
       cancelled = true;
+      stopValidatorUpdates?.();
       releaseActiveView();
       view.destroy();
       viewRef.current = null;
@@ -209,7 +222,7 @@ export function SourcePane({
     // from this dep array so the editor doesn't remount on every parent render.
     // focusedRef is a stable ref and trustedLint is memoized on the format's
     // rule list, so neither remounts it.
-  }, [tabId, formatId, readOnly, validator, loadLanguage, loadExtraExtensions, focusedRef, trustedLint]);
+  }, [tabId, formatId, readOnly, validator, validatorUpdates, loadLanguage, loadExtraExtensions, focusedRef, trustedLint]);
 
   // Reconfigure the line-number gutter when the toggle flips. Kept out of
   // the mount effect so toggling never tears down the view (preserves undo

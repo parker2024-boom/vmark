@@ -6,7 +6,7 @@
  * with hash deduplication, image copying, and ProseMirror node insertion.
  */
 
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 // Mock Tauri filesystem APIs
 const mockMkdir = vi.fn(() => Promise.resolve());
@@ -45,14 +45,6 @@ vi.mock("@/services/media/imageHashRegistry", () => ({
   registerImageHash: (...args: unknown[]) => mockRegisterImageHash(...args),
 }));
 
-// Mock image resize
-const mockResizeImageIfNeeded = vi.fn((data: Uint8Array) =>
-  Promise.resolve({ data, wasResized: false })
-);
-vi.mock("@/services/media/imageResize", () => ({
-  resizeImageIfNeeded: (...args: unknown[]) => mockResizeImageIfNeeded(...args),
-}));
-
 import {
   getAssetsFolder,
   ensureAssetsFolder,
@@ -61,9 +53,58 @@ import {
   insertImageNode,
   insertBlockImageNode,
 } from "./imageOperations";
+import { useSettingsStore } from "@/stores/settingsStore";
 import { Schema } from "@tiptap/pm/model";
 import { EditorState, TextSelection } from "@tiptap/pm/state";
 import { EditorView } from "@tiptap/pm/view";
+
+const DOC = "/Users/test/docs/note.md";
+
+/** The first bytes of a PNG — what the resizer sniffs to pick a MIME type. */
+const pngBytes = () => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 5, 6]);
+
+/**
+ * Stand in for the browser's image pipeline, the boundary the real resizer
+ * drives: an `Image` that decodes to `width`×`height` once its `src` is set,
+ * and a `<canvas>` whose `toBlob` encodes to `encoded`. Returns the canvas (to
+ * read the size it was drawn at) and the `createElement` spy.
+ */
+function stubImagePipeline(width: number, height: number, encoded: number[]) {
+  class DecodedImage {
+    width = 0;
+    height = 0;
+    onload: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    #src = "";
+    get src() {
+      return this.#src;
+    }
+    set src(url: string) {
+      this.#src = url;
+      this.width = width;
+      this.height = height;
+      queueMicrotask(() => this.onload?.());
+    }
+  }
+  const canvas = {
+    width: 0,
+    height: 0,
+    getContext: () => ({ imageSmoothingEnabled: false, imageSmoothingQuality: "low", drawImage: vi.fn() }),
+    toBlob: (done: (blob: Blob | null) => void, type?: string) =>
+      done(new Blob([new Uint8Array(encoded)], { type: type ?? "" })),
+  };
+  const createElement = vi.fn((tag: string) => {
+    if (tag !== "canvas") throw new Error(`unexpected element <${tag}>`);
+    return canvas;
+  });
+  vi.stubGlobal("Image", DecodedImage);
+  vi.stubGlobal("document", { createElement });
+  return { canvas, createElement };
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 // ProseMirror test helpers
 const schema = new Schema({
@@ -161,9 +202,8 @@ describe("saveImageToAssets", () => {
     mockComputeDataHash.mockReset().mockResolvedValue("abc123hash");
     mockFindExistingImage.mockReset().mockResolvedValue(null);
     mockRegisterImageHash.mockReset().mockResolvedValue(undefined);
-    mockResizeImageIfNeeded.mockReset().mockImplementation((data: Uint8Array) =>
-      Promise.resolve({ data, wasResized: false })
-    );
+    // Auto-resize is off by default.
+    useSettingsStore.getState().resetSettings();
   });
 
   it("saves image and returns relative path", async () => {
@@ -175,9 +215,12 @@ describe("saveImageToAssets", () => {
       "/Users/test/docs/note.md"
     );
 
-    expect(mockResizeImageIfNeeded).toHaveBeenCalledWith(imageData);
-    expect(mockComputeDataHash).toHaveBeenCalled();
-    expect(mockWriteFile).toHaveBeenCalled();
+    // Resize off: the bytes are hashed and written exactly as given.
+    expect(mockComputeDataHash).toHaveBeenCalledWith(imageData);
+    expect(mockWriteFile).toHaveBeenCalledWith(
+      "/Users/test/docs/assets/images/unique-screenshot.png",
+      imageData
+    );
     expect(mockRegisterImageHash).toHaveBeenCalledWith(
       "/Users/test/docs/note.md",
       "abc123hash",
@@ -202,12 +245,15 @@ describe("saveImageToAssets", () => {
   });
 
   it("resizes image before saving and hashing", async () => {
-    const original = new Uint8Array([1, 2, 3, 4, 5]);
+    useSettingsStore.getState().updateImageSetting("autoResizeMax", 800);
+    const { canvas } = stubImagePipeline(1600, 900, [1, 2]);
+    const original = pngBytes();
     const resized = new Uint8Array([1, 2]);
-    mockResizeImageIfNeeded.mockResolvedValue({ data: resized, wasResized: true });
 
-    await saveImageToAssets(original, "big.png", "/Users/test/docs/note.md");
+    await saveImageToAssets(original, "big.png", DOC);
 
+    // 1600×900 fits an 800px bound as 800×450, aspect ratio kept.
+    expect([canvas.width, canvas.height]).toEqual([800, 450]);
     // Hash should be computed on resized data
     expect(mockComputeDataHash).toHaveBeenCalledWith(resized);
     // Write should use resized data
@@ -228,9 +274,8 @@ describe("copyImageToAssets", () => {
     mockComputeDataHash.mockReset().mockResolvedValue("xyz789hash");
     mockFindExistingImage.mockReset().mockResolvedValue(null);
     mockRegisterImageHash.mockReset().mockResolvedValue(undefined);
-    mockResizeImageIfNeeded.mockReset().mockImplementation((data: Uint8Array) =>
-      Promise.resolve({ data, wasResized: false })
-    );
+    // Auto-resize is off by default.
+    useSettingsStore.getState().resetSettings();
   });
 
   it("copies image file and returns relative path", async () => {
@@ -259,23 +304,29 @@ describe("copyImageToAssets", () => {
   });
 
   it("writes resized data instead of copying when image was resized", async () => {
+    useSettingsStore.getState().updateImageSetting("autoResizeMax", 800);
+    stubImagePipeline(1600, 900, [1]);
     const resized = new Uint8Array([1]);
-    mockResizeImageIfNeeded.mockResolvedValue({ data: resized, wasResized: true });
 
-    await copyImageToAssets("/external/big.png", "/Users/test/docs/note.md");
+    await copyImageToAssets("/external/big.png", DOC);
 
+    expect(mockComputeDataHash).toHaveBeenCalledWith(resized);
     expect(mockWriteFile).toHaveBeenCalledWith(expect.any(String), resized);
     expect(mockCopyFile).not.toHaveBeenCalled();
   });
 
   it("uses copyFile when image was not resized (faster for large files)", async () => {
-    mockResizeImageIfNeeded.mockImplementation((data: Uint8Array) =>
-      Promise.resolve({ data, wasResized: false })
+    // Resize is on, but a 400×200 image already fits an 800px bound.
+    useSettingsStore.getState().updateImageSetting("autoResizeMax", 800);
+    const { createElement } = stubImagePipeline(400, 200, [9]);
+
+    await copyImageToAssets("/external/photo.png", DOC);
+
+    expect(createElement).not.toHaveBeenCalled();
+    expect(mockCopyFile).toHaveBeenCalledWith(
+      "/external/photo.png",
+      "/Users/test/docs/assets/images/unique-photo.png"
     );
-
-    await copyImageToAssets("/external/photo.png", "/Users/test/docs/note.md");
-
-    expect(mockCopyFile).toHaveBeenCalled();
     expect(mockWriteFile).not.toHaveBeenCalled();
   });
 });

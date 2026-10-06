@@ -1,58 +1,121 @@
 // DocumentWindowMount — the conditional-mount wrapper must run the
 // document composite before the window composite and render nothing.
+//
+// The composites run for real. Only the Tauri event boundary is replaced, by a
+// recorder that logs every listener registration in order — so "the document
+// composite runs first" is observed as the document hooks' registrations
+// (drag-drop) landing before the window hooks' (file watcher, close handling).
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
+import { WindowContext } from "@/contexts/WindowContext";
 
-const calls = vi.hoisted(() => [] as string[]);
-const mockUseWindowLabel = vi.hoisted(() => vi.fn(() => "main"));
+const boundary = vi.hoisted(() => ({
+  label: "main",
+  registered: [] as string[],
+  detached: [] as string[],
+}));
 
-vi.mock("../useDocumentLifecycle", () => ({
-  useDocumentLifecycle: () => calls.push("documentLifecycle"),
+function register(name: string) {
+  boundary.registered.push(name);
+  return Promise.resolve(() => {
+    boundary.detached.push(name);
+  });
+}
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn((event: string) => register(event)),
+  emit: vi.fn(() => Promise.resolve()),
 }));
-vi.mock("../useWindowLifecycle", () => ({
-  useWindowLifecycle: () => calls.push("windowLifecycle"),
+vi.mock("@tauri-apps/api/webview", () => ({
+  getCurrentWebview: vi.fn(() => ({
+    onDragDropEvent: vi.fn(() => register("drag-drop")),
+  })),
 }));
-vi.mock("@/contexts/WindowContext", () => ({
-  useWindowLabel: () => mockUseWindowLabel(),
-}));
-vi.mock("@/hooks/useFinderFileOpen", () => ({
-  useFinderFileOpen: () => calls.push("finderFileOpen"),
+vi.mock("@tauri-apps/api/webviewWindow", () => ({
+  getCurrentWebviewWindow: vi.fn(() => ({
+    label: boundary.label,
+    isFocused: vi.fn(() => Promise.resolve(true)),
+    listen: vi.fn((event: string) => register(event)),
+    emit: vi.fn(() => Promise.resolve()),
+    close: vi.fn(() => Promise.resolve()),
+    onDragDropEvent: vi.fn(() => register("drag-drop")),
+  })),
+  WebviewWindow: { getByLabel: vi.fn(() => Promise.resolve(null)) },
 }));
 
 import { DocumentWindowMount } from "../DocumentWindowMount";
 
+function mount(label: string) {
+  boundary.label = label;
+  return render(
+    <WindowContext.Provider value={{ windowLabel: label, isDocumentWindow: true }}>
+      <DocumentWindowMount />
+    </WindowContext.Provider>
+  );
+}
+
+/** Registered by the document composite (useDragDropOpen). */
+const DOCUMENT_EVENT = "drag-drop";
+/** Registered by the window composite (useWindowFileWatcher, useWindowClose). */
+const WINDOW_EVENTS = ["fs:changed", "menu:close"];
+/** Registered only by the secondary-window Finder listener. */
+const FINDER_EVENT = "app:open-file";
+
+async function settled() {
+  await waitFor(() => {
+    for (const e of [DOCUMENT_EVENT, ...WINDOW_EVENTS]) {
+      expect(boundary.registered).toContain(e);
+    }
+  });
+}
+
 beforeEach(() => {
-  calls.length = 0;
-  mockUseWindowLabel.mockReturnValue("main");
+  boundary.registered.length = 0;
+  boundary.detached.length = 0;
 });
 
 describe("DocumentWindowMount", () => {
-  it("mounts the document composite before the window composite", () => {
-    render(<DocumentWindowMount />);
-    expect(calls).toEqual(["documentLifecycle", "windowLifecycle"]);
+  it("mounts the document composite before the window composite", async () => {
+    mount("main");
+    await settled();
+
+    const documentAt = boundary.registered.indexOf(DOCUMENT_EVENT);
+    for (const e of WINDOW_EVENTS) {
+      expect(documentAt).toBeLessThan(boundary.registered.indexOf(e));
+    }
   });
 
-  it("renders no visible DOM (pure lifecycle wiring)", () => {
-    const { container } = render(<DocumentWindowMount />);
+  it("renders no visible DOM (pure lifecycle wiring)", async () => {
+    const { container } = mount("main");
+    await settled();
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("does not re-run the composites after unmount", () => {
-    const { unmount } = render(<DocumentWindowMount />);
+  it("detaches its listeners on unmount and registers nothing afterwards", async () => {
+    const { unmount } = mount("main");
+    await settled();
+    const before = [...boundary.registered];
+
     unmount();
-    expect(calls).toEqual(["documentLifecycle", "windowLifecycle"]);
+
+    await waitFor(() => {
+      for (const e of [DOCUMENT_EVENT, ...WINDOW_EVENTS]) {
+        expect(boundary.detached).toContain(e);
+      }
+    });
+    expect(boundary.registered).toEqual(before);
   });
 
-  it("mounts the Finder listener in a secondary document window", () => {
-    mockUseWindowLabel.mockReturnValue("doc-0");
+  it("leaves the Finder listener to MainWindowRunners in the main window", async () => {
+    mount("main");
+    await settled();
+    expect(boundary.registered).not.toContain(FINDER_EVENT);
+  });
 
-    render(<DocumentWindowMount />);
-
-    expect(calls).toEqual([
-      "documentLifecycle",
-      "windowLifecycle",
-      "finderFileOpen",
-    ]);
+  it("mounts the Finder listener in a secondary document window", async () => {
+    mount("doc-0");
+    await settled();
+    await waitFor(() => expect(boundary.registered).toContain(FINDER_EVENT));
   });
 });

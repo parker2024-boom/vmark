@@ -1,9 +1,9 @@
 /**
- * Per-window workspace-context generation counter (WI-2R invariant 5).
+ * Per-window workspace-context generation counter (invariant 5).
  *
  * Purpose: every rail switch bumps the window's generation; every ASYNC
- * completion that applies context state (legacy config refresh WI-5R, content
- * search WI-12.3, split-persistence reads WI-10.3) captures the generation at
+ * completion that applies context state (legacy config refresh, content
+ * search, split-persistence reads) captures the generation at
  * start and discards its result if the window has moved on. This is what makes
  * rapid A→B→C switching converge on C regardless of I/O ordering.
  *

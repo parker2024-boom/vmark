@@ -2,6 +2,8 @@
  * Shared Types for Popup Views
  *
  * Common type definitions used by popup view classes.
+ *
+ * @module plugins/shared/types
  */
 
 import type { EditorState, Transaction } from "@tiptap/pm/state";

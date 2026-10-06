@@ -1,4 +1,4 @@
-//! Forward-operator runtime (Phase 3, WI-3.2; design D1/D5). Operators are
+//! Forward-operator runtime (Phase 3; design D1/D5). Operators are
 //! **built-in Rust** `fn(selection, read-view) -> Vec<Candidate>` (not Tier-1
 //! schema-pack functions — SP3/D5). A `Candidate` is one fully-specified output
 //! over a single-head base: content-addressed (D1), with the base recorded as a

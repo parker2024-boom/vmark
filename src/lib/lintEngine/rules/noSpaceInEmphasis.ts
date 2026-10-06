@@ -15,7 +15,7 @@
  * container prefixes) and its own per-LINE code-span scanner, which could not
  * see a span that crossed a line ending and only tested a match's START
  * against it — so `a ** b ``c ** d`` e`, whose closing marker is inside code,
- * was reported (audit round 3, #831/#836/#837). Masking answers all three: a
+ * was reported. Masking answers all three: a
  * masked delimiter cannot be matched at either end.
  *
  * @coordinates-with src/lib/lintEngine/rules/sourceMask.ts — which text is prose
@@ -43,7 +43,7 @@ const UNDER_RE = /(_{1,2}) (.+?) \1/g;
  * `some * emphasized * text` operand-like on all three flanks and silences the
  * rule on exactly the shape it exists to catch. What round 3 fixed is the
  * ALPHABET, not the length: `\w` is ASCII-only, so `甲 * 乙 * 丙` read as
- * emphasis, and no sign was allowed, so `x * -4 * y` did too (#834).
+ * emphasis, and no sign was allowed, so `x * -4 * y` did too.
  */
 function isOperandLike(token: string): boolean {
   const core = token.replace(/^[([{]+|[)\]}.,;:!?]+$/g, "");
@@ -73,8 +73,8 @@ function scanLine(line: string, lineNumber: number, lineOffset: number): LintDia
     while ((match = re.exec(line)) !== null) {
       const end = match.index + match[0].length;
       // A BACKSLASH before the opening delimiter makes it a literal character,
-      // so `a \* text * b` is one escaped star and one real one, not emphasis
-      // (#833). Parity is counted, not a single character tested: `\\*` is an
+      // so `a \* text * b` is one escaped star and one real one, not emphasis.
+      // Parity is counted, not a single character tested: `\\*` is an
       // escaped backslash followed by a real delimiter.
       if (isEscapedAt(line, match.index)) continue;
       if (re === STAR_RE && isArithmeticContext(line, match.index, end, match[2])) continue;

@@ -1,10 +1,9 @@
 /**
- * Purpose: Step write-ness classifier (WI-4.2 / R8a) — the bridge between the
+ * Purpose: Step write-ness classifier (R8a) — the bridge between the
  * parsed workflow IR (`WorkflowStep`, which carries an execution-tier `kind`) and
  * the engine's `EngineStep.write` flag. Execution tier (api/action/goal) and
  * read-vs-write semantics are ORTHOGONAL: a `goal` step can "find the article"
  * (read) or "publish the draft" (write), so `kind` alone cannot decide write-ness.
- * Origin: Embedded browser sites and workflows plan (2026-07-12, retired) WI-4.2.
  *
  * Classification is STRUCTURAL and FAIL-SAFE, never a keyword guess:
  *   - `extract` (reader) and `confirm` (human gate) are read-only by construction —
@@ -17,17 +16,19 @@
  *
  * Write-ness is not the only axis: a `confirm` step is a read, but it is also a HUMAN
  * GATE, and re-running it means re-asking a human who already answered. So the engine
- * step carries `retryable` separately (plan WI-4.2: "confirm blocks").
+ * step carries `retryable` separately.
  *
  * We deliberately do NOT inspect `step.text`. A "Publish"-substring heuristic could
  * misread a write as a read (the exact R8a failure); structural classification cannot.
  *
- * Residual (WI-4.5 grammar decision, not guessable here): syntax for an author to
+ * Residual (a grammar decision, not guessable here): syntax for an author to
  * mark an api/action/goal step as a read so it may self-heal. Until that exists,
  * such steps run conservatively (no auto-heal), which is safe, just cautious.
  *
  * @coordinates-with lib/browser/workflow/engine.ts — consumes EngineStep.write
+ * @module lib/browser/workflow/classify
  */
+
 import type { EngineStep } from "./engine";
 import type { StepKind, WorkflowStep } from "./types";
 
@@ -50,7 +51,7 @@ export function stepWrites(step: WorkflowStep): boolean {
 /**
  * Whether the engine may re-execute the step by itself after a retryable failure.
  * A human gate (`confirm`) is a read, but retrying it re-asks a human who already
- * answered — so it blocks instead (plan WI-4.2).
+ * answered — so it blocks instead.
  */
 function stepRetryable(step: WorkflowStep): boolean {
   return !HUMAN_GATE_KINDS.has(step.kind);

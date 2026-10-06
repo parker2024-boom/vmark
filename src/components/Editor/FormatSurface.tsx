@@ -1,7 +1,7 @@
 /**
  * FormatSurface
  *
- * Purpose: mount a format's WYSIWYG surface, which since WI-13 arrives as an
+ * Purpose: mount a format's WYSIWYG surface, which arrives as an
  *   import thunk rather than a component reference. Owns the async boundary
  *   (Suspense) and the failure boundary that decision-ledger entry **D4**
  *   requires: a rejected thunk must produce a defined, observable error
@@ -16,7 +16,7 @@
  *     success path because `resolveFormatSurface` caches the resolved module.
  *   - Suspense fallback is `null`. The surrounding editor chrome is already
  *     painted, and a spinner that appears for one frame reads as a flicker.
- *   - The error state (WI-UI4.4) names the format via `preview.surfaceFailed`
+ *   - The error state names the format via `preview.surfaceFailed`
  *     and offers an in-place Retry (`dialog:errorBoundary.tryAgain`) that
  *     bumps the lazy key — a fresh thunk evaluation, not a re-render of a
  *     cached rejection. It replaced the older reuse of
@@ -66,7 +66,7 @@ class SurfaceErrorBoundary extends Component<BoundaryProps, BoundaryState> {
 }
 
 /** The visible failure state. Named so a test can assert on it by role.
- *  WI-UI4.4: it names the SURFACE (which format stopped working) and offers
+ *  It names the SURFACE (which format stopped working) and offers
  *  an in-place Retry — the canonical `.vm-btn` — wired by the parent to bump
  *  the lazy key, so the retry is a fresh thunk evaluation, not a re-render of
  *  a cached rejection. */
@@ -91,7 +91,7 @@ function SurfaceLoadFailure({ formatId, onRetry }: { formatId: string; onRetry: 
 }
 
 export function FormatSurface({ formatConfig, tabId }: FormatSurfaceProps) {
-  // WI-UI4.4: bumping the key remounts MountedSurface, which gives a FRESH
+  // Bumping the key remounts MountedSurface, which gives a FRESH
   // React.lazy (so the memoized rejection dies) and a fresh error boundary.
   const [retryKey, setRetryKey] = useState(0);
   return (

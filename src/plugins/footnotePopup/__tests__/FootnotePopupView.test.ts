@@ -55,57 +55,16 @@ vi.mock("@/plugins/shared/popupHostDom", () => ({
   toHostCoordsForDom: (_host: HTMLElement, pos: { top: number; left: number }) => pos,
 }));
 
-vi.mock("../tiptapDomUtils", () => ({
-  scrollToPosition: vi.fn(),
-}));
-
 // The real parser needs a real schema; the view tests use a mock schema,
 // so return an empty parsed doc (normalization then builds an empty paragraph).
 vi.mock("@/utils/markdownPipeline", () => ({
   parseMarkdown: vi.fn(() => ({ forEach: (_cb: (child: unknown) => void) => {} })),
 }));
 
-vi.mock("../footnotePopupDom", () => ({
-  AUTOFOCUS_DELAY_MS: 50,
-  BLUR_CHECK_DELAY_MS: 50,
-  DEFAULT_POPUP_HEIGHT: 100,
-  DEFAULT_POPUP_WIDTH: 280,
-  POPUP_GAP_PX: 6,
-  TEXTAREA_MAX_HEIGHT: 200,
-  createFootnotePopupDom: vi.fn(({ onInputChange, onInputKeydown, onTextareaClick, onTextareaBlur, onGoto, onSave, onDelete }) => {
-    const container = document.createElement("div");
-    container.className = "footnote-popup";
-
-    const textarea = document.createElement("textarea");
-    textarea.className = "footnote-popup-textarea";
-    textarea.addEventListener("input", () => onInputChange());
-    textarea.addEventListener("keydown", onInputKeydown);
-    textarea.addEventListener("click", onTextareaClick);
-    textarea.addEventListener("blur", onTextareaBlur);
-
-    const gotoBtn = document.createElement("button");
-    gotoBtn.className = "footnote-popup-btn-goto";
-    gotoBtn.addEventListener("click", onGoto);
-
-    const saveBtn = document.createElement("button");
-    saveBtn.className = "footnote-popup-btn-save";
-    saveBtn.addEventListener("click", onSave);
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.className = "footnote-popup-btn-delete";
-    deleteBtn.addEventListener("click", onDelete);
-
-    container.appendChild(textarea);
-    container.appendChild(gotoBtn);
-    container.appendChild(saveBtn);
-    container.appendChild(deleteBtn);
-
-    return { container: container as HTMLDivElement, textarea };
-  }),
-}));
-
+// The real popup DOM builder (footnotePopupDom) runs; tests use its constants.
 // Import after mocking
 import { FootnotePopupView } from "../FootnotePopupView";
+import { AUTOFOCUS_DELAY_MS, BLUR_CHECK_DELAY_MS } from "../footnotePopupDom";
 
 function createEditorContainer() {
   const container = document.createElement("div");
@@ -421,12 +380,7 @@ describe("FootnotePopupView", () => {
       saveBtn.click();
       expect(mockClosePopup).toHaveBeenCalled();
     });
-
-    it("goto navigates to definition position", () => {
-      const gotoBtn = dom.container.querySelector(".footnote-popup-btn-goto") as HTMLElement;
-      gotoBtn.click();
-      expect(mockClosePopup).toHaveBeenCalled();
-    });
+    // Goto against a live document: ../FootnotePopupView.goto.test.ts
   });
 
   describe("Delete logic", () => {
@@ -484,7 +438,7 @@ describe("FootnotePopupView", () => {
       const textarea = dom.container.querySelector(".footnote-popup-textarea") as HTMLTextAreaElement;
       textarea.dispatchEvent(new Event("blur", { bubbles: true }));
 
-      vi.advanceTimersByTime(60); // past BLUR_CHECK_DELAY_MS
+      vi.advanceTimersByTime(BLUR_CHECK_DELAY_MS + 1);
 
       expect(popupEl.classList.contains("editing")).toBe(false);
       vi.useRealTimers();
@@ -1047,8 +1001,8 @@ describe("FootnotePopupView", () => {
       // Close popup before focus timeout fires
       emitStateChange({ isOpen: false, anchorRect: null });
 
-      // Advance past the AUTOFOCUS_DELAY_MS (50ms in mock)
-      vi.advanceTimersByTime(100);
+      // Advance past the AUTOFOCUS_DELAY_MS
+      vi.advanceTimersByTime(AUTOFOCUS_DELAY_MS + 1);
 
       // Should not throw and popup should be hidden
       const popupEl = dom.container.querySelector(".footnote-popup") as HTMLElement;

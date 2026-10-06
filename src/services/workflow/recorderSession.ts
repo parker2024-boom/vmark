@@ -1,5 +1,5 @@
 /**
- * Host-owned recording session (WI-NB7.1 / D2v2).
+ * Host-owned recording session (D2v2).
  *
  * The recorder's capture SHIM lives in the page world (`recorderShim.src.js`), but a
  * page-world DOM buffer dies on every cross-document navigation — so a multi-page

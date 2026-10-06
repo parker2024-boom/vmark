@@ -8,47 +8,7 @@
       "inputValue": true,
       "outputValue": false,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-143",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "meta",
-      "inputValue": "startline=3 $%@#$",
-      "outputValue": null,
-      "verdict": "model-limit",
-      "reason": "Code-fence meta: the ProseMirror code block keeps language only, so the fence meta string after the language is dropped on serialize."
-    },
-    {
-      "exampleId": "cm-146",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "meta",
-      "inputValue": "``` ~~~",
-      "outputValue": null,
-      "verdict": "model-limit",
-      "reason": "Code-fence meta: the ProseMirror code block keeps language only, so the fence meta string after the language is dropped on serialize."
-    },
-    {
-      "exampleId": "cm-148",
-      "path": "root.children[1].children[1]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": ".\n",
-      "outputValue": ". ",
-      "verdict": "normalization",
-      "reason": "Soft line break adjacent to inline/raw HTML serializes as a space; whitespace-equivalent in the rendered document, byte-different in the markdown."
-    },
-    {
-      "exampleId": "cm-187",
-      "path": "root.children[0].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "Foo\n",
-      "outputValue": "Foo ",
-      "verdict": "normalization",
-      "reason": "Soft line break adjacent to inline/raw HTML serializes as a space; whitespace-equivalent in the rendered document, byte-different in the markdown."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "cm-194",
@@ -68,7 +28,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "cm-300",
@@ -78,77 +38,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-306",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "spread",
-      "inputValue": true,
-      "outputValue": false,
-      "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-311",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "spread",
-      "inputValue": true,
-      "outputValue": false,
-      "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-313",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "spread",
-      "inputValue": true,
-      "outputValue": false,
-      "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-314",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "spread",
-      "inputValue": true,
-      "outputValue": false,
-      "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-315",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "spread",
-      "inputValue": true,
-      "outputValue": false,
-      "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-316",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "spread",
-      "inputValue": false,
-      "outputValue": true,
-      "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-317",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "spread",
-      "inputValue": false,
-      "outputValue": true,
-      "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "cm-320",
@@ -158,7 +48,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "cm-320",
@@ -168,7 +58,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "cm-321",
@@ -178,7 +68,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "cm-321",
@@ -188,17 +78,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-326",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "spread",
-      "inputValue": true,
-      "outputValue": false,
-      "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "cm-369",
@@ -1028,7 +908,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "cmreg-15",
@@ -1099,16 +979,6 @@
       "outputValue": "__undefined__",
       "verdict": "model-limit",
       "reason": "Delimiter-run pathology (regression corpora): adversarial nested/unbalanced emphasis, strikethrough and tilde runs cannot be represented as distinct ProseMirror marks; the serializer emits its closest escaped spelling, whose re-parse differs at the boundaries. The text content survives; the adversarial delimiter structure does not."
-    },
-    {
-      "exampleId": "cmreg-8",
-      "path": "root.children[0].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "City:\n",
-      "outputValue": "City: ",
-      "verdict": "normalization",
-      "reason": "Soft line break adjacent to inline/raw HTML serializes as a space; whitespace-equivalent in the rendered document, byte-different in the markdown."
     },
     {
       "exampleId": "gfm-202",
@@ -1598,16 +1468,6 @@
       "reason": "Delimiter-run pathology (regression corpora): adversarial nested/unbalanced emphasis, strikethrough and tilde runs cannot be represented as distinct ProseMirror marks; the serializer emits its closest escaped spelling, whose re-parse differs at the boundaries. The text content survives; the adversarial delimiter structure does not."
     },
     {
-      "exampleId": "gfmreg-14",
-      "path": "root.children[0].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "City:\n",
-      "outputValue": "City: ",
-      "verdict": "model-limit",
-      "reason": "Delimiter-run pathology (regression corpora): adversarial nested/unbalanced emphasis, strikethrough and tilde runs cannot be represented as distinct ProseMirror marks; the serializer emits its closest escaped spelling, whose re-parse differs at the boundaries. The text content survives; the adversarial delimiter structure does not."
-    },
-    {
       "exampleId": "gfmreg-8",
       "path": "root.children[0].children[0]",
       "kind": "type",
@@ -1804,16 +1664,6 @@
       "detail": "emphasis vs strong",
       "inputValue": "emphasis",
       "outputValue": "strong",
-      "verdict": "model-limit",
-      "reason": "Delimiter-run pathology (regression corpora): adversarial nested/unbalanced emphasis, strikethrough and tilde runs cannot be represented as distinct ProseMirror marks; the serializer emits its closest escaped spelling, whose re-parse differs at the boundaries. The text content survives; the adversarial delimiter structure does not."
-    },
-    {
-      "exampleId": "gfmreg-9",
-      "path": "root.children[0].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "City:\n",
-      "outputValue": "City: ",
       "verdict": "model-limit",
       "reason": "Delimiter-run pathology (regression corpora): adversarial nested/unbalanced emphasis, strikethrough and tilde runs cannot be represented as distinct ProseMirror marks; the serializer emits its closest escaped spelling, whose re-parse differs at the boundaries. The text content survives; the adversarial delimiter structure does not."
     },
@@ -2622,7 +2472,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "mdx-20",
@@ -2632,7 +2482,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "mdx-20",
@@ -2642,7 +2492,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "mdx-26",
@@ -2652,7 +2502,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "mdx-26",
@@ -2662,7 +2512,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "mdx-27",
@@ -2713,16 +2563,6 @@
       "outputValue": "__undefined__",
       "verdict": "model-limit",
       "reason": "Empty-text link: ProseMirror represents links as marks on text, so a link with no text has nothing to carry the mark and the whole construct — URL included — is dropped on serialize. Honest, pinned data loss."
-    },
-    {
-      "exampleId": "mdx-31",
-      "path": "root.children[0].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "City:\n",
-      "outputValue": "City: ",
-      "verdict": "normalization",
-      "reason": "Soft line break adjacent to inline/raw HTML serializes as a space; whitespace-equivalent in the rendered document, byte-different in the markdown."
     },
     {
       "exampleId": "vmark-alert-note",
@@ -2868,47 +2708,7 @@
       "inputValue": true,
       "outputValue": false,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-143",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "meta",
-      "inputValue": "startline=3 $%@#$",
-      "outputValue": null,
-      "verdict": "model-limit",
-      "reason": "Code-fence meta: the ProseMirror code block keeps language only, so the fence meta string after the language is dropped on serialize."
-    },
-    {
-      "exampleId": "cm-146",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "meta",
-      "inputValue": "``` ~~~",
-      "outputValue": null,
-      "verdict": "model-limit",
-      "reason": "Code-fence meta: the ProseMirror code block keeps language only, so the fence meta string after the language is dropped on serialize."
-    },
-    {
-      "exampleId": "cm-148",
-      "path": "root.children[1].children[1]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": ".\n",
-      "outputValue": ". ",
-      "verdict": "normalization",
-      "reason": "Soft line break adjacent to inline/raw HTML serializes as a space; whitespace-equivalent in the rendered document, byte-different in the markdown."
-    },
-    {
-      "exampleId": "cm-187",
-      "path": "root.children[0].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "Foo\n",
-      "outputValue": "Foo ",
-      "verdict": "normalization",
-      "reason": "Soft line break adjacent to inline/raw HTML serializes as a space; whitespace-equivalent in the rendered document, byte-different in the markdown."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "cm-300",
@@ -2918,7 +2718,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "cm-300",
@@ -2928,77 +2728,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-306",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "spread",
-      "inputValue": true,
-      "outputValue": false,
-      "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-311",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "spread",
-      "inputValue": true,
-      "outputValue": false,
-      "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-313",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "spread",
-      "inputValue": true,
-      "outputValue": false,
-      "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-314",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "spread",
-      "inputValue": true,
-      "outputValue": false,
-      "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-315",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "spread",
-      "inputValue": true,
-      "outputValue": false,
-      "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-316",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "spread",
-      "inputValue": false,
-      "outputValue": true,
-      "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-317",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "spread",
-      "inputValue": false,
-      "outputValue": true,
-      "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "cm-320",
@@ -3008,7 +2738,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "cm-320",
@@ -3018,7 +2748,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "cm-321",
@@ -3028,7 +2758,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "cm-321",
@@ -3038,17 +2768,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
-    },
-    {
-      "exampleId": "cm-326",
-      "path": "root.children[0]",
-      "kind": "attribute",
-      "detail": "spread",
-      "inputValue": true,
-      "outputValue": false,
-      "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "cm-369",
@@ -3811,16 +3531,6 @@
       "reason": "Emphasis spanning a hard line break: ProseMirror marks split at the break node, so *foo(break)bar* serializes as *foo*\\ then *bar* — the re-parse reads three inline nodes where the input had one emphasis span. The emphasized text survives; the single-span structure does not."
     },
     {
-      "exampleId": "cmreg-8",
-      "path": "root.children[0].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "City:\n",
-      "outputValue": "City: ",
-      "verdict": "normalization",
-      "reason": "Soft line break adjacent to inline/raw HTML serializes as a space; whitespace-equivalent in the rendered document, byte-different in the markdown."
-    },
-    {
       "exampleId": "cmreg-14",
       "path": "root.children[0].children[0].children[0]",
       "kind": "attribute",
@@ -3838,7 +3548,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "cmreg-15",
@@ -4448,216 +4158,6 @@
       "reason": "Delimiter-run pathology (regression corpora): adversarial nested/unbalanced emphasis, strikethrough and tilde runs cannot be represented as distinct ProseMirror marks; the serializer emits its closest escaped spelling, whose re-parse differs at the boundaries. The text content survives; the adversarial delimiter structure does not."
     },
     {
-      "exampleId": "gfmreg-9",
-      "path": "root.children[0].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "City:\n",
-      "outputValue": "City: ",
-      "verdict": "model-limit",
-      "reason": "Delimiter-run pathology (regression corpora): adversarial nested/unbalanced emphasis, strikethrough and tilde runs cannot be represented as distinct ProseMirror marks; the serializer emits its closest escaped spelling, whose re-parse differs at the boundaries. The text content survives; the adversarial delimiter structure does not."
-    },
-    {
-      "exampleId": "gfmreg-14",
-      "path": "root.children[0].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "City:\n",
-      "outputValue": "City: ",
-      "verdict": "model-limit",
-      "reason": "Delimiter-run pathology (regression corpora): adversarial nested/unbalanced emphasis, strikethrough and tilde runs cannot be represented as distinct ProseMirror marks; the serializer emits its closest escaped spelling, whose re-parse differs at the boundaries. The text content survives; the adversarial delimiter structure does not."
-    },
-    {
-      "exampleId": "math-10",
-      "path": "root.children[0]",
-      "kind": "child-count",
-      "detail": "2 vs 1",
-      "inputValue": 2,
-      "outputValue": 1,
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-10",
-      "path": "root.children[0].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "$x $",
-      "outputValue": "$x $ x$",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-10",
-      "path": "root.children[0].children[1]",
-      "kind": "missing",
-      "detail": "absent in source-position",
-      "inputValue": "text",
-      "outputValue": "__undefined__",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-12",
-      "path": "root.children[0]",
-      "kind": "child-count",
-      "detail": "8 vs 1",
-      "inputValue": 8,
-      "outputValue": 1,
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-12",
-      "path": "root.children[0].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "these are not math texts: ",
-      "outputValue": "these are not math texts: $ y=x$, $y=x $, $\ny=x$ and $y=x\n$",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-12",
-      "path": "root.children[0].children[1]",
-      "kind": "missing",
-      "detail": "absent in source-position",
-      "inputValue": "text",
-      "outputValue": "__undefined__",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-12",
-      "path": "root.children[0].children[2]",
-      "kind": "missing",
-      "detail": "absent in source-position",
-      "inputValue": "text",
-      "outputValue": "__undefined__",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-12",
-      "path": "root.children[0].children[3]",
-      "kind": "missing",
-      "detail": "absent in source-position",
-      "inputValue": "text",
-      "outputValue": "__undefined__",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-12",
-      "path": "root.children[0].children[4]",
-      "kind": "missing",
-      "detail": "absent in source-position",
-      "inputValue": "text",
-      "outputValue": "__undefined__",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-12",
-      "path": "root.children[0].children[5]",
-      "kind": "missing",
-      "detail": "absent in source-position",
-      "inputValue": "text",
-      "outputValue": "__undefined__",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-12",
-      "path": "root.children[0].children[6]",
-      "kind": "missing",
-      "detail": "absent in source-position",
-      "inputValue": "text",
-      "outputValue": "__undefined__",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-12",
-      "path": "root.children[0].children[7]",
-      "kind": "missing",
-      "detail": "absent in source-position",
-      "inputValue": "text",
-      "outputValue": "__undefined__",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-12",
-      "path": "root.children[1].children[0]",
-      "kind": "child-count",
-      "detail": "2 vs 1",
-      "inputValue": 2,
-      "outputValue": 1,
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-12",
-      "path": "root.children[1].children[0].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "The start of a line counts as whitespace ",
-      "outputValue": "The start of a line counts as whitespace $2 +\n$",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-12",
-      "path": "root.children[1].children[0].children[1]",
-      "kind": "missing",
-      "detail": "absent in source-position",
-      "inputValue": "text",
-      "outputValue": "__undefined__",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-12",
-      "path": "root.children[2]",
-      "kind": "child-count",
-      "detail": "3 vs 2",
-      "inputValue": 3,
-      "outputValue": 2,
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-12",
-      "path": "root.children[2].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "While displays can start with whitespace, {",
-      "outputValue": "While displays can start with whitespace, {${\nthey should not allow inlines to do that $$2 +\n",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-12",
-      "path": "root.children[2].children[1]",
-      "kind": "type",
-      "detail": "text vs inlineMath",
-      "inputValue": "text",
-      "outputValue": "inlineMath",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-12",
-      "path": "root.children[2].children[2]",
-      "kind": "missing",
-      "detail": "absent in source-position",
-      "inputValue": "text",
-      "outputValue": "__undefined__",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
       "exampleId": "math-18",
       "path": "root.children[3]",
       "kind": "attribute",
@@ -4694,176 +4194,6 @@
       "detail": "absent in document",
       "inputValue": "__undefined__",
       "outputValue": "math",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-21",
-      "path": "root.children[2]",
-      "kind": "child-count",
-      "detail": "4 vs 1",
-      "inputValue": 4,
-      "outputValue": 1,
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-21",
-      "path": "root.children[2].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "And this is inline math:\n",
-      "outputValue": "And this is inline math:\n$\\text{Hello $x$ there!}$",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-21",
-      "path": "root.children[2].children[1]",
-      "kind": "missing",
-      "detail": "absent in source-position",
-      "inputValue": "text",
-      "outputValue": "__undefined__",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-21",
-      "path": "root.children[2].children[2]",
-      "kind": "missing",
-      "detail": "absent in source-position",
-      "inputValue": "text",
-      "outputValue": "__undefined__",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-21",
-      "path": "root.children[2].children[3]",
-      "kind": "missing",
-      "detail": "absent in source-position",
-      "inputValue": "text",
-      "outputValue": "__undefined__",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-23",
-      "path": "root.children[1]",
-      "kind": "child-count",
-      "detail": "2 vs 1",
-      "inputValue": 2,
-      "outputValue": 1,
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-23",
-      "path": "root.children[1].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "$\\text{first $",
-      "outputValue": "$\\text{first $ second}$",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-23",
-      "path": "root.children[1].children[1]",
-      "kind": "missing",
-      "detail": "absent in source-position",
-      "inputValue": "text",
-      "outputValue": "__undefined__",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-23",
-      "path": "root.children[4]",
-      "kind": "child-count",
-      "detail": "2 vs 1",
-      "inputValue": 2,
-      "outputValue": 1,
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-23",
-      "path": "root.children[4].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "$\\text{first $",
-      "outputValue": "$\\text{first $ second}$$",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-23",
-      "path": "root.children[4].children[1]",
-      "kind": "missing",
-      "detail": "absent in source-position",
-      "inputValue": "text",
-      "outputValue": "__undefined__",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-23",
-      "path": "root.children[5]",
-      "kind": "child-count",
-      "detail": "2 vs 1",
-      "inputValue": 2,
-      "outputValue": 1,
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-23",
-      "path": "root.children[5].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "$$$\\text{first ",
-      "outputValue": "$$$\\text{first $ second}$",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-23",
-      "path": "root.children[5].children[1]",
-      "kind": "missing",
-      "detail": "absent in source-position",
-      "inputValue": "text",
-      "outputValue": "__undefined__",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-23",
-      "path": "root.children[7]",
-      "kind": "child-count",
-      "detail": "2 vs 1",
-      "inputValue": 2,
-      "outputValue": 1,
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-23",
-      "path": "root.children[7].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "$$$$\\text{first ",
-      "outputValue": "$$$$\\text{first $ second}$",
-      "verdict": "normalization",
-      "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
-    },
-    {
-      "exampleId": "math-23",
-      "path": "root.children[7].children[1]",
-      "kind": "missing",
-      "detail": "absent in source-position",
-      "inputValue": "text",
-      "outputValue": "__undefined__",
       "verdict": "normalization",
       "reason": "Math delimiter canonicalization: $$…$$ inline math re-emits with VMark's canonical dollar delimiters and pathological dollar runs re-delimit; the math VALUE the renderer typesets is unchanged."
     },
@@ -5522,7 +4852,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "mdx-20",
@@ -5532,7 +4862,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "mdx-20",
@@ -5542,7 +4872,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "mdx-26",
@@ -5552,7 +4882,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "mdx-26",
@@ -5562,7 +4892,7 @@
       "inputValue": false,
       "outputValue": true,
       "verdict": "model-limit",
-      "reason": "List looseness: the ProseMirror list model does not represent per-list tight/loose spread, so a loose list serializes tight (or vice versa). Honest, pinned data loss; the rendered list items keep their content."
+      "reason": "Item looseness: a list item does not record its own tight/loose spread, so the serializer infers it from the item's blocks — an item holding two blocks with no blank line between them is written loose, and a single paragraph followed by a nested list is written tight. List-level looseness is kept (the list's `spread` attribute). Honest, pinned data loss; the rendered list items keep their content."
     },
     {
       "exampleId": "mdx-27",
@@ -5613,16 +4943,6 @@
       "outputValue": "__undefined__",
       "verdict": "model-limit",
       "reason": "Empty-text link: ProseMirror represents links as marks on text, so a link with no text has nothing to carry the mark and the whole construct — URL included — is dropped on serialize. Honest, pinned data loss."
-    },
-    {
-      "exampleId": "mdx-31",
-      "path": "root.children[0].children[0]",
-      "kind": "attribute",
-      "detail": "value",
-      "inputValue": "City:\n",
-      "outputValue": "City: ",
-      "verdict": "normalization",
-      "reason": "Soft line break adjacent to inline/raw HTML serializes as a space; whitespace-equivalent in the rendered document, byte-different in the markdown."
     },
     {
       "exampleId": "vmark-alert-note",

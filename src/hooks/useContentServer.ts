@@ -4,21 +4,21 @@
  * workspace; the KB panel consumes these. The hook is the only place that turns
  * service calls into store transitions.
  *
- * The frontend half of the supervisor policy (WI-1.2, ADR-10) lives in the
+ * The frontend half of the supervisor policy (ADR-10) lives in the
  * sibling `useContentServerSupervisor`: Rust detects an unexpected child exit
  * and emits `content-server:exited`, and that hook auto-restarts up to
  * `MAX_CONTENT_SERVER_RESTARTS` times. A manual start (user clicking
  * Start/Retry) resets the budget; auto-restarts never do, so a server that
  * crashes immediately after every spawn cannot loop forever.
  *
- * Trust (WI-FL3.6): every start carries the workspace's live trust, which the
+ * Trust: every start carries the workspace's live trust, which the
  * server turns into its CSP (`img-src` gains `https:` when trusted) — and the
  * CSP is baked into the child at spawn. So a trust flip while serving restarts
  * the server through the same start path (Rust replaces a mismatched child),
  * and a start whose handle reports stale trust — the flip landed mid-flight —
  * is issued again with the live value.
  *
- * Lifecycle operations are generation-stamped (audit #363–#365, #370): every
+ * Lifecycle operations are generation-stamped: every
  * start or stop takes the next generation, and a result that arrives after a
  * later operation began — or after the workspace moved on — is dropped rather
  * than committed. A superseded start never stops the child it spawned: Rust's
@@ -26,7 +26,7 @@
  * serving that root, the manager reuses the child on return, and shutdown_all
  * reaps it at exit.
  *
- * A user stop records the ROOT it stopped (#367/#371): that root's exit signal
+ * A user stop records the ROOT it stopped: that root's exit signal
  * is the stop's acknowledgement, never a crash to restart — no timer (a 3 s
  * window reclassified a late exit as a crash), no boolean (blind to the root),
  * and no release when the stop settles (the echo is not ordered against the
@@ -35,15 +35,15 @@
  * manual start. At most one exit can predate a stop — an intentional stop emits
  * none (Rust's supervisor ends quietly once the registration is gone), and a
  * later exit needs a new child, hence a new start — so the crash after that is
- * still reported. A refused stop is an error, not "stopped" (#366): the child
+ * still reported. A refused stop is an error, not "stopped": the child
  * may live, so its guard is released and its exit is a crash. The status that
- * follows it is ASKED, not assumed (#719) — a stop the backend refused while
+ * follows it is ASKED, not assumed — a stop the backend refused while
  * the child kept serving goes back to `running`, with the failure shown as a
  * toast, because `useContentServerWorkspaceSync` acts only on `running` and an
  * `error` over a live child silently disabled the trust-flip restart.
  *
  * @coordinates-with src/stores/workspaceStore.ts — `isWorkspaceTrusted`, `trustWorkspace`, `untrustWorkspace`
- * @coordinates-with hooks/useContentServerWorkspaceSync.ts — workspace switch (#513) and trust flip while serving
+ * @coordinates-with hooks/useContentServerWorkspaceSync.ts — workspace switch and trust flip while serving
  * @coordinates-with hooks/useContentServerSupervisor.ts — the crash/auto-restart half
  * @coordinates-with hooks/useSlidevControls.ts — the deck preview/export half of the controls
  * @module hooks/useContentServer
@@ -66,7 +66,7 @@ import {
 } from "@/services/contentServer";
 import { useSlidevControls, type SlidevControls } from "./useSlidevControls";
 
-/** Extra starts one user start may issue when trust keeps flipping mid-flight (WI-FL3.6). */
+/** Extra starts one user start may issue when trust keeps flipping mid-flight. */
 export const MAX_TRUST_RECONCILES = 2;
 
 export interface ContentServerControls extends SlidevControls {
@@ -87,11 +87,11 @@ interface LifecycleOperation {
  * Take the next lifecycle generation for an operation on `root`, and return the
  * staleness tests bound to it.
  *
- * ONE definition, not two (audit #714). Start and stop each carried their own
+ * ONE definition, not two. Start and stop each carried their own
  * copy of the `gen !== lifecycleGen.current || rootPath !== root` expression,
  * with a comment on the second saying it was "the SAME test the start path
  * uses" — which is precisely the shape that drifts. It already had: the
- * workspace half reached `stop` only in #718, after the missing half had
+ * workspace half reached `stop` only later, after the missing half had
  * written workspace A's failure over workspace B's store.
  */
 function beginLifecycleOperation(
@@ -137,7 +137,7 @@ export function useContentServer(): ContentServerControls {
       };
       useContentServerStore.getState().setStarting();
       try {
-        // Trust flipped while a start was in flight (WI-FL3.6): the server
+        // Trust flipped while a start was in flight: the server
         // that came up enforces the old value, which the handle reports. Start
         // again with the live value — Rust replaces a mismatched child. Bounded,
         // so a backend that never echoes a boolean cannot keep this spinning.
@@ -145,7 +145,7 @@ export function useContentServer(): ContentServerControls {
           const trusted = useWorkspaceStore.getState().isWorkspaceTrusted();
           const handle = await startContentServer(root, trusted);
           if (superseded()) return abandon();
-          // Compare trust BEFORE publishing anything (audit #716). Announcing
+          // Compare trust BEFORE publishing anything. Announcing
           // `running` and minting an auth URL first advertised — and handed the
           // in-app iframe a live nonce for — a child enforcing the OLD CSP,
           // which on an untrust is exactly the window that must not exist.
@@ -154,7 +154,7 @@ export function useContentServer(): ContentServerControls {
             handle.trusted !== useWorkspaceStore.getState().isWorkspaceTrusted();
           if (stale) {
             if (reconcile < MAX_TRUST_RECONCILES) continue;
-            // FAIL CLOSED (audit #717): trust moved through every reconcile, so
+            // FAIL CLOSED: trust moved through every reconcile, so
             // this handle's CSP still contradicts the live setting. Publishing
             // it is the fail-OPEN the bound was supposed to prevent; the next
             // settled flip restarts through useContentServerWorkspaceSync.
@@ -190,7 +190,7 @@ export function useContentServer(): ContentServerControls {
   const stop = useCallback(async () => {
     const root = useWorkspaceStore.getState().rootPath;
     stopIntentRoot.current = root; // an exit for THIS root while the stop runs IS the stop
-    // The SAME test the start path uses, from the SAME definition now (#714/#718).
+    // The SAME test the start path uses, from the SAME definition now.
     // A workspace switch does not touch the generation, so a stop that failed for
     // workspace A used to write its error over workspace B's store — which the
     // sync hook had just reset to `stopped` for a root this window is not
@@ -200,10 +200,10 @@ export function useContentServer(): ContentServerControls {
       try {
         await stopContentServer(root);
       } catch (e) {
-        // The child may be alive (#366): an error, never "stopped"; a later exit is a crash.
+        // The child may be alive: an error, never "stopped"; a later exit is a crash.
         if (superseded()) return;
         stopIntentRoot.current = null;
-        // ASK the backend rather than assume the child died (audit #719). A
+        // ASK the backend rather than assume the child died. A
         // refused stop that left the server serving used to be modelled as
         // `error`, and `useContentServerWorkspaceSync` only reacts to
         // `running` — so a trust flip after one was silently ignored and the
@@ -226,11 +226,11 @@ export function useContentServer(): ContentServerControls {
         return;
       }
     }
-    // A start that began meanwhile owns the store (audit #365): its server must
+    // A start that began meanwhile owns the store: its server must
     // not be hidden by a superseded stop — and it owns the intent too, so a
     // superseded stop must not clear the guard the newer operation set.
     if (superseded()) return;
-    // The guard OUTLIVES this settle (#367, round 4). Rust emits no exit for a
+    // The guard OUTLIVES this settle. Rust emits no exit for a
     // child an intentional stop removed — the supervisor sees `NotCurrent` and
     // ends silently (`content_server/supervisor.rs`) — so the only exit that can
     // still arrive for this root was emitted BEFORE the stop, by a poll that
@@ -248,7 +248,7 @@ export function useContentServer(): ContentServerControls {
     try {
       await openKbInBrowser(root);
     } catch (e) {
-      // An ACTION failure, not a server failure (#719's class): the server is
+      // An ACTION failure, not a server failure: the server is
       // still up, so moving its status to `error` would both mislead the panel
       // and stop the workspace sync from restarting it on a trust flip.
       toast.error(commandErrorMessage(e));
@@ -267,10 +267,10 @@ export function useContentServer(): ContentServerControls {
     startServerRef.current = startServer;
   });
 
-  // Workspace switch (audit #513) and trust flip (WI-FL3.6) while serving —
+  // Workspace switch and trust flip while serving —
   // one subscription, root change first (that hook's header says why).
   useContentServerWorkspaceSync(startServerRef);
-  // Crash supervision (WI-1.2), sibling hook so this file stays under the cap.
+  // Crash supervision, sibling hook so this file stays under the cap.
   useContentServerSupervisor({
     startServer: startServerRef,
     restartAttempts,

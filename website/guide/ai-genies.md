@@ -22,7 +22,7 @@ Press `Mod + Y` (or menu **Edit → Genies → Search Genies…**) to open a spo
 
 **Scope cycling** — Press `Tab` to cycle through scopes: selection → block → document → all.
 
-**Prompt history** — In freeform mode (no matching genies), press `ArrowUp` / `ArrowDown` to cycle through previous prompts. Press `Ctrl + R` to open a searchable history dropdown. Ghost text shows the most recent matching prompt as a grayed hint — press `Tab` to accept it, or `Escape` to dismiss it (it returns once you change what you typed).
+**Prompt history** — In freeform mode (no matching genies), press `ArrowUp` / `ArrowDown` to cycle through previous prompts. Press `Ctrl + R` to open a searchable history dropdown; its **Clear history** button empties the saved history (up to 100 prompts) at once, without asking. Ghost text shows the most recent matching prompt as a grayed hint — press `Tab` to accept it, or `Escape` to dismiss it (it returns once you change what you typed).
 
 ### Processing Feedback
 
@@ -32,7 +32,7 @@ After selecting a genie or submitting a freeform prompt, the picker shows inline
 - **Preview** — The AI response appears as it arrives: CLI providers stream it as it is generated, while REST providers deliver the whole answer at once when the request completes. Use `Accept` to apply or `Reject` to discard.
 - **Error** — If something goes wrong, the error message appears with a `Retry` button.
 
-The status bar also shows AI progress — a spinning icon with elapsed time while running, a brief "Done" flash on success, or an error indicator with Retry/Dismiss buttons. The status bar auto-shows when AI has active status, even if you previously hid it with `F7`.
+The status bar also shows AI progress — a spinning icon with elapsed time while running, a brief "Done" flash on success, or an error indicator with **Retry** and **Dismiss** buttons. **Retry** runs the failed request again — the same genie or prompt, on the current selection — even after the picker has closed; it is absent when the failure has nothing to re-run, such as a missing provider. The status bar auto-shows when AI has active status, even if you previously hid it with `F7`.
 
 ## Built-in Genies
 

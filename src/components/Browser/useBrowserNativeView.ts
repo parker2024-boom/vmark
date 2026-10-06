@@ -1,6 +1,5 @@
 /**
- * useBrowserNativeView — the React adapter over one browser tab's native WKWebView
- * (WI-1.3 / WI-S0.10).
+ * useBrowserNativeView — the React adapter over one browser tab's native WKWebView.
  *
  * Purpose: on mount, make sure the tab's view exists and is visible; keep it aligned
  * under the reserved rect while mounted; on unmount, hide it. The registry itself —
@@ -13,8 +12,8 @@
  * painting over unrelated UI. `layoutVersion` re-runs the report whenever the shell
  * reflows.
  *
- * Bounds go through ONE `browserBounds` channel for the tab's whole mount (audit round
- * 3, #167): resize, reflow and retry all feed the same serialized, latest-wins pusher,
+ * Bounds go through ONE `browserBounds` channel for the tab's whole mount: resize,
+ * reflow and retry all feed the same serialized, latest-wins pusher,
  * so an older rect can never land after a newer one, and the first send waits for the
  * create to settle instead of spending retries against a view that does not exist yet.
  * Unmount disposes the channel, which ends its retry loop.
@@ -66,9 +65,9 @@ export function useBrowserNativeView(
     void created
       .catch((e: unknown) => {
         // A create that fails leaves NO native view at all — the tab would sit there as an
-        // empty rect forever. Say so (WI-S0.9).
+        // empty rect forever. Say so.
         //
-        // Except when it is only awaiting approval (WI-14): the approval prompt
+        // Except when it is only awaiting approval: the approval prompt
         // owns that interaction and the MCP handler retries once the user
         // decides, so a persistent error under the prompt is a second, wrong
         // story about the same event — and before the error was typed it read
@@ -85,7 +84,7 @@ export function useBrowserNativeView(
       markSurfaceUnmounted(tabId);
     };
     // `url` is the initial navigation target only; navigation is explicit after.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- url and automationMode are creation-time inputs; the view is created once per tab and navigated explicitly after
   }, [tabId]);
 
   // Keep the native view aligned under the reserved rect — on resize AND on reflow.

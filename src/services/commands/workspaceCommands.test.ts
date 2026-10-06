@@ -135,7 +135,7 @@ describe("workspace.openFolder (#1005)", () => {
   // WI-LX1.1 — the picker is the one Rust shows, not the plugin dialog. Rust
   // grants the pick RECURSIVELY (#1252 — `allow_directory(path, true)`, pinned
   // by `a_chosen_root_is_granted_recursively_and_recorded` in
-  // src-tauri/src/workspace_grants/mod.test.rs) and RECORDS it, so the next
+  // src-tauri/src/workspace/grants/mod.test.rs) and RECORDS it, so the next
   // launch re-grants it. The plugin dialog granted for the session only: a
   // folder off the static scope (`G:\` on Windows, `/opt` on macOS) was
   // unreadable after a restart.

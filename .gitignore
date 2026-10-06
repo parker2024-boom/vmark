@@ -164,6 +164,11 @@ e2e/artifacts/
 reports/mutation/
 stryker-setup-*.js
 
+# Probe files .claude/hooks/gha-tdd-guard.test.mjs creates inside src/ for the
+# length of a run. Ignored so the scans that list the tree through git (the
+# eslint-disable-reason scan) never pick up a file that is deleted mid-read.
+__guardspec_*
+
 # Vitest browser-tier (WebKit) artifacts (run with `pnpm test:browser`)
 src/**/__screenshots__/
 .vitest-attachments/

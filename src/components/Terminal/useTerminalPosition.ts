@@ -84,7 +84,7 @@ export function computeTerminalPosition(
  * Compute pixel dimension from ratio, clamped to the absolute pixel floor and
  * a proportional ceiling of TERMINAL_MAX_RATIO (80% of the available space).
  * Exported so the settings dropdown's options can be proven un-clamped
- * (WI-1.2) against the real layout function rather than a restatement of it.
+ * against the real layout function rather than a restatement of it.
  */
 export function ratioToPixels(
   ratio: number,

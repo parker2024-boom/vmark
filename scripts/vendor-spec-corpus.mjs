@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Purpose: convert upstream markdown spec sources into VMark's vendored
- * corpus JSON shape (WI-0.2).
+ * corpus JSON shape.
  *
  * Two input formats:
  *   - CommonMark `spec.json` (array of {markdown, html, example, section})

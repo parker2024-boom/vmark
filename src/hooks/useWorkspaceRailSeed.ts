@@ -1,3 +1,10 @@
+/**
+ * useWorkspaceRailSeed — React hook that seeds the workspace rail with the
+ * current workspace, or a placeholder instance, when rail mode is turned on.
+ *
+ * @module hooks/useWorkspaceRailSeed
+ */
+
 import { useEffect } from "react";
 import { useIsDocumentWindow, useWindowLabel } from "@/contexts/WindowContext";
 import { useSettingsStore } from "@/stores/settingsStore";

@@ -5,13 +5,14 @@
  * (references and definitions) in the rendered editor and navigating between them.
  *
  * @coordinates-with tiptap.ts — uses these for hover detection and click navigation
- * @coordinates-with FootnotePopupView.ts — uses scrollToPosition for "go to definition" action
+ * @coordinates-with FootnotePopupView.ts — uses jumpToFootnoteDefinition for "go to definition" action
  * @coordinates-with utils/settledScroll.ts — lands the target despite content-visibility
  * @module plugins/footnotePopup/tiptapDomUtils
  */
 
 import type { EditorView } from "@tiptap/pm/view";
 import type { Node as PMNode } from "@tiptap/pm/model";
+import { TextSelection } from "@tiptap/pm/state";
 import { scrollToSettled } from "@/utils/settledScroll";
 
 const SCROLL_OFFSET_PX = 100;
@@ -32,6 +33,30 @@ export function scrollToPosition(view: EditorView, pos: number) {
     return coords.top - editorContent.getBoundingClientRect().top - SCROLL_OFFSET_PX;
   };
   scrollToSettled(editorContent, distance, view.dom);
+}
+
+/**
+ * Go to `label`'s definition: caret at the start of its text, editor focused,
+ * THEN the scroll. The order is load-bearing — in WebKit, focusing the editor
+ * (ProseMirror writes the DOM selection) cancels a smooth scroll already in
+ * flight, so scrolling first left the view where it was (#1506).
+ * `definitionPos` is used only while it still holds `label`'s definition;
+ * otherwise the definition is looked up by label. Returns false, having done
+ * nothing, when there is no position or no definition.
+ */
+export function jumpToFootnoteDefinition(view: EditorView, label: string, definitionPos: number | null): boolean {
+  if (definitionPos === null) return false;
+  const { doc } = view.state;
+  const stored = definitionPos <= doc.content.size ? doc.nodeAt(definitionPos) : null;
+  const pos = stored?.type.name === "footnote_definition" && String(stored.attrs.label) === label
+    ? definitionPos
+    : findFootnoteDefinition(view, label)?.pos;
+  if (pos === undefined) return false;
+
+  view.dispatch(view.state.tr.setSelection(TextSelection.near(doc.resolve(pos + 1))));
+  view.focus();
+  scrollToPosition(view, pos);
+  return true;
 }
 
 export function findFootnoteDefinition(view: EditorView, label: string): { content: string; pos: number } | null {

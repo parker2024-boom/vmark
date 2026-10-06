@@ -3,7 +3,7 @@
 //! Split from `manager.rs` at the file-size gate. Same rule as there: the
 //! registry lock is held only to decide; a record removed because its child
 //! exited, or because it stopped answering `try_wait`, is cleaned up after
-//! the lock is released (#121).
+//! the lock is released.
 //!
 //! @coordinates-with manager.rs — the registry these methods read
 //! @coordinates-with supervisor.rs — `monitor_child` is the caller
@@ -75,7 +75,7 @@ pub(super) fn handle_poll_failure(
     };
     m.poll_failures += 1;
     log::warn!(
-        "[content-server] try_wait failed for '{}' ({}/{}): {}",
+        "[content-server] try_wait failed for {:?} ({}/{}): {}",
         workspace_root,
         m.poll_failures,
         MAX_POLL_FAILURES,
@@ -85,7 +85,7 @@ pub(super) fn handle_poll_failure(
         return (ChildState::Running, None);
     }
     log::warn!(
-        "[content-server] child for '{}' is un-pollable after {} attempts — treating as dead",
+        "[content-server] child for {:?} is un-pollable after {} attempts — treating as dead",
         workspace_root,
         MAX_POLL_FAILURES
     );

@@ -1,0 +1,25 @@
+{
+  "$comment": [
+    "The Rust line-coverage floor, enforced by scripts/check-rust-coverage.mjs",
+    "in .github/workflows/rust-coverage.yml.",
+    "Stored as the ceiling on UNCOVERED lines so that loosening the gate is a",
+    "raise, which scripts/check-baseline-ratchet.mjs refuses: the floor on",
+    "covered lines is 100 - maxUncoveredLinePercent.",
+    "Two-way: coverage below the floor fails, and coverage more than",
+    "maxSlackPercent above it fails as a stale floor, with the ceiling to",
+    "commit in the message. Lower the ceiling; never raise it.",
+    "`measured` is the run the ceiling was derived from: whole-crate",
+    "`cargo llvm-cov` line coverage, 75851 of 87085 lines, on an Apple",
+    "silicon Mac, which is the platform of the runner named. The ceiling",
+    "leaves 2 points under it for run-to-run and machine variance, in the",
+    "middle of the band. The workflow must run on that runner: a figure from",
+    "another platform compiles a different set of cfg-gated modules and is",
+    "not comparable."
+  ],
+  "maxUncoveredLinePercent": 14.9,
+  "maxSlackPercent": 4,
+  "measured": {
+    "linePercent": 87.09,
+    "runner": "macos-latest"
+  }
+}

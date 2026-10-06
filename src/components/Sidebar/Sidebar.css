@@ -53,7 +53,7 @@
   gap: var(--space-2);
 }
 
-/* Header/footer buttons are the canonical `.vm-icon-btn--lg` (WI-UI2.3);
+/* Header/footer buttons are the canonical `.vm-icon-btn--lg`;
    rest/hover/pressed/focus and the aria-pressed accent all come from
    src/styles/icon-button-shared.css. */
 
@@ -94,7 +94,7 @@
  * The file tree's real scroller is react-window's outer div
  * (`.file-explorer-scroller`); the outline's is `.sidebar-content` itself.
  * Left as-is, the file tree fell through to the global 10px scrollbar. */
-/* Thin scrollbar comes from `.vm-scroll--thin` (WI-UI3.4). */
+/* Thin scrollbar comes from `.vm-scroll--thin`. */
 
 
 .sidebar-view {
@@ -155,7 +155,7 @@
   color: var(--text-secondary);
 }
 
-/* `.vm-input--bare` (WI-UI3.3): the filter row draws its own boundary. */
+/* `.vm-input--bare`: the filter row draws its own boundary. */
 .outline-filter-input {
   flex: 1;
   min-width: 0;
@@ -352,7 +352,7 @@
   justify-content: space-between;
   padding: var(--space-1-5) var(--space-2);
   border-radius: var(--radius-md);
-  cursor: var(--cursor-interactive, default); /* D7, platform-scoped (WI-UA15) */
+  cursor: var(--cursor-interactive, default); /* D7, platform-scoped */
 }
 
 .history-item:hover {
@@ -394,14 +394,14 @@
   gap: var(--space-half);
 }
 
-/* WI-UI1.8 (C10): the resize handle is keyboard-reachable — paint its focus. */
+/* C10: the resize handle is keyboard-reachable — paint its focus. */
 .sidebar-resize-handle:focus-visible {
   outline: none;
   background: var(--accent-primary);
 }
 
 /* focus: caret-only — borderless finder/popup input; the caret is the
-   indicator (rule 33 §2, WI-UI1.8). */
+   indicator (rule 33 §2). */
 .outline-filter-input:focus {
   outline: none;
 }

@@ -1,5 +1,5 @@
 /**
- * Tab-strip overflow — the pure decision core (WI-TNAV1.1).
+ * Tab-strip overflow — the pure decision core.
  *
  * Purpose: given a scroll container's geometry, decide whether a scroll
  * affordance is owed on each side. `.status-tabs` is `max-width: 60%;

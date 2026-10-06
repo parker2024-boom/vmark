@@ -1,5 +1,5 @@
 /**
- * BreakdownPanel (WI-1.9b) — pull-based list of the workspace's live
+ * BreakdownPanel — pull-based list of the workspace's live
  * stale/diverged dependency edges, grouped by downstream artifact, with the
  * three resolution actions (accept-newer / revise / waive — spec §9.2).
  *

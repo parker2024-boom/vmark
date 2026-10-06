@@ -8,7 +8,7 @@
  *      every button in the group.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -31,9 +31,14 @@ vi.mock("@/services/persistence/hotExit/restartWithHotExit", () => ({
 import { HotExitDevTools } from "./HotExitDevTools";
 import type { SessionData } from "@/services/persistence/hotExit/types";
 
+/** The pinned "now", in ms; a session's age is measured against it. */
+const NOW_MS = Date.UTC(2026, 0, 2, 3, 4, 5);
+/** Default session: captured 42 s before NOW_MS (sessions stamp seconds). */
+const SESSION_AGE_S = 42;
+
 function session(overrides: Partial<SessionData> = {}): SessionData {
   return {
-    timestamp: Math.floor(Date.now() / 1000),
+    timestamp: NOW_MS / 1000 - SESSION_AGE_S,
     vmark_version: "0.9.0",
     windows: [{ window_label: "main", is_main_window: true }],
     ...overrides,
@@ -42,6 +47,11 @@ function session(overrides: Partial<SessionData> = {}): SessionData {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.setSystemTime(NOW_MS);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("HotExitDevTools — capture", () => {
@@ -108,7 +118,7 @@ describe("HotExitDevTools — inspect", () => {
 
     await waitFor(() => expect(mocks.toast.info).toHaveBeenCalled());
     expect(mocks.toast.info).toHaveBeenCalledWith(
-      expect.stringContaining("Session found"),
+      `Session found (${SESSION_AGE_S}s ago)`,
       { description: "1 windows, v0.9.0" }
     );
   });

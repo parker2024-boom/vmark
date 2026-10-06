@@ -3,13 +3,16 @@
  *
  * Popup view for editing images in Source mode (CodeMirror 6).
  * Allows editing image src and alt text.
+ *
+ * @module plugins/sourceImagePopup/SourceImagePopupView
  */
 
 import type { EditorView } from "@codemirror/view";
 import i18n from "@/i18n";
-import { SourcePopupView, type StoreApi } from "@/plugins/sourcePopup";
+import { SourcePopupView, type StoreApi } from "@/plugins/shared/SourcePopupView";
 import type { MediaPopupState } from "@/plugins/shared/popupPorts";
 import { buildPopupIconButton, popupIcons } from "@/utils/popupComponents";
+import { isImeKeyEvent } from "@/utils/imeGuard";
 import { browseImage, copyImagePath, removeImage, saveImageChanges } from "./sourceImageActions";
 import { sourceActionError } from "@/utils/debug";
 
@@ -104,6 +107,8 @@ export class SourceImagePopupView extends SourcePopupView<MediaPopupState> {
   }
 
   private handleInputKeydown(e: KeyboardEvent): void {
+    // The Enter that confirms an IME candidate is not a save.
+    if (isImeKeyEvent(e)) return;
     /* v8 ignore next -- @preserve reason: non-Enter keydown in image popup input not tested */
     if (e.key === "Enter") {
       e.preventDefault();

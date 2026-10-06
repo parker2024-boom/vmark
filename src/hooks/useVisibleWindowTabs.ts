@@ -1,5 +1,5 @@
 /**
- * Visible-tab projection for render surfaces (WI-8.1/4R/12.1).
+ * Visible-tab projection for render surfaces.
  *
  * Purpose: the reactive twin of `services/tabs/visibleWindowTabs` — the
  * active instance's document tabs plus ALL browser tabs (window-global, plan

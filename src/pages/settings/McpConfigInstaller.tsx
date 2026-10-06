@@ -3,6 +3,8 @@
  *
  * UI for installing MCP configuration to AI providers.
  * Shows diagnostics including path validation status.
+ *
+ * @module pages/settings/McpConfigInstaller
  */
 
 import { useCallback, useEffect, useState } from "react";

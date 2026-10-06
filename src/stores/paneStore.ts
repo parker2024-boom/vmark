@@ -9,21 +9,21 @@
  * ADR-1: `tabStore.activeTabId[windowLabel]` is kept as a **derived alias of
  * the focused pane's tab**. This store owns both panes' tabs by position
  * (`primaryTabId`, left/top — `secondaryTabId`, right/bottom) plus which is
- * focused. Reconciliation runs BOTH ways (WI-2): pane actions mirror the
+ * focused. Reconciliation runs BOTH ways: pane actions mirror the
  * focused pane's tab into `tabStore.activeTabId` (syncActiveTab), and every
  * tabStore activation converges the split back through the tabActivationBus
  * (decision D2: focus follows a paned tab; an unpaned document lands in the
  * focused pane; browser tabs never touch panes). `assertPaneTabInvariant`
  * fails loud in DEV when the two ever disagree.
  *
- * Max two panes for v1 (see dev-docs/plans/20260701-split-documents.md).
+ * Max two panes for v1 (see .claude/adr/plans/20260701-split-documents.md).
  *
  * @coordinates-with stores/tabStore.ts — activeTabId is the focused-pane alias
  * @coordinates-with contexts/PaneContext.tsx — provides each pane's tabId
  * @coordinates-with stores/tabRemovalBus.ts — subscribes to onTabRemoved so any
  *   close/detach path collapses a split whose pane held the removed tab
  * @coordinates-with stores/tabActivationBus.ts — subscribes to onTabActivated to
- *   converge the split on every activation (WI-2, D2)
+ *   converge the split on every activation (D2)
  * @module stores/paneStore
  */
 import { create } from "zustand";
@@ -57,7 +57,7 @@ interface PaneState {
   /** Reconcile when a tab closes: collapse the split if it held the tab (#1081 H1). */
   handleTabClosed: (windowLabel: string, closedTabId: string) => void;
   /**
-   * WI-10.1 — atomically replace the window's split with a validated layout
+   * Atomically replace the window's split with a validated layout
    * and perform the ONE final activeTabId sync (ADR-1). Pane tab ids that are
    * not live DOCUMENT tabs of the window are dropped: both survive → split;
    * one survives → single pane on it; none (or `split` null/disabled) →
@@ -216,7 +216,7 @@ onTabRemoved((windowLabel, tabId) =>
   usePaneStore.getState().handleTabClosed(windowLabel, tabId),
 );
 
-/** WI-2 (D2): converge an enabled split on a tabStore activation. The alias is
+/** Converge an enabled split on a tabStore activation (D2). The alias is
  *  already written, so this only patches pane state — never setActiveTab. */
 function convergeSplitOnActivation(windowLabel: string, tabId: string | null): void {
   const split = usePaneStore.getState().byWindow[windowLabel];
@@ -241,7 +241,7 @@ function convergeSplitOnActivation(windowLabel: string, tabId: string | null): v
 }
 
 /**
- * DEV-only ADR-1 invariant check (WI-2): with a split enabled, the focused
+ * DEV-only ADR-1 invariant check: with a split enabled, the focused
  * pane's tab must equal `tabStore.activeTabId` — unless the alias points at a
  * browser tab (browser surfaces overlay the editor; panes hold documents).
  * Throws in DEV, no-op in production; `dev` is injectable for tests.
@@ -267,7 +267,7 @@ export function assertPaneTabInvariant(
   }
 }
 
-// WI-2: every activation converges the split, then the invariant is asserted
+// Every activation converges the split, then the invariant is asserted
 // (DEV only). Registered at module load, like the removal subscription above.
 onTabActivated((windowLabel, tabId) => {
   convergeSplitOnActivation(windowLabel, tabId);

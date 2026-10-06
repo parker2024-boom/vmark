@@ -8,7 +8,7 @@ import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useTabStore } from "@/stores/tabStore";
 import { useDocumentStore } from "@/stores/documentStore";
-import { resetTerminalSessionStore, useUIStore } from "@/stores/uiStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import {
   createWorkspaceInstance,
   createWorkspaceRootIdentity,
@@ -40,7 +40,7 @@ function addWorkspace(id: string, rootPath: string): void {
   );
 }
 
-const sessions = () => useUIStore.getState().terminal.sessions;
+const sessions = () => useTerminalStore.getState().sessions;
 
 beforeEach(() => {
   resetTerminalSessionStore();
@@ -99,7 +99,7 @@ describe("maybeAutoCreateTerminalSession (WI-TS3.2)", () => {
     addWorkspace("wsi-a", "/repo-a");
     addWorkspace("wsi-b", "/repo-b");
     useWorkspaceInstancesStore.getState().activateWorkspaceInstance(W, "wsi-a");
-    useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-b" });
+    useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-b" });
 
     expect(maybeAutoCreateTerminalSession(W)).toBe(true);
 

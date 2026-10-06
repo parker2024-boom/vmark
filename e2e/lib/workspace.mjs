@@ -3,7 +3,7 @@
  *
  * `open_workspace` is the one bridge tool with a HUMAN APPROVAL gate, and the
  * transport cannot hold a call open for input — so the real shipping flow is
- * fail-now → approve → AI-retry (src/hooks/mcpBridge/v2/workspaceOpenFolder.ts):
+ * fail-now → approve → AI-retry (src/services/mcpBridge/v2/workspaceOpenFolder.ts):
  *
  *   1. fire `vmark.workspace.open_workspace` → handler queues a prompt and
  *      answers `{needsApproval:true}`;
@@ -18,7 +18,8 @@
  * A failure AFTER the prompt appeared cleans up the shared app state it
  * touched: an open dialog is denied, and a grant minted by a successful
  * approve is REVOKED by consuming it through the approval store — reached via
- * the dev module graph (dev-docs/e2e-testing.md, the store-import trick).
+ * the dev module graph (e2e/README.md, "Arranging state: import the app's
+ * own stores").
  * That import can hand out a parallel store in an HMR-dirty session, so the
  * store is proven LIVE first: while the dialog is up, the live store holds the
  * pending prompt and a parallel one holds nothing. A store that cannot be
@@ -44,7 +45,7 @@ import { getRailInstances } from "./rail.mjs";
  * because nothing ran the suite.
  *
  * They are EXPORTED so `workspace.test.mjs` can check them against the real
- * component at gate time (audit R3 #8): the drift is now a failing test in
+ * component at gate time: the drift is now a failing test in
  * `check:static` rather than a live-app-only symptom. A stable
  * `data-approval-action` attribute on the dialog would remove the coupling
  * outright and is the better fix; until it exists, this is the half that can be
@@ -79,7 +80,7 @@ export function getApprovalPrompt(client) {
  * head, so denying once can reveal the next prompt rather than closing the
  * overlay. Waiting for "no overlay" then timed out, the caller's `.catch()`
  * swallowed it, and the journey reported "no approval dialog was left open"
- * while leaving one up for the next journey to trip over (audit R2 #9). Each
+ * while leaving one up for the next journey to trip over. Each
  * round waits for THIS prompt to go — the overlay gone, or a different path
  * showing — and the loop is bounded so a dialog that refuses to close is
  * reported rather than spun on.
@@ -200,7 +201,7 @@ async function withApprovalStore(client, body) {
  * `pending.length > 0`: a non-empty queue is evidence that SOME store holds a
  * prompt, and in an HMR-dirty session that can be a parallel instance holding
  * an unrelated one — so the check would pass on a store whose `oneShots` are
- * not the ones a revoke has to reach (audit R2 #11). Matching the path makes
+ * not the ones a revoke has to reach. Matching the path makes
  * it a positive identification of the store the dialog is rendering.
  */
 const grantLedger = (client, canonicalPath) =>
@@ -228,8 +229,8 @@ async function revokeMintedGrants(client, before) {
   }
   // Identity is a JSON TUPLE, not a `|`-joined string: a workspace path or a
   // client id containing `|` made two different grants compare equal, so a
-  // newly minted one could be mistaken for a pre-existing one and left live
-  // (audit R2 #12). JSON.stringify of an array is unambiguous for any content.
+  // newly minted one could be mistaken for a pre-existing one and left live.
+  // JSON.stringify of an array is unambiguous for any content.
   const known = before.oneShots.map((o) => JSON.stringify([o.canonicalPath, o.windowLabel, o.clientId, o.createdAt]));
   const revoked = await withApprovalStore(
     client,
@@ -259,7 +260,7 @@ async function revokeMintedGrants(client, before) {
  * one-shot binds to it — so a caller's uncanonical spelling (a symlinked
  * parent, a `.` segment, a trailing separator) made a CORRECT open fail on
  * `approval dialog shows X, expected Y` or time out waiting for a root that
- * had already landed under its real name (audit R2 #10). `realpathSync` is the
+ * had already landed under its real name. `realpathSync` is the
  * harness's side of the same operation; it runs on the machine the app runs on.
  *
  * A failure AFTER the prompt appeared cleans up after itself: the dialog is
@@ -308,7 +309,7 @@ export async function openWorkspaceViaMcp(client, folderPath, { windowLabel = "m
  * left the rail; with the rail off, the persisted root changed (to null, or to
  * a promoted successor's root).
  *
- * With the rail on this is the product's rail-aware close since 2026-09-07:
+ * With the rail on this is the product's rail-aware close:
  * `workspace.close` removes the ACTIVE railed instance through
  * `closeWorkspaceInstance` and promotes a successor (it used to only null the
  * workspace store, leaving a rootless instance active — see
@@ -332,8 +333,8 @@ export async function closeWorkspace(client, { windowLabel = "main" } = {}) {
   // successor promoted (`closeWorkspaceInstance`). "The root changed" is
   // satisfied by the very regression this helper exists to exercise — the old
   // `workspace.close` nulled the root and left the same rootless instance
-  // ACTIVE — so when a rail instance was active, that exact id must be gone
-  // (audit R2 #15). With the rail off there is no instance to watch and the
+  // ACTIVE — so when a rail instance was active, that exact id must be gone.
+  // With the rail off there is no instance to watch and the
   // persisted root is the only observable.
   await poll(
     async () => ({ root: await getPersistedWorkspaceRoot(client, windowLabel), ids: await railIds() }),

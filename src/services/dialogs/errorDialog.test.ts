@@ -26,17 +26,17 @@ describe("showError", () => {
 
 describe("FileErrors", () => {
   it("formats file/folder exists messages", () => {
-    expect(FileErrors.fileExists("a.md")).toBe('A file named "a.md" already exists.');
-    expect(FileErrors.folderExists("docs")).toBe('A folder named "docs" already exists.');
+    expect(FileErrors.fileExists("a.md")).toBe("A file named “a.md” already exists.");
+    expect(FileErrors.folderExists("docs")).toBe("A folder named “docs” already exists.");
   });
 
   it("formats operation-failed messages", () => {
-    expect(FileErrors.createFailed("x")).toBe('Failed to create "x".');
-    expect(FileErrors.renameFailed("x")).toBe('Failed to rename "x".');
-    expect(FileErrors.deleteFailed("x")).toBe('Failed to delete "x".');
-    expect(FileErrors.moveFailed("x")).toBe('Failed to move "x".');
-    expect(FileErrors.duplicateFailed("x")).toBe('Failed to duplicate "x".');
-    expect(FileErrors.tooManyCopies("x")).toBe('Too many copies of "x" exist. Please delete some first.');
+    expect(FileErrors.createFailed("x")).toBe("Failed to create “x”.");
+    expect(FileErrors.renameFailed("x")).toBe("Failed to rename “x”.");
+    expect(FileErrors.deleteFailed("x")).toBe("Failed to delete “x”.");
+    expect(FileErrors.moveFailed("x")).toBe("Failed to move “x”.");
+    expect(FileErrors.duplicateFailed("x")).toBe("Failed to duplicate “x”.");
+    expect(FileErrors.tooManyCopies("x")).toBe("Too many copies of “x” exist. Please delete some first.");
   });
 
   it("exposes static copyFailed string", () => {

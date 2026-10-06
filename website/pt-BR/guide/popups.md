@@ -24,7 +24,7 @@ Um clique mantém o teclado no documento; clique no campo URL para editar o dest
 
 **Campos:**
 - **URL** — Editar o destino do link
-- **Abrir** — Abrir link no navegador
+- **Abrir destino** — Abre uma URL externa no navegador, vai para o título em links `#favorito` ou abre um arquivo local em uma nova aba em links entre arquivos
 - **Copiar** — Copiar URL para a área de transferência
 - **Excluir** — Remover link, manter texto
 
@@ -44,7 +44,7 @@ Um clique mantém o teclado no documento; clique no campo URL para editar o dest
 ### Modo Fonte
 
 - **`Cmd + Clique`** (`Ctrl + Clique` no Windows/Linux) no link → URLs externas abrem no navegador, links `#favorito` vão para o título e caminhos de arquivos locais abrem o arquivo em uma nova aba
-- **Clique** na sintaxe `[texto](url)` → mostra popup de edição; o cursor permanece no markdown para você continuar digitando
+- **Clique** na sintaxe `[text](url)` → mostra popup de edição; o cursor permanece no markdown para você continuar digitando
 - **`Mod + K`** dentro do link → mostra popup de edição com o foco no campo URL
 
 ::: tip Links de Favorito
@@ -54,6 +54,17 @@ Links que começam com `#` são tratados como favoritos (links de títulos inter
 ::: tip Links Entre Arquivos
 Links que apontam para arquivos locais abrem o arquivo de destino em uma nova aba, indo para o título quando o link tem um `#fragment`. Caminhos relativos como `../appendix/cards.md` ou `./notes.md` são resolvidos a partir do diretório do documento atual. Caminhos absolutos — `/Users/me/notes/a.md` no macOS/Linux, `C:\notes\a.md` no Windows — abrem exatamente o arquivo indicado. Caminhos de rede (`\\server\share\…`) não são abertos a partir de links. Se o documento não tiver título, apenas caminhos absolutos podem ser abertos.
 :::
+
+## Seletor de Títulos (Links de Favorito)
+
+**Ativação:** `Alt + Mod + B` (Link marcador), **Inserir → Links → Marcador** ou o grupo de links da Barra de Ferramentas Universal
+
+Um link de favorito aponta para um título no mesmo documento (`[text](#heading-id)`). Em vez de digitar a âncora, o seletor lista todos os títulos do documento, recuados por nível, com um campo de filtro no topo.
+
+**Comportamento:**
+- `↑`/`↓` percorrem a lista, `Enter` insere o link, `Escape` fecha
+- Com texto selecionado, a seleção vira o texto do link; sem seleção, o próprio texto do título é inserido como link
+- O popup avisa quando o documento não tem títulos ou quando nada corresponde ao filtro
 
 ## Popup de Mídia (Imagens, Vídeo, Áudio)
 
@@ -88,7 +99,9 @@ Um popup unificado para editar todos os tipos de mídia — imagens, vídeo e á
 
 ### Modo Fonte
 
-No modo Fonte, clicar na sintaxe de imagem `![alt](caminho)` abre o mesmo popup de mídia. Arquivos de mídia (extensões de vídeo/áudio) mostram uma prévia flutuante com controles nativos de reprodução ao passar o mouse.
+No modo Fonte, clicar na sintaxe de imagem `![alt](path)` abre o mesmo popup de mídia.
+
+O modo Fonte também mostra uma **prévia** flutuante da mídia — uma imagem, ou um player de vídeo ou áudio com controles nativos de reprodução. Ela aparece enquanto o cursor está dentro de `![alt](path)` (sem texto selecionado) e quando o mouse passa sobre a sintaxe; a prévia do cursor prevalece sobre a do mouse. O caminho deve terminar em uma extensão reconhecida de imagem, vídeo ou áudio (ou ser uma URL `data:image/`). A prévia some enquanto o popup de mídia está aberto.
 
 ## Menu de Contexto de Imagem
 
@@ -112,7 +125,7 @@ Edite expressões LaTeX com prévia ao vivo.
 
 **Ativação:**
 - **WYSIWYG:** Clique em matemática inline `$...$`
-- **Fonte:** Posicione o cursor dentro de `$...$`, `$$...$$` ou blocos ` ```latex `
+- **Fonte:** Posicione o cursor dentro de um `$...$` não vazio, de um bloco `$$...$$` ou de um bloco ` ```latex ` / ` ```math `
 
 **Campos:**
 - **Entrada LaTeX** — Editar a expressão matemática
@@ -121,7 +134,8 @@ Edite expressões LaTeX com prévia ao vivo.
 
 **Atalhos:**
 - `Mod + Enter` — Salvar e fechar
-- `Escape` — Cancelar e fechar
+- `Click outside` — Salvar e fechar (confirma suas edições)
+- `Escape` — Cancelar e fechar (descarta suas edições)
 - `Shift + Backspace` — Excluir matemática inline (funciona mesmo quando não vazia, apenas WYSIWYG)
 - `Alt + Mod + M` — Inserir nova matemática inline
 
@@ -130,7 +144,7 @@ Quando você tem um erro de sintaxe LaTeX, o popup mostra sugestões úteis como
 :::
 
 ::: info Modo Fonte
-O modo Fonte fornece o mesmo popup de matemática editável do modo WYSIWYG — uma caixa de texto para entrada LaTeX com uma prévia KaTeX ao vivo abaixo. O popup abre automaticamente quando o cursor entra em qualquer sintaxe matemática (`$...$`, `$$...$$` ou ` ```latex `). Pressione `Mod + Enter` para salvar ou `Escape` para cancelar.
+O modo Fonte fornece o mesmo popup de matemática editável do modo WYSIWYG — uma caixa de texto para entrada LaTeX com uma prévia KaTeX ao vivo abaixo. O popup abre automaticamente quando o cursor entra em qualquer sintaxe matemática (um `$...$` não vazio, `$$...$$` ou ` ```latex ` / ` ```math `). Pressione `Mod + Enter` para salvar ou `Escape` para cancelar. Um `$$` vazio digitado no fim de uma linha é tratado como texto simples — provavelmente um delimitador de bloco matemático digitado pela metade — e não abre o popup.
 :::
 
 ## Popup de Rodapé
@@ -139,6 +153,7 @@ Edite o conteúdo de rodapé inline.
 
 **Ativação:**
 - **WYSIWYG:** Passar o mouse sobre a referência de rodapé `[^1]`
+- **Fonte:** Passar o mouse sobre uma referência ou definição de rodapé, ou clicar nela
 
 **Campos:**
 - **Conteúdo** — Texto de rodapé em múltiplas linhas (redimensionamento automático)
@@ -154,7 +169,7 @@ Edite o conteúdo de rodapé inline.
 Edite links no estilo wiki para conexões internas de documentos.
 
 **Ativação:**
-- **WYSIWYG:** Passar o mouse sobre `[[alvo]]` (atraso de 300ms)
+- **WYSIWYG:** Passar o mouse sobre `[[target]]` (atraso de 300ms)
 - **Fonte:** Clicar na sintaxe de link wiki
 
 **Campos:**
@@ -196,12 +211,16 @@ Corrija erros de ortografia com sugestões.
 - **Sugestões** — Clique para substituir pela sugestão
 - **Adicionar ao Dicionário** — Parar de marcar como erro ortográfico
 
+## Movendo Texto ao Arrastar
+
+No modo WYSIWYG você pode mover uma seleção com o mouse: pressione sobre o texto selecionado, arraste — um cursor de soltura mostra onde ele vai parar — e solte. A movimentação é uma única etapa que pode ser desfeita (`Mod + Z` a reverte). Pressione `Escape` durante o arraste, ou deixe a janela perder o foco, para cancelar. O VMark implementa isso por conta própria porque o shell de desktop intercepta os eventos nativos de arrastar do navegador, e por isso é um gesto de mouse e não o arrastar e soltar do sistema.
+
 ## Comparação de Modos
 
 | Elemento | Edição WYSIWYG | Fonte |
 |----------|----------------|-------|
 | Link | Clique / `Mod+K` / `Cmd+Clique` para abrir | Clique / `Mod+K` / `Cmd+Clique` para abrir |
-| Imagem | Duplo clique | Clique em `![](caminho)` |
+| Imagem | Duplo clique | Clique em `![](path)` |
 | Vídeo | Duplo clique | — |
 | Áudio | Duplo clique | — |
 | Matemática | Clique | Cursor na matemática → popup |
@@ -224,7 +243,9 @@ Corrija erros de ortografia com sugestões.
 - Para conteúdo de múltiplas linhas (rodapés, matemática): use `Mod + Enter` para salvar
 
 ### Comportamento do Mouse
-- Clique fora do popup para fechar (as alterações são descartadas)
+- Clique fora do popup para fechar. O comportamento padrão é **descartar**
+  as alterações não salvas; o popup de matemática é uma exceção e **confirma** a edição
+  ao clicar fora (veja a seção [Popup de Matemática](#popup-de-matematica)).
 - Popups de hover (rodapé, wiki) têm atraso de 300ms antes de aparecerem
 - Mover o mouse de volta para o popup mantém-no aberto
 

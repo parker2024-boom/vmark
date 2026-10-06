@@ -21,10 +21,11 @@ vi.mock("@tauri-apps/api/path", () => ({
     Promise.resolve(path.split("/").pop() || ""),
   ),
   normalize: vi.fn((path: string) => {
-    // Tauri-like normalization: resolves "." and ".." but PRESERVES leading
-    // "//" (POSIX allows implementation-defined meaning for paths starting
-    // with exactly two slashes; Tauri does not collapse them). Also respects
-    // paths without any leading slash (e.g. Windows "C:/..." drive paths).
+    // Approximate normalization: resolves "." and ".." and respects paths
+    // without a leading slash (e.g. Windows "C:/..." drive paths). It keeps a
+    // leading "//", which Tauri does NOT — Tauri collapses it to "/" and turns
+    // a bare "/" into "//". Tests that depend on those details use the faithful
+    // port in __tests__/tauriNormalizePort.ts instead.
     const leadingSlashes = path.match(/^\/+/)?.[0] ?? "";
     const rest = path.slice(leadingSlashes.length);
     const parts = rest.split("/");
@@ -57,6 +58,7 @@ import {
   resolveRelativePath,
   getDocumentBaseDir,
   getExportContainmentRoot,
+  NO_DOCUMENT_DIR,
 } from "./resourcePaths";
 
 beforeEach(() => {
@@ -305,9 +307,9 @@ describe("getDocumentBaseDir", () => {
     expect(result).toBe("/Users/test/docs");
   });
 
-  it("returns root for null file path", async () => {
+  it("returns the explicit no-root value for a null file path", async () => {
     const result = await getDocumentBaseDir(null);
-    expect(result).toBe("/");
+    expect(result).toBe(NO_DOCUMENT_DIR);
   });
 
   // ---------------------------------------------------------------------
@@ -374,7 +376,7 @@ describe("getExportContainmentRoot", () => {
   });
 
   it("returns the unsaved-buffer fallback when there is no file path", async () => {
-    expect(await getExportContainmentRoot(null, "/Users/test/project")).toBe("/");
+    expect(await getExportContainmentRoot(null, "/Users/test/project")).toBe(NO_DOCUMENT_DIR);
   });
 });
 

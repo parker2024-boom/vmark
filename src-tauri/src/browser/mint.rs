@@ -1,4 +1,4 @@
-//! Authorization **inputs**: what authority may be created (WI-1.1..1.6).
+//! Authorization **inputs**: what authority may be created.
 //!
 //! `authorize.rs` answers "may this operation run?". This module answers the prior
 //! question — "may this authority exist at all?" — and is split out for the same
@@ -35,7 +35,7 @@ pub(crate) const MAX_GRANTS: usize = 512;
 /// Hex SHA-256 of a script — binds a payload-carrying one-shot (`style`, `eval`,
 /// `session`, `type`, `key`, `scroll`) to the EXACT payload the user approved, so an
 /// approved-A cannot be spent on a substituted-B on the retry. Computed
-/// authoritatively both when minting and when running. (Security review P5, High #1.)
+/// authoritatively both when minting and when running.
 pub(crate) fn script_hash(script: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(script.as_bytes());
@@ -181,7 +181,7 @@ pub(crate) fn attach_ai_tab(
     state.attach_tab(tab_id.to_string(), generation, once)
 }
 
-/// Mirror ONE window's frontend approval store into the driver (WI-2.1).
+/// Mirror ONE window's frontend approval store into the driver.
 ///
 /// The driver's copy is authoritative — `browser_eval` reads it — so a caller that
 /// never syncs simply gets default-deny, and an empty vec revokes everything.
@@ -194,7 +194,7 @@ pub(crate) fn attach_ai_tab(
 /// window that owns it (the registry knows which), and `teardown::destroy_window`
 /// drops the slice with the window.
 ///
-/// **Validated as strictly as a one-shot is (WI-1.6).** Previously this accepted the
+/// **Validated as strictly as a one-shot is.** Previously this accepted the
 /// vector verbatim, so a malformed pattern was stored as authority the guard could
 /// never match: invisible to the user, who sees a grant that does nothing.
 ///

@@ -4,7 +4,7 @@
  * Two commands: open a workspace folder (with dirty-tab handling and
  * tab restoration), close the current workspace. Each is a named handler
  * below; `registerWorkspaceCommands` only registers them, as ONE owner-based
- * batch (audit #463/#464) — a reload replaces this owner's batch, and an
+ * batch — a reload replaces this owner's batch, and an
  * identically named command from another registrar is refused rather than
  * taken for "already registered" by a first-command sentinel.
  *
@@ -17,12 +17,13 @@
  * and ACTIVE with no root — the status-bar tab strip is scoped to the active
  * instance, so it had nothing to show and unmounted, and every new untitled
  * tab was claimed into the inactive "Loose Files", invisible until the user
- * happened to click that rail entry. Observed live 2026-09-07.
+ * happened to click that rail entry. Observed live.
  *
  * @coordinates-with services/workspaces/closeWorkspaceInstance.ts — the rail-on close
  * @coordinates-with components/WorkspaceRail/workspaceRailHandlers.ts — the rail's own Close, same path
  * @coordinates-with services/workspaces/openWorkspaceByPath.ts — the shared open sequence and its guard key
  * @coordinates-with services/workspaces/workspaceAccess.ts — the Rust folder picker (grants + records the pick)
+ * @module services/commands/workspaceCommands
  */
 
 import { registerCommands } from "./CommandBus";
@@ -98,7 +99,7 @@ async function closeCurrentWorkspace(windowLabel: string): Promise<void> {
   // concurrent session write, and a close must not tear down a workspace
   // an open is still restoring into.
   await withReentryGuard(windowLabel, WORKSPACE_TRANSITION_GUARD, async () => {
-    // CONTAINED and reported (audit #953), like the open command beside it. A
+    // CONTAINED and reported, like the open command beside it. A
     // session write that fails, a dirty-close that throws, a rail finalization
     // that rejects — all of them used to escape into the command bus, where the
     // menu route logs a line nobody reads and the palette route drops the
@@ -106,7 +107,7 @@ async function closeCurrentWorkspace(windowLabel: string): Promise<void> {
     // declining at the dirty prompt comes back as `result.reason`, so
     // containing the throw does not swallow it.
     try {
-      // Resolve the TARGET before the first await (audit #954). The user asked to
+      // Resolve the TARGET before the first await. The user asked to
       // close the workspace that was active when they invoked the command;
       // reading it after `persistWorkspaceSession` awaited let a rail click in
       // that window pick a different instance and close THAT one instead. A

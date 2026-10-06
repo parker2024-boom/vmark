@@ -5,7 +5,7 @@ vi.mock("@/plugins/formatToolbar/nodeActions.tiptap", () => ({
   handleRemoveBlockquote: vi.fn(),
 }));
 
-vi.mock("@/plugins/multiCursor", () => ({
+vi.mock("@/plugins/shared/MultiSelection", () => ({
   MultiSelection: class MockMultiSelection {},
 }));
 
@@ -42,7 +42,7 @@ import {
 import { getCurrentHeadingLevel, increaseHeadingLevel, decreaseHeadingLevel } from "./wysiwygHeadingLevel";
 import { handleRemoveBlockquote } from "@/plugins/formatToolbar/nodeActions.tiptap";
 import { computeQuoteToggle } from "@/lib/cjkFormatter/quoteToggle";
-import { MultiSelection } from "@/plugins/multiCursor";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import type { WysiwygToolbarContext } from "./types";
 

@@ -1,6 +1,6 @@
 # Funzionalità
 
-VMark è un editor Markdown ricco di funzionalità progettato per i flussi di lavoro di scrittura moderni. Ecco cosa è incluso.
+VMark è lo spazio di lavoro in testo semplice in cui persone e IA collaborano. Il Markdown è il fulcro (con le modalità WYSIWYG, Anteprima Sorgente e Sorgente), ma lo spazio di lavoro apre anche YAML, JSON, TOML, Mermaid, SVG, HTML e 9 formati di visualizzatore di codice — vedi [Formati Supportati](/it/guide/formats) per l'elenco completo.
 
 [[toc]]
 
@@ -28,6 +28,50 @@ Passa alla modifica Markdown grezzo con evidenziazione completa della sintassi:
 - Perfetta per gli utenti avanzati
 
 Passa da una modalità all'altra con `F6`.
+
+### Vista Divisa (Sorgente + Anteprima)
+
+Modifica il sorgente Markdown grezzo a sinistra mentre un'**anteprima WYSIWYG dal vivo
+in sola lettura** si aggiorna a destra — l'anteprima *è* il renderer WYSIWYG, quindi
+non si discosta mai da ciò che vedresti nella Modalità Rich Text. I comandi di formattazione e la
+barra degli strumenti agiscono sul riquadro sorgente; trascina il divisore (o usa i tasti freccia su di esso) per
+ridimensionare.
+
+- Attivala per la sessione con `Shift + F6`, **Vista → Vista divisa Markdown** o la
+  palette dei comandi ("Attiva/disattiva vista divisa Markdown")
+- Rendila predefinita per i file Markdown in **Impostazioni → Markdown → Layout →
+  Dividi sorgente/anteprima per impostazione predefinita**
+
+Il WYSIWYG resta la modalità predefinita; la divisione è opzionale. Le tre viste si escludono
+a vicenda — `F6` attiva/disattiva Sorgente e `Shift + F6` attiva/disattiva Divisa, e ciascuna torna
+al WYSIWYG — quindi passare dall'una all'altra richiede sempre un solo tasto.
+
+Il menu **Vista** mostra le tre modalità — **Modalità WYSIWYG**, **Modalità codice
+sorgente**, **Vista divisa Markdown** — come un gruppo con segno di spunta, così la modalità attiva è
+sempre visibile e l'esclusione reciproca è esplicita. **A capo automatico** e
+**Numeri riga** si applicano solo all'editor sorgente, quindi sono disattivati mentre
+sei in modalità WYSIWYG.
+
+### Posizione di Lettura
+
+Il punto in cui eri in un documento sopravvive quando lo lasci. Passare a un'altra scheda e tornare,
+attivare la modalità Sorgente o la Vista divisa, o far ricaricare il file dal disco ti
+riportano tutti dove stavi leggendo — non all'inizio.
+
+Ogni superficie ricorda la propria posizione, quindi Rich Text e Sorgente mantengono punti
+separati nello stesso file. Se hai posizionato un cursore nel documento, il cursore
+ha comunque la precedenza: tornando atterri sul cursore, ed è anche questo che mantiene
+in vista lo stesso paragrafo quando passi da Rich Text a Sorgente e viceversa.
+
+Le posizioni sono per documento e per sessione — chiudere una scheda le dimentica.
+
+### Annullamento tra le Modalità
+
+Annulla e ripristina attraversano il confine WYSIWYG ⇄ Sorgente. Ogni cambio di modalità registra un checkpoint e, una volta esaurita la cronologia dell'editor corrente, `Mod + Z` continua attraverso quei checkpoint — ripristinando il contenuto precedente senza cambiare la vista in cui ti trovi. Ripristina percorre la stessa catena in avanti; un ripristino il cui ramo hai abbandonato facendo una nuova modifica viene rifiutato invece di essere applicato sopra il tuo lavoro. La catena è conservata per scheda e cancellata quando la scheda si chiude.
+
+### File di Grandi Dimensioni
+
+VMark apre automaticamente in modalità Sorgente i file oltre 1 MB per un'apertura in meno di un secondo, avvisa prima di toccare file oltre 5 MB e rifiuta i file oltre 50 MB. Vedi la guida ai [File di grandi dimensioni](./large-files.md) per soglie e impostazioni.
 
 ### Anteprima Sorgente
 
@@ -127,6 +171,8 @@ Cambia rapidamente le maiuscole/minuscole tramite Formato → Trasforma:
 - Blocchi di codice con evidenziazione della sintassi
 - Elenchi ordinati, non ordinati e di attività
 - Cicla il tipo di elenco: converte un paragrafo in elenco puntato, numerato o di attività in sequenza
+- Disattiva un elenco: fare di nuovo clic sul tipo di elenco attivo rimuove la formattazione dell'elenco
+- Converti in codice: l'azione Blocco di codice trasforma l'intero elenco al cursore — o qualsiasi selezione di più blocchi (paragrafi, intestazioni, elenchi) — in un unico blocco di codice, una riga per blocco o elemento dell'elenco
 - Regole orizzontali
 - Tabelle con supporto completo alla modifica
 
@@ -160,7 +206,8 @@ Modifica completa delle tabelle:
 - Inserisci tabelle tramite menu o scorciatoia
 - Aggiungi/elimina righe e colonne
 - Allineamento delle celle (sinistra, centro, destra)
-- Ridimensiona le colonne trascinando
+- Le colonne si dimensionano automaticamente in base al contenuto; le tabelle larghe scorrono orizzontalmente
+- Adatta alla larghezza — fissa una tabella alla larghezza dell'editor con colonne proporzionali al contenuto (Impostazioni → Markdown, o per singola tabella tramite clic destro)
 - Barra degli strumenti contestuale per azioni rapide
 - Navigazione da tastiera — `Tab` / `Shift + Tab` si spostano tra le celle, i tasti freccia escono dalla tabella ai suoi bordi, e `Mod + Enter` / `Mod + Shift + Enter` aggiungono una riga sotto / sopra
 
@@ -172,8 +219,8 @@ Supporto completo per le immagini:
 - Trascina e rilascia dal file system
 - Incolla dagli appunti
 - Copia automatica nella cartella delle risorse del progetto
-- Ridimensiona tramite menu contestuale
-- Doppio clic per modificare il percorso sorgente, il testo alternativo e le dimensioni
+- Doppio clic per modificare il percorso sorgente e il testo alternativo — le dimensioni dell'immagine sono mostrate in sola lettura
+- Clic destro per Cambia immagine, Elimina immagine, Copia percorso e Mostra nel Finder (Mostra in Esplora risorse su Windows, Mostra nel gestore file su Linux)
 - Alterna tra visualizzazione inline e a blocco
 
 ## Video e Audio
@@ -223,6 +270,13 @@ Rendering LaTeX basato su KaTeX:
 
 - Matematica inline: `$E = mc^2$`
 - Matematica a display: blocchi `$$...$$`
+- I delimitatori in stile ChatGPT vengono riconosciuti all'apertura/incolla e normalizzati nella
+  forma con `$`: `\( ... \)` diventa matematica inline, e un `\[ ... \]` a sé stante
+  diventa un blocco a display
+- Un blocco `$$` deve chiudersi prima di una riga vuota (la regola di pandoc) — un
+  `$$` non chiuso viene mostrato come testo letterale invece di inghiottire i paragrafi successivi.
+  Le righe vuote finali subito prima della chiusura vanno bene (un blocco
+  `$$` … `$$` vuoto resta un blocco matematico)
 - Supporto completo della sintassi LaTeX
 - Messaggi di errore utili con suggerimenti sulla sintassi
 
@@ -328,11 +382,27 @@ I risultati del lint non si aggiornano mentre scrivi. In modalità Sorgente, una
 
 Una barra degli strumenti di formattazione ancorata nella parte inferiore dell'editor, che fornisce accesso rapido a tutte le azioni di formattazione sia in modalità WYSIWYG che Sorgente.
 
-- **Attiva/disattiva:** `Mod + Shift + P` apre la barra degli strumenti e le assegna il focus. Premilo di nuovo per restituire il focus all'editor mantenendo la barra visibile.
+- **Attiva/disattiva:** `Mod + Shift + B` apre la barra degli strumenti e le assegna il focus. Premilo di nuovo per restituire il focus all'editor mantenendo la barra visibile.
 - **Navigazione da tastiera:** Usa le frecce `Sinistra`/`Destra` per spostarti tra i gruppi. `Enter` o `Spazio` apre un menu a discesa. Le frecce navigano all'interno dei menu.
 - **Escape a due fasi:** Se un menu a discesa è aperto, `Escape` chiude prima il menu. Premi `Escape` di nuovo per chiudere l'intera barra degli strumenti.
 - **Memoria di sessione:** La barra ricorda quale pulsante era focalizzato per ultimo durante la sessione corrente, quindi la rifocalizzazione riprende da dove eri rimasto.
 - **Scorciatoia Genies IA:** La barra include un pulsante Genies IA che apre il selettore genie (`Mod + Y`).
+
+## Menu Contestuale dell'Editor
+
+Fai clic destro in un punto qualsiasi dell'editor (modalità WYSIWYG o Sorgente) per aprire un menu contestuale con le azioni comuni.
+
+- **Appunti:** Taglia, Copia, Incolla e Seleziona tutto. Su macOS usano la pipeline nativa degli appunti, quindi incollare contenuti formattati (ad es. HTML copiato da un browser) ne mantiene la formattazione — esattamente come `Mod + V`.
+- **Formattazione inline:** Grassetto, Corsivo, Barrato e Codice inline, con segni di spunta che mostrano i marcatori attivi al cursore.
+- **Operazioni sui blocchi:** sottomenu Livello intestazione e Tipo di elenco, Citazione e Blocco di codice — i segni di spunta riflettono il blocco corrente.
+- **Collegamenti:** Inserisci link sul testo semplice; su un collegamento esistente la sezione diventa Modifica link, Copia link e Rimuovi link.
+- **Sensibile al contesto:** all'interno delle tabelle compare invece il menu dedicato alle tabelle; il clic destro su un'immagine apre il menu dell'immagine; all'interno dei blocchi di codice sono offerte solo le azioni degli appunti. I file non Markdown (JSON, YAML, …) ricevono un menu ridotto con le sole azioni degli appunti.
+- **Gestione della selezione:** il clic destro all'interno di una selezione la mantiene; il clic destro altrove sposta prima lì il cursore (convenzione di macOS).
+- **Tastiera:** i tasti freccia navigano (le voci disattivate vengono saltate), `Destra`/`Sinistra` entrano nei sottomenu e ne escono, `Escape` chiude prima il sottomenu e poi il menu. I suggerimenti delle scorciatoie riflettono le tue combinazioni di tasti personalizzate.
+
+## Palette dei Comandi
+
+Premi `Mod + Shift + P` per aprire la palette dei comandi. Con una ricerca vuota elenca tutti i comandi disponibili raggruppati per categoria — file, workspace, vista, esportazione, formattazione, intestazioni, elenchi, tabelle, righe, selezione, trasformazione, CJK, lint, cronologia, IA e altro; digita per filtrare e ordinare per corrispondenza. `↑`/`↓` si spostano, `Enter` esegue il comando, `Escape` (o un clic sullo sfondo) chiude. Vengono mostrati solo i comandi applicabili in quel momento — un comando dell'editor scompare quando non è aperto alcun documento, un comando del workspace quando non è aperto alcun workspace — e il comando viene eseguito nella finestra da cui hai aperto la palette. Le pagine di questa guida citano i comandi della palette tra virgolette ("Attiva/disattiva vista divisa Markdown", "Dettaglio coerenza", "Stato finestre"). La palette non ha una voce di menu; la sua scorciatoia è personalizzabile in **Impostazioni → Scorciatoie**.
 
 ## Opzioni di Esportazione
 
@@ -340,10 +410,7 @@ VMark offre opzioni di esportazione flessibili per condividere i tuoi documenti.
 
 ### Esportazione HTML
 
-Esporta in HTML standalone con due modalità di confezionamento:
-
-- **Modalità cartella** (predefinita): Crea `Documento/index.html` con le risorse in una sottocartella
-- **Modalità file singolo**: Crea un file `.html` autonomo con immagini incorporate
+**File → Esporta → HTML** scrive una cartella che contiene sia `index.html` (con una cartella `assets/` collegata) sia `standalone.html` (tutto incorporato) — non c'è una modalità da scegliere; usa il file più adatto.
 
 L'HTML esportato include il [**VMark Reader**](/it/guide/export#vmark-reader) — controlli interattivi per impostazioni, sommario, lightbox delle immagini e altro.
 
@@ -351,7 +418,7 @@ L'HTML esportato include il [**VMark Reader**](/it/guide/export#vmark-reader) �
 
 ### Esportazione PDF
 
-Stampa su PDF con la finestra di dialogo di sistema nativa (`Cmd/Ctrl + P`).
+**File → Esporta → PDF** apre la finestra di esportazione di VMark — formato della pagina (A4, Letter, A3, Legal) e orientamento, margini predefiniti o un riquadro dei margini personalizzato trascinabile, dimensione del font, interlinea, font latini e CJK, stili predefiniti e numeri di pagina — poi scrive il PDF su macOS, Windows e Linux, con una struttura delle intestazioni cliccabile nella barra laterale del visualizzatore. **Stampa** (`Cmd/Ctrl + P`) è il percorso separato attraverso la finestra di stampa di sistema. [Scopri di più →](/it/guide/export#stampa-esporta-pdf)
 
 ### Copia come HTML
 
@@ -405,9 +472,36 @@ Quando VMark si riavvia per installare un aggiornamento, o si chiude inaspettata
 - Al riavvio, le schede vengono ripristinate esattamente come le avevi lasciate, con i documenti modificati (non salvati) contrassegnati di conseguenza
 - Le modifiche non salvate vengono anche scritte in istantanee di recupero ogni 10 secondi. Dopo una chiusura inaspettata, VMark le ripristina al prossimo avvio come schede non salvate
 - Le istantanee di recupero più vecchie di 7 giorni vengono eliminate automaticamente
-- Una normale chiusura non cattura la sessione: VMark ti chiede prima di salvare i documenti non salvati. Le schede aperte di un workspace tornano comunque la prossima volta che lo apri (vedi [Ripristino della Sessione](/it/guide/workspace-management#ripristino-della-sessione))
+- Una normale chiusura non cattura la sessione: VMark ti chiede prima di salvare i documenti non salvati (vedi [Chiudere schede e finestre](/it/guide/tab-navigation#chiudere-schede-e-finestre)). Le schede aperte di un workspace tornano comunque la prossima volta che lo apri (vedi [Ripristino della Sessione](/it/guide/workspace-management#ripristino-della-sessione))
 
 Nessuna configurazione necessaria. Il recupero sessione è sempre attivo.
+
+## Barra di Stato
+
+La barra di stato corre lungo il fondo della finestra (`F7` la nasconde). Il lato sinistro contiene la barra delle schede — vedi [Passare da una scheda aperta all'altra](/it/guide/tab-navigation#passare-da-una-scheda-aperta-all-altra) — e brevi avvisi come *"Aperto in modalità Sorgente (file di grandi dimensioni)."* Il lato destro, da sinistra a destra:
+
+| Indicatore | Cosa mostra | Clic |
+|---|---|---|
+| Salvataggio automatico | Un'icona di salvataggio e quanto tempo fa il documento è stato salvato automaticamente; sfuma dopo qualche secondo | — |
+| Conteggi | Parole e caratteri (spazi esclusi); con una selezione, *selezionati / totale* | Apre un popover **Conteggio parole**: parole, caratteri, caratteri senza spazi, caratteri CJK, caratteri senza punteggiatura |
+| Lint | ⊗ errori o ⚠ avvisi trovati dall'ultima esecuzione del [lint](#lint-markdown); nascosto quando non ce ne sono | Salta al problema successivo |
+| IA | Mentre un genie è in esecuzione, *In elaborazione...* con i secondi trascorsi e una × per annullare; poi *Fatto*, oppure l'errore con **Riprova**, che esegue di nuovo la richiesta fallita, e **Ignora**; Riprova non compare quando non c'è nulla da ripetere, per esempio senza provider | — |
+| MCP | Un'icona a forma di satellite, colorata quando un client IA è connesso; la parola *off*, *…* o *error* quando non è in esecuzione normalmente. Il tooltip indica i client connessi | Apre **Impostazioni → Integrazioni** |
+| Cronologia MCP | Le scritture dell'IA in questa scheda, dalla più recente, ciascuna con **Ripristina allo stato precedente a questa scrittura**; un pulsante cestino cancella la cronologia della scheda senza chiedere | Apre l'elenco |
+| Terminale | — | Mostra o nasconde il terminale |
+| Modalità | La modalità corrente — Sorgente o WYSIWYG (nascosta per i file di workflow di GitHub Actions) | Cambia modalità |
+| Lucchetto | Se il documento è in sola lettura | Attiva/disattiva la sola lettura |
+
+Il lato destro è nascosto mentre è attiva una scheda del browser. Una barra di stato nascosta ricompare da sola mentre un genie IA riporta l'avanzamento o è attiva una scheda del browser.
+
+## Dettagli di Modifica
+
+Alcuni comportamenti che funzionano senza alcuna impostazione:
+
+- **La selezione resta visibile quando l'editor perde il focus.** Fai clic nel terminale, nella barra laterale o in un popup e il testo selezionato mantiene un'evidenziazione più tenue, così puoi vedere su cosa agirà un comando o uno strumento IA. La modalità Sorgente mostra ogni intervallo di una selezione multi-cursore.
+- **Digitare sul bordo sinistro del codice inline scrive al suo interno.** Con il cursore subito prima di un frammento di codice inline in modalità WYSIWYG — in qualunque modo ci sia arrivato — il carattere successivo entra nel codice invece di finire fuori.
+- **I metodi di input (IME) sono sicuri.** Mentre componi con un metodo di input cinese, giapponese o coreano, e per 50 ms dopo la fine della composizione, le scorciatoie dell'editor e le conversioni automatiche non scattano, quindi premere Invio per accettare un candidato non divide anche il paragrafo. Annulla e ripristina continuano a funzionare. Una sillaba coreana confermata con Invio inizia anche la nuova riga. La romanizzazione residua davanti al testo confermato viene rimossa, e un carattere confermato in una cella di tabella vuota resta come è stato digitato. Le notifiche informative attendono la fine della composizione; errori e avvisi compaiono subito. Una modifica di un client IA tramite MCP viene rifiutata (il client riprova) o trattenuta fino alla fine della composizione, e anche una modifica del file su disco attende, così nessuna delle due sovrascrive il testo che stai ancora componendo.
+- **La riduzione del movimento viene rispettata.** Quando l'impostazione di accessibilità *riduci movimento* del sistema operativo è attiva, VMark disattiva animazioni e transizioni e scorre istantaneamente invece che in modo fluido (modalità macchina da scrivere inclusa). Non esiste un'impostazione separata in VMark. Allo stesso modo, l'impostazione di sistema *riduci trasparenza* disattiva la sfocatura dello sfondo.
 
 ## Visualizzazione e Focus
 
@@ -439,6 +533,8 @@ Il pannello Sommario mostra la struttura delle intestazioni del documento come u
 - Comprimi ed espandi i gruppi di intestazioni per concentrarti su parti specifiche del documento
 - L'intestazione attualmente attiva è evidenziata mentre scorri o digiti
 - Si aggiorna in tempo reale quando aggiungi, rimuovi o rinomini intestazioni
+- I titoli lunghi vanno a capo su due righe e si mostrano per intero al passaggio del mouse
+- Un campo di filtro in cima al pannello restringe l'albero alle intestazioni il cui testo corrisponde alla ricerca (senza distinzione tra maiuscole e minuscole; gli antenati vengono mantenuti, così il percorso resta visibile). Premi `Esc` per cancellarlo.
 
 ### Zoom
 
@@ -488,6 +584,7 @@ VMark controlla automaticamente gli aggiornamenti e può scaricarli e installarl
 - Cambio rapido dei file
 - Tracciamento dei file recenti
 - Dimensione e posizione della finestra memorizzate tra le sessioni
+- Pannello Stato finestre — vedi lo stato in tempo reale di Claude Code / IA di ogni finestra aperta e salta direttamente a quella che richiede la tua attenzione; fissalo in questa finestra o in tutte le finestre (incluse quelle che aprirai in seguito) per tenerlo aperto mentre passi da una finestra all'altra
 
 [Scopri di più →](/it/guide/workspace-management)
 
@@ -500,13 +597,14 @@ VMark controlla automaticamente gli aggiornamenti e può scaricarli e installarl
 
 ### Temi
 
-Cinque temi di colore integrati:
+Sei temi di colore integrati:
 
 - White (pulito, minimalista)
 - Paper (bianco caldo)
 - Mint (tinta verde morbida)
 - Sepia (stile vintage)
 - Night (modalità scura)
+- Solarized (scuro, palette Solarized)
 
 ### Font
 
@@ -517,6 +615,8 @@ Configura font separati per:
 - Monospace (codice)
 
 Ogni selettore offre un breve elenco di font consigliati, i font installati sul tuo computer e una voce **Personalizzato…** in cui digitare il nome di qualsiasi famiglia di font. [Dettagli →](/it/guide/settings#tipografia)
+
+Il font monospace viene verificato prima di essere usato, in modalità Sorgente, nel codice e nel terminale: se il font scelto non è installato, o si rivela non monospaziato, VMark ripiega lungo la pila sul successivo che lo è. Questo conta soprattutto su Linux con una lingua CJK, dove un nome di font mancante potrebbe altrimenti risolversi in un font CJK proporzionale e rompere la griglia del terminale.
 
 ### Layout
 

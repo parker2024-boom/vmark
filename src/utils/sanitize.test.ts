@@ -4,10 +4,9 @@
  * Security-critical tests for XSS prevention.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   sanitizeHtmlPreview,
-  sanitizeMediaHtml,
   sanitizeSvg,
   sanitizeKatex,
   escapeHtml,
@@ -512,7 +511,7 @@ describe("sanitizeSvg", () => {
     // Liveness, not performance: "terminates" is what the test timeout asserts.
     // The `elapsed < 5000` line that used to be here measured the MACHINE — it
     // failed at 5150ms under concurrent load with sanitizeSvg unchanged.
-    it("handles extremely large SVG without hanging", { timeout: 15_000 }, () => {
+    it("handles extremely large SVG without hanging", () => {
       // Generate a large SVG with many elements (10,000 rects)
       const rects = Array.from({ length: 10_000 }, (_, i) =>
         `<rect x="${i}" y="0" width="1" height="1"/>`,
@@ -663,102 +662,6 @@ describe("sanitizeKatex", () => {
   });
 });
 
-describe("sanitizeMediaHtml", () => {
-  describe("allowed media tags", () => {
-    it("allows video tag with src", () => {
-      const input = '<video src="clip.mp4" controls></video>';
-      const result = sanitizeMediaHtml(input);
-      expect(result).toContain("<video");
-      expect(result).toContain('src="clip.mp4"');
-      expect(result).toContain("controls");
-    });
-
-    it("allows audio tag with src", () => {
-      const input = '<audio src="song.mp3" controls></audio>';
-      const result = sanitizeMediaHtml(input);
-      expect(result).toContain("<audio");
-      expect(result).toContain('src="song.mp3"');
-    });
-
-    it("allows source tag inside video", () => {
-      const input = '<video controls><source src="clip.mp4" type="video/mp4"></video>';
-      const result = sanitizeMediaHtml(input);
-      expect(result).toContain("<source");
-      expect(result).toContain('type="video/mp4"');
-    });
-
-    it("allows video attributes: poster, preload, loop, muted", () => {
-      const input = '<video src="clip.mp4" poster="thumb.jpg" preload="metadata" loop muted controls></video>';
-      const result = sanitizeMediaHtml(input);
-      expect(result).toContain('poster="thumb.jpg"');
-      expect(result).toContain('preload="metadata"');
-    });
-
-    it("allows width and height on video", () => {
-      const input = '<video src="clip.mp4" width="640" height="360" controls></video>';
-      const result = sanitizeMediaHtml(input);
-      expect(result).toContain('width="640"');
-      expect(result).toContain('height="360"');
-    });
-  });
-
-  describe("XSS prevention in media", () => {
-    it("strips script inside video", () => {
-      const input = '<video><script>alert(1)</script></video>';
-      const result = sanitizeMediaHtml(input);
-      expect(result).not.toContain("<script");
-    });
-
-    it("strips onerror on video", () => {
-      const input = '<video src="x" onerror="alert(1)"></video>';
-      const result = sanitizeMediaHtml(input);
-      expect(result).not.toContain("onerror");
-    });
-
-    it("strips javascript: in src", () => {
-      const input = '<video src="javascript:alert(1)"></video>';
-      const result = sanitizeMediaHtml(input);
-      expect(result).not.toContain("javascript:");
-    });
-  });
-
-  describe("video provider iframe handling", () => {
-    it("allows YouTube iframe with nocookie domain", () => {
-      const input = '<iframe src="https://www.youtube-nocookie.com/embed/abc123" width="560" height="315"></iframe>';
-      const result = sanitizeMediaHtml(input);
-      expect(result).toContain("<iframe");
-      expect(result).toContain("youtube-nocookie.com");
-    });
-
-    it("allows YouTube iframe with youtube.com domain", () => {
-      const input = '<iframe src="https://www.youtube.com/embed/abc123" width="560" height="315"></iframe>';
-      const result = sanitizeMediaHtml(input);
-      expect(result).toContain("<iframe");
-      expect(result).toContain("youtube.com");
-    });
-
-    it("allows Vimeo iframe", () => {
-      const input = '<iframe src="https://player.vimeo.com/video/123456789" width="560" height="315"></iframe>';
-      const result = sanitizeMediaHtml(input);
-      expect(result).toContain("<iframe");
-      expect(result).toContain("player.vimeo.com");
-    });
-
-    it("allows Bilibili iframe", () => {
-      const input = '<iframe src="https://player.bilibili.com/player.html?bvid=BV1xx411c7mD" width="560" height="350"></iframe>';
-      const result = sanitizeMediaHtml(input);
-      expect(result).toContain("<iframe");
-      expect(result).toContain("player.bilibili.com");
-    });
-
-    it("strips non-whitelisted iframes", () => {
-      const input = '<iframe src="https://evil.com/page"></iframe>';
-      const result = sanitizeMediaHtml(input);
-      expect(result).not.toContain("evil.com");
-    });
-  });
-});
-
 describe("escapeHtml", () => {
   it("escapes ampersand", () => {
     expect(escapeHtml("Tom & Jerry")).toBe("Tom &amp; Jerry");
@@ -871,15 +774,6 @@ describe("sanitize — isSafeStyleValue angle brackets branch", () => {
   });
 });
 
-describe("sanitizeMediaHtml — no-DOM stripNonWhitelistedIframes branch", () => {
-  it("strips self-closing iframe forms when DOM is available", () => {
-    // In jsdom, the DOM path is taken, which exercises the DOM-based stripping
-    const input = '<iframe src="https://evil.com/page"></iframe>';
-    const result = sanitizeMediaHtml(input);
-    expect(result).not.toContain("evil.com");
-  });
-});
-
 describe("sanitize — isSafeStyleValue angle bracket via sanitizeStyleAttribute", () => {
   it("removes style declarations with embedded < angle bracket", () => {
     // Use an element with style that includes < to trigger line 215
@@ -887,28 +781,6 @@ describe("sanitize — isSafeStyleValue angle bracket via sanitizeStyleAttribute
     const result = sanitizeHtmlPreview(input, { allowStyles: true });
     // The background declaration with < should be removed, color: red should stay
     expect(result).toContain("Text");
-  });
-});
-
-describe("sanitizeMediaHtml — iframe edge cases", () => {
-  it("allows YouTube iframe without www prefix", () => {
-    const input = '<iframe src="https://youtube.com/embed/abc"></iframe>';
-    const result = sanitizeMediaHtml(input);
-    expect(result).toContain("<iframe");
-    expect(result).toContain("youtube.com");
-  });
-
-  it("strips iframes with no src attribute", () => {
-    const input = '<iframe></iframe>';
-    const result = sanitizeMediaHtml(input);
-    // An iframe with no src has empty string which doesn't match whitelist
-    expect(result).not.toContain("<iframe");
-  });
-
-  it("returns HTML as-is when no iframes present", () => {
-    const input = '<video src="clip.mp4" controls></video>';
-    const result = sanitizeMediaHtml(input);
-    expect(result).toContain("<video");
   });
 });
 
@@ -946,84 +818,34 @@ describe("sanitize — isSafeStyleValue url() and expression() via allowed prope
   });
 });
 
-describe("sanitize — filterAllowedStyles no-DOM branch (line 170)", () => {
-  // Simulate a server-side / no-DOM environment by temporarily replacing document.
-  // When typeof document === "undefined", filterAllowedStyles falls back to a
-  // regex-based strip of all style attributes.
+/**
+ * Run `fn` as if in a worker or on a server: no document, and no DOMParser to
+ * parse markup inertly. The re-parsing filters then fall back to stripping.
+ */
+function withoutDom<T>(fn: () => T): T {
+  vi.stubGlobal("document", undefined);
+  vi.stubGlobal("DOMParser", undefined);
+  try {
+    return fn();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+}
 
-  it("strips style attributes via regex when document is not available", () => {
-    const saved = global.document;
-    try {
-      // @ts-expect-error intentionally removing document to test the no-DOM path
-      delete global.document;
-      const input = '<span style="color: red;">Text</span>';
-      const result = sanitizeHtmlPreview(input, { allowStyles: true });
-      // In no-DOM mode the regex strips style attrs entirely
-      expect(result).not.toContain("style=");
-      expect(result).toContain("Text");
-    } finally {
-      global.document = saved;
-    }
+describe("sanitize — the preview style filter with no DOM", () => {
+  it("strips style attributes via regex", () => {
+    const input = '<span style="color: red;">Text</span>';
+    const result = withoutDom(() => sanitizeHtmlPreview(input, { allowStyles: true }));
+    expect(result).not.toContain("style=");
+    expect(result).toContain("Text");
   });
 
-  it("handles multiple style attributes in no-DOM mode", () => {
-    const saved = global.document;
-    try {
-      // @ts-expect-error intentionally removing document to test the no-DOM path
-      delete global.document;
-      const input = '<span style="color: red; font-weight: bold;">A</span><em style="font-style: italic;">B</em>';
-      const result = sanitizeHtmlPreview(input, { allowStyles: true });
-      expect(result).not.toContain("style=");
-      expect(result).toContain("A");
-      expect(result).toContain("B");
-    } finally {
-      global.document = saved;
-    }
-  });
-});
-
-describe("sanitize — stripNonWhitelistedIframes no-DOM branch (line 267)", () => {
-  // Same technique: remove global.document so the no-DOM regex path is taken.
-
-  it("strips paired iframes via regex when document is not available", () => {
-    const saved = global.document;
-    try {
-      // @ts-expect-error intentionally removing document to test the no-DOM path
-      delete global.document;
-      const input = '<iframe src="https://evil.com/page">inner</iframe>';
-      const result = sanitizeMediaHtml(input);
-      expect(result).not.toContain("<iframe");
-      expect(result).not.toContain("evil.com");
-    } finally {
-      global.document = saved;
-    }
-  });
-
-  it("strips self-closing iframes via regex when document is not available", () => {
-    const saved = global.document;
-    try {
-      // @ts-expect-error intentionally removing document to test the no-DOM path
-      delete global.document;
-      const input = '<iframe src="https://evil.com/page" />';
-      const result = sanitizeMediaHtml(input);
-      expect(result).not.toContain("<iframe");
-    } finally {
-      global.document = saved;
-    }
-  });
-
-  it("strips even whitelisted iframes via regex when document is not available (safety over permissiveness)", () => {
-    const saved = global.document;
-    try {
-      // @ts-expect-error intentionally removing document to test the no-DOM path
-      delete global.document;
-      // In no-DOM mode ALL iframes are removed — can't verify src safely
-      const input = '<iframe src="https://www.youtube.com/embed/abc"></iframe>';
-      const result = sanitizeMediaHtml(input);
-      expect(result).not.toContain("<iframe");
-    } finally {
-      global.document = saved;
-    }
+  it("handles multiple style attributes", () => {
+    const input = '<span style="color: red; font-weight: bold;">A</span><em style="font-style: italic;">B</em>';
+    const result = withoutDom(() => sanitizeHtmlPreview(input, { allowStyles: true }));
+    expect(result).not.toContain("style=");
+    expect(result).toContain("A");
+    expect(result).toContain("B");
   });
 });
 

@@ -11,6 +11,8 @@
  *     Quit so that every open editor in this window (e.g. split-pane, or
  *     multiple mounted tabs) is synced to the document store before dirty
  *     content is collected, not just the focused one.
+ *
+ * @module utils/wysiwygFlush
  */
 
 type WysiwygFlusher = () => void;

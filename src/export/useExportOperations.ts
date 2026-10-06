@@ -3,6 +3,8 @@
  *
  * Print: sends self-contained HTML to the Rust `print_document` command
  * (helper webview + system print dialog). HTML Export: ExportSurface.
+ *
+ * @module export/useExportOperations
  */
 
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -75,8 +77,7 @@ export async function exportToPdfNative(options: ExportToPdfOptions): Promise<vo
     // The detail, not just the headline: the HTML and print paths both hand the
     // raw error on (`errorDetail` normalizes a typed CommandError through
     // `commandErrorMessage`), and this one discarded it — so a refused render
-    // or a missing window said only "could not prepare PDF" (audit round 3,
-    // #701).
+    // or a missing window said only "could not prepare PDF".
     toast.errorDetail(i18n.t("dialog:toast.failedToPreparePdf"), error);
   }
 }
@@ -109,13 +110,13 @@ export function pickPrintHtmlSource(
  * `print_document` command builds a separate hidden webview, loads the
  * rendered HTML, and shows the platform's print dialog — same approach as
  * PDF export but with the print panel visible (all three platforms since
- * WI-PDF4.1). Only a `completed` outcome toasts (WI-FL6.3).
+ * WI-PDF4.1). Only a `completed` outcome toasts.
  *
  * The HTML comes from the focused pane's live editor when it is showing the
  * window's active tab — the document `export.pdf` resolved (fast path,
  * WYSIWYG), after its viewport-deferred renders are flushed — and from an
  * ExportSurface render of the markdown otherwise:
- * Source mode, a split whose focused pane is not WYSIWYG (#346), or an editor
+ * Source mode, a split whose focused pane is not WYSIWYG, or an editor
  * that went away while the flush waited. Either
  * way the local images are inlined first (#999): the helper webview has no
  * Tauri asset:// handler. See printDocument.ts for each step.
@@ -142,7 +143,7 @@ async function exportToPdfBrowser(
 
     // `renderPrintableHtml` IS render-then-inline, and the native-PDF path
     // already calls it. Spelling the two steps out here left one printable-body
-    // recipe in two places, free to drift (audit round 3, #702); the LIVE
+    // recipe in two places, free to drift; the LIVE
     // branch is the only one that differs, because its HTML is already
     // rendered and needs the inlining half alone.
     const body =
@@ -166,11 +167,11 @@ async function exportToPdfBrowser(
 
 /**
  * Copy rendered HTML to clipboard. Unstyled by design: the optional branch that
- * prefixed the captured theme CSS had no caller and was removed (WI-FL3.9).
+ * prefixed the captured theme CSS had no caller and was removed.
  * Empty content is refused with the same toast as the export operations.
  *
- * The markup is the same BODY every other export path produces (audit R2,
- * #703/#704): unsanitized and unresolved, it carried ProseMirror's artifacts
+ * The markup is the same BODY every other export path produces:
+ * unsanitized and unresolved, it carried ProseMirror's artifacts
  * and `asset://` URLs that resolve nowhere outside VMark, so every image broke
  * on paste. `sourceFilePath` is what a relative image is relative TO.
  */

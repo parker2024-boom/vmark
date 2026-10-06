@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 
 /**
  * TiptapEditorInner test suite
@@ -39,7 +39,6 @@ const mocks = vi.hoisted(() => ({
     setSelectedText: mocks.setSelectedText,
   })),
   useWindowLabel: vi.fn(() => "main"),
-  consumeWysiwygPendingNav: vi.fn(() => false),
   reportUnparseableDocument: vi.fn(),
   // Mock editor returned by useEditor
   mockEditor: null as ReturnType<typeof createMockEditor> | null,
@@ -213,28 +212,24 @@ vi.mock("@/stores/documentStore", () => ({
   useFileLoadStore: { getState: () => ({ active: false }) },
 }));
 
-vi.mock("./wysiwygPendingNav", () => ({
-  consumeWysiwygPendingNav: (...args: unknown[]) => mocks.consumeWysiwygPendingNav(...args),
-}));
-
 vi.mock("@/services/editor/unparseableDocument", () => ({
   reportUnparseableDocument: (...args: unknown[]) => mocks.reportUnparseableDocument(...args),
 }));
 
-vi.mock("./ImageContextMenu", () => ({
-  ImageContextMenu: ({ onAction }: { onAction: (a: string) => void }) => (
-    <button data-testid="image-ctx" onClick={() => onAction("test")} />
-  ),
-}));
-
 import { TiptapEditorInner } from "./TiptapEditor";
+import { useImageContextMenuStore } from "@/stores/imageContextMenuStore";
+
+/** Open the real image context menu through its store, as a right-click does. */
+function openImageMenu() {
+  useImageContextMenuStore.getState().openMenu({ position: { x: 10, y: 10 }, imageSrc: "a.png", imageNodePos: 1 });
+}
 
 // ── Tests ────────────────────────────────────────────────────────────
-
 
 describe("TiptapEditorInner", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useImageContextMenuStore.getState().closeMenu();
     mocks.mockEditor = createMockEditor();
     // Default: useEditor returns the mock editor
     mocks.useEditor.mockReturnValue(mocks.mockEditor);
@@ -276,13 +271,21 @@ describe("TiptapEditorInner", () => {
   });
 
   it("does not render ImageContextMenu when hidden", () => {
-    const { queryByTestId } = render(<TiptapEditorInner hidden={true} />);
-    expect(queryByTestId("image-ctx")).not.toBeInTheDocument();
+    openImageMenu();
+    const { queryByRole } = render(<TiptapEditorInner hidden={true} />);
+    expect(queryByRole("menu")).not.toBeInTheDocument();
   });
 
-  it("renders ImageContextMenu when visible", () => {
-    const { getByTestId } = render(<TiptapEditorInner hidden={false} />);
-    expect(getByTestId("image-ctx")).toBeInTheDocument();
+  it("renders ImageContextMenu when visible and routes its action to the image handler", () => {
+    const handleAction = vi.fn();
+    mocks.useImageContextMenu.mockReturnValue(handleAction);
+    openImageMenu();
+    const { getByRole, getAllByRole } = render(<TiptapEditorInner hidden={false} />);
+    expect(getByRole("menu")).toBeInTheDocument();
+    fireEvent.click(getAllByRole("menuitem")[0]);
+    expect(handleAction).toHaveBeenCalledWith("change");
+    // Activating an item closes the menu.
+    expect(useImageContextMenuStore.getState().isOpen).toBe(false);
   });
 
   // ── Hooks called ─────────────────────────────────────────────────
@@ -614,9 +617,11 @@ describe("TiptapEditorInner — content-visibility toggle", () => {
       // DOM diff doesn't pay the content-visibility reflow cost.
       expect(el.classList.contains("cv-idle")).toBe(false);
 
-      // After the idle debounce elapses, the class returns so scroll and
-      // initial paint keep the optimization.
+      // After the idle debounce and a rendered frame, the class returns so
+      // scroll and initial paint keep the optimization.
       vi.advanceTimersByTime(500);
+      vi.advanceTimersToNextFrame();
+      vi.advanceTimersToNextFrame();
       expect(el.classList.contains("cv-idle")).toBe(true);
     } finally {
       vi.useRealTimers();

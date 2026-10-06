@@ -29,8 +29,8 @@ If you prefer keeping system functions on F-keys, you can customize VMark shortc
 | `F2` | Next Issue |
 | `Shift + F2` | Previous Issue |
 | `F3` | Toggle Invisibles |
-| `F4` | Sort Lines Ascending |
-| `Shift + F4` | Sort Lines Descending |
+| `F4` | Sort Lines Ascending _(Source mode only; does nothing in WYSIWYG)_ |
+| `Shift + F4` | Sort Lines Descending _(Source mode only; does nothing in WYSIWYG)_ |
 | `F5` | Source Peek |
 | `F6` | Source view (Markdown: WYSIWYG ⇄ Source; other formats: Source ⇄ Split) |
 | `Shift + F6` | Split / Preview (Markdown: split view; other formats: Preview ⇄ Split) |
@@ -350,12 +350,12 @@ When the integrated terminal is focused:
 | Action | Shortcut |
 |--------|----------|
 | Toggle Terminal | `` Ctrl + ` `` |
-| Focus Terminal or Editor | `` Ctrl + Shift + ` `` |
-| Copy | `Mod + C` (with selection) |
-| Paste | `Mod + V` |
-| Select All (terminal output only) | `Mod + A` |
-| Clear | `Mod + K` |
-| Search | `Mod + F` |
+| Focus Terminal or Editor | `` Ctrl + Shift + ` `` (`` Alt + Shift + ` `` on Windows/Linux) |
+| Copy | `Mod + C` (with selection); on Linux also `Ctrl + Shift + C` or `Ctrl + Insert` |
+| Paste | `Mod + V`; on Linux also `Ctrl + Shift + V` or `Shift + Insert` |
+| Select All (terminal output only) | `Mod + A` (`Ctrl + Shift + A` on Linux) |
+| Clear | `Mod + K` (`Ctrl + Shift + K` on Linux) |
+| Search | `Mod + F` (`Ctrl + Shift + F` on Linux) |
 | Switch to session 1–5 | `Mod + 1` through `Mod + 5` |
 | Terminal font bigger | `Mod + =` |
 | Terminal font smaller | `Mod + -` |
@@ -377,6 +377,8 @@ On macOS the terminal also translates the usual text-editing chords for the shel
 | Delete the input line (sends `Ctrl + U`) | `Cmd + Backspace` |
 
 `Ctrl` chords such as `Ctrl + A`, `Ctrl + R` and `Ctrl + W` go straight to the shell on macOS.
+
+On Linux the terminal follows the usual Linux terminal convention: plain `Ctrl` + letter chords go to the shell, so readline keys such as `Ctrl + A`, `Ctrl + E`, `Ctrl + K`, `Ctrl + F`, `Ctrl + U` and `Ctrl + W` work as in any other Linux terminal, and the terminal's own actions move to `Ctrl + Shift` — `Ctrl + Shift + A` selects all, `Ctrl + Shift + K` clears, `Ctrl + Shift + F` searches, and `Ctrl + Shift + C` / `Ctrl + Shift + V` copy and paste. `Ctrl + Insert` and `Shift + Insert` also copy and paste. Two plain `Ctrl` chords stay with the terminal: `Ctrl + C` copies a selection (and sends SIGINT when nothing is selected), and `Ctrl + V` pastes. `Ctrl + 1` through `Ctrl + 5` still switch sessions.
 
 When the terminal search bar is open:
 

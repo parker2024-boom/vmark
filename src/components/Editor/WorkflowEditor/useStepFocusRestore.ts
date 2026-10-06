@@ -5,11 +5,11 @@
  *   The `key=` prop change unmounts/remounts StepForm and strands keyboard
  *   focus on document.body. Only a transition between two non-null step ids
  *   restores it — an initial selection (null → step) does NOT auto-focus, so
- *   users who clicked a step row in JobForm aren't pulled to the nav buttons
- *   (Codex audit MED-3 + verify regression). The focus is deferred a frame so
+ *   users who clicked a step row in JobForm aren't pulled to the nav buttons.
+ *   The focus is deferred a frame so
  *   the new StepForm has mounted and laid out before its DOM is queried.
  *
- *   Two things about the query are load-bearing (audit R2, #586):
+ *   Two things about the query are load-bearing:
  *
  *   - It is SCOPED to the panel that owns it. The selection lives in one store
  *     slice, so every mounted forms editor reacts to the same change, and a
@@ -22,8 +22,8 @@
  *     found nothing in any of the other nine locales and focus restoration
  *     silently did not happen at all.
  *
- *   Focus goes back to the control the user was ON, not to a fixed favourite
- *   (audit R2, #588). `next` first regardless of direction meant walking
+ *   Focus goes back to the control the user was ON, not to a fixed favourite.
+ *   `next` first regardless of direction meant walking
  *   BACKWARD landed on Next every time, so the next Enter reversed the
  *   direction the user had established — two keystrokes per step, alternating.
  *   The remembered nav is captured from `focusin` rather than read here,

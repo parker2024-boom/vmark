@@ -6,6 +6,7 @@
  * rendering) lives in tableFormat.ts.
  *
  * @coordinates-with sourceContextDetection/tableFormat.ts — pure formatting helpers
+ * @module plugins/sourceContextDetection/tableActions
  */
 
 import type { EditorView } from "@codemirror/view";

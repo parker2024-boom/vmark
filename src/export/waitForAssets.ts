@@ -3,6 +3,8 @@
  *
  * Ensures all async content (fonts, images, Math, Mermaid) has rendered
  * before proceeding with export or print.
+ *
+ * @module export/waitForAssets
  */
 
 import { checkImages, getStabilityStatus, type StabilityStatus } from "./assetReadiness";
@@ -42,12 +44,11 @@ const UNUSABLE_BOUNDS_WARNING = "Ignored an unusable timeout/interval option; us
  *
  * A non-finite or non-positive `timeout` is not a shorter deadline — it is NO
  * deadline: `elapsed >= NaN` is false forever, so the poll this module
- * documents as bounded never ends, which is the export hang #348 fixed from the
- * other side. A non-positive `interval` schedules the next poll with no gap at
+ * documents as bounded never ends, which is the very export hang the
+ * deadline exists to prevent. A non-positive `interval` schedules the next poll with no gap at
  * all and spins the main thread. Neither is a value the caller can have meant,
  * so both fall back to the documented default — and say so in `warnings`,
- * because silently substituting a number is how the next caller never learns
- * (audit round 3, #707).
+ * because silently substituting a number is how the next caller never learns.
  */
 function usableBounds({ timeout, interval }: StabilityOptions): {
   timeout: number;
@@ -89,7 +90,7 @@ async function waitForFonts(timeout: number): Promise<void> {
  * A status, as the sentences a caller can act on.
  *
  * Pure and module-level — status-to-warning is a mapping, not part of the
- * deadline race it used to be nested inside (audit round 3, #706). The four
+ * deadline race it used to be nested inside. The four
  * closures left in the poll below ARE the state machine: they share exactly
  * two mutable cells and a `resolve` that only exists inside the promise
  * executor, so hoisting them into a class would move that state behind `this.`
@@ -157,8 +158,8 @@ export async function waitForAssets(
       resolve(result);
     };
 
-    // A consumer callback that throws must not leave the export pending
-    // (audit #352): the failure is recorded once and the poll goes on.
+    // A consumer callback that throws must not leave the export pending:
+    // the failure is recorded once and the poll goes on.
     let progressFailed = false;
     const report = (status: StabilityStatus): void => {
       try {
@@ -179,13 +180,13 @@ export async function waitForAssets(
       warnings.push(...pendingWarnings(status, container));
     };
 
-    // Two frames for layout, then a RE-CHECK (#353): an asset invalidated
+    // Two frames for layout, then a RE-CHECK: an asset invalidated
     // during layout resumes polling instead of shipping a stale "ready". The
-    // frames are bounded by the deadline (#354) — throttled or suspended
+    // frames are bounded by the deadline — throttled or suspended
     // frames used to hang the export indefinitely once it was ready.
     //
     // The deadline REPORTS WHAT IT FINDS, it does not assume the readiness the
-    // poll saw before the frames (#354, round 2). An asset invalidated while
+    // poll saw before the frames. An asset invalidated while
     // the frames never arrived is exactly the case the re-check exists to
     // refuse, and answering `success: true` there shipped it anyway.
     const settle = (elapsed: number): void => {
@@ -223,7 +224,7 @@ export async function waitForAssets(
         return;
       }
 
-      // Never longer than what is LEFT (#709): this poll is what detects the
+      // Never longer than what is LEFT: this poll is what detects the
       // deadline, so waiting a full interval past it is how a documented 10s
       // maximum became 10s plus one interval. `elapsed < timeout` here, so the
       // remainder is positive.

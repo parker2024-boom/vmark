@@ -1,8 +1,8 @@
 /**
- * Browser automation lease — AI vs human arbitration (WI-1.9 / R11 / WI-NB5.1).
+ * Browser automation lease — AI vs human arbitration (R11).
  *
  * Purpose: a single lease per browser tab deciding who drives the page — the AI
- * (a multi-step workflow run) or the human. WIRED as of WI-NB5: the workflow
+ * (a multi-step workflow run) or the human. WIRED: the workflow
  * runner acquires/releases it around a run, browser-chrome interaction and the
  * native page-input signal (`browser://user-input`) reclaim it for the human,
  * tab close clears it via `tabRemovalBus`, and the tab chrome renders the
@@ -32,18 +32,20 @@
  *     the lease, so a late registration cannot re-install an operation a
  *     reclaim just cancelled.
  *
- * The state arithmetic lives in `leaseTransitions.ts` as pure functions (round 3,
- * #92); this file owns SEQUENCING — commit the record first, run the canceller
- * after — and the store itself.
+ * The state arithmetic lives in `leaseTransitions.ts` as pure functions;
+ * the state itself lives in `stores/browserLeaseStore.ts`, which holds data
+ * only. This file owns SEQUENCING — record the new state first, run the canceller
+ * after, outside any `set` — so it is the one writer of that store.
  *
  * @coordinates-with services/browser/leaseTransitions.ts — the pure transitions composed here
+ * @coordinates-with stores/browserLeaseStore.ts — the state this service writes
  * @coordinates-with services/browser/browserLeaseWiring.ts — event sources (chrome, native input, tab close)
  * @coordinates-with components/Browser/BrowserChrome.tsx — renders the AI-control state
  * @module services/browser/lease
  */
 
-import { create } from "zustand";
 import { browserWarn } from "@/utils/debug";
+import { useBrowserLeaseStore } from "@/stores/browserLeaseStore";
 import {
   detachCanceller,
   grantToAi,
@@ -52,20 +54,11 @@ import {
   validateEnvelope,
   withCanceller,
   withoutTab,
-  type Cancellers,
   type LeaseHolder,
-  type Leases,
   type LeaseValidation,
 } from "./leaseTransitions";
 
-interface LeaseState {
-  /** Per-tab lease record, keyed by browser tab id. */
-  leases: Leases;
-  /** Per-tab canceller for the AI's in-flight driver step, if any. */
-  inflightCancel: Cancellers;
-}
-
-interface LeaseActions {
+interface BrowserLease {
   /** AI requests control. Succeeds only if the tab is free or already AI-held
    *  (a human holder always wins). Returns whether the AI now holds the lease. */
   acquireForAi: (tabId: string) => boolean;
@@ -105,83 +98,81 @@ function runCancel(cancel: (() => void) | undefined): void {
   }
 }
 
-/** Manages the per-tab automation lease (R11). Use selectors, not destructuring. */
-export const useBrowserLeaseStore = create<LeaseState & LeaseActions>((set, get) => {
-  /** Detach the tab's in-flight canceller and return it (so it fires at most
-   *  once — the state is committed before the callback runs). */
-  const detachCancel = (tabId: string): (() => void) | undefined => {
-    const { cancellers, cancel } = detachCanceller(get().inflightCancel, tabId);
-    if (cancel) set({ inflightCancel: cancellers });
-    return cancel;
-  };
+const read = useBrowserLeaseStore.getState;
+const write = useBrowserLeaseStore.setState;
 
-  /**
-   * The one authority transition shared by reclaim and release: detach the
-   * in-flight canceller, bump the epoch (invalidating every outstanding run
-   * envelope), move the holder, then fire the canceller against the
-   * already-committed state.
-   */
-  const invalidate = (tabId: string, holder: LeaseHolder | null): void => {
-    const cancel = detachCancel(tabId);
-    set((state) => ({ leases: invalidateLease(state.leases, tabId, holder) }));
-    runCancel(cancel);
-  };
+/** Detach the tab's in-flight canceller and return it (so it fires at most
+ *  once — the state is recorded before the callback runs). */
+function detachCancel(tabId: string): (() => void) | undefined {
+  const { cancellers, cancel } = detachCanceller(read().inflightCancel, tabId);
+  if (cancel) write({ inflightCancel: cancellers });
+  return cancel;
+}
 
-  return {
-    leases: {},
-    inflightCancel: {},
+/**
+ * The one authority transition shared by reclaim and release: detach the
+ * in-flight canceller, bump the epoch (invalidating every outstanding run
+ * envelope), move the holder, then fire the canceller against the
+ * already-recorded state.
+ */
+function invalidate(tabId: string, holder: LeaseHolder | null): void {
+  const cancel = detachCancel(tabId);
+  write((state) => ({ leases: invalidateLease(state.leases, tabId, holder) }));
+  runCancel(cancel);
+}
 
-    acquireForAi: (tabId) => {
-      const leases = grantToAi(get().leases, tabId);
-      if (!leases) return false;
-      set({ leases });
-      return true;
-    },
+/** The per-tab automation lease (R11) — the only writer of browserLeaseStore. */
+export const browserLease: BrowserLease = {
+  acquireForAi: (tabId) => {
+    const leases = grantToAi(read().leases, tabId);
+    if (!leases) return false;
+    write({ leases });
+    return true;
+  },
 
-    reclaimForHuman: (tabId) => {
-      if (get().leases[tabId]?.holder !== "ai") return;
-      invalidate(tabId, "human");
-    },
+  reclaimForHuman: (tabId) => {
+    if (read().leases[tabId]?.holder !== "ai") return;
+    invalidate(tabId, "human");
+  },
 
-    release: (tabId, holder) => {
-      if (leaseOf(get().leases, tabId).holder !== holder) return;
-      // An authority transition like reclaim: the epoch moves so envelopes
-      // from the ended tenure cannot validate after a re-acquire, and the
-      // in-flight step is never left running (or a stale canceller left for a
-      // later reclaim to fire).
-      invalidate(tabId, null);
-    },
+  release: (tabId, holder) => {
+    if (leaseOf(read().leases, tabId).holder !== holder) return;
+    // An authority transition like reclaim: the epoch moves so envelopes
+    // from the ended tenure cannot validate after a re-acquire, and the
+    // in-flight step is never left running (or a stale canceller left for a
+    // later reclaim to fire).
+    invalidate(tabId, null);
+  },
 
-    setInflightCancel: (tabId, cancel) => {
-      // Only the AI holds in-flight steps, and only one per tab. A registration
-      // that lands after a human reclaim would otherwise re-install the very
-      // operation the reclaim just cancelled — refuse it and cancel it at once.
-      if (cancel && get().leases[tabId]?.holder !== "ai") {
-        runCancel(cancel);
-        return;
-      }
-      const previous = get().inflightCancel[tabId];
-      set((state) => ({ inflightCancel: withCanceller(state.inflightCancel, tabId, cancel) }));
-      // Replacing a live canceller abandons its step — cancel it, never orphan it.
-      // Clearing with `null` means the step completed on its own: nothing to cancel.
-      if (cancel && previous && previous !== cancel) runCancel(previous);
-    },
-
-    validate: (tabId, holder, epoch) => validateEnvelope(get().leases, tabId, holder, epoch),
-
-    currentHolder: (tabId) => leaseOf(get().leases, tabId).holder,
-
-    epochOf: (tabId) => leaseOf(get().leases, tabId).epoch,
-
-    removeTab: (tabId) => {
-      // The surface is gone: an in-flight step would act on a destroyed webview
-      // (or, worse, a reused tab id) — cancel it as part of the teardown.
-      const cancel = detachCancel(tabId);
-      set((state) => ({
-        leases: withoutTab(state.leases, tabId),
-        inflightCancel: withoutTab(state.inflightCancel, tabId),
-      }));
+  setInflightCancel: (tabId, cancel) => {
+    // Only the AI holds in-flight steps, and only one per tab. A registration
+    // that lands after a human reclaim would otherwise re-install the very
+    // operation the reclaim just cancelled — refuse it and cancel it at once.
+    if (cancel && read().leases[tabId]?.holder !== "ai") {
       runCancel(cancel);
-    },
-  };
-});
+      return;
+    }
+    const previous = read().inflightCancel[tabId];
+    write((state) => ({ inflightCancel: withCanceller(state.inflightCancel, tabId, cancel) }));
+    // Replacing a live canceller abandons its step — cancel it, never orphan it.
+    // Clearing with `null` means the step completed on its own: nothing to cancel.
+    if (cancel && previous && previous !== cancel) runCancel(previous);
+  },
+
+  validate: (tabId, holder, epoch) => validateEnvelope(read().leases, tabId, holder, epoch),
+
+  currentHolder: (tabId) => leaseOf(read().leases, tabId).holder,
+
+  epochOf: (tabId) => leaseOf(read().leases, tabId).epoch,
+
+  removeTab: (tabId) => {
+    // The surface is gone: an in-flight step would act on a destroyed webview
+    // (or, worse, a reused tab id) — cancel it as part of the teardown.
+    const cancel = detachCancel(tabId);
+    write((state) => ({
+      leases: withoutTab(state.leases, tabId),
+      inflightCancel: withoutTab(state.inflightCancel, tabId),
+    }));
+    runCancel(cancel);
+  },
+};

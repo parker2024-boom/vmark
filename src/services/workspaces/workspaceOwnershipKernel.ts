@@ -1,5 +1,5 @@
 /**
- * Pure workspace ownership kernel (WI-1R).
+ * Pure workspace ownership kernel.
  *
  * Purpose: THE single partition rule deciding which workspace instance owns
  * each tab in a window. Visibility (tab strip, cycling), the switch
@@ -18,7 +18,8 @@
  *      BEFORE partitioning).
  *
  * Argument-pure: no store imports, no feature-flag reads — wrappers gather
- * live state and pass it in. Platform-aware containment via WI-17.1.
+ * live state and pass it in. Platform-aware containment via
+ * `utils/paths/pathComparison`.
  *
  * @coordinates-with workspaceContextOwnership.ts — path classification rule
  * @coordinates-with workspaceTabCollection.ts — tabBelongsToWorkspace wrapper

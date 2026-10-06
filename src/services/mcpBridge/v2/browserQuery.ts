@@ -1,5 +1,5 @@
 /**
- * MCP v2 `vmark.browser.query` handler (WI-P5.1) — structured DOM detection by CSS
+ * MCP v2 `vmark.browser.query` handler — structured DOM detection by CSS
  * selector, read-class. Runs in the driver's ISOLATED content world. Split from
  * `browserPower.ts` (the write-class `style`/`execute_js`) for the file-size gate.
  *
@@ -14,7 +14,7 @@ import { scriptTooLarge } from "./browserHelpers";
 import { buildQueryScript, type QueryFields } from "@/lib/browser/agent/powerScript";
 import { urlForAgent } from "@/lib/browser/url";
 import { runReadClass, parseEvalResult } from "./browserReadClass";
-import { readOperationArgs } from "./readOperationArgs";
+import { readOperationArgsChecked } from "./readOperationArgs";
 
 const FIELDS_SHAPE = "query `fields` must be {attributes?: true, box?: true, styles?: string[]}";
 
@@ -47,7 +47,8 @@ const WIDEST_GENERATION = 1e19;
 
 export async function handleBrowserQuery(id: string, args: Record<string, unknown>): Promise<void> {
   return wrapHandler(id, async () => {
-    const wire = readOperationArgs("vmark.browser.query", args);
+    const read = readOperationArgsChecked("vmark.browser.query", args);
+    const wire = read.wire;
     const selector = typeof wire.selector === "string" && wire.selector.trim() ? wire.selector : "";
     if (!selector) {
       await respond({ id, success: false, error: "query requires a non-empty CSS 'selector'" });
@@ -71,7 +72,7 @@ export async function handleBrowserQuery(id: string, args: Record<string, unknow
       await respond({ id, success: false, error: tooLarge });
       return;
     }
-    await runReadClass<string>(id, args, {
+    await runReadClass<string>(id, read, {
       invoke: (tab) =>
         invoke<string>("browser_eval", {
           tabId: tab.tabId,

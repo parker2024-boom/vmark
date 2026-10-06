@@ -3,6 +3,8 @@
  *
  * Provides async clipboard reading with image path detection.
  * Validates local paths with filesystem existence check.
+ *
+ * @module services/media/clipboardImagePath
  */
 
 import { readText } from "@tauri-apps/plugin-clipboard-manager";

@@ -165,5 +165,5 @@ describe("inline fast paths leave every parse unchanged (#1407)", () => {
       }),
       { numRuns: 3000, seed: SEED },
     );
-  }, 120_000);
+  });
 });

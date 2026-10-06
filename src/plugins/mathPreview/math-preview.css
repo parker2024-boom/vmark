@@ -4,7 +4,7 @@
  * Styled to match link popup design language
  */
 
-/* Shell chrome comes from `.popup-container` (WI-UI3.2). */
+/* Shell chrome comes from `.popup-container`. */
 .math-preview-popup {
   flex-direction: column;
   align-items: center;

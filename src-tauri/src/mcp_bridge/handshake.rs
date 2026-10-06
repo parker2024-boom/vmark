@@ -1,4 +1,4 @@
-//! Pre-authentication policy for MCP bridge WebSocket connections (WI-9).
+//! Pre-authentication policy for MCP bridge WebSocket connections.
 //!
 //! Everything an *unauthenticated* peer can reach lives in this one module so
 //! the surface is auditable in a single read: which HTTP `Origin`s may
@@ -8,8 +8,6 @@
 //! auth phase are in `frames.rs`; how a secret is compared is in
 //! `token_compare.rs`; who the accepted peer turns out to be is in
 //! `principal.rs`.
-//!
-//! Source for each control: `dev-docs/deep-researches/20260728-mcp-stack-audit.md` §2.2.
 
 use super::principal::BridgePrincipal;
 use super::token_compare::token_matches;
@@ -103,7 +101,7 @@ pub(super) const READ_BUFFER_BYTES: usize = 16 * 1024;
 /// left 32 pre-auth peers × 16 MiB ≥ 512 MiB of retainable memory bought with
 /// no credential at all. An auth frame is a few hundred bytes, so this
 /// application-layer cap costs honest clients nothing and disconnects the
-/// peer on the first over-cap frame (audit round 1, finding 5).
+/// peer on the first over-cap frame.
 pub(super) const MAX_PREAUTH_MESSAGE_BYTES: usize = 64 * 1024;
 // Compile-time bounds: strictly under both transport caps (at or above
 // either, this control would be dead code the transport already enforced),
@@ -145,12 +143,24 @@ pub(super) struct ConnectionSlot;
 impl ConnectionSlot {
     /// Reserve a slot, or `None` when the bridge is already at capacity.
     pub(super) fn try_acquire() -> Option<Self> {
-        LIVE_CONNECTIONS
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |live| {
-                (live < MAX_CONCURRENT_CONNECTIONS).then_some(live + 1)
-            })
-            .ok()
-            .map(|_| ConnectionSlot)
+        // An explicit compare-exchange loop rather than `fetch_update`, which
+        // newer toolchains deprecate under a name the declared minimum Rust
+        // version does not have.
+        let mut live = LIVE_CONNECTIONS.load(Ordering::Acquire);
+        loop {
+            if live >= MAX_CONCURRENT_CONNECTIONS {
+                return None;
+            }
+            match LIVE_CONNECTIONS.compare_exchange_weak(
+                live,
+                live + 1,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => return Some(ConnectionSlot),
+                Err(current) => live = current,
+            }
+        }
     }
 
     /// Currently reserved slots. Diagnostics and tests only.
@@ -189,7 +199,7 @@ pub(super) enum AuthOutcome {
 /// binary frames are rejected outright — the protocol is JSON text only, and
 /// an unauthenticated peer should not be able to stream bytes at us.
 ///
-/// Two credentials, two jobs (audit 20260728 §2.1):
+/// Two credentials, two jobs:
 ///
 /// * `token` — the shared bridge token from the port file. This alone decides
 ///   **access**; nothing else authenticates a peer, and that has not changed.
@@ -233,8 +243,8 @@ where
                 };
                 if msg.msg_type != "auth" {
                     log::warn!(
-                        "[MCP Bridge] Peer {peer} sent '{}' before auth — rejected",
-                        msg.msg_type
+                        "[MCP Bridge] Peer {peer} sent {} before auth — rejected",
+                        crate::peer_text::peer_text(&msg.msg_type)
                     );
                     return AuthOutcome::Rejected;
                 }

@@ -89,7 +89,7 @@
   flex-shrink: 0;
   position: relative;
   color: var(--text-secondary);
-  /* WI-2.1 — reset <button> chrome so the chevron stays visually neutral.
+  /* Reset <button> chrome so the chevron stays visually neutral.
      The chevron is rendered as a real button for keyboard accessibility;
      these resets keep it indistinguishable from the previous <span>. */
   background: transparent;
@@ -114,7 +114,7 @@
   color: var(--text-color);
 }
 
-/* WI-2.1 — visible focus indicator for keyboard users (a11y).
+/* Visible focus indicator for keyboard users (a11y).
    Follows .claude/rules/33-focus-indicators.md: U-shaped underline for
    icon buttons. */
 .file-node-arrow:focus-visible {
@@ -151,7 +151,7 @@
   white-space: nowrap;
 }
 
-/* One rename treatment: `.vm-input` (WI-UI3.3). */
+/* One rename treatment: `.vm-input`. */
 .file-node-input {
   flex: 1;
   font-size: var(--font-size-base);

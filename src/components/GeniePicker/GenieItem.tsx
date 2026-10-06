@@ -2,6 +2,8 @@
  * Genie Item
  *
  * A single genie entry in the GeniePicker list.
+ *
+ * @module components/GeniePicker/GenieItem
  */
 
 import type { GenieDefinition } from "@/types/aiGenies";

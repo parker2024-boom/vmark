@@ -1,5 +1,5 @@
 /**
- * Stable element refs backed by a per-document store (WI-P2.1, ADR-A2).
+ * Stable element refs backed by a per-document store (ADR-A2).
  *
  * Purpose: each snapshotted element gets a monotonic ref (`e1`, `e2`, …) that is
  * STABLE across repeated reads within one committed page, so `act` can target
@@ -47,7 +47,7 @@ type DocWithStore = Document & { __vmarkRefStore?: RefStore };
  * already replaces the document (fresh store for free); this additionally covers
  * a **same-document (SPA) navigation**, which keeps the document but replaces the
  * view and bumps the generation — refs minted against the old view must not
- * resolve against the new one (Audit #11).
+ * resolve against the new one.
  */
 function storeFor(doc: Document, generation: number): RefStore {
   const holder = doc as DocWithStore;

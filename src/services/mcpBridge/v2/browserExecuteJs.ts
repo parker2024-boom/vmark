@@ -16,7 +16,7 @@
  * `callAsyncJavaScript` runs it as an async function body.
  *
  * `undefined` is the one value JSON lacks that is ENCODED rather than refused, as
- * `null` at every depth (round 3, #47): the top level so the model can tell
+ * `null` at every depth: the top level so the model can tell
  * "nothing" from a transport failure, and a nested property or array slot so the
  * key survives — dropping it (the stringify default) changes the object's shape
  * behind the model's back, and refusing it would fail the most common value in JS,

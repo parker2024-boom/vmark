@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# DoD checker for the feature-ledger fixes plan (WI-FL).
+# DoD checker for the feature-ledger fixes plan.
 # Plan: dev-docs/plans/20260907-feature-ledger-fixes.md
 #
 # Usage: bash scripts/check-feature-ledger-phase.sh <0-7|all> [--root=<dir>] [--no-exec]
@@ -13,7 +13,7 @@
 #
 # Assertion kinds, strongest first (helpers: scripts/lib/dod-assertions.sh;
 # text assertions are FIXED-STRING matches):
-#   - negative text: the exact stale phrase the 2026-09-07 inspection found must
+#   - negative text: the exact stale phrase the inspection found must
 #     be GONE, so an unstarted phase is red today and cannot round up to done;
 #   - test deliverables must be DISCOVERED, not merely present, and the probes
 #     read CODE, not text (scripts/dod-syntax.mjs): a Rust `x.test.rs` needs an
@@ -26,7 +26,7 @@
 #     maintainer decision accepts each named outcome explicitly (`assert_any`),
 #     never "the file changed";
 #   - review-or-run evidence (a CI run, a preserved branch, a decision) is a
-#     `- WI-FL<n>.<m> evidence: <ref>` or `- D<n> outcome: <text>` line in the
+#     `- <work-item id> evidence: <ref>` or `- D<n> outcome: <text>` line in the
 #     plan, so it is recorded where the next reader looks and greppable here.
 
 set -uo pipefail
@@ -37,8 +37,7 @@ PHASE=""
 EXEC=1
 # Exactly ONE positional phase, and no unknown flag. `*) PHASE="$arg"` accepted
 # any number of positionals and silently kept the LAST — `… 2 3` ran phase 3
-# while the caller asked for 2 — and swallowed a misspelled option as a phase
-# (audit R2 #39).
+# while the caller asked for 2 — and swallowed a misspelled option as a phase.
 for arg in "$@"; do
   case "$arg" in
     --root=*) ROOT="${arg#--root=}" ;;
@@ -70,7 +69,8 @@ source "$SCRIPT_DIR/lib/dod-assertions.sh"
 PLAN="dev-docs/plans/20260907-feature-ledger-fixes.md"   # read by assert_evidence / assert_decision
 RULE60=".claude/rules/60-ai-governance.md"
 
-# WI-FL3.6 (D1 option b): "wired" means the provisioning state machine is
+# Provisioning reachability (D1 option b): "wired" means the provisioning
+# state machine is
 # REACHED from production — a `provision::transition` / `verify_checksum`
 # CALL in the CODE (not a comment or string) of the content_server module
 # outside provision.rs, its swap helper and the tests — and no
@@ -84,7 +84,7 @@ CONTENT_SERVER_MOD="src-tauri/src/content_server/mod.rs"
 # And the file holding that call site must be a module the crate COMPILES: a
 # `.rs` file sitting in the directory is not part of the build until `mod.rs`
 # declares it, so an orphan file carrying the call satisfied "wired" while
-# reaching nothing (audit R2 #40). The declaration is read from CODE, so a
+# reaching nothing. The declaration is read from CODE, so a
 # commented-out `mod` declares nothing.
 provisioning_wired() {
   [[ -f "$PROVISION_RS" ]] || return 1
@@ -166,13 +166,13 @@ phase1() {
   assert_not_grep_E "Install .vmark. Command" website/guide/workspace-management.md "WI-FL1.8 CLI install label corrected"
   assert_not_grep 'greyed out until you enable' website/guide/shortcuts.md "WI-FL1.8 New Browser Tab sentence corrected"
   # BOTH ends of the range, on one row: asserting only `Mod + 1` let the page
-  # document a shorter range under a label claiming 1–5 (audit R2 #41).
+  # document a shorter range under a label claiming 1–5.
   assert_grep_E 'Mod \+ 1.*Mod \+ 5' website/guide/terminal.md "WI-FL1.8 terminal.md documents the whole Mod+1…Mod+5 range"
   assert_not_grep_E '\*\*Tools\*\*:' website/guide/index.md "WI-FL1.8 index.md menu list no longer names a Tools menu"
   assert_not_grep 'runs automatically when the binary' website/guide/workflow-viewer.md "WI-FL1.9 actionlint claim corrected"
   assert_not_grep 'outline-and-polish' website/guide/workflows.md "WI-FL1.9 workflows.md no longer names the removed sample"
   # POSITIVE, and DERIVED from the shipped resource: removing the old name
-  # satisfied a label claiming the page names the sample (audit R2 #42). A
+  # satisfied a label claiming the page names the sample. A
   # rename of the bundled file now fails here rather than leaving the page stale.
   workflow_sample="$(ls src-tauri/resources/workflows/examples/*.yml 2>/dev/null | head -1)"
   if [[ -z "$workflow_sample" ]]; then
@@ -192,7 +192,7 @@ phase1() {
   assert_grep_E '^#+ .*[Cc]ommand [Pp]alette' website/guide/features.md "WI-FL1.11 command palette has its own section in features.md (a passing mention is not documentation)"
   # INSIDE the section, not merely somewhere on the page: two document-wide
   # greps proved a heading exists and the chord exists, never that the chord is
-  # in that section (audit R2 #43).
+  # in that section.
   assert_grep_in_section '^#+ .*[Cc]ommand [Pp]alette' 'Mod \+ Shift \+ P' website/guide/features.md "WI-FL1.11 command palette section names its shortcut"
   assert_exec "WI-FL1.12 doc joins green after the corrections" node scripts/check-doc-joins.mjs
 }
@@ -225,7 +225,7 @@ phase3() {
   assert_no_file src/components/Editor/WorkflowPanel/WorkflowPanelShell.tsx "WI-FL3.1 WorkflowPanelShell.tsx"
   assert_no_file src/workspace/useWorkspace.ts "WI-FL3.1 useWorkspace.ts"
   assert_not_grep 'addMarkSyntaxDecorations' src/plugins/syntaxReveal/marks.ts "WI-FL3.1 syntaxReveal decoration half removed"
-  assert_not_grep 'file_tree::list_directory_entries' src-tauri/src/command_registry.rs "WI-FL3.2 list_directory_entries unregistered"
+  assert_not_grep '::list_directory_entries' src-tauri/src/command_registry.rs "WI-FL3.2 list_directory_entries unregistered"
   assert_not_grep 'window_manager::request_quit' src-tauri/src/command_registry.rs "WI-FL3.2 request_quit command unregistered"
   assert_ts_code_grep 'reopenClosed' src/services/commands/tabCommands.ts "WI-FL3.3 reopen-closed-tab command"
   assert_rust_code_grep '"reopen-closed-tab"' src-tauri/src/menu/localized/file_menu.rs "WI-FL3.3 reopen-closed-tab menu item" --keep-strings
@@ -274,8 +274,8 @@ phase4() {
   # The CLASS, not three historical phrases: every count in index.ts derives
   # from TOOL_REGISTRY (`describeActionCount`), so ANY hand-typed "<n> action(s)"
   # is drift waiting to happen. Rejecting only `34 actions`, `browser (8
-  # actions` and `browser_read (6 actions` let a fresh wrong count pass
-  # (audit R2 #45). Measured at zero on the live file.
+  # actions` and `browser_read (6 actions` let a fresh wrong count pass.
+  # Measured at zero on the live file.
   assert_not_grep_E '[0-9]+ actions?' server/mcp/src/index.ts "WI-FL4.4 no hand-typed action count in the sidecar index (counts derive from TOOL_REGISTRY)"
 }
 
@@ -320,8 +320,8 @@ phase7() {
   assert_not_grep 'workflowViewer' src/stores/settingsStore/defaults.ts "WI-FL7.1 viewer flag removed (D6, by 2026-09-15)"
   # Two `assert_any` calls, and the phase is green only when BOTH pass:
   # (A ∨ R) ∧ (B ∨ R), which distributes to (A ∧ B) ∨ R. A half-done
-  # extraction with no re-verdict therefore cannot pass — reviewed against
-  # audit R2 #50, which read these as independently satisfiable; they are not,
+  # extraction with no re-verdict therefore cannot pass. A review read these as
+  # independently satisfiable; they are not,
   # and check-feature-ledger-phase.test.mjs pins the partial-extraction case.
   assert_any "WI-FL7.2 engine extracted behind a cargo feature, or a dated re-verdict recorded" \
     "grep|cfg(feature = \"workflow-engine\")|src-tauri/src/lib.rs" \

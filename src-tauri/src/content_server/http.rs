@@ -8,7 +8,7 @@
 //! Split out of `commands.rs` at the file-size gate. The seam is real: this
 //! half needs a bounded `reqwest` client, a bearer token and a session
 //! handshake — the `client::ServerClient` it shares with `slidev_commands.rs`
-//! (#129) — where `commands.rs` needs a child process and a port-file.
+//! — where `commands.rs` needs a child process and a port-file.
 //!
 //! @coordinates-with content_server/client.rs — the authenticated loopback client
 //! @coordinates-with content_server/commands.rs — lifecycle (start/stop/status)
@@ -25,8 +25,8 @@ use super::ContentServerManager;
 use reqwest::StatusCode;
 
 /// Every call here is answered from memory over loopback — a nonce, the
-/// precomputed index — so a longer wait is a wedged server (#130). It bounds
-/// the WHOLE conversation, not each request (#310): `graph_over` makes three.
+/// precomputed index — so a longer wait is a wedged server. It bounds
+/// the WHOLE conversation, not each request: `graph_over` makes three.
 const LOOPBACK_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Mint a single-use nonce over loopback and return a ready `/__auth?t=` URL so
@@ -54,14 +54,14 @@ pub async fn content_server_graph(
 }
 
 /// The status `/__auth` answers with when it accepted the nonce. The status is
-/// CHECKED before `Location` is read (#285): an error response — a 403 for a
+/// CHECKED before `Location` is read: an error response — a 403 for a
 /// spent nonce, a proxy's 502 — can carry a `Location` header of its own, and
 /// reading it treated that header as a session token and the refusal as a
 /// successful handshake. A wrong status is reported as the refusal it is.
 const AUTH_REDIRECT: StatusCode = StatusCode::FOUND;
 
 /// The whole handshake over an explicit client, so `http.test.rs` can drive
-/// it against a mock server rather than only in production (#284).
+/// it against a mock server rather than only in production.
 pub(super) async fn graph_over(client: &ServerClient) -> Result<String, CommandError> {
     let nonce = client.mint_nonce().await?;
 
@@ -92,7 +92,7 @@ pub(super) async fn graph_over(client: &ServerClient) -> Result<String, CommandE
         )
         .await?;
     // `body_failure`, not `e.to_string()`: this request's URL carries the live
-    // session token in `?s=`, and `reqwest::Error`'s Display appends it (#276).
+    // session token in `?s=`, and `reqwest::Error`'s Display appends it.
     resp.text()
         .await
         .map_err(|e| body_failure("graph fetch", e))
@@ -100,7 +100,7 @@ pub(super) async fn graph_over(client: &ServerClient) -> Result<String, CommandE
 
 /// The `s` query parameter of the `/__auth` redirect's `Location`.
 ///
-/// `split("s=").nth(1)` was not query parsing (#287): it matches `s=` anywhere
+/// `split("s=").nth(1)` was not query parsing: it matches `s=` anywhere
 /// — inside the path, inside a LONGER parameter name such as `next=` or
 /// `ts=` — keeps every parameter that follows the token, and accepts an empty
 /// value. This splits the query properly and requires a non-empty `s`. The

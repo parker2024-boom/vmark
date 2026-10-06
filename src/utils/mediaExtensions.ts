@@ -1,5 +1,5 @@
 /**
- * Media Extensions — single source of truth (WI-0.6, D3)
+ * Media Extensions — single source of truth
  *
  * Purpose: One canonical list per media kind (image/video/audio). Previously
  * these lists were redefined in 7+ places with DIVERGENT contents — `avif`,

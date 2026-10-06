@@ -16,7 +16,7 @@
  *     hasn't run yet (#755).
  *   - scheduleFlush uses RAF for small docs (≤100ms tier) and a debounced
  *     timeout for large docs — see getAdaptiveDebounceDelay.
- *   - A tab whose document the editor could not parse (#1407) gets no write
+ *   - A tab whose document the editor could not parse gets no write
  *     at all: the editor holds empty or stale content, not the document.
  *   - Every flush reports whether a USER edit is behind it (userEditPending,
  *     set by scheduleFlush). Auto-save and Save All flush before reading
@@ -26,9 +26,10 @@
  *
  * @coordinates-with components/Editor/TiptapEditor.tsx — sole consumer
  * @coordinates-with hooks/useTiptapUnmountFlush.ts — consumes the pending-timer refs
+ * @coordinates-with utils/wysiwygEditPending.ts — publishes userEditPending to auto-save
  * @module components/Editor/useTiptapFlush
  */
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { MutableRefObject } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import type { HardBreakStyleOnSave } from "@/utils/linebreakDetection";
@@ -37,6 +38,7 @@ import { resolveHardBreakStyle } from "@/utils/linebreaks";
 import { useTabStore } from "@/stores/tabStore";
 import { useDocumentStore, useLargeFileSessionStore } from "@/stores/documentStore";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { setWysiwygEditPending } from "@/utils/wysiwygEditPending";
 import { getAdaptiveDebounceDelay } from "./tiptapEditorHelpers";
 
 interface TiptapFlushOptions {
@@ -83,8 +85,18 @@ export function useTiptapFlush(options: TiptapFlushOptions): TiptapFlushHandle {
    * this signal: they are cleared inside their own callbacks BEFORE the flush
    * runs, and a flush requested by auto-save or Save All has no pending timer
    * at all.
+   *
+   * Mirrored into utils/wysiwygEditPending so auto-save can tell, without
+   * serializing anything, whether a flush would carry an edit.
    */
   const userEditPending = useRef(false);
+  const setUserEditPending = useCallback((pending: boolean) => {
+    userEditPending.current = pending;
+    setWysiwygEditPending(userEditPending, pending);
+  }, []);
+  // An unmounted editor can no longer flush: its flag must not keep auto-save
+  // flushing on its behalf. (The unmount flush runs flushToStore regardless.)
+  useEffect(() => () => setWysiwygEditPending(userEditPending, false), []);
 
   const flushToStore = useCallback(
     (editor: TiptapEditor) => {
@@ -94,11 +106,11 @@ export function useTiptapFlush(options: TiptapFlushOptions): TiptapFlushHandle {
       }
 
       const tabId = activeTabId ?? useTabStore.getState().activeTabId[windowLabel];
-      // This editor could not parse the tab's document (#1407), so what it
+      // This editor could not parse the tab's document, so what it
       // holds is empty or stale — writing it would overwrite the real text.
       // Covers the pending edit, Save's flush and the unmount flush alike.
       if (tabId && useLargeFileSessionStore.getState().forcedSourceReason(tabId) === "unparseable") {
-        userEditPending.current = false;
+        setUserEditPending(false);
         return;
       }
 
@@ -122,7 +134,7 @@ export function useTiptapFlush(options: TiptapFlushOptions): TiptapFlushHandle {
       // re-serialization and must not dirty the document (auto-save flushes
       // every tick before it reads isDirty).
       const fromUserEdit = userEditPending.current;
-      userEditPending.current = false;
+      setUserEditPending(false);
       setContent(markdown, { fromUserEdit });
 
       // Cancel previous RAF if pending, then schedule reset
@@ -134,14 +146,14 @@ export function useTiptapFlush(options: TiptapFlushOptions): TiptapFlushHandle {
         isInternalChange.current = false;
       });
     },
-    [setContent, windowLabel, activeTabId, preserveLineBreaksRef, hardBreakStyleOnSaveRef]
+    [setContent, windowLabel, activeTabId, preserveLineBreaksRef, hardBreakStyleOnSaveRef, setUserEditPending]
   );
 
   const scheduleFlush = useCallback(
     (editor: TiptapEditor) => {
       // Only onUpdate schedules a flush, and it has already filtered out
       // programmatic transactions — so reaching here means the user edited.
-      userEditPending.current = true;
+      setUserEditPending(true);
 
       // Cancel any pending flush
       if (pendingRaf.current) {
@@ -171,7 +183,7 @@ export function useTiptapFlush(options: TiptapFlushOptions): TiptapFlushHandle {
         }, delay);
       }
     },
-    [flushToStore]
+    [flushToStore, setUserEditPending]
   );
 
   return {

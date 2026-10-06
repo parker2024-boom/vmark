@@ -32,7 +32,7 @@ use super::install_io::read_config_for_merge;
 use super::providers::{get_config_path, PROVIDERS};
 use crate::secret_token::generate_secret_token;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::{Arc, OnceLock, PoisonError, RwLock};
 
 /// One provider's configured credential.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,9 +127,9 @@ pub(crate) fn read_tokens_at(entries: &[(&str, PathBuf)]) -> Vec<ProviderToken> 
             }),
             Ok(None) => {}
             Err(detail) => log::warn!(
-                "[MCP] Cannot read the client credential for {provider} from {}: {detail} \
+                "[MCP] Cannot read the client credential for {provider} from {:?}: {detail} \
                  — that client will connect but will not be identified",
-                path.display()
+                path
             ),
         }
     }
@@ -145,15 +145,13 @@ fn read_one(provider: &str, path: &Path) -> Result<Option<String>, String> {
 /// bridge compares tokens.
 static TOKENS: OnceLock<RwLock<Arc<Vec<ProviderToken>>>> = OnceLock::new();
 
-fn cell() -> &'static RwLock<Arc<Vec<ProviderToken>>> {
+fn cell() -> &'static TokenCell {
     TOKENS.get_or_init(|| RwLock::new(Arc::new(Vec::new())))
 }
 
 /// Re-read every provider config and publish the result.
 ///
-/// Called at bridge start and after a successful install/uninstall. A poisoned
-/// lock is not fatal — the previous snapshot stays live and clients keep the
-/// identities they had.
+/// Called at bridge start and after a successful install/uninstall.
 pub(crate) fn refresh() {
     let tokens = read_tokens_at(&provider_paths());
     publish(tokens);
@@ -162,21 +160,25 @@ pub(crate) fn refresh() {
 /// Publish a snapshot directly. Separate from [`refresh`] so tests can install
 /// a known set without a real `$HOME`.
 pub(crate) fn publish(tokens: Vec<ProviderToken>) {
-    match cell().write() {
-        Ok(mut guard) => *guard = Arc::new(tokens),
-        Err(e) => log::error!("[MCP] Client-credential registry lock poisoned: {e}"),
-    }
+    publish_into(cell(), tokens);
 }
 
 /// The credentials the bridge should compare a presented token against.
 pub(crate) fn snapshot() -> Arc<Vec<ProviderToken>> {
-    match cell().read() {
-        Ok(guard) => guard.clone(),
-        Err(e) => {
-            log::error!("[MCP] Client-credential registry lock poisoned: {e}");
-            Arc::new(Vec::new())
-        }
-    }
+    snapshot_of(cell())
+}
+
+type TokenCell = RwLock<Arc<Vec<ProviderToken>>>;
+
+// Both read through a poisoned lock: the registry is one `Arc` swapped whole,
+// so no panic can leave it half-written, and refusing it would compare every
+// client against an empty list.
+fn publish_into(cell: &TokenCell, tokens: Vec<ProviderToken>) {
+    *cell.write().unwrap_or_else(PoisonError::into_inner) = Arc::new(tokens);
+}
+
+fn snapshot_of(cell: &TokenCell) -> Arc<Vec<ProviderToken>> {
+    cell.read().unwrap_or_else(PoisonError::into_inner).clone()
 }
 
 /// The credential to show in an install PREVIEW: the one already configured,

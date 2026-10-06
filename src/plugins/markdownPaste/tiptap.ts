@@ -5,27 +5,27 @@
  * plain text into ProseMirror nodes instead of inserting raw text. This enables rich pasting
  * from markdown-aware sources without requiring HTML clipboard data.
  *
- * Pipeline: ClipboardEvent → shouldHandleMarkdownPaste (detection) → parseMarkdown →
- *           ProseMirror Slice → dispatch transaction
+ * Pipeline: ClipboardEvent → shouldHandleMarkdownPaste (detection) →
+ *           createMarkdownPasteTransaction (shared/markdownPasteSlice) → dispatch transaction
  *
  * Key decisions:
  *   - Defers to htmlPaste when substantial HTML is present (avoids double-handling)
- *   - 200K char limit prevents UI freezes on enormous pastes
+ *   - 200K char limit prevents UI freezes on enormous pastes (the node-count cap
+ *     lives with the slice builder in shared/markdownPasteSlice.ts)
  *   - Falls back to Tauri clipboard API when browser API is unavailable
  *   - Skips markdown parsing inside code blocks and multi-cursor selections
  *
  * @coordinates-with markdownPasteDetection.ts — heuristic to determine if text looks like markdown
  * @coordinates-with htmlPaste/tiptap.ts — HTML paste gets priority when HTML clipboard data exists
+ * @coordinates-with shared/markdownPasteSlice.ts — parses markdown into the inserted slice
  * @coordinates-with pasteUtils.ts — shared helpers for code/multi-selection checks
  * @module plugins/markdownPaste/tiptap
  */
 import { Extension } from "@tiptap/core";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
-import { Plugin, PluginKey, type EditorState, type Transaction } from "@tiptap/pm/state";
+import { Plugin, PluginKey, type EditorState } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
-import { Fragment, Slice, type NodeType } from "@tiptap/pm/model";
-import { parseMarkdown } from "@/utils/markdownPipeline";
-import type { MarkdownPipelineOptions } from "@/utils/markdownPipeline/types";
+import { createMarkdownPasteTransaction } from "@/plugins/shared/markdownPasteSlice";
 import { isMarkdownPasteCandidate } from "@/utils/markdownPasteDetection";
 import { isSubstantialHtml } from "@/utils/htmlToMarkdown";
 import { pasteError } from "@/utils/debug";
@@ -35,32 +35,6 @@ const markdownPastePluginKey = new PluginKey("markdownPaste");
 
 const MAX_MARKDOWN_PASTE_CHARS = 200_000;
 
-/**
- * Cap on the number of ProseMirror nodes produced by a markdown paste.
- * Character count alone doesn't bound parse-tree complexity — a 199KB paste
- * of deeply nested list items can produce tens of thousands of nodes and
- * freeze the main thread on dispatch. When the parsed content exceeds this
- * cap, the paste is rejected and falls through to plain-text insertion
- * (which is O(n) regardless of structure).
- */
-const MAX_MARKDOWN_PASTE_NODES = 5_000;
-
-/** Recursively count nodes in a Fragment, bailing out early at `limit`. */
-function countNodesUpTo(content: Fragment, limit: number): number {
-  let count = 0;
-  let exceeded = false;
-  content.descendants(() => {
-    if (exceeded) return false;
-    count += 1;
-    if (count > limit) {
-      exceeded = true;
-      return false;
-    }
-    return true;
-  });
-  return count;
-}
-
 /** Decision parameters controlling whether a paste should be handled as markdown. */
 export interface MarkdownPasteDecision {
   pasteMode: MarkdownPasteMode;
@@ -68,71 +42,8 @@ export interface MarkdownPasteDecision {
   html: string;
 }
 
-function ensureBlockContent(content: Fragment, paragraphType: NodeType | undefined): Fragment {
-  if (content.childCount === 0 && paragraphType) {
-    return Fragment.from(paragraphType.create());
-  }
-  const firstChild = content.firstChild;
-  if (firstChild && !firstChild.isBlock && paragraphType) {
-    return Fragment.from(paragraphType.create(null, content));
-  }
-  return content;
-}
-
 function hasValidUrl(text: string): boolean {
   return /^https?:\/\//i.test(text.trim());
-}
-
-/**
- * Sentinel error thrown when the parsed markdown structure exceeds
- * `MAX_MARKDOWN_PASTE_NODES`. The caller catches this specific type to
- * distinguish "too complex" (fall back to plain text) from a generic
- * parse failure (just log and bail).
- */
-export class MarkdownPasteTooComplexError extends Error {
-  constructor(nodeCount: number) {
-    super(
-      `Parsed markdown has more than ${MAX_MARKDOWN_PASTE_NODES} nodes (${nodeCount}); ` +
-        `refusing to insert to prevent UI freeze`,
-    );
-    this.name = "MarkdownPasteTooComplexError";
-  }
-}
-
-/** Parses markdown text into a ProseMirror Slice suitable for insertion. */
-export function createMarkdownPasteSlice(
-  state: EditorState,
-  markdown: string,
-  options: MarkdownPipelineOptions = {}
-): Slice {
-  const parsed = parseMarkdown(state.schema, markdown, options);
-  const content = ensureBlockContent(parsed.content, state.schema.nodes.paragraph);
-  const nodeCount = countNodesUpTo(content, MAX_MARKDOWN_PASTE_NODES);
-  if (nodeCount > MAX_MARKDOWN_PASTE_NODES) {
-    throw new MarkdownPasteTooComplexError(nodeCount);
-  }
-  return Slice.maxOpen(content);
-}
-
-/** Creates a ProseMirror transaction that replaces the current selection with parsed markdown. */
-export function createMarkdownPasteTransaction(
-  state: EditorState,
-  markdown: string,
-  options: MarkdownPipelineOptions = {}
-): Transaction | null {
-  try {
-    const slice = createMarkdownPasteSlice(state, markdown, options);
-    return state.tr.replaceSelection(slice);
-  } catch (error) {
-    if (error instanceof MarkdownPasteTooComplexError) {
-      // Log at info level — this is an expected backstop, not a bug.
-      // Returning null tells the caller to fall back to plain-text paste.
-      pasteError("Markdown paste exceeded node cap; falling back to plain text:", error.message);
-    } else {
-      pasteError("Failed to parse markdown:", error);
-    }
-    return null;
-  }
 }
 
 /** Determines whether clipboard text should be parsed as markdown based on heuristics and settings. */

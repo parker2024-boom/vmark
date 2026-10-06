@@ -4,7 +4,7 @@
  * subscriptions, effects and markup).
  *
  *   - `FindBarField`: the find and replace text inputs, which differ only in
- *     icon, labels, value and handlers — one component, two uses (#301, round 3).
+ *     icon, labels, value and handlers — one component, two uses.
  *   - `FindBarToggles`: regex / case / whole-word mode toggles. They own their
  *     own store subscriptions, so a mode flip re-renders this group alone.
  *   - `FindBarNavigation`: previous / count / next.
@@ -14,7 +14,7 @@
  * `getState()` — the bar is a pure view over that slice, and a wrapper
  * callback per action was the bulk of what the component carried.
  *
- * Every button here declares `type="button"` (audit R3 #596). An omitted type
+ * Every button here declares `type="button"`. An omitted type
  * defaults to `submit`, so the bar's clicks would submit any form it were ever
  * nested inside — a latent break that surfaces only when someone reuses the bar.
  *
@@ -42,7 +42,7 @@ interface FindBarFieldProps {
   inputRef: RefObject<HTMLInputElement | null>;
   icon: ReactNode;
   placeholder: string;
-  /** WI-2.4 (a11y) — an explicit accessible name; a placeholder is not one. */
+  /** An explicit accessible name (a11y); a placeholder is not one. */
   label: string;
   value: string;
   onChange: (e: ChangeEvent<HTMLInputElement>) => void;
@@ -114,7 +114,7 @@ export function FindBarToggles() {
   // Turning the setting off only HID the toggle, so a query already in regex
   // mode kept being matched as a pattern with no visible way to stop it — the
   // user's `a.b` silently matched `axb` in a build that says it does no regex
-  // search (audit R2, #597). The setting owns the mode, not just its button.
+  // search. The setting owns the mode, not just its button.
   useEffect(() => {
     if (!enableRegexSearch && useRegex) useUIStore.getState().searchToggleRegex();
   }, [enableRegexSearch, useRegex]);
@@ -149,7 +149,7 @@ export function FindBarToggles() {
 }
 
 interface MatchAwareProps {
-  /** The bar has a match to act on — see `hasCurrentMatch` (#302). */
+  /** The bar has a match to act on — see `hasCurrentMatch`. */
   hasMatches: boolean;
 }
 

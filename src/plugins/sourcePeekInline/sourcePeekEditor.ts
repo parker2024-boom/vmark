@@ -3,6 +3,8 @@
  *
  * Creates and manages the CodeMirror editor instance for inline Source Peek.
  * CodeMirror modules are lazily loaded on first use to avoid bloating the main bundle.
+ *
+ * @module plugins/sourcePeekInline/sourcePeekEditor
  */
 
 import { codeHighlightStyle } from "@/plugins/codemirror";

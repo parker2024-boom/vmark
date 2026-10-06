@@ -10,6 +10,8 @@
  * - WYSIWYG preview: mount a live Markmap instance for interactivity
  * - Export: serialize the SVG element to string, then convert to PNG
  * - No @panzoom/panzoom needed — Markmap has its own pan/zoom
+ *
+ * @module plugins/markmap/plugin
  */
 
 import type { Transformer } from "markmap-lib";
@@ -31,7 +33,7 @@ let loadPromise: Promise<void> | null = null;
 // Track active markmap instances for theme re-rendering
 const activeInstances = new Map<SVGElement, { mm: Markmap; content: string }>();
 
-// Current theme snapshot — the token VALUES, not the dark bit (WI-UI1.5): a
+// Current theme snapshot — the token VALUES, not the dark bit: a
 // mint→sepia switch never flips isDark, yet every alert colour changes.
 let currentTokenKey = "";
 
@@ -201,7 +203,7 @@ export async function renderMarkmapToSvgString(
  * Update markmap theme when app theme changes.
  * Re-renders all active instances with new colors. Compares the TOKEN
  * SNAPSHOT, not the dark bit — mint→sepia changes every branch colour while
- * isDark never moves (WI-UI1.5).
+ * isDark never moves.
  * Returns true if theme changed.
  */
 export async function updateMarkmapTheme(): Promise<boolean> {

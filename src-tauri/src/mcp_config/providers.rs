@@ -143,7 +143,7 @@ fn get_target_triple() -> &'static str {
 ///
 /// Always compiled — a no-op on Unix, whose paths never carry the prefix — so
 /// the rule is unit-tested on every platform rather than only on Windows CI.
-/// Mirrors `workspace_validation::strip_verbatim_prefix`, which does the same
+/// Mirrors `workspace::validation::strip_verbatim_prefix`, which does the same
 /// for the frontend; the two stay separate because they are different
 /// boundaries and neither module should depend on the other.
 fn display_path(path: &str) -> String {

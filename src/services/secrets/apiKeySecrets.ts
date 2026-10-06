@@ -151,6 +151,11 @@ export async function loadApiKeysWithStatus(
  * Returns the set of provider types that were migrated, so the caller can
  * confirm the move before clearing the plaintext source. Never throws — a
  * keychain failure leaves the legacy value in memory rather than losing it.
+ *
+ * Sunset: 0.8.2 was the last release to persist a key in plaintext; 0.8.3
+ * writes the keychain. Remove this function and phase 1 of
+ * `hydrateAndMigrateApiKeys` (stores/aiStore/provider.ts) once no supported
+ * upgrade path starts below 0.8.3.
  */
 export async function migrateLegacyApiKeys(
   legacy: Record<string, string>

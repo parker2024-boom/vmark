@@ -11,11 +11,11 @@
  * Key decisions:
  *   - Append-on-push: a true O(1) `writeTextFile(..., { append: true })`
  *     — never read-modify-write, which raced with itself and dropped
- *     lines when two MCP writes landed back to back (audit H5).
+ *     lines when two MCP writes landed back to back.
  *   - Serialized writers: every disk mutation (append/compact/clear) flows
  *     through one promise queue, so a rewrite can never interleave with
  *     an in-flight append.
- *   - Multi-window safety (audit 20260612 deferred / cross-model review):
+ *   - Multi-window safety:
  *     every document window is a separate webview with its OWN in-memory
  *     store and write queue, all writing this one file. So full-file
  *     rewrites must never derive solely from one window's memory — that
@@ -143,7 +143,7 @@ export async function hydrateCheckpoints(): Promise<void> {
  *
  * Uses a true filesystem append (no read-modify-write) and the shared
  * writer queue, so concurrent MCP writes can never drop each other's
- * lines (audit H5).
+ * lines.
  */
 export async function appendCheckpoint(
   cp: MCPCheckpoint,
@@ -198,8 +198,8 @@ export async function rewriteAll(): Promise<void> {
 /**
  * Remove checkpoints matching `filter` from the persisted file in place,
  * preserving every other line — including checkpoints other windows
- * appended that this window never had in memory (multi-window safety;
- * audit 20260612 deferred). Mirrors mcpStore.checkpointClear's filter
+ * appended that this window never had in memory (multi-window safety).
+ * Mirrors mcpStore.checkpointClear's filter
  * semantics. Queued behind in-flight appends.
  */
 export async function clearCheckpointsOnDisk(filter?: {

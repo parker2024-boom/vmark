@@ -57,10 +57,10 @@
   transition: background-color var(--duration-base) ease, color var(--duration-base) ease;
 }
 
-/* Inline rename box (WI-4.1). It occupies the tab's slot, so it inherits the
+/* Inline rename box. It occupies the tab's slot, so it inherits the
    tab metrics and only overrides what a text field needs. Wider than a tab so
    a name is actually legible while typing. */
-/* One rename treatment: `.vm-input` (WI-UI3.3) — but `.vm-input` lives in the
+/* One rename treatment: `.vm-input` — but `.vm-input` lives in the
    early main chunk while `.terminal-tab` is emitted in the lazy Terminal
    chunk, so at equal specificity `.terminal-tab`'s border: none / secondary
    ink / mono face beat it. The properties a text field needs are re-declared
@@ -118,7 +118,7 @@
   line-height: 1;
 }
 
-/* Background-activity indicator (WI-4.3): a small accent dot top-right of a
+/* Background-activity indicator: a small accent dot top-right of a
    non-active tab whose shell rang the bell. Cleared when the tab is focused. */
 .terminal-tab-activity {
   position: relative;
@@ -142,7 +142,7 @@
   gap: var(--space-half);
 }
 
-/* Action buttons are canonical `.vm-icon-btn--sm` (WI-UI2.3). */
+/* Action buttons are canonical `.vm-icon-btn--sm`. */
 
 /* Focus indicator for the numbered session tabs (rule 33). */
 .terminal-tab:focus-visible {
@@ -162,7 +162,7 @@
 }
 
 
-/* WI-UI4.5 (R13): the active session survives forced-colors mode. */
+/* R13: the active session survives forced-colors mode. */
 @media (forced-colors: active) {
   .terminal-tab-active {
     border: 1px solid CanvasText;

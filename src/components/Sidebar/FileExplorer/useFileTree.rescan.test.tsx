@@ -33,6 +33,14 @@ import { DEFAULT_RESCAN_TIMING } from "./rescanScheduler";
 
 const listings = () => invokeMock.mock.calls.filter(([cmd]) => cmd === "list_directory_tree");
 
+/** A listing of `/root` in the walker's wire form (names only, the root once). */
+const wireListing = (entries: unknown[], truncated = false) => ({
+  rootPrefix: "/root/",
+  separator: "/",
+  entries,
+  truncated,
+});
+
 beforeEach(() => {
   vi.useFakeTimers();
   invokeMock.mockReset();
@@ -45,11 +53,13 @@ afterEach(() => {
 describe("useFileTree — rescans are paced (#1357)", () => {
   it("lists the tree in ONE IPC call, with the exclusions and hidden flag passed to the walker", async () => {
     invokeMock.mockResolvedValue({
+      rootPrefix: "/root/",
+      separator: "/",
       entries: [
-        { name: "docs", path: "/root/docs", isDirectory: true, isHidden: false, children: [
-          { name: "a.md", path: "/root/docs/a.md", isDirectory: false, isHidden: false },
+        { name: "docs", isDirectory: true, isHidden: false, children: [
+          { name: "a.md", isDirectory: false, isHidden: false },
         ] },
-        { name: "readme.md", path: "/root/readme.md", isDirectory: false, isHidden: false },
+        { name: "readme.md", isDirectory: false, isHidden: false },
       ],
       truncated: false,
     });
@@ -63,7 +73,7 @@ describe("useFileTree — rescans are paced (#1357)", () => {
   });
 
   it("a burst of event batches is ONE re-listing, after the burst goes quiet", async () => {
-    invokeMock.mockResolvedValue({ entries: [], truncated: false });
+    invokeMock.mockResolvedValue(wireListing([]));
     renderHook(() => useFileTree("/root"));
     await act(async () => { await vi.advanceTimersByTimeAsync(0); });
     expect(listings()).toHaveLength(1);
@@ -79,7 +89,7 @@ describe("useFileTree — rescans are paced (#1357)", () => {
   it("events landing during every scan do NOT restart it back to back — the interval widens", async () => {
     // A 3 s scan and an event every 500 ms, the reporter's shape, for five minutes.
     invokeMock.mockImplementation(
-      () => new Promise((resolve) => setTimeout(() => resolve({ entries: [], truncated: false }), 3_000)),
+      () => new Promise((resolve) => setTimeout(() => resolve(wireListing([])), 3_000)),
     );
     renderHook(() => useFileTree("/root"));
     for (let t = 0; t < 5 * 60_000; t += 500) {
@@ -92,7 +102,9 @@ describe("useFileTree — rescans are paced (#1357)", () => {
 
   it("reports a truncated listing and still shows what was listed", async () => {
     invokeMock.mockResolvedValue({
-      entries: [{ name: "a.md", path: "/root/a.md", isDirectory: false, isHidden: false }],
+      rootPrefix: "/root/",
+      separator: "/",
+      entries: [{ name: "a.md", isDirectory: false, isHidden: false }],
       truncated: true,
     });
     const { result } = renderHook(() => useFileTree("/root"));
@@ -102,7 +114,7 @@ describe("useFileTree — rescans are paced (#1357)", () => {
   });
 
   it("refresh() resolves after its listing has run, so a create flow can rename the new node", async () => {
-    invokeMock.mockResolvedValue({ entries: [], truncated: false });
+    invokeMock.mockResolvedValue(wireListing([]));
     const { result } = renderHook(() => useFileTree("/root"));
     await act(async () => { await vi.advanceTimersByTimeAsync(0); });
     const before = listings().length;

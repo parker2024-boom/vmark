@@ -1,4 +1,4 @@
-//! Persisted browser storage-state blobs (WI-P6.2 / P6.3) — the credential-bearing
+//! Persisted browser storage-state blobs — the credential-bearing
 //! cookies + `localStorage` the AI reuses by an opaque HANDLE, never by value.
 //!
 //! Security model (ADR-A7):

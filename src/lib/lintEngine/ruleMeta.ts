@@ -5,10 +5,10 @@
  * canonical ENGLISH title — what the docs gate joins against, and what the
  * diagnostics UI shows beside a bare rule code (`ruleTitle`, through the
  * engine's public surface) when the user's locale has nothing better, so the
- * metadata the docs are checked against is the metadata users see (WI-FL0.3).
+ * metadata the docs are checked against is the metadata users see.
  *
  * Why it exists: `website/guide/lint.md` carries a rule table that restates
- * the engine, and nothing joined the two. By 2026-09-07 four rows had drifted —
+ * the engine, and nothing joined the two. Four rows had drifted —
  * E05 was documented as an Error while the code emits a warning, and the
  * E06/E08/W05 descriptions had rotated onto each other's ids — through every
  * green CI run, because a docs-only change runs no test that reads the rules.
@@ -103,7 +103,7 @@ const BY_ID: ReadonlyMap<string, (typeof RULE_ROWS)[number]> = new Map(
 /**
  * The `{ ruleId, severity }` pair an emitter spreads into `createDiagnostic`.
  *
- * This is the whole of #405: a rule states its id ONCE, here at the call site,
+ * This is the whole design: a rule states its id ONCE, here at the call site,
  * and its severity comes back from the table the docs are joined against — so
  * the two cannot disagree, rather than being checked for agreeing.
  *

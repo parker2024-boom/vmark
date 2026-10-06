@@ -45,7 +45,12 @@ const entry = (name: string) => ({
 });
 
 /** The one-call listing's wire shape (#1357). */
-const listing = (entries: unknown[], truncated = false) => ({ entries, truncated });
+const listing = (entries: unknown[], truncated = false, root = "/root") => ({
+  rootPrefix: `${root}/`,
+  separator: "/",
+  entries,
+  truncated,
+});
 
 beforeEach(() => {
   invokeMock.mockReset();
@@ -93,7 +98,7 @@ describe("a root-to-root switch", () => {
     expect(result.current.tree).toEqual([]);
 
     await act(async () => {
-      second.resolve(listing([{ ...entry("new.md"), path: "/two/new.md" }]));
+      second.resolve(listing([entry("new.md")], false, "/two"));
       await second.promise;
     });
     await waitFor(() => expect(result.current.tree.map((n) => n.name)).toEqual(["new.md"]));
@@ -119,7 +124,7 @@ describe("a root-to-root switch", () => {
     expect(result.current.truncated).toBe(false);
 
     await act(async () => {
-      second.resolve(listing([{ ...entry("new.md"), path: "/two/new.md" }], true));
+      second.resolve(listing([entry("new.md")], true, "/two"));
       await second.promise;
     });
     await waitFor(() => expect(result.current.truncated).toBe(true));

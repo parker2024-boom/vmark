@@ -1,7 +1,7 @@
 /**
  * The state transitions for resolving a non-attach approval (split from
  * `browserApprovalStore.ts` for the file-size gate; split again into its three
- * transitions in audit round 3, #150). Pure: each takes the current slice and the
+ * transitions). Pure: each takes the current slice and the
  * request, returns the next slice — the SAME array when nothing changes, so a
  * subscriber sees no spurious update.
  *
@@ -35,7 +35,7 @@ interface ResolveSlices {
 }
 
 /**
- * Profile-OPEN (WI-P6.1 H1): "Allow once" mints a single-use grant bound to
+ * Profile-OPEN: "Allow once" mints a single-use grant bound to
  * (profile, origin) — never a standing grant, so `remember` mints nothing. Capped
  * and de-duplicated so a stream of approvals cannot grow `profileOpens` without
  * bound (mirrors the pending cap and the Rust-side profile-open cap).

@@ -4,6 +4,8 @@
  * Handles ArrowUp/ArrowDown at list boundaries:
  * - ArrowUp at first item of first-block list → insert paragraph before
  * - ArrowDown at last item of last-block list → insert paragraph after
+ *
+ * @module plugins/listEscape/listEscape
  */
 
 import type { EditorView } from "@tiptap/pm/view";

@@ -1,224 +1,93 @@
 //! Workflow runner with topological ordering and cancellation.
 //!
 //! Executes workflow steps respecting `needs:` dependencies via topological
-//! sort. Steps without unmet dependencies run in declaration order.
-//! All file operations are sandboxed to the workspace root directory.
+//! sort (`step_order`). Steps without unmet dependencies run in declaration
+//! order.
+//!
+//! Pipeline, per step — one module each, split out at the file-size limit:
+//!   `step_preflight` (cancel, `if:`, parameters) → `step_approval`
+//!   (`approval: ask`) → `step_execute` (the step, under its timeout) →
+//!   `step_record` (outputs, events). `run_context` is what they share.
 //!
 //! Key decisions:
-//!   - Path sandboxing via `sandbox::validate_path` for all file I/O
-//!   - Resource limits: max 1000 files, 10MB per file, 100MB total in read-folder
-//!   - Event emission failures are logged, not silently dropped
-//!   - `genie/*` steps run via `genie_step`; `webhook/*` returns Err, not fake Ok
-//!   - Returns Err when any step fails (not Ok with silent failure)
-//!   - Env substitution uses regex for embedded `${VAR}` patterns
-//!   - Cancellation checked before each step via shared AtomicBool
+//!   - Exactly one `workflow:complete` on every path this function returns
+//!     from, emitted in one place; `launch.rs` covers the paths that never
+//!     return (a panic, the runtime dropping the task)
+//!   - Returns Err when any step fails (not Ok with silent failure), naming
+//!     the first step that failed
+//!   - A step's `if:` decides whether it runs (`success()` when absent), so
+//!     `failure()` / `always()` steps run after a failure; the run still fails
+//!   - Cancellation checked before each step via shared AtomicBool, and before
+//!     its condition: a cancel stops `always()` steps too
+//!   - The cancel bridge lives exactly as long as the run: the run cancels its
+//!     own token when it ends, and the bridge ends on that
 //!   - Steps ordered by topological sort on `needs:` dependencies
+//!
+//! @coordinates-with launch.rs — spawns the run and guards its terminal event
+//! @coordinates-with validate.rs — runs `topological_sort` at admission
+//! @module workflow::runner
 
-use super::approval::{ApprovalRegistry, ApprovalRequest};
-use super::condition::evaluate_condition;
-use super::expressions::{self, WorkflowOutputs};
-use super::genie_step::{self, LoadedGenie, ProviderConfig};
-use super::sandbox::validate_path;
+use super::approval::ApprovalRegistry;
+use super::coherence_capture::StepSlice;
+use super::genie_step::ProviderConfig;
 use super::step_config::resolve_step_config;
-use super::types::*;
-use std::collections::{HashMap, HashSet, VecDeque};
+use super::types::{ExecutionCompleteEvent, RawWorkflow};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
-use tauri::{AppHandle, Emitter, Runtime};
+use std::time::Duration;
+use tauri::{AppHandle, Runtime};
 use tokio_util::sync::CancellationToken;
 
-// Resource limits for file actions
-const MAX_OUTPUT_SIZE_BYTES: usize = 5 * 1024 * 1024; // 5MB per step output in IPC
+#[path = "run_context.rs"]
+mod run_context;
+#[path = "step_approval.rs"]
+mod step_approval;
+#[path = "step_execute.rs"]
+mod step_execute;
+#[path = "step_order.rs"]
+mod step_order;
+#[path = "step_preflight.rs"]
+mod step_preflight;
+#[path = "step_record.rs"]
+mod step_record;
 
-/// Emit a Tauri event, logging failures instead of silently dropping them.
-fn emit_event<R: Runtime>(app: &AppHandle<R>, event: &str, data: impl serde::Serialize + Clone) {
-    if let Err(e) = app.emit(event, data.clone()) {
-        log::error!("Failed to emit '{}': {}", event, e);
-        if event == "workflow:complete" {
-            if let Err(e2) = app.emit(event, data) {
-                log::error!("Retry failed for '{}': {}", event, e2);
-            }
-        }
-    }
-}
+use run_context::{emit_event, RunContext, RunState};
+use step_approval::approval_gate;
+use step_execute::execute_with_timeout;
+pub(super) use step_order::{topological_sort, ResolvedStep};
+use step_preflight::step_preflight;
+use step_record::record_step_result;
 
-/// A resolved step with its ID and dependencies.
-#[derive(Debug)]
-pub(super) struct ResolvedStep {
-    id: String,
-    step: RawStep,
-    needs: Vec<String>,
-}
+/// How often the bridge looks at the cancel flag.
+const CANCEL_POLL: Duration = Duration::from_millis(100);
 
-/// Topologically sort steps by `needs:`; no-dep steps first. `run_workflow`
-/// runs it at ADMISSION too (#522), so this `?` never fails a spawned run.
-pub(super) fn topological_sort(steps: Vec<RawStep>) -> Result<Vec<ResolvedStep>, String> {
-    // Build resolved steps with IDs
-    let mut resolved: Vec<ResolvedStep> = Vec::new();
-    let mut id_set: HashSet<String> = HashSet::new();
-
-    for step in steps {
-        let id = step.id.clone().unwrap_or_else(|| {
-            step.uses
-                .split('/')
-                .next_back()
-                .unwrap_or("step")
-                .to_string()
-        });
-        let needs = step.needs.to_vec();
-        // Duplicate IDs would silently overwrite earlier steps in step_map
-        // below, dropping work — fail loudly instead.
-        if !id_set.insert(id.clone()) {
-            return Err(format!(
-                "Duplicate step id '{}' — every step needs a unique id",
-                id
-            ));
-        }
-        resolved.push(ResolvedStep { id, step, needs });
-    }
-
-    // Validate all needs references exist
-    for rs in &resolved {
-        for dep in &rs.needs {
-            if !id_set.contains(dep) {
-                return Err(format!(
-                    "Step '{}' depends on unknown step '{}'",
-                    rs.id, dep
-                ));
-            }
-        }
-    }
-
-    // Kahn's algorithm for topological sort
-    let mut in_degree: HashMap<String, usize> = HashMap::new();
-    let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
-
-    for rs in &resolved {
-        in_degree.entry(rs.id.clone()).or_insert(0);
-        adjacency.entry(rs.id.clone()).or_default();
-        for dep in &rs.needs {
-            adjacency
-                .entry(dep.clone())
-                .or_default()
-                .push(rs.id.clone());
-            *in_degree.entry(rs.id.clone()).or_insert(0) += 1;
-        }
-    }
-
-    let mut queue: VecDeque<String> = VecDeque::new();
-    // Seed with steps that have no dependencies, preserving declaration order
-    for rs in &resolved {
-        if *in_degree.get(&rs.id).unwrap_or(&0) == 0 {
-            queue.push_back(rs.id.clone());
-        }
-    }
-
-    let mut sorted_ids: Vec<String> = Vec::new();
-    while let Some(id) = queue.pop_front() {
-        sorted_ids.push(id.clone());
-        if let Some(dependents) = adjacency.get(&id) {
-            for dep_id in dependents {
-                if let Some(deg) = in_degree.get_mut(dep_id) {
-                    *deg -= 1;
-                    if *deg == 0 {
-                        queue.push_back(dep_id.clone());
-                    }
-                }
-            }
-        }
-    }
-
-    if sorted_ids.len() != resolved.len() {
-        return Err(rust_i18n::t!("errors.workflow.circularDependency").to_string());
-    }
-
-    // Reorder resolved steps by sorted order
-    let mut step_map: HashMap<String, ResolvedStep> =
-        resolved.into_iter().map(|rs| (rs.id.clone(), rs)).collect();
-    let mut ordered = Vec::new();
-    for id in sorted_ids {
-        if let Some(rs) = step_map.remove(&id) {
-            ordered.push(rs);
-        }
-    }
-
-    Ok(ordered)
-}
-
-/// Outcome of the approval wait — explicit so the caller doesn't have to
-/// reason about which `Result` variant came from where.
-enum ApprovalOutcome {
-    Approved,
-    Denied,
-    /// Sender side dropped without delivering a value (window close, etc.).
-    ChannelClosed,
-    /// Approval window expired.
-    TimedOut,
-    /// Workflow was cancelled while the dialog was open.
-    Cancelled,
-}
-
-/// Build the preview the approval dialog shows.
+/// Convert the `Arc<AtomicBool>` cancel flag into a polling task that flips a
+/// `CancellationToken`, the primitive the AI provider stack and the approval
+/// wait react to.
 ///
-/// For genie steps, attempts to load the genie and fill its template against
-/// `resolved_params` so the preview matches what the model will actually
-/// receive. Falls back to the raw `with.input` / `with.content` / `with.prompt`
-/// value if the genie can't be loaded (so non-genie steps and authoring-time
-/// errors still get a useful preview).
-async fn build_approval_preview(
-    step: &RawStep,
-    resolved_params: &HashMap<String, String>,
-    genies_dir: Option<&Path>,
-) -> String {
-    const PREVIEW_BYTES: usize = 500;
-
-    if let Some(name) = step.uses.strip_prefix("genie/") {
-        if let Some(dir) = genies_dir {
-            if let Ok(path) = genie_step::find_genie_file(dir, name) {
-                if let Ok(raw) = tokio::fs::read_to_string(&path).await {
-                    if let Ok(content) = parse_genie_content(&raw, &path) {
-                        if let Ok(filled) =
-                            super::template::fill(&content.template, resolved_params)
-                        {
-                            return filled.chars().take(PREVIEW_BYTES).collect();
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    resolved_params
-        .get("input")
-        .or_else(|| resolved_params.get("content"))
-        .or_else(|| resolved_params.get("prompt"))
-        .map(|s| s.chars().take(PREVIEW_BYTES).collect())
-        .unwrap_or_default()
-}
-
-/// Convert the legacy `Arc<AtomicBool>` cancel flag into a polling task that
-/// flips a `CancellationToken`. Bridges the existing API to the new tokio
-/// cancellation primitive used by `run_ai_prompt_collect`.
+/// The task ends when it has cancelled the token, or as soon as anyone else
+/// has: the run cancels its token on the way out, so no bridge outlives its
+/// run.
 ///
 /// Wrapped in `spawn_logged` so a panic inside the polling loop surfaces in
 /// the log instead of silently leaking a cancel token (which would let the
 /// downstream AI request run past its caller's cancel signal).
 fn spawn_cancel_bridge(
-    legacy: Arc<AtomicBool>,
+    flag: Arc<AtomicBool>,
     token: CancellationToken,
 ) -> tokio::task::JoinHandle<()> {
     crate::task::spawn_logged("workflow-cancel-bridge", async move {
         loop {
-            if legacy.load(Ordering::SeqCst) {
+            if flag.load(Ordering::SeqCst) {
                 token.cancel();
                 return;
             }
-            if token.is_cancelled() {
-                return;
+            tokio::select! {
+                _ = token.cancelled() => return,
+                _ = tokio::time::sleep(CANCEL_POLL) => {}
             }
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
     })
 }
@@ -245,347 +114,44 @@ pub async fn run_workflow_sequential<R: Runtime>(
     approvals: Arc<ApprovalRegistry>,
     capture_policy: crate::coherence::capture_policy::CapturePolicy,
 ) -> Result<String, String> {
-    // Bridge the legacy AtomicBool cancel flag into a CancellationToken that
-    // the AI provider stack can react to without polling.
+    // Bridge the cancel flag into a CancellationToken that the AI provider
+    // stack and the approval wait can react to without polling. The guard
+    // cancels the token when this run is over — on a return, a panic, or the
+    // runtime dropping the task — which is what ends the bridge with it.
     let cancel = CancellationToken::new();
     let _bridge = spawn_cancel_bridge(Arc::clone(cancel_token), cancel.clone());
-
-    let defaults = workflow.defaults;
-    let mut outputs: WorkflowOutputs = HashMap::new();
+    let _run_over = cancel.clone().drop_guard();
 
     // Merge workflow env with provided env (provided takes precedence)
-    let mut merged_env = workflow.env.clone();
+    let mut merged_env = workflow.env;
     merged_env.extend(env);
+    let ctx = RunContext {
+        app,
+        execution_id,
+        workspace_root,
+        cancel_flag: cancel_token.as_ref(),
+        cancel,
+        provider,
+        genies_dir,
+        approvals,
+        capture_policy,
+        defaults: workflow.defaults,
+        env: merged_env,
+    };
 
-    // Topologically sort steps by needs: dependencies
-    let sorted_steps = topological_sort(workflow.steps)?;
-    let step_count = sorted_steps.len();
-    // Coherence (WI-1.6): raw dataflow snapshot for save-file input tracing.
-    let dataflow: Vec<crate::workflow::coherence_capture::StepSlice> = sorted_steps
-        .iter()
-        .map(|rs| (rs.id.clone(), rs.step.uses.clone(), rs.step.with.clone()))
-        .collect();
-    let mut failed = false;
-    let mut failed_step = String::new();
-    let mut completed_steps: HashSet<String> = HashSet::new();
+    // Sort the steps by their `needs:` edges. `run_workflow` sorts the same
+    // steps at admission, so this does not fail for a run it spawned; if it
+    // ever does, the run ends like any other failed run — through the
+    // completion event below — instead of returning without a word.
+    let outcome = match topological_sort(workflow.steps) {
+        Ok(sorted_steps) => run_steps(&ctx, &workflow.name, sorted_steps).await,
+        Err(unsortable) => Err(unsortable),
+    };
 
-    log::info!(
-        "Workflow '{}' starting: {} steps",
-        workflow.name,
-        step_count
-    );
-
-    for (i, rs) in sorted_steps.into_iter().enumerate() {
-        let step_id = rs.id;
-        let step = rs.step;
-
-        // Check cancellation
-        if cancel_token.load(Ordering::SeqCst) {
-            emit_event(
-                app,
-                "workflow:step-update",
-                StepStatusEvent {
-                    execution_id: execution_id.to_string(),
-                    step_id: step_id.clone(),
-                    status: "skipped".to_string(),
-                    output: None,
-                    error: Some("Workflow cancelled".to_string()),
-                    duration: None,
-                },
-            );
-            if !failed {
-                failed = true;
-                failed_step = format!("{} (cancelled)", step_id);
-            }
-            continue;
-        }
-
-        // Skip if a dependency failed
-        if failed || rs.needs.iter().any(|dep| !completed_steps.contains(dep)) {
-            emit_event(
-                app,
-                "workflow:step-update",
-                StepStatusEvent {
-                    execution_id: execution_id.to_string(),
-                    step_id: step_id.clone(),
-                    status: "skipped".to_string(),
-                    output: None,
-                    error: None,
-                    duration: None,
-                },
-            );
-            continue;
-        }
-
-        // Evaluate condition (if: field). Fail-loud (RW-6 / L10): an
-        // unparseable condition fails the step, never silently passes.
-        if let Some(condition) = &step.condition {
-            match evaluate_condition(condition, &outputs, &merged_env, failed) {
-                Ok(true) => {} // proceed
-                Ok(false) => {
-                    emit_event(
-                        app,
-                        "workflow:step-update",
-                        StepStatusEvent {
-                            execution_id: execution_id.to_string(),
-                            step_id: step_id.clone(),
-                            status: "skipped".to_string(),
-                            output: None,
-                            error: Some(format!("Condition not met: {}", condition)),
-                            duration: None,
-                        },
-                    );
-                    continue;
-                }
-                Err(e) => {
-                    failed = true;
-                    failed_step = step_id.clone();
-                    emit_event(
-                        app,
-                        "workflow:step-update",
-                        StepStatusEvent {
-                            execution_id: execution_id.to_string(),
-                            step_id,
-                            status: "error".to_string(),
-                            output: None,
-                            error: Some(format!("Condition evaluation failed: {}", e)),
-                            duration: None,
-                        },
-                    );
-                    continue;
-                }
-            }
-        }
-
-        // Emit running status
-        emit_event(
-            app,
-            "workflow:step-update",
-            StepStatusEvent {
-                execution_id: execution_id.to_string(),
-                step_id: step_id.clone(),
-                status: "running".to_string(),
-                output: None,
-                error: None,
-                duration: None,
-            },
-        );
-
-        let start = Instant::now();
-
-        // Resolve parameters: output refs + env substitution
-        let resolved_params =
-            match resolve_params(&step.with, &outputs, &merged_env, workspace_root) {
-                Ok(p) => p,
-                Err(e) => {
-                    failed = true;
-                    failed_step = step_id.clone();
-                    emit_event(
-                        app,
-                        "workflow:step-update",
-                        StepStatusEvent {
-                            execution_id: execution_id.to_string(),
-                            step_id,
-                            status: "error".to_string(),
-                            output: None,
-                            error: Some(format!("Parameter resolution failed: {}", e)),
-                            duration: Some(start.elapsed().as_millis() as u64),
-                        },
-                    );
-                    continue;
-                }
-            };
-
-        // Resolve effective step timeout (ADR-6) so we can wrap execution.
-        let step_config = resolve_step_config(&step, None, &defaults);
-        let step_timeout = std::time::Duration::from_secs(step_config.timeout_secs);
-
-        // Approval gate: if step.approval == "ask", emit a request event and
-        // park on the registered oneshot until the dialog responds OR the
-        // workflow is cancelled. Build the preview from the *resolved* prompt
-        // for genie steps so the user approves what the model actually sees.
-        if step_config.approval == "ask" {
-            let approval_key = (execution_id.to_string(), step_id.clone());
-            let rx = approvals.register(approval_key.clone());
-            let preview =
-                build_approval_preview(&step, &resolved_params, genies_dir.as_deref()).await;
-            emit_event(
-                app,
-                "workflow:approval-request",
-                ApprovalRequest {
-                    execution_id: execution_id.to_string(),
-                    step_id: step_id.clone(),
-                    summary: step.uses.clone(),
-                    preview,
-                    model: step_config.model.clone(),
-                },
-            );
-            let approval_timeout = step_timeout.min(std::time::Duration::from_secs(600));
-            let approval_outcome = tokio::select! {
-                _ = cancel.cancelled() => ApprovalOutcome::Cancelled,
-                res = tokio::time::timeout(approval_timeout, rx) => match res {
-                    Ok(Ok(true)) => ApprovalOutcome::Approved,
-                    Ok(Ok(false)) => ApprovalOutcome::Denied,
-                    Ok(Err(_)) => ApprovalOutcome::ChannelClosed,
-                    Err(_) => ApprovalOutcome::TimedOut,
-                },
-            };
-            match approval_outcome {
-                ApprovalOutcome::Approved => {}
-                ApprovalOutcome::Cancelled => {
-                    approvals.drop_pending(&approval_key);
-                    failed = true;
-                    failed_step = step_id.clone();
-                    emit_event(
-                        app,
-                        "workflow:step-update",
-                        StepStatusEvent {
-                            execution_id: execution_id.to_string(),
-                            step_id,
-                            status: "skipped".to_string(),
-                            output: None,
-                            error: Some("Workflow cancelled".to_string()),
-                            duration: Some(start.elapsed().as_millis() as u64),
-                        },
-                    );
-                    continue;
-                }
-                ApprovalOutcome::TimedOut => {
-                    approvals.drop_pending(&approval_key);
-                    failed = true;
-                    failed_step = step_id.clone();
-                    emit_event(
-                        app,
-                        "workflow:step-update",
-                        StepStatusEvent {
-                            execution_id: execution_id.to_string(),
-                            step_id,
-                            status: "error".to_string(),
-                            output: None,
-                            error: Some("Approval timed out".to_string()),
-                            duration: Some(start.elapsed().as_millis() as u64),
-                        },
-                    );
-                    continue;
-                }
-                ApprovalOutcome::Denied | ApprovalOutcome::ChannelClosed => {
-                    failed = true;
-                    failed_step = step_id.clone();
-                    let err_msg = if matches!(approval_outcome, ApprovalOutcome::ChannelClosed) {
-                        "Approval channel closed"
-                    } else {
-                        "Approval denied by user"
-                    };
-                    emit_event(
-                        app,
-                        "workflow:step-update",
-                        StepStatusEvent {
-                            execution_id: execution_id.to_string(),
-                            step_id,
-                            status: "error".to_string(),
-                            output: None,
-                            error: Some(err_msg.to_string()),
-                            duration: Some(start.elapsed().as_millis() as u64),
-                        },
-                    );
-                    continue;
-                }
-            }
-        }
-
-        // Execute step based on type, with a per-step timeout. On elapsed:
-        // fire the cancel token so any in-flight AI provider work (CLI child,
-        // REST request) is aborted, then surface a "Timed out" step error.
-        let exec_fut = execute_step(
-            &step,
-            &resolved_params,
-            workspace_root,
-            cancel.clone(),
-            provider.as_ref(),
-            genies_dir.as_deref(),
-            &defaults,
-        );
-        let result = match tokio::time::timeout(step_timeout, exec_fut).await {
-            Ok(r) => r,
-            Err(_elapsed) => {
-                cancel.cancel();
-                Err(format!("Timed out after {}s", step_config.timeout_secs))
-            }
-        };
-        let duration_ms = start.elapsed().as_millis() as u64;
-
-        match result {
-            Ok(step_outputs) => {
-                // Coherence (WI-1.6): capture under the run's policy, awaited (A11).
-                if step.uses == "action/save-file" {
-                    if let (Some(rel), Some(content)) =
-                        (resolved_params.get("path"), resolved_params.get("input"))
-                    {
-                        crate::workflow::coherence_capture::capture_save_file_ordered(
-                            app,
-                            workspace_root,
-                            dataflow.clone(),
-                            step_id.clone(),
-                            rel.clone(),
-                            content.clone(),
-                            capture_policy,
-                        )
-                        .await;
-                    }
-                }
-                // Store full structured output for downstream step consumption.
-                // Action steps + text genies have a single "text" entry; JSON
-                // genies populate one entry per top-level field.
-                let primary_text = step_outputs.get("text").cloned().unwrap_or_default();
-                outputs.insert(step_id.clone(), step_outputs);
-                completed_steps.insert(step_id.clone());
-                // Truncate only for IPC emission (char-safe, no byte-boundary panic)
-                let emitted_output = truncate_utf8_safe(&primary_text, MAX_OUTPUT_SIZE_BYTES);
-                emit_event(
-                    app,
-                    "workflow:step-update",
-                    StepStatusEvent {
-                        execution_id: execution_id.to_string(),
-                        step_id,
-                        status: "success".to_string(),
-                        output: Some(emitted_output),
-                        error: None,
-                        duration: Some(duration_ms),
-                    },
-                );
-            }
-            Err(error) => {
-                failed = true;
-                failed_step = step_id.clone();
-                emit_event(
-                    app,
-                    "workflow:step-update",
-                    StepStatusEvent {
-                        execution_id: execution_id.to_string(),
-                        step_id,
-                        status: "error".to_string(),
-                        output: None,
-                        error: Some(error),
-                        duration: Some(duration_ms),
-                    },
-                );
-            }
-        }
-
-        log::info!(
-            "Workflow '{}': step {}/{} ({}) ({}ms)",
-            workflow.name,
-            i + 1,
-            step_count,
-            if failed { "FAILED" } else { "ok" },
-            duration_ms
-        );
-    }
-
-    // Emit completion
-    let final_status = if cancel_token.load(Ordering::SeqCst) {
+    // The one place a run that returns says so: nothing above returns.
+    let final_status = if ctx.cancel_requested() {
         "cancelled"
-    } else if failed {
+    } else if outcome.is_err() {
         "failed"
     } else {
         "completed"
@@ -598,174 +164,71 @@ pub async fn run_workflow_sequential<R: Runtime>(
             status: final_status.to_string(),
         },
     );
+    log::info!("Workflow {:?} {}", workflow.name, final_status);
 
-    log::info!("Workflow '{}' {}", workflow.name, final_status);
-
-    if failed {
-        Err(format!(
-            "Workflow '{}' failed at step '{}'",
-            workflow.name, failed_step
-        ))
-    } else {
-        Ok(execution_id.to_string())
-    }
+    outcome.map(|()| execution_id.to_string())
 }
 
-/// Truncate a string to at most `max_bytes` on a valid UTF-8 char boundary.
-fn truncate_utf8_safe(s: &str, max_bytes: usize) -> String {
-    if s.len() <= max_bytes {
-        return s.to_string();
-    }
-    let safe_end = s
-        .char_indices()
-        .take_while(|(i, _)| *i < max_bytes)
-        .last()
-        .map(|(i, c)| i + c.len_utf8())
-        .unwrap_or(0);
-    format!(
-        "{}...\n[Output truncated for display: {} bytes total]",
-        &s[..safe_end],
-        s.len()
-    )
-}
+/// Run the sorted steps in order, each through its four phases. `Err` names
+/// the first step that failed.
+async fn run_steps<R: Runtime>(
+    ctx: &RunContext<'_, R>,
+    name: &str,
+    steps: Vec<ResolvedStep>,
+) -> Result<(), String> {
+    let step_count = steps.len();
+    // Coherence: the steps as written, for tracing what fed a save-file.
+    let dataflow: Vec<StepSlice> = steps
+        .iter()
+        .map(|rs| (rs.id.clone(), rs.step.uses.clone(), rs.step.with.clone()))
+        .collect();
+    let mut state = RunState::default();
 
-/// Resolve step parameters via the expression module (WI-2.3).
-///
-/// Supports `${{ steps.X.outputs.Y }}`, `${{ steps.X.output }}`,
-/// `${{ env.NAME }}`, legacy `${VAR}`, and legacy whole-string
-/// `stepId.output` aliases.
-fn resolve_params(
-    params: &HashMap<String, String>,
-    outputs: &WorkflowOutputs,
-    env: &HashMap<String, String>,
-    workspace_root: &Path,
-) -> Result<HashMap<String, String>, String> {
-    let mut resolved = HashMap::new();
+    log::info!("Workflow {:?} starting: {} steps", name, step_count);
 
-    for (key, value) in params {
-        let val = expressions::resolve(value, outputs, env).map_err(|e| e.to_string())?;
-
-        // Re-validate paths after substitution.
-        if key == "path" {
-            validate_path(&val, workspace_root)
-                .map_err(|e| format!("Path validation failed after parameter resolution: {}", e))?;
+    for (i, rs) in steps.iter().enumerate() {
+        let Some(ready) = step_preflight(ctx, &mut state, rs) else {
+            continue;
+        };
+        // Effective approval mode and timeout for the step (ADR-6).
+        let config = resolve_step_config(&rs.step, None, &ctx.defaults);
+        if !approval_gate(ctx, &mut state, rs, &ready, &config).await {
+            continue;
         }
+        let result = execute_with_timeout(ctx, &rs.step, &ready.params, &config).await;
+        let duration_ms = ready.started.elapsed().as_millis() as u64;
+        let step_ok = result.is_ok();
+        record_step_result(
+            ctx,
+            &mut state,
+            &dataflow,
+            rs,
+            &ready.params,
+            result,
+            duration_ms,
+        )
+        .await;
 
-        resolved.insert(key.clone(), val);
+        log::info!(
+            "Workflow {:?}: step {}/{} ({}) ({}ms)",
+            name,
+            i + 1,
+            step_count,
+            if step_ok { "ok" } else { "FAILED" },
+            duration_ms
+        );
     }
 
-    Ok(resolved)
-}
-
-/// Execute a single step based on its `uses:` prefix.
-///
-/// Returns a `StepOutputs` map (step id → field → value). Action steps and
-/// v0/v1-text genies populate just `{"text": ...}`; v1-JSON genies populate
-/// each declared schema field as a sibling of `text`.
-///
-/// `genie/*` steps require `provider` and `genies_dir` — passing `None` for
-/// either causes the step to fail with a clear error rather than panic, so
-/// action-only workflows can run from contexts that haven't selected a
-/// provider yet.
-async fn execute_step(
-    step: &RawStep,
-    params: &HashMap<String, String>,
-    workspace_root: &Path,
-    cancel: CancellationToken,
-    provider: Option<&ProviderConfig>,
-    genies_dir: Option<&Path>,
-    defaults: &RawDefaults,
-) -> Result<HashMap<String, String>, String> {
-    let uses = step.uses.as_str();
-    if uses.starts_with("action/") {
-        let text = execute_action(uses, params, workspace_root).await?;
-        Ok(HashMap::from([("text".to_string(), text)]))
-    } else if uses.starts_with("genie/") {
-        execute_genie_step(step, params, cancel, provider, genies_dir, defaults).await
-    } else if uses.starts_with("webhook/") {
-        Err(format!("Webhook '{}' execution not yet implemented", uses))
-    } else {
-        Err(format!("Unknown step type: {}", uses))
+    match state.first_failure() {
+        Some(step) => Err(format!("Workflow '{}' failed at step '{}'", name, step)),
+        None => Ok(()),
     }
 }
-
-/// Resolve and execute a `genie/<name>` step.
-///
-/// Walks: name extraction → file discovery → frontmatter parse → input
-/// validation → template fill → AI provider call → output validation.
-/// Each failure mode produces a step-level error string suitable for the
-/// `workflow:step-update` event payload.
-async fn execute_genie_step(
-    step: &RawStep,
-    params: &HashMap<String, String>,
-    cancel: CancellationToken,
-    provider: Option<&ProviderConfig>,
-    genies_dir: Option<&Path>,
-    defaults: &RawDefaults,
-) -> Result<HashMap<String, String>, String> {
-    let name = genie_step::parse_genie_name(&step.uses).map_err(|e| e.to_string())?;
-    let provider = provider.ok_or_else(|| {
-        format!(
-            "Genie '{}' requires an active AI provider — none configured for this workflow run",
-            name
-        )
-    })?;
-    let genies_dir = genies_dir.ok_or_else(|| {
-        format!(
-            "Genie '{}' requires a genies directory — none resolved for this workflow run",
-            name
-        )
-    })?;
-
-    let genie_path = genie_step::find_genie_file(genies_dir, name).map_err(|e| e.to_string())?;
-    // Use tokio::fs to avoid blocking the runtime worker on slow disks.
-    let raw = tokio::fs::read_to_string(&genie_path).await.map_err(|e| {
-        format!(
-            "Failed to read genie file '{}': {}",
-            genie_path.display(),
-            e
-        )
-    })?;
-
-    // Parse via the same path the editor uses, so v0 + v1 frontmatter behave
-    // identically. We inline the call here rather than re-export `parse_genie`
-    // (private to the genies module) by going through the public Tauri command
-    // surface in tests, but at runtime we need a synchronous path. Re-implement
-    // the minimal slice: BOM strip + frontmatter detect + parse via serde_yaml.
-    let content = parse_genie_content(&raw, &genie_path)?;
-
-    let step_config = resolve_step_config(step, Some(&content.metadata), defaults);
-
-    let loaded = LoadedGenie {
-        metadata: content.metadata,
-        template: content.template,
-    };
-
-    genie_step::execute_genie(cancel, &loaded, params, &step_config, provider)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// Slim genie-content parser used by the runner.
-///
-/// The editor path goes through `crate::genies::commands::read_genie` which
-/// is a Tauri command and can't be called from inside another Tauri command's
-/// async handler without re-entering the IPC layer. This function calls the
-/// same `parse_genie` underneath via the public `read_genie` Rust API exposed
-/// through `genies::types::GenieContent`.
-fn parse_genie_content(
-    raw: &str,
-    path: &Path,
-) -> Result<crate::genies::types::GenieContent, String> {
-    let path_str = path.to_string_lossy();
-    crate::genies::parse_genie_for_runner(raw, &path_str)
-        .map_err(|e| format!("Failed to parse genie '{}': {}", path.display(), e))
-}
-
-use super::actions::execute_action;
-#[cfg(test)]
-use super::actions::matches_accept;
 
 #[cfg(test)]
 #[path = "runner.test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "runner_flow.test.rs"]
+mod flow_tests;

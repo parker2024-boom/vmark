@@ -97,8 +97,8 @@ fn migrate_v1_to_v2(mut session: SessionData) -> Result<SessionData, String> {
 
 /// Migrate v2 -> v3: Add format_id / editing_enabled / active_schema_id to TabState
 ///
-/// v3 adds three fields to TabState in support of the multi-format workspace
-/// (plan WI-1A.13). Pre-v3 sessions are markdown-only by definition; the
+/// v3 adds three fields to TabState in support of the multi-format workspace.
+/// Pre-v3 sessions are markdown-only by definition; the
 /// migration backfills:
 ///   - format_id        = "markdown"
 ///   - editing_enabled  = true   (markdown is editable by default)
@@ -196,7 +196,7 @@ mod tests {
     }
 }
 
-// WI-1A.13 — v2 → v3 migration tests live in a sibling file so this
+// The v2 → v3 migration tests live in a sibling file so this
 // module stays under the project's ~300-line target. The `#[path]`
 // attribute lets the file itself be the module body, keeping the
 // fixtures and helpers private to test builds.

@@ -5,6 +5,8 @@
  * - DOM setup (editor containers, mocks)
  * - Store mocking patterns
  * - Async helpers
+ *
+ * @module test/popupTestUtils
  */
 
 // ============================================================================

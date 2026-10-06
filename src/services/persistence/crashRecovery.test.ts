@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   readTextFile,
   writeTextFile,
@@ -32,6 +32,10 @@ const mockRename = vi.mocked(rename);
 const mockAppDataDir = vi.mocked(appDataDir);
 const mockJoin = vi.mocked(join);
 
+/** The fixed "now" every test runs at; snapshot ages are measured from it. */
+const NOW = Date.UTC(2026, 0, 15, 12, 0, 0);
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 function makeSnapshot(overrides: Partial<RecoverySnapshot> = {}): RecoverySnapshot {
   return {
     version: 1,
@@ -40,13 +44,14 @@ function makeSnapshot(overrides: Partial<RecoverySnapshot> = {}): RecoverySnapsh
     content: "# Hello",
     filePath: null,
     title: "Untitled-1",
-    timestamp: Date.now(),
+    timestamp: NOW,
     ...overrides,
   };
 }
 
 describe("crashRecovery", () => {
   beforeEach(() => {
+    vi.setSystemTime(NOW);
     vi.clearAllMocks();
     mockAppDataDir.mockResolvedValue("/Users/test/.config");
     mockJoin.mockImplementation((...parts: string[]) =>
@@ -57,6 +62,10 @@ describe("crashRecovery", () => {
     mockWriteTextFile.mockResolvedValue(undefined);
     mockRename.mockResolvedValue(undefined);
     mockRemove.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe("getRecoveryDir", () => {
@@ -92,7 +101,7 @@ describe("crashRecovery", () => {
 
       // Should write to tmp file first (includes timestamp suffix)
       expect(mockWriteTextFile).toHaveBeenCalledWith(
-        expect.stringMatching(/^\/Users\/test\/\.config\/recovery\/\.tmp-tab-123-\d+$/),
+        `/Users/test/.config/recovery/.tmp-tab-123-${NOW}`,
         expect.any(String)
       );
 
@@ -210,8 +219,8 @@ describe("crashRecovery", () => {
   describe("deleteStaleRecoveryFiles", () => {
     it("deletes files older than maxAgeDays", async () => {
       mockExists.mockResolvedValue(true);
-      const oldTimestamp = Date.now() - 8 * 24 * 60 * 60 * 1000; // 8 days ago
-      const recentTimestamp = Date.now() - 1 * 24 * 60 * 60 * 1000; // 1 day ago
+      const oldTimestamp = NOW - 8 * DAY_MS;
+      const recentTimestamp = NOW - 1 * DAY_MS;
 
       const oldSnapshot = makeSnapshot({ tabId: "old-tab", timestamp: oldTimestamp });
       const recentSnapshot = makeSnapshot({ tabId: "recent-tab", timestamp: recentTimestamp });
@@ -232,6 +241,22 @@ describe("crashRecovery", () => {
       expect(mockRemove).toHaveBeenCalledWith(
         "/Users/test/.config/recovery/snapshot-old-tab.json"
       );
+    });
+
+    it("keeps a snapshot exactly maxAgeDays old and deletes one a millisecond older", async () => {
+      mockExists.mockResolvedValue(true);
+      mockReadDir.mockResolvedValue([
+        { name: "snapshot-edge.json", isDirectory: false, isFile: true, isSymlink: false },
+        { name: "snapshot-past.json", isDirectory: false, isFile: true, isSymlink: false },
+      ] as never);
+      mockReadTextFile
+        .mockResolvedValueOnce(JSON.stringify(makeSnapshot({ tabId: "edge", timestamp: NOW - 7 * DAY_MS })))
+        .mockResolvedValueOnce(JSON.stringify(makeSnapshot({ tabId: "past", timestamp: NOW - 7 * DAY_MS - 1 })));
+
+      await deleteStaleRecoveryFiles(7);
+
+      expect(mockRemove).toHaveBeenCalledTimes(1);
+      expect(mockRemove).toHaveBeenCalledWith("/Users/test/.config/recovery/snapshot-past.json");
     });
 
     it("does not throw if dir does not exist", async () => {

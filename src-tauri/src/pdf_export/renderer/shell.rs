@@ -1,4 +1,4 @@
-//! The shell both renderer paths share (#220): the temp document, the
+//! The shell both renderer paths share: the temp document, the
 //! outcome channel, and the main-thread hop.
 //!
 //! Purpose: `render_pdf` and `print_document` each carried their own copy of
@@ -56,7 +56,7 @@ async fn write_render_temp(prefix: &str, html: String) -> Result<std::path::Path
         })
         .await
         // A `JoinError` is the TASK failing — a panic, or the runtime dropping
-        // it — not the filesystem (#440). Reported as `io` it looked like a
+        // it — not the filesystem. Reported as `io` it looked like a
         // disk the user could do something about, and `is_retryable` says so;
         // `internal` is the class this crate reserves for a task join failure.
         .map_err(|e| {
@@ -84,7 +84,7 @@ pub(super) fn dispatch_error(e: impl std::fmt::Display) -> CommandError {
 /// that is not `str` (url 2.5.8, `path_to_file_url_segments_windows`). The
 /// old `to_string_lossy` handed such a path on with `U+FFFD` in it, and the
 /// failure surfaced as a navigation to a file that does not exist — a load
-/// error nobody could explain from the message (#226). Refusing here names
+/// error nobody could explain from the message. Refusing here names
 /// the path, in the only spelling it has.
 pub(super) fn utf8_path(path: &Path) -> Result<&str, CommandError> {
     path.to_str().ok_or_else(|| {
@@ -102,7 +102,7 @@ pub(super) fn utf8_path(path: &Path) -> Result<&str, CommandError> {
 pub(super) type Body<T> =
     Box<dyn FnOnce(&AppHandle, &str, &str, Arc<RenderSink<T>>) + Send + 'static>;
 
-/// The shell both paths share (#220): write the document to the temp file the
+/// The shell both paths share: write the document to the temp file the
 /// sink will own, build the sink around the outcome channel, and hop to the
 /// main thread. Returns the sink (so the caller can abandon it) and the
 /// receiver it will settle.
@@ -124,7 +124,7 @@ pub(super) async fn dispatch<T: Send + 'static>(
     // (ADR-PDF4).
     // Checked before anything is written: the temp file's path is this
     // directory plus ASCII, so a directory the webviews cannot name is
-    // refused before a document is put in it (#226).
+    // refused before a document is put in it.
     let temp_dir = std::env::temp_dir();
     let temp_dir_str = utf8_path(&temp_dir)?.to_string();
     let temp_html = write_render_temp(prefix, html).await?;

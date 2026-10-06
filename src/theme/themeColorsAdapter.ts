@@ -21,7 +21,7 @@ export interface ThemeColors {
   link: string;
   secondary: string;
   border: string;
-  /** D8 (WI-UI1.2) — the ≥3:1 control boundary; `border` stays a divider. */
+  /** D8 — the ≥3:1 control boundary; `border` stays a divider. */
   controlBorder?: string;
   isDark?: boolean;
   textSecondary?: string;
@@ -30,7 +30,7 @@ export interface ThemeColors {
   mdChar?: string;
   strong?: string;
   emphasis?: string;
-  // WI-UI1.1 — projected for EVERY theme (isDark no longer chooses colours):
+  // Projected for EVERY theme (isDark no longer chooses colours):
   contrastText?: string;
   warningColor?: string;
   warningBg?: string;
@@ -87,7 +87,7 @@ function setIfStated<K extends keyof ThemeColors>(
  *  themes through the SAME projection the runtime uses — a private copy in the
  *  gate would drift from this one. */
 export function themeTokensToColors(t: ThemeTokens): ThemeColors {
-  // WI-UI1.1 — every value below is projected for EVERY theme, so the legacy
+  // Every value below is projected for EVERY theme, so the legacy
   // writer's isDark branch chooses a CLASS, never a colour. Before this, the
   // light branch discarded selection/accentBg (mint rendered the shared blue
   // tint) and the dark branch omitted the warning/contrast/subtle families
@@ -126,7 +126,7 @@ export function themeTokensToColors(t: ThemeTokens): ThemeColors {
     alertWarning: t.color.alert.warning,
     alertCaution: t.color.alert.caution,
   };
-  // Audit fix (H2, 2026-05-25): codeText/mdChar live on ThemeTokens.color.legacy
+  // Audit fix: codeText/mdChar live on ThemeTokens.color.legacy
   // (dark themes state them; light themes share the static fragment).
   setIfStated(out, "codeText", t.color.legacy?.codeText);
   setIfStated(out, "mdChar", t.color.legacy?.mdChar);

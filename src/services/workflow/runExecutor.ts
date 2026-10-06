@@ -1,5 +1,5 @@
 /**
- * Workflow run executor (WI-NB6.1 / P-1) — the callback `runWebWorkflow` drives
+ * Workflow run executor (P-1) — the callback `runWebWorkflow` drives
  * each step through. It turns a parsed step into an act on the embedded browser,
  * re-deciding authorization on EVERY attempt so a one-shot spent on one step can
  * never carry to the next (the engine retries by calling this again).
@@ -24,7 +24,7 @@
  * or ambiguous → failed+undefined (stop-and-ask); a transport error propagates as
  * a throw (→ unknown → pause); a `WorkflowPause` carries its own code.
  *
- * Split (round 3, #106): `runExecutorEnv.ts` holds the shared environment
+ * Split: `runExecutorEnv.ts` holds the shared environment
  * (authorize, tab, evals, snapshot, the single authorized act) and the pure
  * outcome/input helpers; `runExecutorHeal.ts` holds role resolution and the heal
  * retry. This file composes the two step kinds from them.

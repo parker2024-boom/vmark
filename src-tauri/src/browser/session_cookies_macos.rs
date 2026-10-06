@@ -1,4 +1,4 @@
-//! Native `WKHTTPCookieStore` capture/replay for storage-state (WI-P6.2, macOS).
+//! Native `WKHTTPCookieStore` capture/replay for storage-state (macOS).
 //!
 //! Included via `#[path]` from surface_macos.rs; `super::` is that module, so this
 //! reaches its private `on_main`/`WEBVIEWS`/`pump_until`. The cookie APIs are async
@@ -77,11 +77,13 @@ pub fn capture_cookies(
 ) -> Result<Vec<StoredCookie>, NativeSurfaceError> {
     super::on_main(app, move |_mtm| {
         let webview = super::webview_for(&tab_id)?;
-        let store = unsafe { webview.configuration().websiteDataStore().httpCookieStore() };
+        let store = super::webkit_calls::cookie_store(&webview);
 
         let out: Rc<RefCell<Option<Vec<StoredCookie>>>> = Rc::new(RefCell::new(None));
         let sink = out.clone();
         let handler = RcBlock::new(move |cookies: NonNull<NSArray<NSHTTPCookie>>| {
+            // SAFETY: WebKit passes a non-null array that stays alive for the
+            // duration of the block; `arr` is not kept past it.
             let arr = unsafe { cookies.as_ref() };
             let mut v = Vec::new();
             for cookie in arr.iter() {
@@ -107,6 +109,9 @@ pub fn capture_cookies(
             }
             *sink.borrow_mut() = Some(v);
         });
+        // SAFETY: `store` is live and on the main thread. WebKit copies the block
+        // and calls it once, on the main thread — the thread that owns the `Rc`
+        // it captures.
         unsafe { store.getAllCookies(&handler) };
 
         let run_loop = NSRunLoop::mainRunLoop();
@@ -132,14 +137,20 @@ fn build_cookie(c: &StoredCookie) -> Option<Retained<NSHTTPCookie>> {
     let expires_val = c.expires.map(NSDate::dateWithTimeIntervalSince1970);
     let samesite_val = c.same_site.as_ref().map(|s| NSString::from_str(s));
 
-    let mut keys: Vec<&NSHTTPCookiePropertyKey> = unsafe {
-        vec![
+    // SAFETY: Foundation's cookie property keys — constants the framework
+    // initializes when it loads and never writes again.
+    let (name_key, value_key, domain_key, path_key, secure_key, expires_key, same_site_key) = unsafe {
+        (
             NSHTTPCookieName,
             NSHTTPCookieValue,
             NSHTTPCookieDomain,
             NSHTTPCookiePath,
-        ]
+            NSHTTPCookieSecure,
+            NSHTTPCookieExpires,
+            NSHTTPCookieSameSitePolicy,
+        )
     };
+    let mut keys: Vec<&NSHTTPCookiePropertyKey> = vec![name_key, value_key, domain_key, path_key];
     let mut vals: Vec<&AnyObject> = vec![
         name.as_ref(),
         value.as_ref(),
@@ -147,19 +158,23 @@ fn build_cookie(c: &StoredCookie) -> Option<Retained<NSHTTPCookie>> {
         path.as_ref(),
     ];
     if let Some(v) = &secure_val {
-        keys.push(unsafe { NSHTTPCookieSecure });
+        keys.push(secure_key);
         vals.push(v.as_ref());
     }
     if let Some(v) = &expires_val {
-        keys.push(unsafe { NSHTTPCookieExpires });
+        keys.push(expires_key);
         vals.push(v.as_ref());
     }
     if let Some(v) = &samesite_val {
-        keys.push(unsafe { NSHTTPCookieSameSitePolicy });
+        keys.push(same_site_key);
         vals.push(v.as_ref());
     }
     let props: Retained<NSDictionary<NSHTTPCookiePropertyKey, AnyObject>> =
         NSDictionary::from_slices(&keys, &vals);
+    // SAFETY: every key is a documented cookie property key, paired with the
+    // value type Foundation expects for it — strings for name, value, domain,
+    // path, the Secure marker and the SameSite policy, an `NSDate` for Expires.
+    // A set Foundation rejects comes back as nil, which the caller handles.
     unsafe { NSHTTPCookie::cookieWithProperties(&props) }
 }
 
@@ -180,6 +195,7 @@ pub fn apply_cookies(
         // host — an HTTPS→HTTP or port change must not slip through). A residual
         // async window remains (setCookie completes after this check while the run
         // loop pumps); it is bounded and the cookie stays domain-scoped regardless.
+        // SAFETY: a property read on a live webview on the main thread.
         let current_origin = unsafe { webview.URL() }
             .and_then(|u| u.absoluteString())
             .and_then(|s| url::Url::parse(&s.to_string()).ok())
@@ -190,7 +206,7 @@ pub fn apply_cookies(
                     .to_string(),
             ));
         }
-        let store = unsafe { webview.configuration().websiteDataStore().httpCookieStore() };
+        let store = super::webkit_calls::cookie_store(&webview);
 
         // Build the set we will actually write: on-domain, non-HttpOnly. A malformed
         // on-domain cookie fails the whole restore closed (never a silent skip). [H1/M3]
@@ -218,6 +234,9 @@ pub fn apply_cookies(
         for cookie in &to_set {
             let d = done.clone();
             let handler = RcBlock::new(move || d.set(d.get() + 1));
+            // SAFETY: `store` and `cookie` are live. WebKit copies the block and
+            // calls it once, on the main thread — the thread that owns the `Rc`
+            // counter it captures.
             unsafe { store.setCookie_completionHandler(cookie, Some(&handler)) };
         }
         let run_loop = NSRunLoop::mainRunLoop();

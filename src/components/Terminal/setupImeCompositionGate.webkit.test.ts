@@ -8,10 +8,21 @@
  * CANNOT: a real OS IME composition cycle (macOS Pinyin candidate window) — those
  * need recorded human traces (plan WI-0.3). This file covers the former.
  */
+// timer-isolation: intentional real timers — this tier observes WebKit's own ordering of input events against xterm's and the gate's setTimeout(0) macrotasks; a fake clock would replace the ordering under test.
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { userEvent } from "vitest/browser";
 import { Terminal } from "@xterm/xterm";
 import { setupImeCompositionGate } from "./setupImeCompositionGate";
+
+/**
+ * Resolve after every timer already queued with a delay of 0 — xterm's input
+ * finalizer, the gate's claim expiry and echo clear. HTML orders timers: one
+ * runs only after every earlier timer from the same document whose timeout is
+ * equal or less has run. 4ms is the ceiling the engine clamps a nested
+ * setTimeout(0) to, so this barrier is ordered after those too. It waits for
+ * the queued work, not for a guessed duration.
+ */
+const afterQueuedTimers = () => new Promise<void>((resolve) => setTimeout(resolve, 4));
 
 interface Harness {
   term: Terminal;
@@ -61,13 +72,13 @@ describe("gate path (real WebKit) — single writer", () => {
 
   it("types ASCII exactly once (xterm keydown owns it; gate stops the redundant input)", async () => {
     await userEvent.keyboard("a");
-    await new Promise((r) => setTimeout(r, 20));
+    await afterQueuedTimers();
     expect(h.ptyWrites.join("")).toBe("a");
   });
 
   it("types a word of ASCII with no duplication", async () => {
     await userEvent.keyboard("echo");
-    await new Promise((r) => setTimeout(r, 20));
+    await afterQueuedTimers();
     expect(h.ptyWrites.join("")).toBe("echo");
   });
 
@@ -75,7 +86,7 @@ describe("gate path (real WebKit) — single writer", () => {
     // Playwright inserts the literal char (insertText, no composition). This is
     // the shape of the WeChat/no-composition punctuation path.
     await userEvent.keyboard("。");
-    await new Promise((r) => setTimeout(r, 20));
+    await afterQueuedTimers();
     // Record what actually happened, then assert single-occurrence.
     console.log("[GATE] direct non-ASCII writes:", JSON.stringify(h.ptyWrites));
     expect(h.ptyWrites.filter((w) => w.includes("。")).join("")).toBe("。");
@@ -111,7 +122,7 @@ describe("gate path (real WebKit) — who writes an insertText", () => {
     // Nothing else can: xterm's keydown path never ran, and T1 already stopped
     // the event so `_inputEvent` cannot fire either.
     fireInsert("/");
-    await new Promise((r) => setTimeout(r, 20));
+    await afterQueuedTimers();
     expect(h.ptyWrites.join("")).toBe("/");
   });
 
@@ -119,7 +130,7 @@ describe("gate path (real WebKit) — who writes an insertText", () => {
     const ta = h.term.textarea!;
     ta.dispatchEvent(new KeyboardEvent("keydown", { key: "a", keyCode: 229, bubbles: true }));
     fireInsert("/");
-    await new Promise((r) => setTimeout(r, 20));
+    await afterQueuedTimers();
     expect(h.ptyWrites.join("")).toBe("/");
   });
 
@@ -127,7 +138,7 @@ describe("gate path (real WebKit) — who writes an insertText", () => {
     // userEvent drives a genuine keydown, so xterm's keydown path owns it; the
     // redundant input event that follows must not add a second write.
     await userEvent.keyboard("x");
-    await new Promise((r) => setTimeout(r, 20));
+    await afterQueuedTimers();
     expect(h.ptyWrites.join("")).toBe("x");
   });
 });
@@ -147,14 +158,14 @@ describe("gate path (real WebKit) — xterm and keyCode 229", () => {
   it("writes a plain keydown for `/` (control)", async () => {
     const ta = h.term.textarea!;
     ta.dispatchEvent(new KeyboardEvent("keydown", { key: "/", keyCode: 191, bubbles: true, cancelable: true }));
-    await new Promise((r) => setTimeout(r, 20));
+    await afterQueuedTimers();
     expect(h.ptyWrites.join("")).toBe("/");
   });
 
   it("REFUSES a keyCode-229 keydown, even for a printable key", async () => {
     const ta = h.term.textarea!;
     ta.dispatchEvent(new KeyboardEvent("keydown", { key: "/", keyCode: 229, bubbles: true, cancelable: true }));
-    await new Promise((r) => setTimeout(r, 20));
+    await afterQueuedTimers();
     console.log("[229] writes:", JSON.stringify(h.ptyWrites));
     // If this is empty, xterm can never deliver these keystrokes and the gate
     // must write them itself — letting T2 "pass them through" achieves nothing.

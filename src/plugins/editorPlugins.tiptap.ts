@@ -7,11 +7,11 @@
  * - buildEditorKeymapBindings: Build the full keymap bindings record
  * - editorKeymapExtension: Tiptap Extension wrapping the keymap plugin
  * - expandedToggleMarkTiptap: Re-export for external consumers
- *
  * @coordinates-with plugins/shared/ — hostShortcuts (chords), hostPopups (Escape)
  * @coordinates-with editorPlugins/keymapUtils.ts (binding helpers)
  * @coordinates-with services/editor/runEditorAction.ts (executor for editor.* actions)
  * @coordinates-with editorPlugins/linkCommands.ts (unlink shortcut — no editor.* command)
+ * @module plugins/editorPlugins.tiptap
  */
 
 import { Extension } from "@tiptap/core";
@@ -57,7 +57,7 @@ export function buildEditorKeymapBindings(): Record<string, Command> {
   // through the shared editor executor (runEditorAction) — the SAME path the menu
   // uses (IME queue, read-only re-validation, isActionExecutable gate). NOT
   // executeCommand: that applies the palette actionAvailability gate, which is
-  // stricter and would drop keyboard formatting the executor accepts (WI-4.2).
+  // stricter and would drop keyboard formatting the executor accepts.
   bindIfKey(
     bindings,
     hostShortcuts.getShortcut("bold"),

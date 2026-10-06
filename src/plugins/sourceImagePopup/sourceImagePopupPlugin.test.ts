@@ -10,7 +10,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
 // Mock dependencies
-vi.mock("@/plugins/sourcePopup", () => ({
+vi.mock("@/plugins/shared/createSourcePopupPlugin", () => ({
   createSourcePopupPlugin: vi.fn((config) => {
     (createSourcePopupPlugin as ReturnType<typeof vi.fn>).__lastConfig = config;
     return {};
@@ -28,15 +28,10 @@ vi.mock("@/plugins/imagePreview/ImagePreviewView", () => ({
   hideImagePreview: vi.fn(),
 }));
 
-vi.mock("./SourceImagePopupView", () => ({
-  SourceImagePopupView: vi.fn().mockImplementation(() => ({
-    destroy: vi.fn(),
-  })),
-}));
-
-import { createSourcePopupPlugin } from "@/plugins/sourcePopup";
+import { createSourcePopupPlugin } from "@/plugins/shared/createSourcePopupPlugin";
 import { createSourceImagePopupPlugin } from "./sourceImagePopupPlugin";
 import { hideImagePreview } from "@/plugins/imagePreview/ImagePreviewView";
+import { SourceImagePopupView } from "./SourceImagePopupView";
 
 // Helper to create a CM6 view
 function createView(doc: string, cursorPos?: number): EditorView {
@@ -66,6 +61,25 @@ describe("createSourceImagePopupPlugin", () => {
     expect(typeof config.detectTriggerAtPos).toBe("function");
     expect(typeof config.extractData).toBe("function");
     expect(typeof config.onOpen).toBe("function");
+  });
+
+  it("createView builds the real image popup view on the given store", () => {
+    const unsubscribe = vi.fn();
+    const store = {
+      getState: () => ({ isOpen: false, anchorRect: null }),
+      subscribe: vi.fn(() => unsubscribe),
+    };
+    createSourceImagePopupPlugin(store as never);
+    const config = (createSourcePopupPlugin as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const view = createView("![alt](a.png)", 2);
+
+    const popupView = config.createView(view, store);
+
+    expect(popupView).toBeInstanceOf(SourceImagePopupView);
+    expect(store.subscribe).toHaveBeenCalledTimes(1);
+    popupView.destroy();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    view.destroy();
   });
 
   it("onOpen hides image preview", () => {

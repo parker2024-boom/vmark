@@ -3,11 +3,20 @@
  *
  * Purpose: sync external content changes INTO the Tiptap editor (subsequent
  * changes only — onCreate owns the initial load), and re-sync + restore
- * focus/cursor on hidden → visible transitions. Extracted verbatim from
+ * focus/cursor on hidden → visible transitions. Extracted from
  * TiptapEditor.tsx (effect stack split); the refs are owned by the component.
+ *
+ * Key decisions:
+ *   - An editable pane applies an external change at once: it is a file
+ *     reload, a history revert or an AI write, and the user must see it.
+ *   - A markdown-split preview pane sees a change on every keystroke typed in
+ *     the source pane, and each sync is a full parse plus a whole-document
+ *     replace. It waits for typing to settle on a large document
+ *     (previewDebounce.ts); a small one still syncs at once.
  *
  * @coordinates-with TiptapEditor.tsx — sole consumer; owns the refs
  * @coordinates-with wysiwygPendingNav.ts — pending content-search jump wins over cursor restore
+ * @coordinates-with previewDebounce.ts — how long a preview pane waits
  * @module components/Editor/useTiptapContentSync
  */
 import { useEffect, type MutableRefObject } from "react";
@@ -18,7 +27,8 @@ import { getTiptapEditorView } from "@/services/editor/tiptapView";
 import { scheduleTiptapFocusAndRestore } from "@/services/editor/tiptapFocus";
 import { restoreCursorInTiptap } from "@/utils/cursorSync/tiptap";
 import { consumeWysiwygPendingNav } from "./wysiwygPendingNav";
-import { syncMarkdownToEditor } from "./tiptapEditorHelpers";
+import { syncMarkdownToEditor } from "./tiptapContentLoad";
+import { previewSyncDelay } from "./previewDebounce";
 
 interface TiptapContentSyncParams {
   editor: TiptapEditor | null;
@@ -54,38 +64,50 @@ export function useTiptapContentSync({
   useEffect(() => {
     /* v8 ignore next -- @preserve reason: editor null guard; always defined by the time the content effect fires */
     if (!editor) return;
-    // Skip sync when hidden — content will be synced on visibility transition
-    /* v8 ignore next -- @preserve reason: hidden branch skips external content sync; hidden tab scenario not covered in current tests */
-    if (hiddenRef.current) return;
-    /* v8 ignore next -- @preserve reason: isInternalChange guard; only set true during programmatic content updates, not exercised in isolation tests */
-    if (isInternalChange.current) return;
-    if (content === lastExternalContent.current) return;
-    // Skip if onCreate hasn't run yet - let onCreate handle initial content loading
-    if (!editorInitialized.current) return;
 
-    const synced = syncMarkdownToEditor(
-      editor, content, lastExternalContent, preserveLineBreaksRef.current, activeTabId,
-    );
+    const sync = () => {
+      // Skip sync when hidden — content will be synced on visibility transition
+      if (hiddenRef.current) return;
+      /* v8 ignore next -- @preserve reason: isInternalChange guard; only set true during programmatic content updates, not exercised in isolation tests */
+      if (isInternalChange.current) return;
+      if (content === lastExternalContent.current) return;
+      // Skip if onCreate hasn't run yet - let onCreate handle initial content loading
+      if (!editorInitialized.current) return;
 
-    // For fresh document load (no saved cursor position), set cursor to start
-    /* v8 ignore next -- @preserve reason: fresh-doc cursor reset only when synced and no saved cursor; requires specific initial state not exercised in tests */
-    if (synced && !cursorInfoRef.current) {
-      const view = getTiptapEditorView(editor);
-      /* v8 ignore next -- @preserve reason: view null guard; always present after editor init */
-      if (view) {
-        try {
-          const tr = view.state.tr
-            .setSelection(Selection.atStart(view.state.doc))
-            .scrollIntoView()
-            .setMeta("addToHistory", false);
-          view.dispatch(tr);
-        } catch {
-          // Ignore selection errors
+      const synced = syncMarkdownToEditor(
+        editor, content, lastExternalContent, preserveLineBreaksRef.current, activeTabId,
+      );
+
+      // For fresh document load (no saved cursor position), set cursor to start
+      /* v8 ignore next -- @preserve reason: fresh-doc cursor reset only when synced and no saved cursor; requires specific initial state not exercised in tests */
+      if (synced && !cursorInfoRef.current) {
+        const view = getTiptapEditorView(editor);
+        /* v8 ignore next -- @preserve reason: view null guard; always present after editor init */
+        if (view) {
+          try {
+            const tr = view.state.tr
+              .setSelection(Selection.atStart(view.state.doc))
+              .scrollIntoView()
+              .setMeta("addToHistory", false);
+            view.dispatch(tr);
+          } catch {
+            // Ignore selection errors
+          }
         }
       }
+    };
+
+    // A preview pane re-parses a large document once typing has settled; the
+    // next change replaces this effect and clears the wait.
+    const delay = previewRef.current ? previewSyncDelay(content.length) : 0;
+    if (delay === 0) {
+      sync();
+      return;
     }
+    const timer = window.setTimeout(sync, delay);
+    return () => window.clearTimeout(timer);
   // Refs are stable identities; deps intentionally match the original inline effect.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on content and editor; everything else is a ref or read at sync time
   }, [content, editor]);
 
   // Handle visibility transitions: hidden → visible
@@ -112,6 +134,6 @@ export function useTiptapContentSync({
         activeTabId,
       );
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the hidden-to-visible transition only; everything else is a ref or read when it runs
   }, [hidden]);
 }

@@ -15,7 +15,7 @@
  * would be absurd — and it does not touch math or HTML, because a heading may
  * be ABOUT a `<div>` or an equation and deleting either loses real text.
  *
- * @coordinates-with components/Sidebar/outlineUtils.ts — the one caller today
+ * @coordinates-with utils/markdownOutline.ts — the one caller today
  * @module utils/stripInlineMarkdown
  */
 

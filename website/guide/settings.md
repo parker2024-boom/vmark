@@ -247,7 +247,7 @@ The setting does not appear on macOS or Linux.
 | Maximum versions | Number of history snapshots to keep per document | 50 versions | 10, 25, 50, 100 |
 | Keep versions for | Maximum age of history snapshots before they are pruned | 7 days | 1 day, 7 days, 14 days, 30 days |
 | Merge window | Consecutive auto-saves within this window consolidate into a single snapshot, reducing storage noise | 30 seconds | Off, 10s, 30s, 1 min, 2 min |
-| Max file size for history | Skip taking history snapshots for files larger than this threshold | 512 KB | 256 KB, 512 KB, 1 MB, 5 MB, Unlimited |
+| Max file size for history | Skip autosave history snapshots for files larger than this threshold. Manual saves, MCP saves and the safety copy taken before restoring a version are always kept | 512 KB | 256 KB, 512 KB, 1 MB, 5 MB, Unlimited |
 
 ### Images
 
@@ -336,7 +336,7 @@ you can switch any tab with the on-screen toggle or `F6` / `Shift + F6`.
 
 ### External editor
 
-For the **Open in external editor** button on read-only code tabs, pick the editor that should launch. An app bundle (e.g. `/Applications/Visual Studio Code.app`) or an executable.
+For the **Open in external editor** button on read-only code tabs, pick the editor that should launch: the name of a known editor (`code`, `zed`, `subl`, `vim`, …) or the full path of an app bundle (e.g. `/Applications/Visual Studio Code.app`) or executable. Shells, interpreters and terminal emulators are refused, as is a path that does not exist.
 
 The GUI setting overrides any environment variables — explicit beats implicit. Leave it empty to use the env-var fallback chain `$VMARK_EXTERNAL_EDITOR → $VISUAL → $EDITOR → platform default`. See [Open in external editor](/guide/formats#open-in-external-editor) for the full resolution order and security gate.
 
@@ -374,7 +374,7 @@ The Language section contains 20+ fine-grained formatting toggles. For a full ex
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| Convert fullwidth letters/numbers | Convert fullwidth alphanumeric characters to halfwidth (e.g., `ABC` to `ABC`) | On |
+| Convert fullwidth letters/numbers | Convert fullwidth alphanumeric characters to halfwidth (e.g., `ＡＢＣ` to `ABC`) | On |
 | Normalize punctuation width | Convert fullwidth commas and periods to halfwidth when between CJK characters | On |
 | Convert parentheses | Convert fullwidth parentheses to halfwidth when content is CJK | On |
 | Convert brackets | Convert halfwidth brackets to fullwidth `【】` when content is CJK | Off |
@@ -436,7 +436,7 @@ Configure the integrated terminal panel. Open the terminal with `` Ctrl + ` ``.
 
 | Setting | Description | Default | Options |
 |---------|-------------|---------|---------|
-| Shell | Which shell to use. Requires a terminal restart to take effect | System Default | Auto-detected shells on your system (e.g., zsh, bash, fish) |
+| Shell | Which shell to use. Requires a terminal restart to take effect. A saved shell that is no longer available shows as *(unavailable)* and the default is used | System Default | Auto-detected shells on your system (e.g., zsh, bash, fish) |
 | Panel Position | Where to place the terminal panel | Auto | Auto (based on window aspect ratio), Top, Bottom, Left, Right |
 | Panel Size | Proportion of available space the terminal occupies. Drag-resizing the panel also updates this value | 40% | 10% to 80% |
 | Font Size | Text size in the terminal | 13px | 10px to 24px |
@@ -445,7 +445,7 @@ Configure the integrated terminal panel. Open the terminal with `` Ctrl + ` ``.
 | Cursor Blink | Whether the terminal cursor blinks | On | On / Off |
 | Copy on Select | Automatically copy selected terminal text to the clipboard | Off | On / Off |
 | Automatic transcript rendering | Render Claude/Codex Markdown, tables and Mermaid diagrams beside the terminal CLI. Adds a local SessionStart hook to the Claude Code and Codex configuration; restart running CLI sessions after enabling | Off | On / Off |
-| WebGL Renderer | Use GPU-accelerated rendering for the terminal. Disable if you experience IME input issues. Requires a terminal restart | On | On / Off |
+| WebGL Renderer | Use GPU-accelerated rendering for the terminal. Disable if you experience IME input issues. Requires a terminal restart. macOS and Windows only — Linux always uses the DOM renderer | On | On / Off |
 | Remote Clipboard (OSC 52) | Let programs running in the terminal — over ssh, inside tmux — copy to your system clipboard. The channel is write-only: reading the clipboard is always refused, since any output printed to the terminal could request it | On | On / Off |
 | Scrollback | Number of lines of output each session keeps in its scroll history. Higher values use more memory | 5,000 | 1,000 / 5,000 / 10,000 / 50,000 |
 | Screen Reader Mode | Expose terminal output to assistive technology (VoiceOver). Off by default for performance | Off | On / Off |
@@ -464,7 +464,7 @@ See [Integrated Terminal](/guide/terminal) for more about sessions, keyboard sho
 
 ## About
 
-Displays app version, links to the website and GitHub repository, and update management.
+Displays app version, links to the website and GitHub repository, and update management. The **Third-party notices** link opens the license texts of the open-source software bundled with VMark, in your system's default app for text files.
 
 ### Updates
 

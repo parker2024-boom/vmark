@@ -124,6 +124,18 @@ describe("workspace transfer claim handling", () => {
       .resolves.toBe(false);
   });
 
+  // WI-RA7.5 — Rust claims for the window that is ASKING. A label argument
+  // would be a label any window could spell, so none is sent.
+  it("claims as the calling window, naming no label", async () => {
+    setLocationSearch("?workspaceTransfer=true");
+    mockInvoke.mockResolvedValueOnce(null);
+
+    await claimWorkspaceTransferForWindow("doc-2", mockOpenWorkspaceWithConfig);
+
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(mockInvoke.mock.calls[0]).toEqual(["claim_workspace_transfer"]);
+  });
+
   it("claims and applies a workspace transfer payload from a transfer window", async () => {
     setRailMode(true);
     setLocationSearch("?workspaceTransfer=true");

@@ -40,7 +40,7 @@ const isWebKit =
 export const tableScrollFreezeExtension = Extension.create({
   name: "tableScrollFreeze",
   addProseMirrorPlugins() {
-    // No-op on non-WebKit engines (#4: cross-platform regression risk)
+    // No-op on non-WebKit engines (cross-platform regression risk)
     if (!isWebKit) return [];
 
     let scrollContainer: HTMLElement | null = null;
@@ -50,7 +50,7 @@ export const tableScrollFreezeExtension = Extension.create({
 
     function freeze(container: HTMLElement) {
       if (frozen) return;
-      // Capture immutable baseline — this is what we restore to (#1)
+      // Capture immutable baseline — this is what we restore to
       baselineScrollTop = container.scrollTop;
       frozen = true;
 
@@ -60,7 +60,7 @@ export const tableScrollFreezeExtension = Extension.create({
           return baselineScrollTop;
         },
         set(_val: number) {
-          // True no-op: discard ALL writes including WebKit's caret-scroll (#1)
+          // True no-op: discard ALL writes including WebKit's caret-scroll
         },
       });
     }
@@ -79,7 +79,7 @@ export const tableScrollFreezeExtension = Extension.create({
       // Restore to the immutable baseline
       container.scrollTop = baselineScrollTop;
 
-      // Apply correct vertical-only scroll if cursor is off-screen (#5: shared helper)
+      // Apply correct vertical-only scroll if cursor is off-screen (shared helper)
       scrollVerticalOnly(view, container);
     }
 
@@ -96,7 +96,7 @@ export const tableScrollFreezeExtension = Extension.create({
         key: scrollFreezeKey,
         props: {
           handleDOMEvents: {
-            // Capture phase via PM's handleDOMEvents for normal clicks (#2 partial)
+            // Capture phase via PM's handleDOMEvents for normal clicks
             mousedown(view, event) {
               const target = event.target as HTMLElement | null;
               if (!target?.closest("table")) return false;
@@ -114,7 +114,7 @@ export const tableScrollFreezeExtension = Extension.create({
         },
         view(editorView) {
           // Capture-phase listener on the editor DOM catches mousedown on resize
-          // handles, which stopPropagation and never reach PM's handleDOMEvents (#2).
+          // handles, which stopPropagation and never reach PM's handleDOMEvents.
           const onCapture = (e: Event) => {
             const target = e.target as HTMLElement | null;
             if (!target?.closest("table")) return;
@@ -136,7 +136,7 @@ export const tableScrollFreezeExtension = Extension.create({
               if (!scrollContainer) return;
 
               // Freeze on any PM update that lands in a table —
-              // catches keyboard nav, resize handle interactions (#2), and
+              // catches keyboard nav, resize handle interactions, and
               // any path that bypasses the mousedown handler
               if (isSelectionInTable(view) && !frozen) {
                 freeze(scrollContainer);

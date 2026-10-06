@@ -119,7 +119,7 @@ export function planDocumentReorder(
 }
 
 /**
- * WI-12.4: map an index in the VISIBLE tab array back to the window's flat
+ * Map an index in the VISIBLE tab array back to the window's flat
  * store array by tab id. Reordering with flat indices preserves hidden
  * instances' tabs' relative positions — the visible plan never crosses them.
  */
@@ -135,7 +135,7 @@ export function translateVisibleIndexToFlat(
 
 /**
  * Plan a reorder in the VISIBLE projection and translate it to flat store
- * indices (WI-12.4). `tab` is null when the plan is blocked or unknown.
+ * indices. `tab` is null when the plan is blocked or unknown.
  */
 export function planVisibleReorderToFlat(
   rawTabs: Tab[],

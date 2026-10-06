@@ -25,7 +25,7 @@ Ouvrez **Paramètres → Intégrations** et activez le serveur MCP :
 
 - **Activer le serveur MCP** - Activer pour autoriser les connexions IA
 - **Démarrer au lancement** - Démarrage automatique à l'ouverture de VMark
-- **Approuver automatiquement les modifications** - Appliquer les changements IA sans prévisualisation (voir ci-dessous)
+- **Approuver automatiquement les enregistrements vers un nouvel emplacement et les résultats des génies** - Désactivé par défaut. Permet à une IA d'enregistrer un document vers un *nouveau* chemin sans demander, et permet à un génie d'appliquer son résultat directement plutôt que sous forme de suggestion. Les écritures ordinaires de l'IA ne sont jamais soumises à ce réglage — leur filet de sécurité est l'[historique des points de contrôle d'édition](#points-de-controle-d-edition) (voir [Fonctionnement des modifications](#fonctionnement-des-modifications))
 
 ### 2. Installer la configuration
 
@@ -39,11 +39,26 @@ Assistants IA pris en charge :
 - **Claude Desktop** - Application bureau d'Anthropic
 - **Claude Code** - CLI pour développeurs
 - **Codex CLI** - Assistant de codage d'OpenAI
-- **Gemini CLI** - Assistant IA de Google
+- **Antigravity CLI** - `agy` de Google, le successeur de Gemini CLI
+- **Grok CLI** - L'agent de codage de xAI
+- **opencode** - l'agent de terminal open source, indépendant du fournisseur
+
+**L'installation écrit un identifiant propre à chaque client.** En plus du chemin vers le serveur MCP de VMark, l'installation place un jeton secret dans le propre fichier de configuration du client, sous `env.VMARK_MCP_TOKEN` (`environment.VMARK_MCP_TOKEN` pour opencode). Chaque client reçoit son propre jeton, qui n'est stocké nulle part ailleurs. Il indique à VMark quel client se connecte, au lieu de se fier au nom que le client annonce. Aujourd'hui, seules les actions déléguées en ont besoin — répondre à une question de cohérence en votre nom avec `coherence_resolve` ; tous les autres outils fonctionnent sans lui. L'installation et **Réparer** conservent un jeton encore valide ; pour en émettre un nouveau, désinstallez puis installez à nouveau. Redémarrez le client IA après l'une ou l'autre opération. Traitez le jeton comme un mot de passe : ne collez pas le fichier de configuration dans un ticket ou une discussion.
+
+::: info Gemini CLI est abandonné
+Google a remplacé Gemini CLI par Antigravity. Si une installation antérieure de VMark a
+laissé une entrée `vmark` dans `~/.gemini/settings.json`, le panneau Intégrations affiche
+pour elle une ligne **Abandonné** avec un bouton **Supprimer** ; les nouvelles installations
+ciblent Antigravity à la place.
+:::
 
 ::: info Autres clients compatibles MCP
 D'autres clients compatibles MCP tels que Cursor, Windsurf et des outils similaires peuvent également se connecter au serveur MCP de VMark. Configurez-les manuellement en pointant vers le chemin du binaire du serveur MCP (voir [Configuration manuelle](#configuration-manuelle) ci-dessous).
 :::
+
+#### CC-Switch
+
+Si vous gérez vos CLI d'IA avec CC-Switch, le programme d'installation affiche aussi une ligne **CC-Switch**. **Ajouter à CC-Switch** ouvre un lien `ccswitch://v1/import` qui transmet le serveur MCP de VMark — le chemin de son binaire — à CC-Switch, lequel écrit ensuite l'entrée `vmark` dans toutes les CLI que vous y gérez ; un bouton de copie vous donne le lien lui-même si vous préférez le coller. La ligne reste désactivée tant que VMark n'a pas résolu son propre binaire MCP.
 
 #### Icônes de statut
 
@@ -54,6 +69,7 @@ Chaque fournisseur affiche un indicateur de statut :
 | ✓ Vert | Valide | La configuration est correcte et fonctionnelle |
 | ⚠ Ambre | Incompatibilité de chemin | VMark a été déplacé — cliquez sur **Réparer** |
 | ✗ Rouge | Binaire manquant | Binaire MCP introuvable — réinstallez VMark |
+| 🗎 Rouge | Configuration illisible | VMark ne peut pas lire ou analyser le fichier de configuration ; on ne sait donc pas s'il contient une entrée VMark. Le message nomme le fichier et la raison. Corrigez-le ou déplacez-le, puis cliquez sur **Revérifier** — l'installation et la réparation sont suspendues tant qu'il ne s'analyse pas, car écrire dans un fichier que VMark ne peut pas lire risquerait d'en détruire le contenu |
 | ○ Gris | Non configuré | Non installé — cliquez sur **Installer** |
 
 ::: tip VMark déplacé ?
@@ -128,9 +144,9 @@ Modifiez `~/.codex/config.toml` :
 command = "/Applications/VMark.app/Contents/MacOS/vmark-mcp-server"
 ```
 
-### Gemini CLI
+### Antigravity CLI
 
-Modifiez `~/.gemini/settings.json` :
+Modifiez `~/.gemini/config/mcp_config.json` :
 
 ```json
 {
@@ -141,6 +157,46 @@ Modifiez `~/.gemini/settings.json` :
   }
 }
 ```
+
+### Grok CLI
+
+Modifiez `~/.grok/config.toml` :
+
+```toml
+[mcp_servers.vmark]
+command = "/Applications/VMark.app/Contents/MacOS/vmark-mcp-server"
+```
+
+### opencode
+
+Modifiez `~/.config/opencode/opencode.json`. Le schéma d'opencode diffère du schéma
+`mcpServers` : la clé est `mcp`, et `command` est un tableau unique contenant
+le programme et ses arguments :
+
+```json
+{
+  "mcp": {
+    "vmark": {
+      "type": "local",
+      "command": ["/Applications/VMark.app/Contents/MacOS/vmark-mcp-server"],
+      "enabled": true
+    }
+  }
+}
+```
+
+Si vos propres réglages se trouvent dans `opencode.jsonc`, laissez-les là — opencode
+fusionne les deux fichiers, donc l'entrée de VMark dans `opencode.json` s'ajoute aux vôtres. VMark écrit
+le fichier JSON simple parce qu'il ne peut pas conserver les commentaires d'un fichier `.jsonc` à la réécriture.
+
+::: warning Une entrée `vmark` existante dans `opencode.jsonc` l'emporte
+opencode fusionne `config.json`, puis `opencode.json`, puis `opencode.jsonc`, et
+le dernier lu a priorité. Si vous avez auparavant ajouté à la main une entrée `vmark`
+dans `opencode.jsonc`, elle remplace donc celle que gère VMark — VMark signalera
+le fournisseur comme valide alors qu'opencode continue d'utiliser votre ancienne entrée (et
+son chemin de binaire obsolète). Supprimez le bloc `mcp.vmark` écrit à la main dans
+`opencode.jsonc` et laissez le panneau Intégrations le gérer.
+:::
 
 ::: tip Trouver le chemin du binaire
 Sur macOS, le binaire du serveur MCP est à l'intérieur de VMark.app :
@@ -162,7 +218,7 @@ Le binaire du serveur MCP prend en charge un petit ensemble d'options pour les d
 | Option | Ce qu'elle fait |
 |---|---|
 | `--version` (ou `-v`) | Affiche la version (doit correspondre à la VMark en cours d'exécution) et quitte. |
-| `--health-check` | Exécute un auto-test contre le pont VMark en cours d'exécution et quitte. Utilisez ceci pour vérifier votre installation avant de connecter un assistant IA. |
+| `--health-check` | Exécute un auto-test du binaire et quitte : il démarre le serveur MCP face à un pont simulé intégré, affiche sa version et son nombre d'outils en JSON, et quitte avec un code non nul si le nombre d'outils n'est pas celui qu'attend cette version. Il ne contacte **pas** une VMark en cours d'exécution — utilisez-le pour confirmer que le binaire fonctionne ; utilisez **Paramètres → Intégrations** pour vérifier le pont actif. |
 | `--port <nombre>` | Substitution manuelle du port. Ignore la procédure de découverte automatique et se connecte sur le port indiqué. Utile uniquement pour les configurations legacy où le port du pont est fixé en externe ; la découverte automatique est préférable. |
 
 Exemple :
@@ -187,18 +243,19 @@ Assistant IA <--stdio--> Serveur MCP <--WebSocket--> Éditeur VMark
 
 ## Capacités disponibles
 
-Une fois connecté, votre assistant IA peut :
+Une fois connecté, votre assistant IA dispose de neuf outils :
 
-| Catégorie | Capacités |
-|-----------|----------|
-| **Document** | Lire/écrire du contenu, rechercher, remplacer |
-| **Sélection** | Obtenir/définir la sélection, remplacer le texte sélectionné |
-| **Formatage** | Gras, italique, code, liens, et plus |
-| **Blocs** | Titres, paragraphes, blocs de code, citations |
-| **Listes** | Listes à puces, ordonnées et de tâches |
-| **Tableaux** | Insérer, modifier les lignes/colonnes |
-| **Spécial** | Équations mathématiques, diagrammes Mermaid, liens wiki |
-| **Espace de travail** | Ouvrir/enregistrer des documents, gérer les fenêtres |
+| Outil | Ce qu'il couvre |
+|-------|-----------------|
+| `session` | Fenêtres, onglets, document actif et onglets du navigateur (lecture seule) |
+| `workspace` | Nouveau, ouvrir, enregistrer, enregistrer sous, fermer, changer d'onglet, mettre une fenêtre au premier plan, ouvrir un espace de travail |
+| `document` | Lire et écrire l'ensemble du document en Markdown ; transformations de formatage CJK |
+| `selection` | Lire et remplacer le texte sélectionné |
+| `workflow` | Correctifs sûrs pour le CST et validation du YAML GitHub Actions |
+| `browser` / `browser_read` | Automatisation du navigateur intégré sur macOS — les moitiés modifiante et en lecture seule |
+| `coherence` / `coherence_resolve` | Lire la couche de cohérence ; résoudre les liens obsolètes dans le cadre d'une délégation que vous avez accordée |
+
+Le formatage n'est pas un outil distinct : l'assistant écrit du Markdown, donc les titres, tableaux, maths et diagrammes sont simplement ce qu'il écrit.
 
 Consultez la [Référence des outils MCP](/fr/guide/mcp-tools) pour la documentation complète.
 
@@ -208,37 +265,25 @@ VMark fournit plusieurs façons de vérifier le statut du serveur MCP :
 
 ### Indicateur dans la barre d'état
 
-La barre d'état affiche un indicateur **MCP** sur le côté droit :
+La barre d'état affiche un indicateur **MCP** sur le côté droit. Lorsque quelque chose
+requiert votre attention, un petit mot d'état apparaît à côté de l'icône satellite ;
+une connexion saine se résume à l'icône verte. Le survol de l'indicateur liste les clients IA
+actuellement connectés, par nom et version :
 
-| Couleur | Statut |
-|---------|--------|
-| Vert | Connecté et en cours d'exécution |
-| Gris | Déconnecté ou arrêté |
-| Pulsation (animé) | Démarrage en cours |
+| Couleur | Mot | Statut |
+|---------|-----|--------|
+| Vert | — | Connecté et en cours d'exécution |
+| Gris | `off` | Déconnecté ou arrêté |
+| Pulsation (animé) | `…` | Démarrage en cours |
+| Rouge | `error` | Échec du serveur — survolez pour en voir la raison |
 
 Le démarrage se termine généralement en 1 à 2 secondes.
 
-Cliquez sur l'indicateur pour ouvrir la boîte de dialogue de statut détaillé.
-
-### Boîte de dialogue de statut
-
-Accessible via **Aide → Statut du serveur MCP** ou en cliquant sur l'indicateur de la barre d'état.
-
-La boîte de dialogue affiche :
-- Santé de la connexion (Sain / Erreur / Arrêté)
-- État du pont et port
-- Version du serveur
-- Outils disponibles (12) et ressources (4)
-- Heure du dernier contrôle de santé
-- Liste complète des outils disponibles avec bouton de copie
+Cliquez sur l'indicateur pour ouvrir **Paramètres → Intégrations**.
 
 ### Panneau de paramètres
 
-Dans **Paramètres → Intégrations**, lorsque le serveur est en cours d'exécution, vous verrez :
-- Numéro de version
-- Nombre d'outils et de ressources
-- Bouton **Tester la connexion** — exécute un contrôle de santé
-- Bouton **Voir les détails** — ouvre la boîte de dialogue de statut
+**Paramètres → Intégrations** est l'autre surface de statut — il n'existe pas de boîte de dialogue de statut distincte. Tant que le pont fonctionne, le panneau affiche l'adresse sur laquelle il écoute (`localhost:<port>`, avec un bouton de copie) et le nombre de clients IA connectés, actualisé toutes les quelques secondes. Le bouton **Tester la connexion** (intitulé **Vérifier le sidecar** lorsque le pont est arrêté) exécute le propre `--health-check` du sidecar et indique la version du sidecar, son nombre d'outils et l'heure de la dernière vérification — il confirme que le binaire installé fonctionne, pas qu'un client est connecté.
 
 ## Dépannage
 
@@ -270,39 +315,28 @@ Si vous avez déplacé VMark.app vers un autre emplacement (ex. de Téléchargem
 - Cliquez dans la zone de l'éditeur pour la mettre au point
 - Certaines commandes nécessitent d'abord que du texte soit sélectionné
 
-## Système de suggestions et approbation automatique
+## Fonctionnement des modifications
 
-Par défaut, lorsque les assistants IA modifient votre document (insérer, remplacer ou supprimer du contenu), VMark crée des **suggestions** qui nécessitent votre approbation :
+La surface MCP réduite suit l'axe lecture-écriture : les assistants IA appellent `document.read` pour obtenir le contenu actuel + un jeton de révision, raisonnent dessus, puis appellent `document.write` avec le nouveau contenu complet. Le jeton de révision protège contre les écrasements silencieux : si vous avez tapé dans VMark pendant que l'IA réfléchissait, l'écriture renvoie `STALE` et l'IA relit le document.
 
-- **Insertion** - Le nouveau texte apparaît comme aperçu fantôme
-- **Remplacement** - Le texte original a un barré, le nouveau texte comme texte fantôme
-- **Suppression** - Le texte à supprimer apparaît avec un barré
+Pour les fichiers YAML de workflow GitHub Actions, l'IA utilise plutôt `workflow.apply_patch` — les mutateurs de VMark, conscients du CST, préservent les commentaires, les ancres et l'ordre des clés qu'une réécriture du texte brut perdrait.
 
-Appuyez sur **Entrée** pour accepter ou **Échap** pour rejeter. Cela préserve votre historique d'annulation/rétablissement et vous donne un contrôle total.
+Il n'y a pas d'étape d'aperçu pour `document.write`, `selection.set` ou `workflow.apply_patch` — la modification arrive dans l'éditeur dès que la vérification de révision réussit. Le filet de sécurité est l'[historique des points de contrôle d'édition](#points-de-controle-d-edition) ci-dessous ; si vous souhaitez relire avant que quoi que ce soit n'arrive, gardez le document sous git et relisez le diff. Le seul point d'approbation est **Approuver automatiquement les enregistrements vers un nouvel emplacement et les résultats des génies** : réglage désactivé (par défaut), une IA ne peut pas enregistrer un document vers un nouveau chemin — `workspace.save_as` renvoie `APPROVAL_REQUIRED` et VMark affiche une notification nommant le fichier. Même réglage activé, `save_as` refuse d'écraser un autre fichier existant.
 
-### Mode d'approbation automatique
+## Points de contrôle d'édition
 
-::: warning Utilisez avec précaution
-Activer **Approuver automatiquement les modifications** contourne l'aperçu des suggestions et applique immédiatement les changements IA. N'activez cela que si vous faites confiance à votre assistant IA et souhaitez une édition plus rapide.
-:::
+Chaque mutation de document par l'IA — `document.write`, `document.transform`, `selection.set` et `workflow.apply_patch` — commence par prendre un instantané du contenu qu'elle s'apprête à remplacer. Le bouton **historique** de la barre d'état ouvre une fenêtre contextuelle qui liste, pour l'onglet actif, quand chaque écriture de l'IA a eu lieu et quel outil l'a effectuée, avec en un clic **Restaurer l'état d'avant cette écriture** sur chaque ligne et une action **Effacer l'historique de cet onglet**. La restauration remet le contenu antérieur en place et incrémente la révision du document, de sorte qu'un client IA qui détient encore l'ancienne révision reçoit `STALE` à sa prochaine écriture au lieu d'écraser votre restauration.
 
-Lorsque l'approbation automatique est activée :
-- Les modifications sont appliquées directement sans aperçu
-- Annuler (Mod+Z) fonctionne toujours pour inverser les changements
-- Les messages de réponse incluent « (approuvé automatiquement) » pour la transparence
-
-Ce paramètre est utile pour :
-- Les flux de travail d'écriture assistée par IA rapides
-- Les assistants IA de confiance avec des tâches bien définies
-- Les opérations par lots où la prévisualisation de chaque changement est peu pratique
+Les points de contrôle sont conservés par fichier — 50 par fichier et 5 Mio au total — et persistés dans `mcp-checkpoints.jsonl` dans le répertoire de données de l'application VMark, ils survivent donc à un redémarrage. Les documents sans titre ont des points de contrôle par onglet.
 
 ## Notes de sécurité
 
 - Le serveur MCP n'accepte que les connexions locales (localhost)
 - Aucune donnée n'est envoyée à des serveurs externes
+- Les opérations de fichiers de l'IA sont confinées à la racine de l'espace de travail ouvert et aux dossiers des documents ouverts — voir [Confidentialité](/fr/guide/privacy#ce-qu-un-assistant-ia-peut-atteindre)
 - Tout le traitement se fait sur votre machine
 - Le pont WebSocket n'est accessible que localement
-- L'approbation automatique est désactivée par défaut pour éviter les changements non intentionnels
+- Chaque client installé porte son propre `VMARK_MCP_TOKEN`. Un client sans jeton, avec un jeton inconnu ou avec un jeton partagé avec un autre client se connecte quand même, mais ses actions déléguées sont refusées avec un message vous invitant à exécuter Installer pour lui dans **Paramètres → Intégrations** puis à le redémarrer
 
 ## Prochaines étapes
 

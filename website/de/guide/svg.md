@@ -4,7 +4,7 @@ VMark bietet erstklassige Unterstützung für SVG — Skalierbare Vektorgrafiken
 
 | Methode | Am besten für | Bearbeitbarer Quellcode? |
 |---------|--------------|--------------------------|
-| [Bild einbetten](#svg-als-bild-einbetten) (`![](datei.svg)`) | Statische SVG-Dateien auf dem Datenträger | Nein |
+| [Bild einbetten](#svg-als-bild-einbetten) (`![](file.svg)`) | Statische SVG-Dateien auf dem Datenträger | Nein |
 | [Code-Block](#svg-code-blocke) (` ```svg `) | Inline-SVG, KI-generierte Grafiken | Ja |
 
 ## SVG als Bild einbetten
@@ -12,7 +12,7 @@ VMark bietet erstklassige Unterstützung für SVG — Skalierbare Vektorgrafiken
 Standard-Markdown-Bildsyntax verwenden, um eine SVG-Datei einzubetten:
 
 ```markdown
-![Architekturdiagramm](./assets/architecture.svg)
+![Architecture diagram](./assets/architecture.svg)
 ```
 
 Dies funktioniert genau wie PNG- oder JPEG-Bilder — Drag-and-Drop, Einfügen oder über die Symbolleiste einfügen. SVG-Dateien werden als Bilder erkannt und inline gerendert.
@@ -117,7 +117,7 @@ KI-Coding-Assistenten können SVG direkt in Ihre VMark-Dokumente über MCP-Tools
 
 **Beispiel-Prompt:**
 
-> Erstelle ein Balkendiagramm mit vierteljährlichem Umsatz: Q1 2,1 Mio. €, Q2 2,8 Mio. €, Q3 3,2 Mio. €, Q4 3,9 Mio. €
+> Erstelle ein Balkendiagramm mit vierteljährlichem Umsatz: Q1 $2.1M, Q2 $2.8M, Q3 $3.2M, Q4 $3.9M
 
 Die KI generiert ein SVG-Balkendiagramm, das inline in Ihrem Dokument gerendert wird, mit sofort verfügbaren Schwenk-/Zoom- und PNG-Export-Funktionen.
 
@@ -138,6 +138,12 @@ Die KI generiert ein SVG-Balkendiagramm, das inline in Ihrem Dokument gerendert 
 ### Sicherheit
 
 VMark bereinigt SVG-Inhalt vor dem Rendering. Script-Tags und Event-Handler-Attribute (`onclick`, `onerror` usw.) werden entfernt. Dies schützt vor XSS beim Einfügen von SVG aus nicht vertrauenswürdigen Quellen.
+
+Auch externe Verweise werden entfernt: `<use>` und `<image>` dürfen auf ein Fragment im selben Dokument (`href="#arrowhead"`) oder eine eingebettete `data:image/…`-Nutzlast zeigen, eine URL, die vom Rechner weg verweist, wird jedoch verworfen. Ohne dies würde schon das bloße Öffnen eines Dokuments mit einem nicht vertrauenswürdigen Diagramm diese URL abrufen — und damit Ihre IP-Adresse und den Zeitpunkt preisgeben, zu dem Sie die Datei geöffnet haben. Diagrammwerkzeuge wie Mermaid verweisen ausschließlich auf Fragmente, normale Diagramme sind also nicht betroffen.
+
+Das eigene Stylesheet eines SVG (`<style>`) ist auf dieses SVG beschränkt: Jeder Selektor wird so umgeschrieben, dass er nur innerhalb des SVG greifen kann, aus dem er stammt, sodass ein Diagramm weder den Editor noch ein anderes Diagramm umgestalten kann. Erhalten bleiben nur Stilregeln, `@media` und `@keyframes` (Animationsnamen werden pro SVG eindeutig gemacht); `@import`, `@font-face` und andere At-Regeln, externe `url()`-Verweise sowie `position: fixed` / `sticky` werden verworfen. `<form>`-Elemente werden entfernt (ihr Inhalt bleibt erhalten).
+
+Links innerhalb eines gerenderten SVG navigieren nie VMark selbst. Ein Klick auf einen Weblink öffnet ihn in Ihrem Systembrowser; ein relativer Dateilink öffnet die Datei in einem VMark-Tab; `javascript:`-, `file:`- und `data:`-Links werden nie geöffnet.
 
 ### Größenanpassung
 

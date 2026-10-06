@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { applyRules, defaultCJKSettings } from './cjkFormatter'
+// The app's own rule chain, not a copy: scripts/check-cjk-demo-parity.mjs holds it.
+import { applyRules } from '../../../../src/lib/cjkFormatter/rules/applyRules'
+import { DEFAULT_CJK_FORMATTING } from '../../../../src/lib/cjkFormatter/types'
 
 const sampleTexts = [
   {
@@ -43,7 +45,7 @@ const inputText = computed(() => {
 })
 
 const outputText = computed(() => {
-  return applyRules(inputText.value, defaultCJKSettings)
+  return applyRules(inputText.value, DEFAULT_CJK_FORMATTING)
 })
 
 const hasChanges = computed(() => inputText.value !== outputText.value)

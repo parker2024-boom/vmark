@@ -4,7 +4,8 @@
 //! Called by Tauri commands when the frontend notifies of list changes.
 //!
 //! @coordinates-with `mod.rs` (snapshot Mutexes and submenu ID constants)
-//! @coordinates-with `menu_events.rs` (resolves snapshot paths on click)
+//! @coordinates-with `events.rs` (resolves snapshot paths on click)
+//! @coordinates-with `dynamic_layout.rs` (the ids, labels and grouping built here)
 
 use std::collections::HashMap;
 
@@ -12,34 +13,25 @@ use rust_i18n::t;
 use tauri::menu::{Menu, MenuItem, MenuItemKind, PredefinedMenuItem, Submenu};
 use tauri::AppHandle;
 
+#[path = "dynamic_layout.rs"]
+mod layout;
+use layout::{genie_layout, recent_entries, search_genies_accelerator, GenieLayout};
+
 use super::{
-    GENIES_SNAPSHOT, GENIES_SUBMENU_ID, RECENT_FILES_SNAPSHOT, RECENT_FILES_SUBMENU_ID,
-    RECENT_WORKSPACES_SNAPSHOT, RECENT_WORKSPACES_SUBMENU_ID,
+    replace_snapshot, GENIES_SNAPSHOT, GENIES_SUBMENU_ID, RECENT_FILES_SNAPSHOT,
+    RECENT_FILES_SUBMENU_ID, RECENT_WORKSPACES_SNAPSHOT, RECENT_WORKSPACES_SUBMENU_ID,
 };
 
 /// Update the Open Recent submenu with the given list of file paths.
 pub fn update_recent_files_menu(app: &AppHandle, files: Vec<String>) -> tauri::Result<()> {
     // Store snapshot of files for lookup when menu items are clicked
-    if let Ok(mut snapshot) = RECENT_FILES_SNAPSHOT.lock() {
-        *snapshot = files.clone();
-    }
+    replace_snapshot(&RECENT_FILES_SNAPSHOT, files.clone());
 
     let Some(menu) = app.menu() else {
         return Ok(());
     };
 
-    // Find the recent files submenu
-    let mut submenu_opt = None;
-    for item in menu.items()? {
-        if let MenuItemKind::Submenu(sub) = item {
-            if let Some(MenuItemKind::Submenu(recent)) = sub.get(RECENT_FILES_SUBMENU_ID) {
-                submenu_opt = Some(recent);
-                break;
-            }
-        }
-    }
-
-    let Some(submenu) = submenu_opt else {
+    let Some(submenu) = find_nested_submenu(&menu, RECENT_FILES_SUBMENU_ID)? else {
         return Ok(());
     };
 
@@ -59,13 +51,7 @@ pub fn update_recent_files_menu(app: &AppHandle, files: Vec<String>) -> tauri::R
         )?;
         submenu.append(&no_recent)?;
     } else {
-        for (index, path) in files.iter().enumerate() {
-            let filename = std::path::Path::new(path)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(path);
-
-            let item_id = format!("recent-file-{}", index);
+        for (item_id, filename) in recent_entries("recent-file", &files) {
             let item = MenuItem::with_id(app, &item_id, filename, true, None::<&str>)?;
             submenu.append(&item)?;
         }
@@ -92,25 +78,13 @@ pub fn update_recent_workspaces_menu(
     app: &AppHandle,
     workspaces: Vec<String>,
 ) -> tauri::Result<()> {
-    if let Ok(mut snapshot) = RECENT_WORKSPACES_SNAPSHOT.lock() {
-        *snapshot = workspaces.clone();
-    }
+    replace_snapshot(&RECENT_WORKSPACES_SNAPSHOT, workspaces.clone());
 
     let Some(menu) = app.menu() else {
         return Ok(());
     };
 
-    let mut submenu_opt = None;
-    for item in menu.items()? {
-        if let MenuItemKind::Submenu(sub) = item {
-            if let Some(MenuItemKind::Submenu(recent)) = sub.get(RECENT_WORKSPACES_SUBMENU_ID) {
-                submenu_opt = Some(recent);
-                break;
-            }
-        }
-    }
-
-    let Some(submenu) = submenu_opt else {
+    let Some(submenu) = find_nested_submenu(&menu, RECENT_WORKSPACES_SUBMENU_ID)? else {
         return Ok(());
     };
 
@@ -128,13 +102,7 @@ pub fn update_recent_workspaces_menu(
         )?;
         submenu.append(&no_recent)?;
     } else {
-        for (index, path) in workspaces.iter().enumerate() {
-            let foldername = std::path::Path::new(path)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(path);
-
-            let item_id = format!("recent-workspace-{}", index);
+        for (item_id, foldername) in recent_entries("recent-workspace", &workspaces) {
             let item = MenuItem::with_id(app, &item_id, foldername, true, None::<&str>)?;
             submenu.append(&item)?;
         }
@@ -153,6 +121,21 @@ pub fn update_recent_workspaces_menu(
     submenu.append(&clear_item)?;
 
     Ok(())
+}
+
+/// The submenu `id` nested one level under any top-level menu, if present.
+fn find_nested_submenu(
+    menu: &Menu<tauri::Wry>,
+    id: &str,
+) -> tauri::Result<Option<Submenu<tauri::Wry>>> {
+    for item in menu.items()? {
+        if let MenuItemKind::Submenu(sub) = item {
+            if let Some(MenuItemKind::Submenu(found)) = sub.get(id) {
+                return Ok(Some(found));
+            }
+        }
+    }
+    Ok(None)
 }
 
 /// Find the Edit submenu from the top-level menu by ID.
@@ -175,7 +158,7 @@ fn find_genies_submenu(parent: &Submenu<tauri::Wry>) -> Option<Submenu<tauri::Wr
     None
 }
 
-/// Refresh the Genies submenu by scanning global and workspace genie directories.
+/// Refresh the Genies submenu by scanning the global genie directory.
 /// Called by frontend on mount and when workspace changes.
 /// Creates the submenu dynamically inside Edit if it doesn't already exist.
 /// Accepts optional shortcuts map to resolve custom accelerators (e.g., "search-genies").
@@ -192,8 +175,7 @@ pub fn refresh_genies_menu(
     } else {
         Vec::new()
     };
-
-    let mut snapshot: Vec<String> = Vec::new();
+    let layout = genie_layout(&global_entries);
 
     let menu = app.menu().ok_or("No menu")?;
     let edit_menu = find_edit_submenu(&menu).ok_or("Edit menu not found")?;
@@ -217,16 +199,7 @@ pub fn refresh_genies_menu(
     };
 
     // "Search Genies..." at top -- opens the picker
-    // When shortcuts map is provided, use its value (empty = unbound).
-    // When no shortcuts map is provided, fall back to default.
-    let accel: Option<String> = match &shortcuts {
-        Some(s) => match s.get("search-genies") {
-            Some(v) if v.is_empty() => None, // explicitly unbound
-            Some(v) => Some(v.clone()),
-            None => Some("CmdOrCtrl+Y".to_string()), // key absent from map
-        },
-        None => Some("CmdOrCtrl+Y".to_string()), // no map at all
-    };
+    let accel = search_genies_accelerator(shortcuts.as_ref());
     let search_item = MenuItem::with_id(
         &app,
         "search-genies",
@@ -250,7 +223,7 @@ pub fn refresh_genies_menu(
         .map_err(|e| e.to_string())?;
         submenu.append(&no_genies).map_err(|e| e.to_string())?;
     } else {
-        append_genie_entries(&app, &submenu, &global_entries, &mut snapshot)?;
+        append_genie_entries(&app, &submenu, &layout)?;
     }
 
     // Separator before folder action
@@ -280,9 +253,7 @@ pub fn refresh_genies_menu(
     submenu.append(&open_folder).map_err(|e| e.to_string())?;
 
     // Update snapshot
-    if let Ok(mut s) = GENIES_SNAPSHOT.lock() {
-        *s = snapshot;
-    }
+    replace_snapshot(&GENIES_SNAPSHOT, layout.snapshot);
 
     // Re-apply SF Symbol icons to cover newly added genie items
     #[cfg(target_os = "macos")]
@@ -292,7 +263,7 @@ pub fn refresh_genies_menu(
 }
 
 /// Remove the Genies submenu from the Edit menu.
-/// Called when the feature is toggled off (useGenieShortcuts unmounts).
+/// Called when `useGenieShortcuts` unmounts, which happens with the main window.
 #[tauri::command]
 pub fn hide_genies_menu(app: AppHandle) -> Result<(), String> {
     let menu = app.menu().ok_or("No menu")?;
@@ -318,61 +289,31 @@ pub fn hide_genies_menu(app: AppHandle) -> Result<(), String> {
     }
 
     // Clear stale snapshot so removed menu items can't resolve genie paths
-    if let Ok(mut s) = GENIES_SNAPSHOT.lock() {
-        s.clear();
-    }
+    replace_snapshot(&GENIES_SNAPSHOT, Vec::new());
 
     Ok(())
 }
 
-/// Append genie entries to a submenu: root-level items flat, categorized items as group submenus.
+/// Append the laid-out genies to a submenu: root items flat, then one
+/// submenu per category.
 fn append_genie_entries(
     app: &AppHandle,
     parent: &Submenu<tauri::Wry>,
-    entries: &[crate::genies::GenieMenuEntry],
-    snapshot: &mut Vec<String>,
+    layout: &GenieLayout<'_>,
 ) -> Result<(), String> {
-    // Separate root-level entries from categorized entries
-    let mut root_entries = Vec::new();
-    let mut groups: HashMap<String, Vec<&crate::genies::GenieMenuEntry>> = HashMap::new();
-
-    for entry in entries {
-        if let Some(ref cat) = entry.category {
-            groups.entry(cat.clone()).or_default().push(entry);
-        } else {
-            root_entries.push(entry);
-        }
-    }
-
-    // Add root-level entries first
-    for entry in &root_entries {
-        let index = snapshot.len();
-        let item_id = format!("genie-item-{}", index);
-        let item = MenuItem::with_id(app, &item_id, &entry.title, true, None::<&str>)
+    for (item_id, title) in &layout.root {
+        let item = MenuItem::with_id(app, item_id, title, true, None::<&str>)
             .map_err(|e| e.to_string())?;
         parent.append(&item).map_err(|e| e.to_string())?;
-        snapshot.push(entry.path.clone());
     }
-
-    // Add group submenus (sorted by name)
-    let mut group_names: Vec<String> = groups.keys().cloned().collect();
-    group_names.sort();
-
-    for group_name in &group_names {
-        let group_entries = &groups[group_name];
+    for (group_name, items) in &layout.groups {
         let group_sub = Submenu::new(app, group_name, true).map_err(|e| e.to_string())?;
-
-        for entry in group_entries {
-            let index = snapshot.len();
-            let item_id = format!("genie-item-{}", index);
-            let item = MenuItem::with_id(app, &item_id, &entry.title, true, None::<&str>)
+        for (item_id, title) in items {
+            let item = MenuItem::with_id(app, item_id, title, true, None::<&str>)
                 .map_err(|e| e.to_string())?;
             group_sub.append(&item).map_err(|e| e.to_string())?;
-            snapshot.push(entry.path.clone());
         }
-
         parent.append(&group_sub).map_err(|e| e.to_string())?;
     }
-
     Ok(())
 }

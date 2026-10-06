@@ -4,6 +4,8 @@
  * Toggle task list checkbox state:
  * - [ ] (unchecked) ↔ [x] (checked)
  * - Plain list item → task list item
+ *
+ * @module plugins/sourceContextDetection/taskListActions
  */
 
 import type { EditorView } from "@codemirror/view";

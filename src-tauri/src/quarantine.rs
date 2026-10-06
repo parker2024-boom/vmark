@@ -6,25 +6,42 @@
 //! CoreServicesUIAgent on running Tauri apps.
 //!
 //! Pipeline: frontend `openWorkspaceWithConfig` → `strip_workspace_quarantine`
-//! command → strips xattr on root + depth-1 supported-format files →
-//! returns counts.
+//! command → root judged readable by the document windows → strips xattr on
+//! root + depth-1 supported-format files → returns counts.
 //!
 //! Key decisions:
+//!   - Only a folder the document windows can ALREADY read. The root comes
+//!     from the webview, and clearing quarantine is a metadata write the fs
+//!     scope does not mediate, so unchecked the command reached every folder
+//!     on disk (an `.app` bundle is a folder). A root is accepted when it is a
+//!     workspace the user granted, or lies inside the scope the app's
+//!     capabilities give document windows (`webview_can_read`); anything else
+//!     is refused and nothing is touched. What is judged is the CANONICAL
+//!     folder, and that is also what is stripped, so a link cannot stand in
+//!     for it.
 //!   - Scope is bounded: root directory + direct supported-extension
 //!     children only. No recursion. Keeps the operation predictable and
 //!     fast on huge folders.
+//!   - Links are not followed: the attribute is removed from the entry itself
+//!     (`xattr::remove` does not dereference), so a link inside the workspace
+//!     cannot aim the strip at a file outside it.
 //!   - macOS-only. The xattr strip is a no-op on other platforms — the
 //!     command exists on all platforms but returns an empty result so the
 //!     frontend can call it unconditionally.
 //!   - Best-effort: per-entry failures are logged and counted, never fatal.
 //!     The workspace open must succeed even if quarantine cannot be cleared.
 //!   - Registered-extension only: matches `SUPPORTED_EXTENSIONS` from the
-//!     format registry. Phase 1B (WI-1B.16) extended the scope from
+//!     format registry. Phase 1B extended the scope from
 //!     markdown-only so newly-supported formats reach the same Finder
 //!     "Open With" guarantee.
+//!
+//! @coordinates-with workspace/grants/mod.rs — the workspace roots the user granted
+//! @coordinates-with services/macos/macQuarantineNotice.ts — the only caller
 
 #[cfg(target_os = "macos")]
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+use crate::command_error::CommandError;
 
 #[cfg(target_os = "macos")]
 const QUARANTINE_ATTR: &str = "com.apple.quarantine";
@@ -40,7 +57,8 @@ pub struct StripStats {
 
 /// Remove `com.apple.quarantine` from a single path. Returns `Ok(true)` if
 /// the attribute was present and removed, `Ok(false)` if it was already
-/// absent, `Err` only on unexpected I/O failures.
+/// absent, `Err` only on unexpected I/O failures. A link is never followed:
+/// the attribute is removed from the link itself.
 #[cfg(target_os = "macos")]
 fn strip_one(path: &Path) -> std::io::Result<bool> {
     match xattr::remove(path, QUARANTINE_ATTR) {
@@ -74,7 +92,7 @@ pub fn strip_workspace_quarantine(root: &Path) -> StripStats {
         Ok(false) => {}
         Err(e) => {
             stats.error_count += 1;
-            log::warn!("[quarantine] strip root {} failed: {}", root.display(), e);
+            log::warn!("[quarantine] strip root {:?} failed: {}", root, e);
         }
     }
 
@@ -82,7 +100,7 @@ pub fn strip_workspace_quarantine(root: &Path) -> StripStats {
         Ok(e) => e,
         Err(e) => {
             stats.error_count += 1;
-            log::warn!("[quarantine] read_dir {} failed: {}", root.display(), e);
+            log::warn!("[quarantine] read_dir {:?} failed: {}", root, e);
             return stats;
         }
     };
@@ -100,15 +118,15 @@ pub fn strip_workspace_quarantine(root: &Path) -> StripStats {
             Ok(false) => {}
             Err(e) => {
                 stats.error_count += 1;
-                log::warn!("[quarantine] strip {} failed: {}", path.display(), e);
+                log::warn!("[quarantine] strip {:?} failed: {}", path, e);
             }
         }
     }
 
     if stats.stripped_count > 0 || stats.error_count > 0 {
         log::info!(
-            "[quarantine] root={} stripped={} errors={}",
-            root.display(),
+            "[quarantine] root={:?} stripped={} errors={}",
+            root,
             stats.stripped_count,
             stats.error_count
         );
@@ -117,138 +135,83 @@ pub fn strip_workspace_quarantine(root: &Path) -> StripStats {
     stats
 }
 
-/// Tauri command. On non-macOS, returns an empty `StripStats` so the
-/// frontend can call this unconditionally without platform branches.
+/// Can the document windows already read `folder` (a canonical path)?
+///
+/// Yes when it is a workspace root the user granted, or a folder inside one
+/// (`WorkspaceGrants`), or when the asset-protocol scope allows it. That scope
+/// is the fs capability's static roots (`capabilities.test.rs` pins the two
+/// equal) plus every runtime workspace grant, so it answers "is this inside
+/// what the app's capabilities let a document window read" without a second,
+/// hand-kept copy of those globs here.
+#[cfg(target_os = "macos")]
+fn webview_can_read<R: tauri::Runtime>(app: &tauri::AppHandle<R>, folder: &Path) -> bool {
+    use tauri::Manager;
+    let granted = folder.to_str().is_some_and(|canonical| {
+        app.try_state::<crate::workspace::grants::WorkspaceGrants>()
+            .is_some_and(|grants| grants.covers(canonical))
+    });
+    granted || app.asset_protocol_scope().is_allowed(folder)
+}
+
+/// The canonical folder `raw` names, if the webview may have it stripped.
+///
+/// NO ORACLE: a path that does not resolve and a folder the webview cannot
+/// read are refused with the same error, naming the path as the caller
+/// spelled it, so the command cannot be used to probe what exists outside the
+/// webview's reach.
+#[cfg(target_os = "macos")]
+fn readable_workspace_root(
+    raw: &Path,
+    can_read: impl Fn(&Path) -> bool,
+) -> Result<PathBuf, CommandError> {
+    if !raw.is_absolute() {
+        return Err(CommandError::invalid_input(format!(
+            "'{}' is not absolute",
+            raw.display()
+        )));
+    }
+    match raw.canonicalize() {
+        Ok(canonical) if can_read(&canonical) => Ok(canonical),
+        _ => Err(crate::localized_error!(
+            crate::command_error::ErrorCode::PermissionDenied,
+            "errors.workspaceAccess.notGranted",
+            path = raw.display()
+        )),
+    }
+}
+
+/// Tauri command. Strips quarantine from `root` and its direct children when
+/// `root` is a folder the document windows can already read; anything else is
+/// refused with `permission-denied` and nothing is touched.
+///
+/// `async`, with its filesystem work on the blocking pool: resolving `root`
+/// can block for a dead network mount's timeout, which must not happen on the
+/// thread that delivers IPC. It reads and writes no shared state.
+///
+/// On non-macOS, returns an empty `StripStats` so the frontend can call this
+/// unconditionally without platform branches.
 #[tauri::command]
-pub fn strip_workspace_quarantine_cmd(root: String) -> StripStats {
+pub async fn strip_workspace_quarantine_cmd<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    root: String,
+) -> Result<StripStats, CommandError> {
     #[cfg(target_os = "macos")]
     {
-        strip_workspace_quarantine(Path::new(&root))
+        tauri::async_runtime::spawn_blocking(move || {
+            let root =
+                readable_workspace_root(Path::new(&root), |folder| webview_can_read(&app, folder))?;
+            Ok(strip_workspace_quarantine(&root))
+        })
+        .await
+        .map_err(|e| CommandError::internal(format!("quarantine task failed: {e}")))?
     }
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = root;
-        StripStats::default()
+        let _ = (app, root);
+        Ok(StripStats::default())
     }
 }
 
 #[cfg(all(test, target_os = "macos"))]
-mod tests {
-    use super::*;
-    use std::fs;
-
-    fn set_quarantine(path: &Path) {
-        // Realistic value matching what the Mixin app writes.
-        xattr::set(path, QUARANTINE_ATTR, b"0286;69ef2b4d;Mixin;").unwrap();
-    }
-
-    fn has_quarantine(path: &Path) -> bool {
-        matches!(xattr::get(path, QUARANTINE_ATTR), Ok(Some(_)))
-    }
-
-    #[test]
-    fn strips_root_and_every_supported_extension_child() {
-        // WI-1B.16: scope expanded from .md-only to every registered
-        // format. Verifies markdown + txt + json + yaml + html now all
-        // get cleared, while an unregistered extension (.zip) is left
-        // alone.
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        let md = root.join("a.md");
-        let markdown = root.join("b.markdown");
-        let txt = root.join("c.txt");
-        let json = root.join("d.json");
-        let yaml = root.join("e.yaml");
-        let html = root.join("f.html");
-        let zip = root.join("g.zip");
-        for path in [&md, &markdown, &txt, &json, &yaml, &html, &zip] {
-            fs::write(path, b"data").unwrap();
-            set_quarantine(path);
-        }
-        set_quarantine(root);
-
-        let stats = strip_workspace_quarantine(root);
-
-        assert_eq!(stats.error_count, 0);
-        // Root + 6 supported children = 7. .zip is left alone.
-        assert_eq!(stats.stripped_count, 7);
-        for path in [&md, &markdown, &txt, &json, &yaml, &html] {
-            assert!(!has_quarantine(path), "{} kept attr", path.display());
-        }
-        assert!(!has_quarantine(root));
-        assert!(has_quarantine(&zip), "unregistered .zip should keep attr");
-    }
-
-    #[test]
-    fn does_not_recurse_into_subdirectories() {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        let nested = root.join("sub");
-        fs::create_dir(&nested).unwrap();
-        let nested_md = nested.join("deep.md");
-        fs::write(&nested_md, b"# deep").unwrap();
-        set_quarantine(&nested_md);
-
-        let stats = strip_workspace_quarantine(root);
-
-        assert_eq!(stats.stripped_count, 0);
-        assert_eq!(stats.error_count, 0);
-        // Depth-2 file untouched.
-        assert!(has_quarantine(&nested_md));
-    }
-
-    #[test]
-    fn idempotent_on_already_clean_files() {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        let md = root.join("a.md");
-        fs::write(&md, b"# a").unwrap();
-
-        let first = strip_workspace_quarantine(root);
-        let second = strip_workspace_quarantine(root);
-
-        assert_eq!(first.stripped_count, 0);
-        assert_eq!(first.error_count, 0);
-        assert_eq!(second.stripped_count, 0);
-        assert_eq!(second.error_count, 0);
-    }
-
-    #[test]
-    fn missing_root_returns_empty_stats() {
-        let stats = strip_workspace_quarantine(Path::new("/no/such/path/we/hope"));
-        assert_eq!(stats.stripped_count, 0);
-        assert_eq!(stats.error_count, 0);
-    }
-
-    #[test]
-    fn root_pointing_to_file_returns_empty() {
-        let tmp = tempfile::tempdir().unwrap();
-        let f = tmp.path().join("regular.md");
-        fs::write(&f, b"# x").unwrap();
-        set_quarantine(&f);
-
-        let stats = strip_workspace_quarantine(&f);
-
-        // We never strip when root is not a directory — caller's responsibility
-        // to pass a workspace dir, not a single file.
-        assert_eq!(stats.stripped_count, 0);
-        assert!(has_quarantine(&f));
-    }
-
-    #[test]
-    fn handles_cjk_paths() {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path().join("《定投》");
-        fs::create_dir(&root).unwrap();
-        let md = root.join("英国老太太.md");
-        fs::write(&md, b"# cjk").unwrap();
-        set_quarantine(&root);
-        set_quarantine(&md);
-
-        let stats = strip_workspace_quarantine(&root);
-
-        assert_eq!(stats.error_count, 0);
-        assert_eq!(stats.stripped_count, 2);
-        assert!(!has_quarantine(&md));
-    }
-}
+#[path = "quarantine.test.rs"]
+mod tests;

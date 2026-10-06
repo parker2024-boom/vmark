@@ -1,19 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockSessions, mockSetActiveSession } = vi.hoisted(() => ({
-  mockSessions: vi.fn(() => [] as Array<{ id: string; name: string; isAlive: boolean }>),
-  mockSetActiveSession: vi.fn(),
-}));
-
-vi.mock("@/stores/uiStore", () => ({
-  useUIStore: {
-    getState: () => ({
-      terminal: { sessions: mockSessions(), activeSessionId: null },
-      terminalSetActiveSession: mockSetActiveSession,
-    }),
-  },
-}));
-
 const { mockTerminalFontSize, mockUpdateTerminalSetting, mockToggleBinding } = vi.hoisted(() => ({
   mockTerminalFontSize: { value: 13 },
   mockUpdateTerminalSetting: vi.fn(),
@@ -38,6 +24,16 @@ import { createTerminalKeyHandler, type KeyHandlerCallbacks } from "./terminalKe
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { Terminal } from "@xterm/xterm";
 import type { IPty } from "@/lib/pty";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
+
+/** Seed the real session store with live sessions, none of them shown yet. */
+function seedSessions(ids: string[]): void {
+  useTerminalStore.setState({
+    sessions: ids.map((id, i) => ({ id, label: id, ordinal: i + 1, isAlive: true })),
+    activeSessionId: null,
+  });
+}
+const activeId = () => useTerminalStore.getState().activeSessionId;
 
 vi.mock("@/lib/pty", () => ({ spawn: vi.fn() }));
 
@@ -86,6 +82,7 @@ describe("createTerminalKeyHandler", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetTerminalSessionStore();
     mockIsComposing = vi.fn<() => boolean>(() => false);
     callbacks = { onSearch: vi.fn(), isComposing: mockIsComposing };
     mockPty = { write: vi.fn() };
@@ -750,11 +747,7 @@ describe("createTerminalKeyHandler", () => {
 
   describe("Cmd+1-5 session switching", () => {
     it("switches to session by index when sessions exist", () => {
-      mockSessions.mockReturnValue([
-        { id: "s1", name: "Terminal 1", isAlive: true },
-        { id: "s2", name: "Terminal 2", isAlive: true },
-        { id: "s3", name: "Terminal 3", isAlive: true },
-      ]);
+      seedSessions(["s1", "s2", "s3"]);
 
       const term = makeTerm();
       const handler = createTerminalKeyHandler(term, ptyRef, callbacks);
@@ -762,41 +755,32 @@ describe("createTerminalKeyHandler", () => {
       const event1 = makeEvent("1");
       const result = handler(event1);
       expect(result).toBe(false);
-      expect(mockSetActiveSession).toHaveBeenCalledWith("s1");
+      expect(activeId()).toBe("s1");
       expect(event1.preventDefault).toHaveBeenCalled();
 
-      mockSetActiveSession.mockClear();
       const event2 = makeEvent("2");
       handler(event2);
-      expect(mockSetActiveSession).toHaveBeenCalledWith("s2");
+      expect(activeId()).toBe("s2");
     });
 
     it("does not switch when index exceeds session count", () => {
-      mockSessions.mockReturnValue([
-        { id: "s1", name: "Terminal 1", isAlive: true },
-      ]);
+      seedSessions(["s1"]);
 
       const term = makeTerm();
       const handler = createTerminalKeyHandler(term, ptyRef, callbacks);
       handler(makeEvent("3"));
-      expect(mockSetActiveSession).not.toHaveBeenCalled();
+      expect(activeId()).toBeNull();
     });
 
     it("handles Cmd+5 for the fifth session", () => {
-      mockSessions.mockReturnValue([
-        { id: "s1", name: "T1", isAlive: true },
-        { id: "s2", name: "T2", isAlive: true },
-        { id: "s3", name: "T3", isAlive: true },
-        { id: "s4", name: "T4", isAlive: true },
-        { id: "s5", name: "T5", isAlive: true },
-      ]);
+      seedSessions(["s1", "s2", "s3", "s4", "s5"]);
 
       const term = makeTerm();
       const handler = createTerminalKeyHandler(term, ptyRef, callbacks);
       const event = makeEvent("5");
       const result = handler(event);
       expect(result).toBe(false);
-      expect(mockSetActiveSession).toHaveBeenCalledWith("s5");
+      expect(activeId()).toBe("s5");
     });
   });
 

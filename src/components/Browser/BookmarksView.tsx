@@ -1,5 +1,5 @@
 /**
- * BookmarksView — saved pages, in the sidebar (WI-S3.2 / WI-S3.3).
+ * BookmarksView — saved pages, in the sidebar.
  *
  * Shown when the active tab is a browser (ADR-2). Opening a bookmark navigates the active
  * browser tab if there is one, and otherwise CREATES one — a bookmark is reachable from a

@@ -2,6 +2,8 @@
  * Mermaid Plugin Constants
  *
  * Shared constants for mermaid diagram functionality.
+ *
+ * @module plugins/mermaid/constants
  */
 
 /**

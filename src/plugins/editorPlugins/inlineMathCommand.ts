@@ -13,6 +13,7 @@
  * @coordinates-with editorPlugins.tiptap.ts (keymap builder binds this)
  * @coordinates-with inlineNodeEditing plugin (triggers .editing class)
  * @coordinates-with syntaxReveal/marks.ts (findWordAtCursor)
+ * @module plugins/editorPlugins/inlineMathCommand
  */
 
 import { Selection, NodeSelection } from "@tiptap/pm/state";

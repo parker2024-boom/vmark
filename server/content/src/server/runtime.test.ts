@@ -1,6 +1,6 @@
 // Phase 1/4 — live HTTP: real socket, cookie handshake over the wire, port-file,
 // watcher-driven index refresh. (Server-half evidence for spike S0.1.)
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { promises as fs } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -18,32 +18,33 @@ async function write(rel: string, content: string): Promise<void> {
 }
 
 /**
- * Wall-clock budget for a test in this file.
+ * How long `until` polls for the watcher's rebuild before it reports what it
+ * last read.
  *
  * Every test here binds a real socket, writes real files, drives a real
- * watcher and makes several HTTP round trips. Vitest's 5000ms default is a
- * budget for a unit test, and this file's first case spent 5072ms — missing it
- * by 72ms — when the machine was busy. Raising the bound costs nothing on the
- * passing path; a genuine hang still fails, just later.
+ * watcher and makes several HTTP round trips. The tests themselves run under
+ * the package's liveness bound (`testTimeout` in server/content's
+ * vitest.config.ts, the shared `LIVENESS_TIMEOUT_MS`), not a number of their
+ * own: this file's first case once spent 5072ms against vitest's 5000ms
+ * default when the machine was busy. This poll budget sits below that bound
+ * so a rebuild that never lands fails with the poll's message, not a bare
+ * test timeout.
  */
-const LIVE_SOCKET_TIMEOUT_MS = 30_000;
+const WATCHER_POLL_TIMEOUT_MS = 30_000;
 
 /**
- * Poll `read` until it reports `expected`, or fail after `LIVE_SOCKET_TIMEOUT_MS`.
+ * Poll `read` until it reports `expected`, or fail after `WATCHER_POLL_TIMEOUT_MS`.
  *
  * Replaces a fixed `setTimeout(600)` that guessed at how long a debounced
  * watcher rebuild takes. A fixed sleep is wrong in both directions: it wastes
  * 600ms when the rebuild lands in 20ms, and it fails when a loaded machine
  * takes 700ms — the same wall-clock-as-correctness mistake as the timeout above.
  */
-async function until(read: () => Promise<number>, expected: number): Promise<number> {
-  const deadline = Date.now() + LIVE_SOCKET_TIMEOUT_MS;
-  let seen = await read();
-  while (seen !== expected && Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 25));
-    seen = await read();
-  }
-  return seen;
+async function until(read: () => Promise<number>, expected: number): Promise<void> {
+  await vi.waitFor(async () => expect(await read()).toBe(expected), {
+    timeout: WATCHER_POLL_TIMEOUT_MS,
+    interval: 25,
+  });
 }
 
 /** Mint a nonce over the wire, bootstrap, return the session Cookie header. */
@@ -93,7 +94,7 @@ describe("startKbServer — live over a real socket", () => {
     const html = await note.text();
     expect(html).toContain("<h1>Home</h1>");
     expect(html).toContain('href="/note/Note.md"');
-  }, LIVE_SOCKET_TIMEOUT_MS);
+  });
 
   it("refreshes the index after a file is added (watcher)", async () => {
     await write("A.md", "a");
@@ -111,12 +112,11 @@ describe("startKbServer — live over a real socket", () => {
     await write("B.md", "b");
 
     // Poll for the debounced watcher rebuild rather than guessing its duration.
-    const after = await until(async () => {
+    await until(async () => {
       const health = (await (
         await fetch(`${running.url}/__health`, { headers: { cookie } })
       ).json()) as { docs: number };
       return health.docs;
     }, 2);
-    expect(after).toBe(2);
-  }, LIVE_SOCKET_TIMEOUT_MS);
+  });
 });

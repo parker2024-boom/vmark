@@ -2,6 +2,8 @@
  * Markmap Plugin Constants
  *
  * Shared constants for markmap mindmap functionality.
+ *
+ * @module plugins/markmap/constants
  */
 
 /**

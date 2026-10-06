@@ -1,5 +1,5 @@
 /**
- * Purpose: WI-C.3 — workflow-level permissions editor. The
+ * Purpose: workflow-level permissions editor. The
  *   IR's `permissions` field can be one of:
  *     - undefined (default — github-token's default scopes)
  *     - "read-all" | "write-all" | "none" (string shorthand)
@@ -56,7 +56,7 @@ export function PermissionsForm({
 
   // The IR carries scope keys in camelCase (`pullRequests`); the
   // form displays them in kebab-case (the on-disk YAML form). We
-  // convert both ways through scopes.ts (Codex audit HIGH-2 fix).
+  // convert both ways through scopes.ts.
   // `customMap` is keyed by kebab so direct lookup works in the
   // render below.
   //
@@ -65,7 +65,7 @@ export function PermissionsForm({
   // so deriving the map from the prop on every render meant the queued edit was
   // invisible AND the next edit was computed from the pre-edit map. Since the
   // queue dedups by target, setting a second scope replaced the first patch and
-  // silently dropped the first scope (audit R2, #573). Discard remounts this
+  // silently dropped the first scope. Discard remounts this
   // component (the panel keys it by `formGen`), which re-seeds it.
   const [customMap, setCustomMap] = useState<Record<string, PermLevel>>(() =>
     typeof permissions === "object" && permissions !== null
@@ -94,7 +94,7 @@ export function PermissionsForm({
     setMode(next);
     if (next === "default") {
       // Delete the permissions key to restore GitHub's default
-      // behavior. Codex audit HIGH-1 fix — empty string was getting
+      // behavior. An empty string was getting
       // serialized as `permissions: ""` which is invalid.
       queue({ kind: "workflow.permissions.set", value: null });
       return;

@@ -9,7 +9,7 @@
  *   `transform` runs the deterministic CJK rewriter — kept because CJK
  *   rules are too nuanced for AI prose to reimplement reliably.
  *
- * Origin: MCP pruning plan (2026-05-04, retired) ADR-1, ADR-2, ADR-4.
+ * Origin: MCP pruning plan (retired) ADR-1, ADR-2, ADR-4.
  *
  * Key decisions:
  *   - Full-content write, not diff. Correctness first; if large-doc
@@ -25,179 +25,78 @@
  *     failure does NOT fail the write: the buffer is updated, the
  *     response carries `saved: false` plus EITHER `save_skipped`
  *     (we didn't attempt — opt-out or untitled tab) OR `save_error`
- *     (we attempted and the FS rejected). The two fields are mutually
- *     exclusive so AI clients can branch without parsing free-form text.
+ *     (we attempted and it was refused or rejected). The two fields are
+ *     mutually exclusive so AI clients can branch without parsing free-form
+ *     text.
+ *   - The save is the app's own save (`bridgeSave.ts`), so the file keeps
+ *     its line endings and byte-order mark, the write is atomic and ordered
+ *     with every other save, and history and provenance are recorded there.
+ *     What is saved is the BUFFER as this write left it — the store's
+ *     canonical text, not the raw string the client sent. For the tab the
+ *     live WYSIWYG editor is showing, that buffer is the editor's
+ *     serialization of the client's text, so disk, store and editor agree
+ *     and the reply's `saved` and `revision` stay true after the editor
+ *     settles (`liveEditor.ts`).
+ *   - Every handler resolves its tab through `tabGuard.ts`, which first
+ *     flushes the mounted editors into the store — so it reads, checks and
+ *     replaces what the user actually has, pending keystrokes included.
+ *   - `write` and `transform` refuse BUSY, changing nothing, while the user
+ *     is composing with an input method in the editor showing the tab.
  *
- * @coordinates-with stores/documentStore/revision.ts — current revision + isCurrentRevision
+ * @coordinates-with tabGuard.ts — tab resolution, the flush, INVALID_TAB and STALE
+ * @coordinates-with liveEditor.ts — the mounted WYSIWYG editor ↔ store seam
+ * @coordinates-with bridgeSave.ts — the path guard and the save pipeline
+ * @coordinates-with checkpoint.ts — the checkpoint a write leaves behind
  * @coordinates-with documentTransform.ts — CJK transform helpers (extracted)
- * @coordinates-with utils/markdownPipeline/index.ts — parseMarkdown / serializeMarkdown
  * @coordinates-with stores/documentStore.ts — content + dirty state
- * @coordinates-with stores/tabStore.ts — tab → window resolution
- * @coordinates-with services/coherence/mcpCapture.ts — MCP read/write capture under the capture policy (WI-LX1.4)
+ * @coordinates-with stores/documentStore/revision.ts — the revision token
+ * @coordinates-with services/coherence/mcpCapture.ts — MCP read capture; the write is captured by the save pipeline
  * @module services/mcpBridge/v2/document
  */
 
-import { writeTextFile } from "@tauri-apps/plugin-fs";
-import { registerPendingSave, clearPendingSave } from "@/utils/pendingSaves";
-import { captureMcpWrite, recordMcpRead } from "@/services/coherence/mcpCapture";
-import { useTabStore } from "@/stores/tabStore";
+import { recordMcpRead } from "@/services/coherence/mcpCapture";
 import { useDocumentStore, useRevisionStore } from "@/stores/documentStore";
-import { useEditorStore } from "@/stores/editorStore";
-import { getCurrentWindowLabel } from "@/services/persistence/workspaceStorage";
-import { checkBridgePath } from "@/services/mcpBridge/bridgePathGuard";
-import {
-  isWorkflowYaml,
-  looksLikeWorkflowPath,
-} from "@/lib/ghaWorkflow/detection";
-import { parseMarkdown } from "@/utils/markdownPipeline";
-import { getSerializeOptions } from "@/plugins/toolbarActions/wysiwygAdapterUtils";
 import { respond } from "@/services/mcpBridge/utils";
 import { wrapHandler } from "./wrapHandler";
+import { saveTabForBridge } from "./bridgeSave";
+import { describeSizeChange, recordBridgeCheckpoint } from "./checkpoint";
+import { liveCompositionRefusal, loadIntoLiveWysiwyg } from "./liveEditor";
 import { readOperationArgs } from "./readOperationArgs";
-import { v2ErrorString } from "./types";
+import { requireCurrentRevision, requireTab, resolveKind, structuredError } from "./tabGuard";
+import {
+  applyTransform,
+  currentTransformSettings,
+  isTransformKind,
+  TRANSFORM_KINDS,
+} from "./documentTransform";
 import type { DocumentKind, V2Error } from "./types";
-import { useMcpStore } from "@/stores/mcpStore";
-import { appendCheckpoint } from "@/stores/mcpCheckpointPersistence";
-import type { CheckpointTool } from "@/stores/mcpStore";
-import { errorMessage } from "@/utils/errorMessage";
-
-interface ResolvedTab {
-  tabId: string;
-  windowLabel: string;
-  filePath: string | null;
-  content: string;
-  dirty: boolean;
-  kind: DocumentKind;
-}
 
 /**
- * Decide a tab's kind from its filePath + content. Pure helper so
- * callers can re-evaluate against incoming content (e.g. on write).
- */
-function resolveKind(filePath: string | null, content: string): DocumentKind {
-  if (looksLikeWorkflowPath(filePath ?? undefined)) return "yaml-workflow";
-  if (isWorkflowYaml(content)) return "yaml-workflow";
-  return "markdown";
-}
-
-function resolveTab(tabIdArg: string | undefined): ResolvedTab | null {
-  const tabState = useTabStore.getState();
-  const docState = useDocumentStore.getState();
-
-  let tabId: string;
-  let windowLabel: string;
-
-  if (tabIdArg) {
-    const owner = Object.entries(tabState.tabs).find(([, list]) =>
-      list.some((t) => t.id === tabIdArg),
-    );
-    if (!owner) return null;
-    tabId = tabIdArg;
-    windowLabel = owner[0];
-  } else {
-    windowLabel = getCurrentWindowLabel();
-    const active = tabState.activeTabId[windowLabel];
-    if (!active) return null;
-    tabId = active;
-  }
-
-  const doc = docState.documents[tabId];
-  if (!doc) return null;
-
-  const content = doc.content;
-  const filePath = doc.filePath;
-  const kind = resolveKind(filePath, content);
-
-  return {
-    tabId,
-    windowLabel,
-    filePath,
-    content,
-    dirty: doc.isDirty,
-    kind,
-  };
-}
-
-function structuredError(id: string, err: V2Error): Promise<void> {
-  return respond({ id, success: false, error: v2ErrorString(err) });
-}
-
-/**
- * Capture a checkpoint for the just-completed MCP write. Push the
- * snapshot synchronously so callers can read it back immediately, then
- * fire the disk append asynchronously (errors are logged, never
- * surfaced — a failed history write must not break the MCP path).
- */
-function recordCheckpoint(args: {
-  resolved: ResolvedTab;
-  tool: CheckpointTool;
-  description: string;
-  contentBefore: string;
-  revisionBefore: string;
-  revisionAfter: string;
-}): void {
-  const id = useMcpStore.getState().checkpointPush({
-    tabId: args.resolved.tabId,
-    filePath: args.resolved.filePath,
-    tool: args.tool,
-    description: args.description,
-    contentBefore: args.contentBefore,
-    revisionBefore: args.revisionBefore,
-    revisionAfter: args.revisionAfter,
-  });
-  const cp = useMcpStore.getState().checkpointGet(id);
-  if (cp) void appendCheckpoint(cp);
-}
-
-/**
- * Replace document content. Returns the new revision on success or a
- * structured V2Error on failure. Does NOT call `respond` — callers
- * decide how to package the result.
+ * Replace a tab's content and return the revision the document is then at,
+ * or BUSY — with nothing changed — while the live WYSIWYG editor showing the
+ * tab has an IME composition in progress (`liveEditor.ts`).
+ * Does NOT call `respond` — callers decide how to package the result.
+ *
+ * The store takes the content as an EDIT that keeps the document's disk
+ * convention. A Markdown tab the live WYSIWYG editor is showing is then loaded
+ * into that editor, which leaves the store holding the editor's serialization
+ * (see `liveEditor.ts`); a background or Source-mode tab is store-only — the
+ * live editor shows a different document, and dispatching into it would
+ * replace that one.
+ *
+ * The revision is bumped HERE, last, so the token returned is by construction
+ * the document's newest: nothing after this point changes the document.
  */
 function writeContent(
   tabId: string,
   content: string,
   kind: DocumentKind,
 ): { revision: string } | V2Error {
-  const docState = useDocumentStore.getState();
-  const revisionStore = useRevisionStore.getState();
-  // mcp-write: an EDIT that keeps the document's disk convention (WI-1.3).
-  docState.ingestExternalContent(tabId, content, "mcp-write");
-
-  // For a Markdown tab that is the ACTIVE WYSIWYG editor, also re-render the
-  // Tiptap doc so the editor stays in sync; its transaction bumps THIS tab's
-  // revision via revisionTracker (the tracker is keyed to the active tab).
-  //
-  // Guard on `activeWysiwygTabId === tabId` (C5 follow-up): the live editor
-  // shows only the active tab, so a `document.write` to a *background* markdown
-  // tab must NOT dispatch into it — that would clobber the active document and
-  // bump the wrong tab's revision. For background tabs (and non-Markdown tabs
-  // with no bound editor) we update the doc store and bump the TARGET tab's
-  // revision directly.
-  const editorState = useEditorStore.getState();
-  const editor = editorState.tiptap.editor;
-  const isActiveWysiwygTab = editorState.active.activeWysiwygTabId === tabId;
-  if (editor && kind === "markdown" && isActiveWysiwygTab) {
-    try {
-      const serializeOpts = getSerializeOptions();
-      const newDoc = parseMarkdown(editor.schema, content, {
-        preserveLineBreaks: serializeOpts.preserveLineBreaks,
-      });
-      const view = editor.view;
-      const tr = view.state.tr
-        .replaceWith(0, view.state.doc.content.size, newDoc.content)
-        .setMeta("addToHistory", true);
-      view.dispatch(tr);
-    } catch {
-      // Parser rejected — doc store already updated; force-bump
-      // revision so callers see a fresh token.
-      revisionStore.updateRevision(tabId);
-    }
-  } else {
-    revisionStore.updateRevision(tabId);
-  }
-
-  return { revision: revisionStore.getRevision(tabId) };
+  const refusal = liveCompositionRefusal(tabId);
+  if (refusal) return refusal;
+  useDocumentStore.getState().ingestExternalContent(tabId, content, "mcp-write");
+  if (kind === "markdown") loadIntoLiveWysiwyg(tabId, content);
+  return { revision: useRevisionStore.getState().updateRevision(tabId) };
 }
 
 /**
@@ -208,30 +107,24 @@ export async function handleDocumentRead(
   args: Record<string, unknown>,
 ): Promise<void> {
   return wrapHandler(id, async () => {
-    const tabIdArg = typeof args.tabId === "string" ? args.tabId : undefined;
-    const resolved = resolveTab(tabIdArg);
-    if (!resolved) {
-      await structuredError(id, {
-        error: "INVALID_TAB",
-        message: "tabId could not be resolved",
-      });
-      return;
-    }
-    const revision = useRevisionStore.getState().getRevision(resolved.tabId);
+    const wire = readOperationArgs("vmark.document.read", args);
+    const tab = await requireTab(id, wire.tabId);
+    if (!tab) return;
+    const revision = useRevisionStore.getState().getRevision(tab.tabId);
     await respond({
       id,
       success: true,
       data: {
-        content: resolved.content,
+        content: tab.content,
         revision,
-        filePath: resolved.filePath,
-        kind: resolved.kind,
-        dirty: resolved.dirty,
+        filePath: tab.filePath,
+        kind: tab.kind,
+        dirty: tab.dirty,
       },
     });
-    // Coherence (WI-1.6): only a read the client actually RECEIVED joins the
-    // next write's inputs (audit T6), pinned to the content served (#133).
-    if (resolved.filePath) recordMcpRead(resolved.filePath, resolved.content, resolved.tabId);
+    // Coherence: only a read the client actually RECEIVED joins the
+    // next write's inputs, pinned to the content served.
+    if (tab.filePath) recordMcpRead(tab.filePath, tab.content, tab.tabId);
   });
 }
 
@@ -240,9 +133,9 @@ export async function handleDocumentRead(
  *
  * Args: `{tabId?, content: string, expected_revision?: string, save?: boolean}`.
  *
- * `save` defaults to `true`: after the buffer is updated we persist to
- * disk and call `markSaved` so the dirty flag clears. Untitled tabs (no
- * filePath) skip the save with `saved: false` so the AI can decide
+ * `save` defaults to `true`: after the buffer is updated it is saved
+ * through the app's save pipeline, which clears the dirty flag. Untitled
+ * tabs (no filePath) skip the save with `saved: false` so the AI can decide
  * whether to call `workspace.save_as`. Save failure leaves the buffer
  * updated; the response surfaces `saved: false, save_error` instead of
  * throwing — re-writing on a transient FS error would lose intent.
@@ -252,59 +145,46 @@ export async function handleDocumentWrite(
   args: Record<string, unknown>,
 ): Promise<void> {
   return wrapHandler(id, async () => {
-    // One parse against the generated contract (WI-15), not four `typeof`
-    // chains restating it. Wrong runtime shape reads as absent, as before.
+    // One parse against the generated contract, not a `typeof` chain
+    // restating it. Wrong runtime shape reads as absent.
     const wire = readOperationArgs("vmark.document.write", args);
     if (wire.content === undefined) {
       await structuredError(id, { error: "INTERNAL", message: "content must be a string" });
       return;
     }
-    const { content, tabId: tabIdArg, expected_revision: expectedRevision } = wire;
+    const { content } = wire;
     // `save` defaults to true. AI agents shouldn't have to know about
     // VMark's buffer-vs-disk distinction; the natural mental model is
     // "I wrote the file → file is updated."
     const shouldSave = wire.save !== false;
 
-    const resolved = resolveTab(tabIdArg);
-    if (!resolved) {
-      await structuredError(id, {
-        error: "INVALID_TAB",
-        message: "tabId could not be resolved",
-      });
-      return;
-    }
+    const tab = await requireTab(id, wire.tabId);
+    if (!tab || !(await requireCurrentRevision(id, tab.tabId, wire.expected_revision))) return;
 
-    const revisionStore = useRevisionStore.getState();
-    if (
-      expectedRevision !== undefined &&
-      !revisionStore.isCurrentRevision(resolved.tabId, expectedRevision)
-    ) {
-      await structuredError(id, {
-        error: "STALE",
-        message: "Document has changed since the last read",
-        current_revision: revisionStore.getRevision(resolved.tabId),
-      });
-      return;
-    }
-
-    const contentBefore = resolved.content;
-    const revisionBefore = revisionStore.getRevision(resolved.tabId);
-    // Re-detect kind against the INCOMING content. resolveTab read the
-    // current content, which is empty for fresh untitled tabs — that
+    const contentBefore = tab.content;
+    const revisionBefore = useRevisionStore.getState().getRevision(tab.tabId);
+    // Re-detect kind against the INCOMING content. The tab was resolved on
+    // its current content, which is empty for fresh untitled tabs — that
     // would default kind=markdown and run YAML writes through Tiptap's
     // markdown parser, garbling the document. The new content is the
     // authoritative source of truth at write time.
-    const writeKind = resolveKind(resolved.filePath, content);
-    const result = writeContent(resolved.tabId, content, writeKind);
+    const writeKind = resolveKind(tab.filePath, content);
+    const result = writeContent(tab.tabId, content, writeKind);
     if ("error" in result) {
       await structuredError(id, result);
       return;
     }
-    if (contentBefore !== content) {
-      recordCheckpoint({
-        resolved: { ...resolved, kind: writeKind },
+    // The buffer this write produced, read back from the store BEFORE any
+    // await: canonical text (a client may send CRLF; a live WYSIWYG editor
+    // re-serializes), and this request's own — a later request can replace
+    // the buffer while the save is in flight.
+    const buffer = useDocumentStore.getState().documents[tab.tabId]?.content ?? content;
+    if (contentBefore !== buffer) {
+      recordBridgeCheckpoint({
+        tabId: tab.tabId,
+        filePath: tab.filePath,
         tool: "document.write",
-        description: describeWrite(content, contentBefore),
+        description: describeSizeChange("Wrote document", contentBefore, buffer),
         contentBefore,
         revisionBefore,
         revisionAfter: result.revision,
@@ -316,7 +196,7 @@ export async function handleDocumentWrite(
     //   - saved: true                            → buffer updated AND on disk
     //   - saved: false, save_skipped: "opt_out"  → caller passed save:false
     //   - saved: false, save_skipped: "untitled" → no filePath; call save_as
-    //   - saved: false, save_error: <message>    → disk write attempted & failed
+    //   - saved: false, save_error: <message>    → the save was refused or failed
     // save_skipped and save_error are mutually exclusive — the former
     // means "we never tried", the latter means "we tried and failed".
     let saved = false;
@@ -324,36 +204,12 @@ export async function handleDocumentWrite(
     let saveError: string | undefined;
     if (!shouldSave) {
       saveSkipped = "opt_out";
-    } else if (!resolved.filePath) {
+    } else if (!tab.filePath) {
       saveSkipped = "untitled";
-    } else if (!(await checkBridgePath(resolved.filePath)).allowed) {
-      // Defense in depth: even document.write's already-open path goes through
-      // the workspace/open-document guard before disk persistence.
-      saveError = "Path is outside the workspace and open documents";
     } else {
-      try {
-        const saveToken = registerPendingSave(resolved.filePath, content);
-        try {
-          await writeTextFile(resolved.filePath, content);
-          const snap = { editorSnapshot: content, diskSnapshot: content };
-          useDocumentStore.getState().markSaved(resolved.tabId, snap);
-          saved = true;
-          // Coherence (WI-1.6): inferred capture with the session-read
-          // input set (G1 finding 2). Fire-and-forget.
-          void captureMcpWrite({
-            absolutePath: resolved.filePath,
-            content: content,
-            toolName: "document.write",
-          }).catch(() => {});
-        } finally {
-          // Delayed clear (audit T9): late FSEvents can still match this
-          // save — same 1000ms window as saveToPath.
-          const filePath = resolved.filePath;
-          setTimeout(() => clearPendingSave(filePath, saveToken), 1000);
-        }
-      } catch (err) {
-        saveError = errorMessage(err);
-      }
+      const outcome = await saveTabForBridge(tab.tabId, tab.filePath, buffer, "document.write");
+      if (outcome.saved) saved = true;
+      else saveError = outcome.message;
     }
 
     await respond({
@@ -369,18 +225,6 @@ export async function handleDocumentWrite(
   });
 }
 
-/** One-line summary of a `document.write` for the checkpoint panel. */
-function describeWrite(after: string, before: string): string {
-  const beforeBytes = before.length;
-  const afterBytes = after.length;
-  const delta = afterBytes - beforeBytes;
-  const sign = delta >= 0 ? "+" : "−";
-  const magnitude = Math.abs(delta);
-  return `Wrote document (${sign}${magnitude} chars, was ${beforeBytes}, now ${afterBytes})`;
-}
-
-import { applyTransform, currentTransformSettings, isTransformKind, TRANSFORM_KINDS } from "./documentTransform";
-
 /**
  * Handle `vmark.document.transform`.
  *
@@ -392,63 +236,37 @@ export async function handleDocumentTransform(
   args: Record<string, unknown>,
 ): Promise<void> {
   return wrapHandler(id, async () => {
-    if (!isTransformKind(args.kind)) {
+    const wire = readOperationArgs("vmark.document.transform", args);
+    const { kind } = wire;
+    if (!isTransformKind(kind)) {
       await structuredError(id, {
         error: "INTERNAL",
         message: `kind must be one of: ${TRANSFORM_KINDS.join(", ")}`,
       });
       return;
     }
-    const tabIdArg = typeof args.tabId === "string" ? args.tabId : undefined;
-    const expectedRevision =
-      typeof args.expected_revision === "string"
-        ? args.expected_revision
-        : undefined;
 
-    const resolved = resolveTab(tabIdArg);
-    if (!resolved) {
-      await structuredError(id, {
-        error: "INVALID_TAB",
-        message: "tabId could not be resolved",
-      });
+    const tab = await requireTab(id, wire.tabId);
+    if (!tab || !(await requireCurrentRevision(id, tab.tabId, wire.expected_revision))) return;
+
+    const revisionBefore = useRevisionStore.getState().getRevision(tab.tabId);
+    const transformed = applyTransform(kind, tab.content, currentTransformSettings());
+    if (transformed === tab.content) {
+      await respond({ id, success: true, data: { revision: revisionBefore } });
       return;
     }
 
-    const revisionStore = useRevisionStore.getState();
-    if (
-      expectedRevision !== undefined &&
-      !revisionStore.isCurrentRevision(resolved.tabId, expectedRevision)
-    ) {
-      await structuredError(id, {
-        error: "STALE",
-        message: "Document has changed since the last read",
-        current_revision: revisionStore.getRevision(resolved.tabId),
-      });
-      return;
-    }
-
-    const transformed = applyTransform(args.kind, resolved.content, currentTransformSettings());
-    if (transformed === resolved.content) {
-      await respond({
-        id,
-        success: true,
-        data: { revision: revisionStore.getRevision(resolved.tabId) },
-      });
-      return;
-    }
-
-    const contentBefore = resolved.content;
-    const revisionBefore = revisionStore.getRevision(resolved.tabId);
-    const result = writeContent(resolved.tabId, transformed, resolved.kind);
+    const result = writeContent(tab.tabId, transformed, tab.kind);
     if ("error" in result) {
       await structuredError(id, result);
       return;
     }
-    recordCheckpoint({
-      resolved,
+    recordBridgeCheckpoint({
+      tabId: tab.tabId,
+      filePath: tab.filePath,
       tool: "document.transform",
-      description: `Transform: ${args.kind}`,
-      contentBefore,
+      description: `Transform: ${kind}`,
+      contentBefore: tab.content,
       revisionBefore,
       revisionAfter: result.revision,
     });

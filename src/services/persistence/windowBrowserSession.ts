@@ -1,5 +1,5 @@
 /**
- * Window-scoped browser-session persistence (WI-8.2 / plan D1).
+ * Window-scoped browser-session persistence (plan D1).
  *
  * Purpose: browser pages are WINDOW-GLOBAL (never owned by a workspace
  * instance), so their session belongs to the window — not to any workspace
@@ -93,7 +93,7 @@ export function restoreWindowBrowserSession(windowLabel: string): number {
   return restoreBrowserRecords(windowLabel, loadWindowBrowserSession(windowLabel));
 }
 
-/** Recreate validated browser records without stealing activation (WI-9.4). */
+/** Recreate validated browser records without stealing activation. */
 export function restoreBrowserRecords(
   windowLabel: string,
   records: readonly PersistedBrowserTab[],

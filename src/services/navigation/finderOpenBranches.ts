@@ -86,7 +86,7 @@ export async function replaceTabWithFile(
   }
   if (ctx.isCancelled()) return null;
 
-  // Media never reaches readTextFile — it is a path-only viewer tab.
+  // Media never reaches the text read — it is a path-only viewer tab.
   if (isBinaryMediaPath(path)) {
     replaceTabWithMediaFile(tab.tabId, path);
     useTabStore.getState().setActiveTab(ctx.windowLabel, tab.tabId);

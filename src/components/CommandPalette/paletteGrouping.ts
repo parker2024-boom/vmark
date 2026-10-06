@@ -1,5 +1,5 @@
 /**
- * paletteGrouping — pure sectioning for the Command Palette (WI-4.2).
+ * paletteGrouping — pure sectioning for the Command Palette.
  *
  * Turns a flat ranked command list into the palette's VISUAL layout:
  *  - While SEARCHING (non-empty query) → one flat section, no header, so the

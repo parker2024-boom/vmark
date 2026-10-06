@@ -23,11 +23,11 @@
   align-items: center;
   gap: var(--space-6);
   width: 100%;
-  max-width: 648px; /* was 36em @ 18px (WI-UI2.1) */
+  max-width: 648px; /* was 36em @ 18px */
   padding: var(--space-6);
 }
 
-/* WI-UA13 (audit 20260901): the identity moment — display size, full ink.
+/* The identity moment — display size, full ink.
    The old 16px secondary-ink title was quieter than the buttons under it. */
 .welcome-screen__title {
   margin: 0;
@@ -49,10 +49,10 @@
   justify-content: center;
 }
 
-/* The actions are the canonical `.vm-btn` + `--pill` (WI-UI4.7 / WI-UA13;
-   pill by maintainer direction 2026-08-31). The elevated 1b recipe debuted
-   here as a variant and was promoted to the .vm-btn BASE by the re-audit
-   (WI-UB1), so the residual keeps only the front door's larger size. A
+/* The actions are the canonical `.vm-btn` + `--pill` (pill
+   by maintainer direction). The elevated 1b recipe debuted
+   here as a variant and was promoted to the .vm-btn BASE by the re-audit,
+   so the residual keeps only the front door's larger size. A
    capsule's round ends visually eat horizontal padding, hence the wider
    inset. */
 .welcome-action {
@@ -69,7 +69,7 @@
 
 /* Both MRU lists together. They sit closer to each other than to the action
    row above, so they read as one block rather than two unrelated panels. */
-/* WI-UA13: shortcut education under the actions. Plain inline flow — a flex
+/* Shortcut education under the actions. Plain inline flow — a flex
    container here drops the whitespace text nodes around the separator. */
 .welcome-screen__hint {
   margin: 0;

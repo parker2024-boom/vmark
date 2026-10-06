@@ -136,7 +136,7 @@ describe('useHotExitRestore', () => {
 
       expect(mockPullWindowStateWithRetry).toHaveBeenCalledWith('main');
       expect(mockRestoreWindowState).toHaveBeenCalledWith('main', state);
-      expect(mockInvoke).toHaveBeenCalledWith('hot_exit_window_restore_complete', { windowLabel: 'main' });
+      expect(mockInvoke).toHaveBeenCalledWith('hot_exit_window_restore_complete');
     });
 
     it('should emit RESTORE_COMPLETE when all windows are done', async () => {

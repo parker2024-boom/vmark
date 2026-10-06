@@ -3,6 +3,8 @@
  *
  * Inline popover for switching AI providers directly from the GeniePicker footer.
  * Shows CLI providers (with availability badges) and REST providers (with key hints).
+ *
+ * @module components/GeniePicker/ProviderSwitcher
  */
 
 import { useEffect, useRef } from "react";

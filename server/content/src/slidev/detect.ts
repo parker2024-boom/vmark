@@ -1,5 +1,5 @@
 /**
- * Slidev deck detection (Phase 6, WI-6.1) — implements the plan's §3bis
+ * Slidev deck detection (Phase 6) — implements the plan's §3bis
  * detection spec. Avoids false positives on ordinary frontmatter notes.
  *
  * A `.md` is a deck when its headmatter (first YAML block) carries a
@@ -23,7 +23,7 @@ export interface DetectionResult {
 /** Extract the first `---`-delimited YAML headmatter block, if any. */
 export function extractHeadmatter(markdown: string): Record<string, unknown> | null {
   // Headmatter must be at the very start (allow a leading BOM/whitespace line).
-  const m = /^﻿?\s*---\r?\n([\s\S]*?)\r?\n---\s*(\r?\n|$)/.exec(markdown);
+  const m = /^\uFEFF?\s*---\r?\n([\s\S]*?)\r?\n---\s*(\r?\n|$)/.exec(markdown);
   if (!m) return null;
   try {
     const parsed = parseYaml(m[1], { maxAliasCount: 100 }); // grill M8
@@ -43,7 +43,7 @@ const DETECT_WINDOW = 64 * 1024;
  * than §3bis / Slidev itself).
  */
 function countSlideSeparators(markdown: string): number {
-  const body = markdown.replace(/^﻿?\s*---\r?\n[\s\S]*?\r?\n---\s*(\r?\n|$)/, "");
+  const body = markdown.replace(/^\uFEFF?\s*---\r?\n[\s\S]*?\r?\n---\s*(\r?\n|$)/, "");
   const matches = body.match(/\r?\n---[ \t]*\r?\n/g);
   return matches ? matches.length : 0;
 }

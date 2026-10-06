@@ -60,7 +60,7 @@ export function setTabExistenceGuard(fn: ((tabId: string) => boolean) | null): v
 }
 
 /**
- * WI-1: invalidate the MCP revision whenever a tab's content actually changes.
+ * Invalidate the MCP revision whenever a tab's content actually changes.
  *
  * The single choke point every content writer passes through — wiring the bump
  * into the Tiptap listener alone left source mode, split panes, workflows,
@@ -233,11 +233,4 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
     }),
 
   getDocument: (tabId) => get().documents[tabId],
-
-  getAllDirtyDocuments: () => {
-    const { documents } = get();
-    return Object.entries(documents)
-      .filter(([_, doc]) => doc.isDirty)
-      .map(([tabId]) => tabId);
-  },
 }));

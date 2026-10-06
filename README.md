@@ -66,12 +66,13 @@ When you file an issue, AI fixes it with full context of the project's conventio
 
 - **[Bug Report](.github/ISSUE_TEMPLATE/bug_report.yml)** · **[Feature Request](.github/ISSUE_TEMPLATE/feature_request.yml)**
 - Read more: **[Why Issues, Not PRs](https://vmark.app/guide/users-as-developers/why-issues-not-prs)**
+- **Security problems** are reported privately, not as issues — see **[SECURITY.md](SECURITY.md)**
 
 ---
 
 ## Building from Source
 
-**Prerequisites:** [Node.js](https://nodejs.org/) 22+, [pnpm](https://pnpm.io/) 10+, [Rust](https://www.rust-lang.org/tools/install) (stable), [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/)
+**Prerequisites:** [Node.js](https://nodejs.org/) 22+, [pnpm](https://pnpm.io/) 10.x (`>=10 <11` — the install refuses any other major), [Rust](https://www.rust-lang.org/tools/install) stable (1.89 or newer), [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/)
 
 ```bash
 git clone https://github.com/xiaolai/vmark.git
@@ -86,6 +87,8 @@ pnpm tauri dev        # Development
 pnpm tauri build      # Production
 pnpm check:all        # Lint + test + build
 ```
+
+`pnpm check:all` runs tests that execute `zsh` and [`tokei`](https://github.com/XAMPPRocky/tokei) and fail without them; [CONTRIBUTING.md](CONTRIBUTING.md#prerequisites) lists what the full gate needs beyond a build.
 
 **Tech Stack:** Tauri v2 (Rust), React 19, TypeScript, Zustand v5, Tiptap, CodeMirror 6, Tailwind CSS v4
 

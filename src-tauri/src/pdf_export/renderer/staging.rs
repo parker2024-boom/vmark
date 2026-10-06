@@ -1,5 +1,5 @@
 //! The staging file a render writes, published onto the output only on a
-//! delivered success (#224, #198).
+//! delivered success.
 //!
 //! Purpose: the platforms used to print straight to the caller's output
 //! path. A render that outlived its caller's timeout — WebView2's
@@ -22,6 +22,7 @@
 //!
 //! @coordinates-with sink.rs — removes the file on every path but a delivered Ok
 //! @coordinates-with wait.rs — publishes it on that path
+//! @coordinates-with atomic_persist.rs — the directory sync that makes the rename durable
 //! @module pdf_export/renderer/staging
 
 use std::path::{Path, PathBuf};
@@ -46,11 +47,22 @@ pub(super) fn staging_path_for(output: &Path) -> PathBuf {
 /// Move the finished render onto the output path, replacing whatever was
 /// there — one rename, so the output is never observable half-written.
 ///
+/// The move is made durable, because the output is the user's file: the
+/// render's bytes are synced before the rename and the output's directory
+/// after it. Without the first a crash can leave an empty PDF under the new
+/// name; without the second it can bring the previous one back. Both are
+/// best-effort and logged — a filesystem that refuses a sync has still been
+/// given a complete file.
+///
 /// On failure the staging file is removed and the previous output, if any,
 /// is left exactly as it was; the error names the OS's reason.
 pub(super) fn publish(staging: &Path, output: &Path) -> Result<(), CommandError> {
+    sync_contents(staging);
     match std::fs::rename(staging, output) {
-        Ok(()) => Ok(()),
+        Ok(()) => {
+            crate::atomic_persist::sync_parent_directory(output);
+            Ok(())
+        }
         Err(e) => {
             remove_temp(staging);
             // `publishFailed`, not `staleOutputNotRemoved` (audit 20260907
@@ -68,6 +80,23 @@ pub(super) fn publish(staging: &Path, output: &Path) -> Result<(), CommandError>
     }
 }
 
+/// Flush the render to disk. Opened for writing: Windows flushes only through
+/// a handle that may write. A file that cannot be opened is left for the
+/// rename to report.
+fn sync_contents(staging: &Path) {
+    let synced = std::fs::OpenOptions::new()
+        .write(true)
+        .open(staging)
+        .and_then(|file| file.sync_all());
+    match synced {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            log::warn!("[PDF] could not sync the render {staging:?} before publishing it: {e}")
+        }
+    }
+}
+
 /// Delete a render's private file, logging a failure rather than swallowing it.
 ///
 /// The temp HTML holds the user's entire document and the staging PDF its
@@ -78,7 +107,7 @@ pub(super) fn remove_temp(path: &Path) {
     match std::fs::remove_file(path) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => log::warn!("[PDF] could not remove temp file {}: {e}", path.display()),
+        Err(e) => log::warn!("[PDF] could not remove temp file {:?}: {e}", path),
     }
 }
 

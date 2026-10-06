@@ -1,4 +1,4 @@
-//! The Linux session-bus gate for the single-instance guard (WI-FL6.1).
+//! The Linux session-bus gate for the single-instance guard.
 //!
 //! Purpose: decide, from `DBUS_SESSION_BUS_ADDRESS` alone, whether the
 //! single-instance plugin may be registered — WITHOUT touching the network,
@@ -37,7 +37,7 @@
 //!
 //! Key decisions:
 //!   - **The RAW value is ONE address.** zbus does not split on `;` and does
-//!     not trim, so neither does this (#245). ` unix:path=/run/user/1000/bus`
+//!     not trim, so neither does this. ` unix:path=/run/user/1000/bus`
 //!     reads as the transport `" unix"` — "unsupported transport", an abort —
 //!     and `a;b` reads as one address whose option value contains a `;`.
 //!   - **Stricter than zbus is safe; laxer is the abort.** Refusing costs only
@@ -69,7 +69,7 @@ use std::collections::HashMap;
 const GUID_LEN: usize = 32;
 
 /// Whether the guard may be registered, given the session-bus address the
-/// environment carries (WI-FL6.1).
+/// environment carries.
 ///
 /// True only for a value zbus is CERTAIN to parse into a local unix-socket
 /// address — see the module docs for why that is the whole question, and why
@@ -79,7 +79,7 @@ const GUID_LEN: usize = 32;
 /// is compiled everywhere so its tests run on the dev platform, hence the
 /// off-Linux dead-code allowance.
 ///
-/// The allowance is on THIS ITEM and nothing else (#471). It used to be
+/// The allowance is on THIS ITEM and nothing else. It used to be
 /// `#![cfg_attr(…, allow(dead_code))]` over the whole module, which covered
 /// every future item too — so an orphan left behind by a later edit would have
 /// been silenced along with this one. rustc treats an `allow(dead_code)` item

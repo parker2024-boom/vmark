@@ -1,3 +1,10 @@
+/**
+ * List continuation — a Tiptap keymap extension that splits the list item on
+ * Enter (unchecking a new task item) and lifts an empty item out of the list.
+ *
+ * @module plugins/listContinuation/tiptap
+ */
+
 import { Extension } from "@tiptap/core";
 import { keymap } from "@tiptap/pm/keymap";
 import { liftListItem, splitListItem } from "@tiptap/pm/schema-list";

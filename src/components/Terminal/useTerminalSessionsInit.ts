@@ -13,10 +13,11 @@
  * @coordinates-with useTerminalSessions.ts — sole caller
  * @coordinates-with terminalSessionReconcile.ts — pure id diff
  * @coordinates-with terminalSessionRegistry.ts — dispose helpers
+ * @coordinates-with stores/terminalStore.ts — the session store it subscribes to
  * @module components/Terminal/useTerminalSessionsInit
  */
 import { useEffect, useRef } from "react";
-import { useUIStore } from "@/stores/uiStore";
+import { useTerminalStore } from "@/stores/terminalStore";
 import { getCurrentWindowLabel } from "@/services/persistence/workspaceStorage";
 import { maybeAutoCreateTerminalSession } from "@/services/terminal/maybeAutoCreateTerminalSession";
 import { diffSessionIds } from "./terminalSessionReconcile";
@@ -41,15 +42,15 @@ export function useTerminalSessionsInit(
     if (!containerRef.current || initializedRef.current) return;
     initializedRef.current = true;
 
-    const state = useUIStore.getState();
+    const state = useTerminalStore.getState();
 
-    if (state.terminal.sessions.length === 0) {
+    if (state.sessions.length === 0) {
       // First launch — auto-create through the ONE shared gate (WI-TS3.2 /
       // D-T8). This creator used to be unconditional, so a hot-exit-restored
       // visible panel over a refusing scope spawned a shell into $HOME; a
       // refusal now leaves the panel's empty-state hint instead.
       if (maybeAutoCreateTerminalSession(getCurrentWindowLabel())) {
-        const createdId = useUIStore.getState().terminal.activeSessionId;
+        const createdId = useTerminalStore.getState().activeSessionId;
         if (createdId) {
           createSession(createdId);
           switchToVisible(createdId);
@@ -57,20 +58,20 @@ export function useTerminalSessionsInit(
       }
     } else {
       // Sessions already exist (e.g., hot-exit restore) — create instances
-      for (const s of state.terminal.sessions) {
+      for (const s of state.sessions) {
         createSession(s.id);
       }
-      switchToVisible(state.terminal.activeSessionId);
+      switchToVisible(state.activeSessionId);
     }
 
     // Subscribe to store changes
     let prevSessionIds = new Set(
-      useUIStore.getState().terminal.sessions.map((s) => s.id),
+      useTerminalStore.getState().sessions.map((s) => s.id),
     );
-    let prevActiveId = useUIStore.getState().terminal.activeSessionId;
+    let prevActiveId = useTerminalStore.getState().activeSessionId;
 
-    const unsubscribe = useUIStore.subscribe((storeState) => {
-      const currentIds = new Set(storeState.terminal.sessions.map((s) => s.id));
+    const unsubscribe = useTerminalStore.subscribe((storeState) => {
+      const currentIds = new Set(storeState.sessions.map((s) => s.id));
 
       const { added, removed } = diffSessionIds(prevSessionIds, currentIds, (id) =>
         sessionsRef.current.has(id));
@@ -78,12 +79,12 @@ export function useTerminalSessionsInit(
       for (const id of removed) removeSession(id);
 
       // Detect active session change
-      if (storeState.terminal.activeSessionId !== prevActiveId) {
-        switchToVisible(storeState.terminal.activeSessionId);
+      if (storeState.activeSessionId !== prevActiveId) {
+        switchToVisible(storeState.activeSessionId);
       }
 
       prevSessionIds = currentIds;
-      prevActiveId = storeState.terminal.activeSessionId;
+      prevActiveId = storeState.activeSessionId;
     });
 
     const sessions = sessionsRef.current;

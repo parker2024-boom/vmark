@@ -4,7 +4,7 @@
  *   the badge, F2 navigation, and any other lintStore-driven UI
  *   surface YAML problems alongside markdown ones.
  *
- *   Codex audit MED-3 close-out (originally deferred): the
+ *   Why it exists: the
  *   `sourceYamlLint.ts` CodeMirror extension provides live gutter
  *   feedback as the user types, but its diagnostics never reached
  *   the shared lintStore. This module bridges the two, REUSING the
@@ -14,12 +14,12 @@
  *     - Y001 — YAML parse error
  *     - Y002 — YAML parse warning
  *
- * Offsets are converted through a line-start index built ONCE per call
- * (audit R3 #865): the previous converter walked the source from character
+ * Offsets are converted through a line-start index built ONCE per call:
+ * the previous converter walked the source from character
  * zero for every diagnostic, which is O(source × diagnostics) on an
  * editor-facing path that runs as the user types.
  *
- * The index breaks on LF, CRLF **and bare CR** (#866). The mechanism that
+ * The index breaks on LF, CRLF **and bare CR**. The mechanism that
  * decides this is the consumer, not the YAML spec: these line numbers address
  * the CodeMirror document, and CodeMirror's `Text` splits on `/\r\n?|\n/` —
  * `"a\rb"` is two lines there. `yaml`'s own message text says "line 1" for the
@@ -30,7 +30,7 @@
  *
  * @coordinates-with src/plugins/codemirror/sourceYamlLint.ts — the
  *   live gutter linter (different lifecycle, same parse function).
- * @coordinates-with src/lib/lintEngine/ruleMeta.ts — Y001 / Y002 severities (#405)
+ * @coordinates-with src/lib/lintEngine/ruleMeta.ts — Y001 / Y002 severities
  * @coordinates-with src/stores/documentStore/lint.ts — runYamlLint action
  * @module lib/lintEngine/yaml
  */

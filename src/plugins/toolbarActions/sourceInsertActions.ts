@@ -145,7 +145,7 @@ export function insertDivider(view: EditorView): boolean {
 }
 
 /**
- * The `[TOC]` line the pipeline parses into a toc block (WI-FL3.10). It is
+ * The `[TOC]` line the pipeline parses into a toc block. It is
  * paragraph-level markdown, so it needs a blank line above it — otherwise it
  * continues the paragraph and the pipeline never sees a `[TOC]`-only paragraph.
  */

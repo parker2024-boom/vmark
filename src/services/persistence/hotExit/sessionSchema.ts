@@ -1,5 +1,5 @@
 /**
- * Zod schemas for the hot-exit session read boundary (WI-3).
+ * Zod schemas for the hot-exit session read boundary.
  *
  * Purpose: structural validation of persisted session payloads BEFORE they
  * reach migration/restore. The payload crosses an IPC boundary (Rust reads the
@@ -20,12 +20,19 @@
  *     cosmetic sub-shapes (ui_state, geometry, rail metadata) pass through
  *     untouched — quarantining a window's content over a corrupt sidebar
  *     width would be worse than restoring it.
+ *   - Written against `zod/mini`, the tree-shakable build of the same
+ *     library: classic zod's chainable API brings the whole library along
+ *     (~88 kB) into the startup bundle, this one only what these schemas use.
+ *     Mini ships no messages, so the English locale is configured here and
+ *     quarantine reasons read exactly as before.
  *
  * @coordinates-with sessionSalvage.ts — per-item salvage over these schemas
  * @coordinates-with instanceContextState.ts — opaque-field validation at restore
  * @module services/persistence/hotExit/sessionSchema
  */
-import { z } from "zod";
+import * as z from "zod/mini";
+
+z.config(z.locales.en());
 
 /** Cursor info is best-effort at restore; object-or-null is enough here. */
 const cursorInfoSchema = z.union([z.looseObject({}), z.null()]);
@@ -37,32 +44,32 @@ const historyCheckpointSchema = z.looseObject({});
 const documentStateSchema = z.looseObject({
   content: z.string(),
   saved_content: z.string(),
-  is_dirty: z.boolean().optional(),
-  is_missing: z.boolean().optional(),
-  is_divergent: z.boolean().optional(),
-  is_read_only: z.boolean().optional(),
-  line_ending: z.enum(["\n", "\r\n", "unknown"]).optional(),
-  cursor_info: cursorInfoSchema.optional(),
-  last_modified_timestamp: z.number().nullish(),
-  is_untitled: z.boolean().optional(),
-  untitled_number: z.number().nullish(),
-  undo_history: z.array(historyCheckpointSchema).optional(),
-  redo_history: z.array(historyCheckpointSchema).optional(),
-  mode: z.enum(["wysiwyg", "source"]).optional(),
-  hard_break_style: z.enum(["backslash", "twoSpaces", "mixed", "unknown"]).optional(),
-  last_disk_content: z.string().optional(),
+  is_dirty: z.optional(z.boolean()),
+  is_missing: z.optional(z.boolean()),
+  is_divergent: z.optional(z.boolean()),
+  is_read_only: z.optional(z.boolean()),
+  line_ending: z.optional(z.enum(["\n", "\r\n", "unknown"])),
+  cursor_info: z.optional(cursorInfoSchema),
+  last_modified_timestamp: z.nullish(z.number()),
+  is_untitled: z.optional(z.boolean()),
+  untitled_number: z.nullish(z.number()),
+  undo_history: z.optional(z.array(historyCheckpointSchema)),
+  redo_history: z.optional(z.array(historyCheckpointSchema)),
+  mode: z.optional(z.enum(["wysiwyg", "source"])),
+  hard_break_style: z.optional(z.enum(["backslash", "twoSpaces", "mixed", "unknown"])),
+  last_disk_content: z.optional(z.string()),
 });
 
 /** A restorable tab: identity + document integrity. v3 fields optional (pre-migration). */
 export const tabStateSchema = z.looseObject({
   id: z.string(),
-  file_path: z.string().nullish(),
+  file_path: z.nullish(z.string()),
   title: z.string(),
-  is_pinned: z.boolean().optional(),
+  is_pinned: z.optional(z.boolean()),
   document: documentStateSchema,
-  format_id: z.string().optional(),
-  editing_enabled: z.boolean().optional(),
-  active_schema_id: z.string().nullish(),
+  format_id: z.optional(z.string()),
+  editing_enabled: z.optional(z.boolean()),
+  active_schema_id: z.nullish(z.string()),
 });
 
 /**
@@ -73,7 +80,7 @@ export const tabStateSchema = z.looseObject({
 export const windowEnvelopeSchema = z.looseObject({
   window_label: z.string(),
   is_main_window: z.boolean(),
-  active_tab_id: z.string().nullish(),
+  active_tab_id: z.nullish(z.string()),
   tabs: z.array(z.unknown()),
 });
 
@@ -89,15 +96,15 @@ export const sessionEnvelopeSchema = z.looseObject({
 export const workspaceStateSchema = z.union([z.looseObject({}), z.null()]);
 
 /**
- * Per-instance UI state (WI-9.4 opaque field). Mirrors the hydrate guard in
+ * Per-instance UI state (an opaque WindowState field). Mirrors the hydrate guard in
  * workspaceInstanceUiStore (`isValidInstanceUiState`) so the boundary is
  * exactly as strict as the store — plus passthrough for unknown fields.
  */
 export const instanceUiStateSchema = z.looseObject({
-  sidebarWidth: z.number().finite().nullable(),
-  sidebarViewMode: z.string().nullable(),
-  fileExplorerOpenState: z.record(z.string(), z.unknown()).nullable(),
-  fileTreeScrollOffset: z.number().finite().nullable(),
+  sidebarWidth: z.nullable(z.number()),
+  sidebarViewMode: z.nullable(z.string()),
+  fileExplorerOpenState: z.nullable(z.record(z.string(), z.unknown())),
+  fileTreeScrollOffset: z.nullable(z.number()),
   outlineByTabId: z.record(z.string(), z.unknown()),
 });
 
@@ -105,7 +112,7 @@ export const instanceUiStateSchema = z.looseObject({
 export const opaqueRecordSchema = z.record(z.string(), z.unknown());
 
 /** One human-readable line summarizing why a payload failed its schema. */
-export function schemaReason(error: z.ZodError): string {
+export function schemaReason(error: z.core.$ZodError): string {
   return error.issues
     .map((issue) =>
       issue.path.length > 0 ? `${issue.path.join(".")}: ${issue.message}` : issue.message,

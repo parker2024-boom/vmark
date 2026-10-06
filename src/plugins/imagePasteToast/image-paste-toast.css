@@ -3,7 +3,7 @@
  * Compact toast with icon buttons - matches link popup style
  */
 
-/* Shell chrome comes from `.popup-container` (WI-UI3.2). */
+/* Shell chrome comes from `.popup-container`. */
 .image-paste-toast {
   gap: var(--space-half);
   padding: var(--space-1);

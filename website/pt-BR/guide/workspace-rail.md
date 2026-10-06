@@ -51,7 +51,7 @@ Clientes de IA que abrem documentos via MCP nunca arrancam você do espaço de t
 | Reordenar | Arraste um glifo sobre outro |
 | Mover para uma janela própria | Arraste um glifo para fora da janela |
 | Duplicar em uma nova janela | O botão **⧉** ao passar o mouse |
-| Fechar um espaço de trabalho | Clique com o botão direito → Fechar (pergunta a cada aba com alterações não salvas) |
+| Fechar um espaço de trabalho | Clique com o botão direito → Fechar. Todas as abas dele fecham junto, inclusive as fixadas; cada aba com alterações não salvas pergunta antes, e cancelar mantém o espaço de trabalho |
 
 ## Sessões do terminal
 

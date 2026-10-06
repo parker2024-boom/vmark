@@ -11,9 +11,40 @@ use unicode_normalization::UnicodeNormalization;
 
 use super::types::ContentHash;
 
+#[cfg(test)]
+thread_local! {
+    /// (canonicalizations, text content hashes) on this thread, so a test can
+    /// pin how often a write path pays for each. Per thread: tests run in
+    /// parallel and must not see each other's work.
+    static HASHING_COUNTS: std::cell::Cell<(usize, usize)> =
+        const { std::cell::Cell::new((0, 0)) };
+}
+
+#[cfg(test)]
+fn count_hashing(canonicalized: usize, hashed: usize) {
+    HASHING_COUNTS.with(|c| {
+        let (a, b) = c.get();
+        c.set((a + canonicalized, b + hashed));
+    });
+}
+
+/// Test-only: zero this thread's counts.
+#[cfg(test)]
+pub(crate) fn reset_hashing_counts() {
+    HASHING_COUNTS.with(|c| c.set((0, 0)));
+}
+
+/// Test-only: (canonicalizations, text content hashes) since the last reset.
+#[cfg(test)]
+pub(crate) fn hashing_counts() -> (usize, usize) {
+    HASHING_COUNTS.with(std::cell::Cell::get)
+}
+
 /// NFC + LF normalization (spec §3.1). No other transformation: trailing
 /// whitespace and final-newline presence are content.
 pub fn canonicalize_text(input: &str) -> String {
+    #[cfg(test)]
+    count_hashing(1, 0);
     let nfc: String = input.nfc().collect();
     // \r\n and bare \r both become \n.
     let mut out = String::with_capacity(nfc.len());
@@ -86,17 +117,39 @@ pub fn mask_identity(text: &str) -> String {
     }
 }
 
-/// Spec §3.2: hash of the identity-masked canonical bytes.
-pub fn text_content_hash(input: &str) -> ContentHash {
-    let masked = mask_identity(&canonicalize_text(input));
-    let digest: [u8; 32] = Sha256::digest(masked.as_bytes()).into();
-    ContentHash::from_digest(&digest)
+/// A text document's identity-masked canonical bytes (what the CAS stores,
+/// spec §4.2) together with their hash (spec §3.2). Computed as one value so a
+/// write path canonicalizes and hashes its content once and hands both on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MaskedText {
+    pub bytes: String,
+    pub hash: ContentHash,
 }
 
-/// The exact bytes the CAS stores for a text document (spec §4.2) — the
-/// same bytes `text_content_hash` hashed, keeping snapshots self-verifying.
-pub fn canonical_masked_bytes(input: &str) -> String {
-    mask_identity(&canonicalize_text(input))
+/// Mask and hash text that is ALREADY canonical — the output of
+/// `canonicalize_text`, or text built from it by joining at line boundaries
+/// (`insert_identity`, `assign_identity`), which keeps it canonical. Passing
+/// raw text here skips canonicalization and records the wrong hash; use
+/// `masked_text` for that.
+pub fn mask_and_hash_canonical(canonical: &str) -> MaskedText {
+    let bytes = mask_identity(canonical);
+    #[cfg(test)]
+    count_hashing(0, 1);
+    let digest: [u8; 32] = Sha256::digest(bytes.as_bytes()).into();
+    MaskedText {
+        bytes,
+        hash: ContentHash::from_digest(&digest),
+    }
+}
+
+/// Canonicalize, mask and hash raw text in one pass.
+pub fn masked_text(input: &str) -> MaskedText {
+    mask_and_hash_canonical(&canonicalize_text(input))
+}
+
+/// Spec §3.2: hash of the identity-masked canonical bytes.
+pub fn text_content_hash(input: &str) -> ContentHash {
+    masked_text(input).hash
 }
 
 /// Spec §3.4: raw-byte hashing for binary content.
@@ -127,7 +180,7 @@ pub fn insert_identity(text: &str, id: &str, schema: Option<&str>) -> String {
         };
         // Merge into an EXISTING vmark mapping (it may carry unknown
         // children masking preserved) — a second mapping would shadow the
-        // identity from read_identity (audit R14). Existing `id:`/`schema:`
+        // identity from read_identity. Existing `id:`/`schema:`
         // children are REPLACED, not kept: they are kernel-namespace lines
         // (mask_identity strips them, so dropping them never moves the
         // content hash), and keeping one would leave a duplicate key —

@@ -27,7 +27,7 @@ export function KbGraphView() {
   // Legitimate setState-in-effect: resets to a loading state then fills from an
   // async graph fetch (with cancellation) — driven by I/O, not derivable during
   // render (#1063).
-  /* eslint-disable react-hooks/set-state-in-effect */
+  /* eslint-disable react-hooks/set-state-in-effect -- loading reset then an async graph fetch with cancellation, keyed on the workspace root */
   useEffect(() => {
     let cancelled = false;
     setFlow(null);

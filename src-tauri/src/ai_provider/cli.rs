@@ -4,20 +4,25 @@
 //! `tokio::process::Command` and forwards stdout to a sink. Async I/O lets
 //! the parent task kill the child via `child.kill().await` when the caller
 //! cancels (e.g., the workflow runner's per-step timeout fires).
+//!
+//! The prompt reaches the child on stdin (`cli/prompt.rs`), never in `args`:
+//! `args` are the fixed flags `dispatch.rs` chose.
 
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::io::{AsyncWriteExt, BufReader};
+use tokio::io::BufReader;
 use tokio::process::Command as TokioCommand;
 use tokio_util::sync::CancellationToken;
 
 use super::detection::login_shell_path;
 use super::sink::AiSink;
-use super::spawn::build_command;
+use super::spawn::{build_command, spawn_failure};
+use prompt::PromptWriter;
 use stream::{next_bounded_chunk, spawn_stderr_drain};
 
+mod prompt;
 mod stream;
 
 /// Maximum time a CLI provider is allowed to run before being killed.
@@ -29,8 +34,12 @@ const CLI_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Run a CLI AI provider, forwarding stdout to the sink.
 ///
+/// `stdin_prompt`, when present, is written to the child's stdin and the pipe
+/// is closed; when absent the child gets no stdin at all. `args` must not
+/// carry the prompt.
+///
 /// `cancel` allows the caller to kill the child process from another task —
-/// the runner's per-step timeout (WI-2.5) and the user's Cancel button
+/// the runner's per-step timeout and the user's Cancel button
 /// (Phase 4) both signal this token. The CLI process is force-killed within
 /// one tokio scheduler tick of the cancel signal.
 ///
@@ -60,8 +69,9 @@ pub(super) async fn run_cli_blocking(
     match outcome {
         Ok(Ok(())) => Ok(()),
         Ok(Err(e)) => {
-            // run_cli_provider already emits sink errors on most paths, but
-            // spawn and stdin failures return Err without emitting.
+            // run_cli_provider already emits sink errors on most paths, but a
+            // failed spawn, a missing pipe and a failed wait return Err
+            // without emitting.
             sink.error(&e);
             Err(e)
         }
@@ -100,28 +110,29 @@ async fn run_cli_provider(
 
     let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
     let std_cmd = build_command(effective_cmd, &arg_refs);
+    // The first lookup runs the user's login shell (bounded at five seconds)
+    // and is cached after; it is blocking work, so never on an async worker.
+    let path = tokio::task::spawn_blocking(login_shell_path)
+        .await
+        .map_err(|e| format!("PATH lookup task failed: {e}"))?;
     // Convert std::process::Command → tokio::process::Command so we can
     // kill the child from another task via child.kill().await.
     let mut tokio_cmd = TokioCommand::from(std_cmd);
     let mut child = tokio_cmd
-        .env("PATH", login_shell_path())
+        .env("PATH", path)
         .stdin(stdin_cfg)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true) // belt-and-suspenders if the future is dropped
         .spawn()
-        .map_err(|e| format!("Failed to spawn {}: {}", cmd, e))?;
+        .map_err(|e| spawn_failure(cmd, &e))?;
 
-    // Pipe prompt to stdin when expected.
-    if let Some(prompt) = stdin_prompt {
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(prompt.as_bytes())
-                .await
-                .map_err(|e| format!("Failed to write to stdin: {}", e))?;
-            // stdin is dropped here, closing it
-        }
-    }
+    // The prompt is written on its own task while stdout is read below, and
+    // the pipe is closed after the last byte.
+    let prompt_writer = match stdin_prompt {
+        Some(prompt) => Some(PromptWriter::start(child.stdin.take(), prompt)?),
+        None => None,
+    };
 
     // Read stdout line-by-line concurrently with cancellation polling.
     let stdout = child
@@ -183,9 +194,27 @@ async fn run_cli_provider(
             format!("{} exited with status {}: {}", cmd, status, stderr_text)
         };
         sink.error(&msg);
-    } else {
-        sink.done();
+        return Ok(());
     }
+
+    // The child succeeded, but an answer to a prompt it did not finish
+    // reading is not an answer to the prompt that was sent.
+    if let Some(writer) = prompt_writer {
+        let written = tokio::select! {
+            _ = cancel.cancelled() => {
+                sink.error("Cancelled");
+                return Ok(());
+            }
+            written = writer.finish() => written,
+        };
+        if let Err(e) = written {
+            sink.error(&format!(
+                "{cmd} exited before reading the whole prompt: {e}"
+            ));
+            return Ok(());
+        }
+    }
+    sink.done();
 
     Ok(())
 }

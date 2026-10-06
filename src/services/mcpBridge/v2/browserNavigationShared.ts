@@ -133,7 +133,7 @@ export async function waitForNavigation(
       url: result.url,
       generation: result.generation,
     });
-    // Advisory gate verdict (WI-NB2.2): best-effort, absent for ordinary pages
+    // Advisory gate verdict: best-effort, absent for ordinary pages
     // and on any probe failure — a gate must never degrade a loaded result. It
     // is also bounded by what is LEFT of the request's budget: a slow page could
     // hold the eval for seconds and push the response past the bridge deadline.
@@ -155,7 +155,7 @@ export async function waitForNavigation(
     await failure(id, "NAVIGATION_SUPERSEDED", eventData(result, tabId));
   } else if (result.kind === "timeout") {
     // The ticket is still live: a later `wait {navigationId}` retrieves the
-    // terminal result. The sidecar passes this data through (audit E-02).
+    // terminal result. The sidecar passes this data through.
     await failure(id, "TIMEOUT", eventData(result, tabId));
   } else if (result.kind === "disabled") {
     await failure(id, "BROWSER_DISABLED", eventData(result, tabId));

@@ -8,9 +8,9 @@
  * Two things the heading text is NOT (audit 20260907 round 3):
  *   - raw inline HTML. `# Hello <b>World</b>` renders an anchor of
  *     `hello-world`; feeding the tags in produced `hello-bworldb`, so every
- *     link to that heading was reported missing (#810).
+ *     link to that heading was reported missing.
  *   - a URL-encoded spelling. `[x](#caf%C3%A9)` addresses `#café`, and
- *     comparing the raw URL text rejected it (#814).
+ *     comparing the raw URL text rejected it.
  *
  * @module lib/lintEngine/rules/linkFragments
  */
@@ -50,7 +50,7 @@ function headingSlugs(mdast: Root): Set<string> {
     if (!base) return;
     // One set for both jobs: `makeUniqueSlug` reads it to number a repeat, and
     // membership is what a link is checked against. Two sets were kept in
-    // lockstep by hand and always held exactly the same values (#812).
+    // lockstep by hand and always held exactly the same values.
     slugs.add(makeUniqueSlug(base, slugs));
   });
   return slugs;

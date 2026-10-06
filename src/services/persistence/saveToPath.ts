@@ -3,7 +3,7 @@
  *
  * Purpose: Central save logic — normalizes content (line endings, hard breaks),
  * re-emits the document's BOM (decision D1), writes to disk, updates stores
- * with the dual save snapshots (WI-1.4), records history snapshots, and
+ * with the dual save snapshots, records history snapshots, and
  * manages pending save tracking for file watcher coordination.
  *
  * Key decisions:
@@ -23,17 +23,29 @@
  *   - Auto-save skips recent files list AND skips error toasts to avoid spam on
  *     a flaky disk; the user didn't initiate the action and the next manual save
  *     will surface the error
+ *   - ONE pipeline for every writer of a document. An AI client's write over
+ *     the MCP bridge enters through `saveToPathForMcp` and gets the same
+ *     normalization, ordering, atomic write, history snapshot and saved
+ *     snapshots as a human save. What differs is decided here, per origin, and
+ *     nowhere else: it never toasts (its caller reports the reason to the
+ *     client — a toast on top would report one failure twice), it does not
+ *     join the recent files, it never switches the visible workspace, and its
+ *     provenance is captured as an MCP write naming the tool
+ *   - A failed save says WHY (`SaveOutcome`). `saveToPath` keeps its boolean
+ *     for the human callers, which act on document state rather than a reason
  *
  * @coordinates-with pendingSaves.ts — content-based save tracking for watcher coordination
  * @coordinates-with linebreaks.ts — line ending and hard break normalization
  * @coordinates-with documentStore.ts — markSaved/markAutoSaved state updates
  * @coordinates-with serializeByPath.ts — the per-path save queue
  * @coordinates-with saveTargetClaim.ts — per-DOCUMENT identity ordering, which
- *     the per-path queue cannot provide (audit 20260906, F3)
+ *     the per-path queue cannot provide
  * @coordinates-with saveHistorySnapshot.ts — version history snapshots
- * @coordinates-with services/coherence/captureFunnel.ts — fire-and-forget provenance capture
- *     (WI-1.6). `general.coherenceCaptureOnSave` (default OFF) is enforced there
- *     and in the kernel for EVERY write path (WI-LX1.4), not here
+ * @coordinates-with saveOutcome.ts — who asked for a save and how it ended
+ * @coordinates-with saveCapture.ts — fire-and-forget provenance capture, one per
+ *     write, human or MCP. `general.coherenceCaptureOnSave` (default OFF) is
+ *     enforced by the capture funnel and the kernel for EVERY write path, not here
+ * @coordinates-with services/mcpBridge/v2/bridgeSave.ts — the MCP entry's only caller
  * @module services/persistence/saveToPath
  */
 import { invoke } from "@tauri-apps/api/core";
@@ -58,7 +70,8 @@ import { claimSaveTarget, type SaveTargetClaim } from "./saveTargetClaim";
 import { applyPostSaveState } from "./applyPostSaveState";
 import type { NormalizedSaveContent } from "./normalizedSaveContent";
 import { recordHistorySnapshot, type SaveType } from "./saveHistorySnapshot";
-import { captureWrite } from "@/services/coherence/captureFunnel";
+import type { SaveOrigin, SaveOutcome } from "./saveOutcome";
+import { captureSave } from "./saveCapture";
 import { saveError } from "@/utils/debug";
 import { commandErrorDetailString, isCommandErrorCode }
   from "@/services/commands/commandError";
@@ -90,7 +103,7 @@ function parseParentMissingError(error: unknown): string | null {
  * detected state plus user settings, and apply them to produce the bytes that
  * will be written to disk.
  *
- * @public — exported for the Phase 1 all-ingress matrix (WI-1.9), which proves
+ * @public — exported for the Phase 1 all-ingress matrix, which proves
  * round-trip fidelity against the REAL save pipeline rather than a re-implementation
  * that could drift from it.
  */
@@ -116,8 +129,9 @@ export function normalizeSaveContent(tabId: string, content: string): Normalized
 }
 
 /**
- * Map a failed write to user feedback and document state, clearing the pending
- * save first. Always returns `false` — the caller propagates the save failure.
+ * Map a failed write to user feedback, document state and the failure the
+ * caller propagates, clearing the pending save first. Only a manual save
+ * toasts.
  */
 function handleWriteError(
   tabId: string,
@@ -125,7 +139,7 @@ function handleWriteError(
   saveToken: ReturnType<typeof registerPendingSave>,
   saveType: SaveType,
   error: unknown
-): false {
+): SaveOutcome {
   // CRITICAL: Always clear pending save on failure to prevent stale entries.
   // Token ensures we only clear our own registration, not a newer save's.
   clearPendingSave(path, saveToken);
@@ -144,23 +158,23 @@ function handleWriteError(
         { pin: true },
       );
     }
-    return false;
+    return { ok: false, reason: "parent-missing", dir: missingDir };
   }
 
   // Manual saves toast; auto-saves stay quiet so a flaky disk doesn't pop
   // a notification every interval. The next manual save (or an external
   // signal like the file becoming missing) will surface the problem.
   if (saveType === "manual") {
-    // Two-line toast (WI-UI4.4): paths/permission details as the detail.
+    // Two-line toast: paths/permission details as the detail.
     // Raw error — errorDetail owns the normalization (commandErrorMessage,
     // so a typed rejection cannot render "[object Object]").
     toast.errorDetail(i18n.t("dialog:toast.failedToSaveGeneric"), error);
   }
-  return false;
+  return { ok: false, reason: "write-failed", error };
 }
 
 /**
- * Serialized per path by `saveToPath`. Everything here — the write, the store
+ * Serialized per path by `submitSave`. Everything here — the write, the store
  * update, and the history snapshot — belongs to one save and must not
  * interleave with another save to the same file.
  */
@@ -168,9 +182,10 @@ async function performSave(
   tabId: string,
   path: string,
   content: string,
-  saveType: SaveType,
+  origin: SaveOrigin,
   claim: SaveTargetClaim
-): Promise<boolean> {
+): Promise<SaveOutcome> {
+  const { saveType } = origin;
   // Normalized at RUN time, not submission time: a queued save must use the
   // document's convention as of its turn, not as of when it was requested.
   const normalized = normalizeSaveContent(tabId, content);
@@ -178,7 +193,7 @@ async function performSave(
   const ownership = resolveWritableFileOwnership(tabId, path);
   if (!ownership.ok) {
     if (saveType === "manual") showFileOwnershipConflictToast(path, ownership.conflicts);
-    return false;
+    return { ok: false, reason: "ownership-conflict", conflicts: ownership.conflicts };
   }
 
   // Register pending save with content for content-based verification.
@@ -193,23 +208,31 @@ async function performSave(
 
   applyPostSaveState(tabId, path, content, normalized, saveToken, saveType, claim);
   await recordHistorySnapshot(path, normalized.output, saveType);
+  captureSave(path, normalized.output, origin);
 
-  // Coherence capture (WI-1.6, human funnel): fire-and-forget — a failed
-  // capture never fails the save; scan reconciliation heals gaps. The
-  // trailing catch guards the contract even if captureWrite ever throws.
-  //
-  // Stamping a `vmark:` block into the user's file and creating `.vmark/` are
-  // OPT-IN (`general.coherenceCaptureOnSave`, default off) — autosave once made
-  // that rewrite silent. The setting is enforced ONCE, by the funnel and the
-  // kernel, for every write path (WI-LX1.4); a gate here covered saves only.
-  void captureWrite({
-    absolutePath: path,
-    content: normalized.output,
-    agent: { type: "human" },
-    intent: { kind: "editor-save", summary: saveType === "auto" ? "auto save" : "manual save" },
-  }).catch(() => {});
+  return { ok: true, written: normalized.output };
+}
 
-  return true;
+/**
+ * Submit one save: claim the document, then queue the write behind every
+ * earlier save to the same path. The single entry both public doors use, so
+ * no writer can reach the disk without the claim and the queue.
+ */
+function submitSave(
+  tabId: string,
+  path: string,
+  content: string,
+  origin: SaveOrigin
+): Promise<SaveOutcome> {
+  // Claimed HERE — at submission, outside the per-path queue. Path
+  // serialization orders writes to one file; it cannot order two saves of one
+  // DOCUMENT to different files, which is exactly the autosave-then-Save-As
+  // case. Claiming at submission also means the user's
+  // most recent choice wins even if its write finishes first.
+  const claim = claimSaveTarget(tabId);
+  return serializeByPath(normalizePath(path), () =>
+    performSave(tabId, path, content, origin, claim)
+  );
 }
 
 /**
@@ -226,15 +249,25 @@ export function saveToPath(
   tabId: string,
   path: string,
   content: string,
-  saveType: SaveType = "manual"
+  saveType: "manual" | "auto" = "manual"
 ): Promise<boolean> {
-  // Claimed HERE — at submission, outside the per-path queue. Path
-  // serialization orders writes to one file; it cannot order two saves of one
-  // DOCUMENT to different files, which is exactly the autosave-then-Save-As
-  // case (audit 20260906, F3). Claiming at submission also means the user's
-  // most recent choice wins even if its write finishes first.
-  const claim = claimSaveTarget(tabId);
-  return serializeByPath(normalizePath(path), () =>
-    performSave(tabId, path, content, saveType, claim)
-  );
+  return submitSave(tabId, path, content, { saveType }).then((outcome) => outcome.ok);
+}
+
+/**
+ * The same save, for an AI client writing through the MCP bridge.
+ *
+ * `content` is editor-domain text (LF, BOM-free), exactly as for `saveToPath`.
+ * The outcome says why a save wrote nothing, because the bridge has to tell
+ * the client — and it is the bridge's only feedback channel: this door never
+ * toasts. `toolName` (`document.write`, `workspace.save`, …) is recorded as
+ * the write's provenance.
+ */
+export function saveToPathForMcp(
+  tabId: string,
+  path: string,
+  content: string,
+  toolName: string
+): Promise<SaveOutcome> {
+  return submitSave(tabId, path, content, { saveType: "mcp", toolName });
 }

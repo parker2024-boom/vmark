@@ -6,7 +6,7 @@
  * with no Zustand in it, the same split `workflowEditQueue.ts` already makes
  * for the queue algebra.
  *
- * NON-THROWING by contract, and it says WHICH failure (audit #991/#1006).
+ * NON-THROWING by contract, and it says WHICH failure.
  * Every failure — the document does not parse, a patch cannot be applied, alias
  * expansion is refused — used to return `originalYaml`, so the only signal a
  * caller had was string equality against its own input. That conflates three
@@ -35,7 +35,7 @@ function resolvePreserve(override: boolean | null): boolean {
 }
 
 /**
- * Bound on YAML alias expansion (audit #1008).
+ * Bound on YAML alias expansion.
  *
  * `-1` — the previous value — is yaml's "disable the check" setting, and the
  * input reaching this parser is a workflow file the user opened from a
@@ -71,7 +71,7 @@ export type WorkflowSerializeResult =
 /**
  * Apply `patches` to `originalYaml`, reporting exactly what happened.
  *
- * EDITOR domain in and out (audit 20260928 #158/#159): the result goes back
+ * EDITOR domain in and out: the result goes back
  * through `setEditorContent`, which accepts only canonical LF text, and the
  * file's own line endings are restored by `saveToPath` from the document's
  * recorded `lineEnding`. Input is canonicalised by the shared line-ending

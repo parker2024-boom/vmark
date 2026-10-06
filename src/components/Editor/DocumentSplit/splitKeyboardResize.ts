@@ -6,7 +6,7 @@
  *
  * Panes sit left | right, so only Left/Right (and Home/End) resize; Up/Down
  * stay with the browser — the stacked orientation had no writer and was
- * removed (WI-FL3.10). The clamp is DERIVED from the store constants, not
+ * removed. The clamp is DERIVED from the store constants, not
  * restated: Home/End and the ARIA range were once hardcoded as 0.2/0.8, so a
  * change to the store bounds would have moved the drag limit while leaving
  * the keyboard jump pointing at the old ones — silently, and only for

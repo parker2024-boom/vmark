@@ -3,15 +3,15 @@
  *
  * `sanitize.test.ts` tests hand-picked vectors against the entry point each
  * one is about. That leaves the cross-product uncovered: a vector proven
- * dead in `sanitizeSvg` says nothing about `sanitizeMediaHtml`, and the
+ * dead in `sanitizeSvg` says nothing about `sanitizeKatex`, and the
  * allow-lists differ per function — which is exactly where a hole hides.
- * This list is swept across all five in `sanitizerCrossProduct.test.ts`.
+ * This list is swept across all four in `sanitizerCrossProduct.test.ts`.
  *
  * Vectors are grouped by mechanism so a new entry lands next to its family
  * rather than at the end of an undifferentiated list.
  *
  * @coordinates-with sanitizerCrossProduct.test.ts — the sweep
- * @coordinates-with ../sanitize.ts — the five entry points
+ * @coordinates-with ../sanitize.ts — the four entry points
  * @module utils/__tests__/sanitizerVectors
  */
 

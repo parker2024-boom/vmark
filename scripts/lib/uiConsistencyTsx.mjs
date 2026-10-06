@@ -1,5 +1,5 @@
 /**
- * WI-UI0.3 — TSX-side checks of the ui-consistency gate: C7 (icon sizes) and
+ * TSX-side checks of the ui-consistency gate: C7 (icon sizes) and
  * C10 (focus visibility). A real TS AST walk — the `size={1}` on
  * `@xyflow/react`'s `<Background>` is why imports are resolved rather than
  * grepping the prop, and check-command-error-ratchet's history is why no

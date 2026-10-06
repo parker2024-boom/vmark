@@ -5,8 +5,10 @@
   ],
   "workspaces": {
     ".": {
+      "eslint": false,
       "entry": [
         "src/main.tsx!",
+        "eslint.config.js!",
         "scripts/*.{ts,mjs}!",
         ".claude/hooks/*.mjs!"
       ],

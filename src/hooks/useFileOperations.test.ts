@@ -4,6 +4,7 @@
  * @module hooks/useFileOperations.test
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fileBytes } from "@/test/fileBytes";
 import { renderHook } from "@testing-library/react";
 
 // Hoist mocks to avoid "Cannot access before initialization" errors
@@ -17,7 +18,7 @@ const {
   mockClose: vi.fn(() => Promise.resolve()),
   mockCloseTab: vi.fn(),
   mockDetachTab: vi.fn(),
-  mockReadTextFile: vi.fn(() => Promise.resolve("# Hello")),
+  mockReadTextFile: vi.fn((_path: string) => Promise.resolve("# Hello")),
   mockInitDocument: vi.fn(),
   mockSetLineMetadata: vi.fn(),
   mockAddFile: vi.fn(),
@@ -37,7 +38,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: mockReadTextFile,
+  readFile: (path: string) => fileBytes(mockReadTextFile(path)),
 }));
 
 vi.mock("sonner", () => ({

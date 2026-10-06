@@ -30,7 +30,7 @@ pub(super) enum CappedLine {
 }
 
 /// Read one newline-terminated line from `reader` into `buf`, bounding memory to
-/// `max` bytes (re-review #3). A line with no early newline is drained to its
+/// `max` bytes. A line with no early newline is drained to its
 /// boundary WITHOUT being buffered once it passes `max`, so a single huge or
 /// hostile line can never OOM the reader. Consumes the BufReader's own buffer via
 /// `fill_buf`/`consume`, so at most one fill's worth (plus the capped `buf`) is
@@ -99,7 +99,7 @@ pub(super) fn parse_line(line: &[u8]) -> LineOutcome {
     // build's `Envelope` first meant a newer format that renames, removes or
     // retypes any required field failed to parse and was reported as
     // `Malformed` — quarantined, with `future_format` left at zero, so the
-    // WI-2.2 write gate saw a fully-read ledger and let the write through. The
+    // future-format write gate saw a fully-read ledger and let the write through. The
     // version field is the one thing a format bump must keep readable, so it is
     // read from the untyped value.
     let value: serde_json::Value = match serde_json::from_str(text) {

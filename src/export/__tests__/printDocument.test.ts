@@ -10,13 +10,11 @@ const {
   mockGetDocumentBaseDir,
   mockGetContainmentRoot,
   mockToastWarning,
-  mockRender,
 } = vi.hoisted(() => ({
   mockResolveResources: vi.fn(),
   mockGetDocumentBaseDir: vi.fn(),
   mockGetContainmentRoot: vi.fn(),
   mockToastWarning: vi.fn(),
-  mockRender: vi.fn(),
 }));
 
 vi.mock("../resourceResolver", () => ({
@@ -26,35 +24,21 @@ vi.mock("../resourcePaths", () => ({
   getDocumentBaseDir: (...args: unknown[]) => mockGetDocumentBaseDir(...args),
   getExportContainmentRoot: (...args: unknown[]) => mockGetContainmentRoot(...args),
 }));
-vi.mock("../renderMarkdownToHtml", () => ({
-  renderMarkdownToHtml: (...args: unknown[]) => mockRender(...args),
-}));
 vi.mock("@/services/ime/imeToast", () => ({
   imeToast: { warning: mockToastWarning, error: vi.fn(), success: vi.fn() },
 }));
-vi.mock("../themeSnapshot", () => ({
-  captureThemeCSS: () => "/* theme-css */",
-  isDarkTheme: () => false,
-}));
-vi.mock("../htmlExportStyles", () => ({
-  getEditorContentCSS: () => "/* content-css */",
-}));
-// `expandDetails` is the REAL one: the shared print CSS this builder inlines
-// styles `details[open]`, so what matters is that a collapsed element arrives
-// at the page already open — not that a function was called.
-vi.mock("../pdfHtmlTemplate", async () => {
-  const actual = await vi.importActual<typeof import("../pdfHtmlTemplate")>("../pdfHtmlTemplate");
-  return {
-    getKatexCSS: () => "/* katex-css */",
-    getForceLightThemeCSS: () => "/* light-css */",
-    getSharedContentCSS: () => "/* shared-css */",
-    expandDetails: actual.expandDetails,
-  };
-});
+// Vitest's CSS handling turns the `?raw` stylesheet asset into an empty string
+// (see pdfHtmlTemplate.test.ts), so the KaTeX asset itself — the boundary — is
+// supplied with a recognisable rule. Every CSS builder below is the real one.
+vi.mock("katex/dist/katex.min.css?raw", () => ({ default: ".katex{font:normal 1.21em KaTeX_Main}" }));
 vi.mock("@/i18n", () => ({ default: { t: (key: string) => key } }));
 
 import { buildPrintHtml, prepareExportBody, renderPrintableHtml } from "../printDocument";
+import { getEditorContentCSS } from "../htmlExportStyles";
+import { getForceLightThemeCSS, getKatexCSS, getSharedContentCSS } from "../pdfHtmlTemplate";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
+
+const KATEX_RULE = ".katex{font:normal 1.21em KaTeX_Main}";
 
 const report = (missing: unknown[] = []) => ({ resources: [], resolved: [], missing, totalSize: 0 });
 
@@ -63,6 +47,8 @@ beforeEach(() => {
   mockGetDocumentBaseDir.mockResolvedValue("/docs");
   mockGetContainmentRoot.mockResolvedValue("/docs");
   useWorkspaceStore.setState({ rootPath: null });
+  // The live theme the snapshot reads off the document root.
+  document.documentElement.style.setProperty("--bg-color", "#fafafa");
   mockResolveResources.mockImplementation((html: string) => Promise.resolve({ html, report: report() }));
 });
 
@@ -146,16 +132,16 @@ describe("prepareExportBody", () => {
 });
 
 describe("renderPrintableHtml", () => {
-  it("renders the markdown light-themed, then prepares its body", async () => {
-    mockRender.mockResolvedValue("<p>rendered</p>");
+  // The real off-screen render: the markdown's heading reaches the resolver,
+  // already stripped of the editor's `sourceline` attribute.
+  it("renders the markdown, then prepares its body", async () => {
     mockResolveResources.mockResolvedValueOnce({ html: "<p>inlined</p>", report: report() });
     const html = await renderPrintableHtml("# hi", "/docs/note.md");
-    expect(mockRender).toHaveBeenCalledWith("# hi", true);
-    expect(mockResolveResources).toHaveBeenCalledWith("<p>rendered</p>", {
-      baseDir: "/docs",
-      containWithin: "/docs",
-      mode: "single",
-    });
+    expect(mockResolveResources).toHaveBeenCalledTimes(1);
+    const [sent, options] = mockResolveResources.mock.calls[0] as [string, unknown];
+    expect(sent).toMatch(/<h1[^>]*>hi<\/h1>/);
+    expect(sent).not.toContain("sourceline");
+    expect(options).toEqual({ baseDir: "/docs", containWithin: "/docs", mode: "single" });
     expect(html).toBe("<p>inlined</p>");
   });
 });
@@ -164,8 +150,12 @@ describe("buildPrintHtml", () => {
   it("wraps the body in a self-contained, light-theme document", async () => {
     const html = await buildPrintHtml("<p>body</p>");
     expect(html.startsWith("<!DOCTYPE html>")).toBe(true);
-    for (const marker of ["/* theme-css */", "/* light-css */", "/* content-css */", "/* shared-css */"]) {
-      expect(html).toContain(marker);
+    // The captured theme, the forced light theme, the editor content CSS and
+    // the shared print CSS — each the real builder's output, never empty.
+    expect(html).toContain("--bg-color: #fafafa;");
+    for (const css of [getForceLightThemeCSS(), getEditorContentCSS(), getSharedContentCSS()]) {
+      expect(css.trim()).not.toBe("");
+      expect(html).toContain(css);
     }
     expect(html).toContain("@page { margin: 1.5cm; }");
     expect(html).toContain('<div class="export-surface-editor tiptap-editor">');
@@ -200,14 +190,15 @@ describe("buildPrintHtml — KaTeX rides along only when there is math", () => {
     '<div class="math-block">x</div>',
     '<span class="math-inline">x</span>',
   ])("includes it for %s", async (body) => {
-    expect(await buildPrintHtml(body)).toContain("/* katex-css */");
+    expect(getKatexCSS()).toContain(KATEX_RULE);
+    expect(await buildPrintHtml(body)).toContain(KATEX_RULE);
   });
 
   it("leaves it out of a document with no math", async () => {
     const html = await buildPrintHtml("<p>plain body</p>");
-    expect(html).not.toContain("/* katex-css */");
+    expect(html).not.toContain(KATEX_RULE);
     // …and the rest of the document is unchanged.
     expect(html).toContain("<p>plain body</p>");
-    expect(html).toContain("/* shared-css */");
+    expect(html).toContain(getSharedContentCSS());
   });
 });

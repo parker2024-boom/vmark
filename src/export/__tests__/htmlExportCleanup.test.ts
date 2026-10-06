@@ -1,5 +1,5 @@
-// @vitest-environment node
 // exportHtml's failure and publish semantics (audit 20260907, #332/#334).
+// The content pipeline (sanitizer, templates, styles, reader, theme) is real; jsdom supplies the DOM it needs.
 //
 // The export used to write straight into the destination and, on failure,
 // delete every path it had written — which, over a previous export, meant
@@ -70,11 +70,6 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
   }),
 }));
 
-vi.mock("../themeSnapshot", () => ({
-  captureThemeCSS: () => "/* theme */",
-  isDarkTheme: () => false,
-}));
-
 vi.mock("../resourceResolver", () => ({
   resolveResources: async (_html: string) => ({
     html: "<p>test</p>",
@@ -84,34 +79,6 @@ vi.mock("../resourceResolver", () => ({
 vi.mock("../resourcePaths", () => ({
   getDocumentBaseDir: async () => "/tmp",
   getExportContainmentRoot: async () => "/tmp",
-}));
-
-vi.mock("../fontEmbedder", () => ({
-  contentHasMath: () => false,
-  getKaTeXFontFiles: () => [],
-  getUserFontFile: () => null,
-  downloadFont: async () => null,
-  generateLocalFontCSS: () => "",
-  generateEmbeddedFontCSS: () => "",
-  fontDataToDataUri: () => "",
-}));
-
-vi.mock("../htmlSanitizer", () => ({
-  sanitizeExportHtml: (html: string) => html,
-}));
-
-vi.mock("../htmlTemplates", () => ({
-  generateIndexHtml: () => "<html>index</html>",
-  generateStandaloneHtml: () => "<html>standalone</html>",
-}));
-
-vi.mock("../htmlExportStyles", () => ({
-  getEditorContentCSS: () => "/* content */",
-}));
-
-vi.mock("../reader", () => ({
-  getReaderCSS: () => "/* reader css */",
-  getReaderJS: () => "/* reader js */",
 }));
 
 vi.mock("@/utils/debug", () => ({ exportWarn: vi.fn() }));

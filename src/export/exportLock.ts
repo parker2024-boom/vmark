@@ -141,7 +141,7 @@ export async function releaseExportLock(destination: string, owner: string): Pro
  *
  * The lock is ADVISORY — a holder that outlives the stale threshold can have
  * it taken over — so an export asks this before it publishes, rather than
- * assuming the lock it took at the start is still its own (#332).
+ * assuming the lock it took at the start is still its own.
  */
 export async function holdsExportLock(destination: string, owner: string): Promise<boolean> {
   const text = await readQuietly(exportLockPath(destination));

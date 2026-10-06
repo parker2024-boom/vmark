@@ -95,7 +95,7 @@
   padding: var(--space-4);
 }
 
-/* Run/Cancel toolbar (WI-4.2) */
+/* Run/Cancel toolbar */
 .workflow-side-panel__toolbar {
   display: flex;
   align-items: center;

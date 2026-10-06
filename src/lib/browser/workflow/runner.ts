@@ -1,14 +1,13 @@
 /**
- * WIRED: `services/workflow/workflowRunService.ts` drives every `workflow_run`
- * through `runWebWorkflow`; the per-attempt approval gate the earlier banner
- * demanded lives in `services/workflow/runExecutor.ts` (P-1).
- *
- * Purpose: Top-level web-workflow runner (WI-4.2) — the capstone that wires the
+ * Purpose: Top-level web-workflow runner — the capstone that wires the
  * parsed IR to the R8a-safe engine. It maps each `WorkflowStep` to the engine's
  * safety shape via the write-ness classifier, then drives the generic
  * `runWorkflow` control flow, handing the executor the ORIGINAL step so it knows
  * how to act (kind selects the tier; text is the instruction).
- * Origin: Embedded browser sites and workflows plan (2026-07-12, retired) WI-4.2.
+ *
+ * WIRED: `services/workflow/workflowRunService.ts` drives every `workflow_run`
+ * through `runWebWorkflow`; the per-attempt approval gate the earlier banner
+ * demanded lives in `services/workflow/runExecutor.ts`.
  *
  * The two shapes are kept apart on purpose: the safety layer only ever sees
  * `{id, write}` (so its double-post protection depends on nothing but write-ness),
@@ -20,7 +19,9 @@
  *
  * @coordinates-with lib/browser/workflow/engine.ts — the generic step runner
  * @coordinates-with lib/browser/workflow/classify.ts — IR → write-ness
+ * @module lib/browser/workflow/runner
  */
+
 import { toEngineStep } from "./classify";
 import { runWorkflow, type RunOptions, type StepExecutor, type WorkflowRunResult } from "./engine";
 import type { WebWorkflow, WorkflowStep } from "./types";

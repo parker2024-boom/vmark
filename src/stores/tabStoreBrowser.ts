@@ -1,5 +1,5 @@
 /**
- * Pure helpers for tabStore's browser-tab actions (WI-1.1 / R1).
+ * Pure helpers for tabStore's browser-tab actions (R1).
  *
  * Extracted from tabStore.ts so the store stays under its size baseline. No
  * store access — exercised via tabStore's `createBrowserTab`/`updateBrowserTab`
@@ -19,7 +19,7 @@ import type {
 
 /** Canonical URL for a browser tab; falls back to the raw string when the URL
  *  is not a navigable http(s) URL (about:blank, a scheme-less draft) so the tab
- *  still opens — origin enforcement happens at navigation time (WI-2.1). */
+ *  still opens — origin enforcement happens at navigation time. */
 export function browserTabUrl(url: string): string {
   return canonicalizeBrowserUrl(url) ?? url;
 }
@@ -58,7 +58,7 @@ export function makeBrowserTab(
 }
 
 /** The mutable fields of a browser tab. `generation` is the driver's navigation
- *  generation for the committed page (WI-2.1). */
+ *  generation for the committed page. */
 export type BrowserTabPatch = Partial<Pick<BrowserTab, "url" | "title" | "scrollY" | "generation">>;
 
 /** The patch's defined fields, canonicalized and narrowed to what actually

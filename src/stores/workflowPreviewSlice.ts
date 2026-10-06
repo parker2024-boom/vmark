@@ -3,7 +3,7 @@
  *
  * Purpose: `workflowStore.ts` is the store's WIRING; what a run's panel state
  * looks like after an event is a separate concern with no Zustand in it, and it
- * had grown to the point of pushing that file past its size cap (audit #1001).
+ * had grown to the point of pushing that file past its size cap.
  * Same split `workflowEditQueue.ts` already makes for the patch queue.
  *
  * Everything here returns the SAME slice reference when nothing changes, which
@@ -14,11 +14,11 @@
  */
 import type { StepStatusEntry, WorkflowGraph } from "@/lib/workflow/types";
 
-/** How a run ended, once `executionId` is back to null (audit #767). */
+/** How a run ended, once `executionId` is back to null. */
 export type WorkflowRunOutcome = "completed" | "failed" | "cancelled";
 
 /**
- * One markdown-surface document's live preview (audit 20260928 #129): the
+ * One markdown-surface document's live preview: the
  * graph its Source editor parsed, the parse error, and whether its side panel
  * is open. Keyed by tab, because two Source editors in a split each parse
  * their own file — a single slot let them overwrite each other, and either
@@ -48,7 +48,7 @@ export interface PreviewSlice {
   /**
    * The tab whose panel started the current (or last) run, or null for an
    * unowned run — a workflow genie's. Registered WITH the run, in the same
-   * write (#113/#114). Only that tab's panel paints the run's statuses,
+   * write. Only that tab's panel paints the run's statuses,
    * offers Cancel, and offers the restore (WI-LX2.1).
    */
   runTabId: string | null;
@@ -124,7 +124,7 @@ export function setPanelOpen(slice: PreviewSlice, tabId: string, panelOpen: bool
 /**
  * Replace `tabId`'s graph.
  *
- * The run SURVIVES — its id (audit #1002 proposed clearing it, and the code
+ * The run SURVIVES — its id (clearing it has been proposed, and the code
  * refutes it) and its step statuses. The only production caller is the source
  * pane's debounced re-parse, which fires on open, on every keystroke in a
  * workflow file and on leaving it — including while a run is in flight.
@@ -133,7 +133,7 @@ export function setPanelOpen(slice: PreviewSlice, tabId: string, panelOpen: bool
  * every keystroke. Statuses belong to the run, and whether they are painted
  * over a graph is decided against `runSource`, the text that ran. A step
  * SELECTION is not store state at all: it is the panel's, tied to the graph
- * object it was made on (#105), so a re-parse drops it by construction.
+ * object it was made on, so a re-parse drops it by construction.
  */
 export function setGraph(
   slice: PreviewSlice,
@@ -151,7 +151,7 @@ function finishedRunOf(slice: PreviewSlice): FinishedRun {
 
 /**
  * Register a new run — with its `owner` when a panel started it, in the SAME
- * write (#113/#114) — or roll one back.
+ * write — or roll one back.
  *
  * Registration happens BEFORE the backend admits the run, so the finished run
  * it replaces is set aside rather than discarded: a start the backend refuses
@@ -173,7 +173,7 @@ export function setExecution(
 }
 
 /**
- * End `executionId`, KEEPING its step statuses (audit #767).
+ * End `executionId`, KEEPING its step statuses.
  *
  * `setExecution(null)` discarded every step result at the moment the run ended
  * — the canvas lost its success/failure colouring exactly when the user wanted

@@ -1,5 +1,5 @@
 /**
- * cancelGenieRequest — ask Rust to stop a streaming AI request (audit #375).
+ * cancelGenieRequest — ask Rust to stop a streaming AI request.
  *
  * Purpose: the frontend's cancel used to drop its `ai:response` listener and
  *   reset the store while the provider ran on to completion. `cancel_ai_prompt`
@@ -13,12 +13,12 @@
  *     command is typed, so its rejection is a plain object that `String()`
  *     would render as "[object Object]". Rust treats an id that is no longer
  *     in flight as a successful no-op, so a rejection here is a real fault.
- *   - And a real fault is SHOWN, not only logged (audit #375, round 3): the
+ *   - And a real fault is SHOWN, not only logged: the
  *     provider is still running and still billing, which is exactly the thing
  *     the user pressed Cancel to stop. `genieWarn` reaches the log file, which
  *     nobody reads mid-session, so the message also lands in the invocation
  *     store's error — Rust localizes it, so no new i18n key is involved.
- *   - ALWAYS shown, on one surface or the other (audit #958). Round 3 dropped
+ *   - ALWAYS shown, on one surface or the other. An earlier version dropped
  *     the message whenever a newer invocation had started, to protect that
  *     run's `isRunning` — which silenced the report in the case where a
  *     provider left running matters MOST. The store carries it while idle; a
@@ -26,6 +26,7 @@
  *     cannot overwrite the newer run's state.
  *
  * @coordinates-with hooks/useGenieInvocation.ts — calls this from cancel()
+ * @coordinates-with components/StatusBar/StatusBar.tsx — its Cancel button
  * @coordinates-with streamRunner.ts — mints the request id run_ai_prompt is keyed by
  * @module services/genieInvocation/cancelRequest
  */
@@ -36,9 +37,21 @@ import { useAiInvocationStore } from "@/stores/aiStore";
 import { imeToast as toast } from "@/services/ime/imeToast";
 import { genieWarn } from "@/utils/debug";
 
+/**
+ * Stop the active invocation: ask Rust to stop its provider, then reset the
+ * status. The request id is read BEFORE the reset clears it. Every Cancel
+ * surface goes through this — the status bar's used to reset the store alone,
+ * which hid the run while the provider went on to completion.
+ */
+export function cancelActiveInvocation(): void {
+  const { requestId } = useAiInvocationStore.getState();
+  if (requestId) cancelGenieRequest(requestId);
+  useAiInvocationStore.getState().cancel();
+}
+
 /** Ask Rust to cancel the streaming request `requestId`; never rejects. */
 export function cancelGenieRequest(requestId: string): void {
-  // Which run the store slot belongs to, taken NOW (audit #959). See below.
+  // Which run the store slot belongs to, taken NOW. See below.
   const startEpoch = useAiInvocationStore.getState().startEpoch;
   void invoke("cancel_ai_prompt", { requestId }).catch((err: unknown) => {
     const message = commandErrorMessage(err);
@@ -52,7 +65,7 @@ export function cancelGenieRequest(requestId: string): void {
     // rejection is asynchronous, and a NEW invocation started since must not be
     // knocked out of `isRunning` by an error belonging to the request before it.
     //
-    // `isRunning` alone is an ABA read (audit #959): a newer invocation that
+    // `isRunning` alone is an ABA read: a newer invocation that
     // started AND finished while this rejection was in flight leaves the store
     // idle again, and the error would then overwrite that run's success flash
     // with a failure belonging to the request before it. `startEpoch` moves on
@@ -63,7 +76,7 @@ export function cancelGenieRequest(requestId: string): void {
       state.setError(message);
       return;
     }
-    // But it must still be SEEN (audit #958), whether the newer run is still
+    // But it must still be SEEN, whether the newer run is still
     // going or already done. Suppressing it entirely to protect the singleton
     // was the wrong trade: a refused cancel means a provider request the user
     // stopped is still running, and still billing, which is exactly what they

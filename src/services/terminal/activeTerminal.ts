@@ -3,7 +3,7 @@
  *
  * Purpose: The window-scoped handle on terminal instances, so non-React
  * callers can reach a live xterm without threading a ref through the component
- * tree (WI-4.3 "Run in Terminal").
+ * tree (for "Run in Terminal").
  *
  * Why it lives in `services/` and not next to the terminal components: the
  * consumer is `services/terminal/runInTerminal.ts`, and `services/` may not

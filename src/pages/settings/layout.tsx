@@ -4,6 +4,8 @@
  *
  * Part of the shared Settings UI primitives; see `components.tsx` (the
  * barrel) for the naming/decision rules that govern this family.
+ *
+ * @module pages/settings/layout
  */
 
 import React, { useState, useRef } from "react";
@@ -33,8 +35,8 @@ export function SettingRow({ label, description, children, disabled }: SettingRo
   // No "button" here on purpose: label activation is the affordance for VALUE
   // controls (toggle, select, field). On a row whose child is an action
   // button, a click on the label TEXT would fire the action — surprising for
-  // one-shot buttons like "Detect CLI" or "Reset all settings" (audit round
-  // 2, finding 28). Buttons keep aria-labelledby only.
+  // one-shot buttons like "Detect CLI" or "Reset all settings".
+  // Buttons keep aria-labelledby only.
   const LABELABLE_TAGS = new Set(["input", "select", "textarea", "meter", "output", "progress"]);
   const childEl = React.isValidElement(children)
     ? (children as React.ReactElement<Record<string, unknown>>)
@@ -56,7 +58,7 @@ export function SettingRow({ label, description, children, disabled }: SettingRo
     >
       <div className="flex-1">
         {/* A real <label htmlFor>, so clicking the row's text activates the
-            control (WI-UI2.4) — a switch/select is a labelable element.
+            control — a switch/select is a labelable element.
             Audit 20260829: a wrapper <div> child is NOT labelable, so the
             htmlFor would dangle — omit it there and keep the aria wiring. */}
         <label

@@ -4,7 +4,7 @@
  * Owns three lint flows: synchronous markdown rules, synchronous YAML
  * rules, and asynchronous local-link existence checking. The async path
  * is gated by per-tab monotonic tokens so a stale completion can't
- * overwrite a newer one (Codex audit HIGH-1).
+ * overwrite a newer one.
  *
  * @coordinates-with stores/settingsStore.ts — subscribed at module init to
  *                   clear diagnostics when the user disables lint
@@ -50,7 +50,7 @@ interface LintActions {
    */
   runYamlLint: (tabId: string, source: string) => LintDiagnostic[];
   /**
-   * Lint using the linter the FILE'S FORMAT contributes (WI-4.3).
+   * Lint using the linter the FILE'S FORMAT contributes.
    *
    * Replaces choosing between `runLint` and `runYamlLint` at the call site,
    * which hard-coded a two-format world into every caller.
@@ -137,7 +137,7 @@ export const useLintStore = create<LintState & LintActions>((set, get) => ({
 
   runLinkCheck: async (tabId, source, filePath) => {
     if (!filePath) return [];
-    // Codex audit HIGH-1 fix: per-tab token guards against stale async
+    // Per-tab token guards against stale async
     // results overwriting newer ones. Increment the token before the
     // fs.exists race; only commit results when the token matches at
     // settle time. Older completions resolve their promise but don't
@@ -177,8 +177,7 @@ export const useLintStore = create<LintState & LintActions>((set, get) => ({
     // Invalidate any in-flight runLinkCheck promise for this tab —
     // bumping `next` and clearing byTab[tabId] makes any pending
     // completion's token comparison fail, so it drops its result
-    // instead of repopulating the cleared tab. Codex audit HIGH-1
-    // partial finding.
+    // instead of repopulating the cleared tab.
     linkCheckTokens.next++;
     delete linkCheckTokens.byTab[tabId];
     set((state) => {

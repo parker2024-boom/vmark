@@ -3,6 +3,8 @@
  *
  * Captures computed CSS variables at export time to ensure
  * exported HTML matches the user's current theme exactly.
+ *
+ * @module export/themeSnapshot
  */
 
 /**
@@ -73,7 +75,7 @@ export const EXPORT_CSS_VARS = [
   "--success-color",
   // The reader stylesheet reads this one, and it was the ONE token in that file
   // whose `var(--x, #hex)` fallback was load-bearing rather than dead — omitted
-  // here, so the literal was what shipped (WI-DS3).
+  // here, so the literal was what shipped.
   "--success-color-dark",
 
   // Hover states

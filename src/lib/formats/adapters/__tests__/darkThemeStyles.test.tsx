@@ -13,7 +13,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { useSettingsStore } from "@/stores/settingsStore";
 
 const { jsonViewMock, defaultStyles, darkStyles } = vi.hoisted(() => {
@@ -90,11 +90,12 @@ describe("adapter dark-theme style selection", () => {
   });
 
   for (const { label, format, content, path } of fixtures) {
-    it(`${label}: builds the style on defaultStyles under light theme`, () => {
+    it(`${label}: builds the style on defaultStyles under light theme`, async () => {
       setTheme("paper");
       const Preview = format.genericPreview!;
       render(<Preview content={content} path={path ?? null} diagnostics={[]} />);
-      expect(jsonViewMock).toHaveBeenCalled();
+      // The tree view is loaded on first use (LazyJsonTree).
+      await waitFor(() => expect(jsonViewMock).toHaveBeenCalled());
       const style = jsonViewMock.mock.calls.at(-1)?.[0]?.style;
       // Carries the light base's identity marker...
       expect(style.__token).toBe(defaultStyles.__token);
@@ -102,31 +103,31 @@ describe("adapter dark-theme style selection", () => {
       expect(style.stringValue).toBe("vmark-json-view__string");
     });
 
-    it(`${label}: builds the style on darkStyles under dark theme`, () => {
+    it(`${label}: builds the style on darkStyles under dark theme`, async () => {
       setTheme("night");
       const Preview = format.genericPreview!;
       render(<Preview content={content} path={path ?? null} diagnostics={[]} />);
-      expect(jsonViewMock).toHaveBeenCalled();
+      await waitFor(() => expect(jsonViewMock).toHaveBeenCalled());
       const style = jsonViewMock.mock.calls.at(-1)?.[0]?.style;
       expect(style.__token).toBe(darkStyles.__token);
       expect(style.stringValue).toBe("vmark-json-view__string");
     });
   }
 
-  it("rebuilds on the dark base after a light → dark theme switch (json)", () => {
+  it("rebuilds on the dark base after a light → dark theme switch (json)", async () => {
     setTheme("paper");
     const Preview = jsonFormat.genericPreview!;
     const { rerender } = render(
       <Preview content='{"a":1}' path="/x/a.json" diagnostics={[]} />,
     );
-    expect(jsonViewMock.mock.calls.at(-1)?.[0]?.style.__token).toBe(
-      defaultStyles.__token,
+    await waitFor(() =>
+      expect(jsonViewMock.mock.calls.at(-1)?.[0]?.style.__token).toBe(defaultStyles.__token),
     );
 
     setTheme("night");
     rerender(<Preview content='{"a":1}' path="/x/a.json" diagnostics={[]} />);
-    expect(jsonViewMock.mock.calls.at(-1)?.[0]?.style.__token).toBe(
-      darkStyles.__token,
+    await waitFor(() =>
+      expect(jsonViewMock.mock.calls.at(-1)?.[0]?.style.__token).toBe(darkStyles.__token),
     );
   });
 });

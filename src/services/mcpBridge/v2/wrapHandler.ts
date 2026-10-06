@@ -1,5 +1,5 @@
 /**
- * wrapHandler — centralizes the MCP v2 handler error contract (WI-3.2, D2).
+ * wrapHandler — centralizes the MCP v2 handler error contract.
  * Runs the handler body; any thrown error becomes a structured
  * `respond({ id, success: false, error, data? })` so each handler only writes its
  * happy path (validation still uses structuredError() inside the body).

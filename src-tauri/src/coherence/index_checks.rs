@@ -1,4 +1,4 @@
-//! Live check-result loading (WI-2b.3, split from `index_query.rs` for
+//! Live check-result loading (split from `index_query.rs` for
 //! the file-size gate). D5.6: a result is live only under the exact
 //! (context, claims-fingerprint) snapshot that produced it.
 

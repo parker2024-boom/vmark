@@ -175,6 +175,12 @@ export function PdfSettingsSidebar({ options, onOptionChange: set, onExport, exp
             left={options.marginLeft}
             landscape={options.orientation === "landscape"}
             unitLabel={t("pdf.pageSetup.marginUnit")}
+            sideLabels={{
+              marginTop: t("pdf.pageSetup.marginTop"),
+              marginRight: t("pdf.pageSetup.marginRight"),
+              marginBottom: t("pdf.pageSetup.marginBottom"),
+              marginLeft: t("pdf.pageSetup.marginLeft"),
+            }}
             onChange={handleMarginChange}
           />
         </PdfSettingsGroup>

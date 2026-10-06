@@ -2,6 +2,8 @@
  * Combo-box for model selection: curated suggestions + free-text input.
  *
  * For Ollama, dynamically fetches local models on first open.
+ *
+ * @module pages/settings/ModelComboBox
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";

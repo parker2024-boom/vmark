@@ -21,7 +21,7 @@
  *
  * @coordinates-with FileExplorer.tsx — sole caller, supplies the deps
  * @coordinates-with ContextMenu.tsx — owns the ContextMenuActionId union
- * @coordinates-with services/terminal/openTerminalHere.ts — "Open Terminal Here" (WI-4.2)
+ * @coordinates-with services/terminal/openTerminalHere.ts — "Open Terminal Here"
  * @module components/Sidebar/FileExplorer/contextMenuActions
  */
 import type { ContextMenuActionId } from "./ContextMenu";
@@ -46,7 +46,7 @@ export interface ContextMenuActionDeps {
   revealInFinder: (path: string) => Promise<unknown>;
   newFile: (parentPath?: string | null) => Promise<unknown>;
   newFolder: (parentPath?: string | null) => Promise<unknown>;
-  /** Open a terminal session in a directory (WI-4.2). */
+  /** Open a terminal session in a directory. */
   openTerminalHere: (dirPath: string) => OpenTerminalHereResult;
   /** Surface a failure to the user. */
   notifyError: (messageKey: string) => void;
@@ -81,7 +81,7 @@ const HANDLERS: Record<ContextMenuActionId, Handler> = {
   newFile: { requires: "optional", run: (d, path) => d.newFile(path || null) },
   newFolder: { requires: "optional", run: (d, path) => d.newFolder(path || null) },
   // Folders only — "here" has no meaning for a file, and offering it on one
-  // would just open the parent, which is not what was clicked (WI-4.2).
+  // would just open the parent, which is not what was clicked.
   openTerminalHere: {
     requires: "folder",
     run: (d, path) => {

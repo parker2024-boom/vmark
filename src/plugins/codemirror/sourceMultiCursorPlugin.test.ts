@@ -15,12 +15,6 @@ vi.mock("@/utils/imeGuard", () => ({
   isCodeMirrorComposing: () => false,
 }));
 
-// Mock sourceAltClick
-const mockHandleAltClick = vi.fn();
-vi.mock("./sourceAltClick", () => ({
-  handleAltClick: (...args: unknown[]) => mockHandleAltClick(...args),
-}));
-
 import { sourceMultiCursorExtensions } from "./sourceMultiCursorPlugin";
 
 const views: EditorView[] = [];
@@ -34,7 +28,9 @@ function createView(
 
   const state = EditorState.create({
     doc: content,
-    extensions: [sourceMultiCursorExtensions],
+    // The Source editor allows multiple selections; without it CodeMirror
+    // normalizes every selection to its main range.
+    extensions: [EditorState.allowMultipleSelections.of(true), sourceMultiCursorExtensions],
   });
   const view = new EditorView({ state, parent });
   views.push(view);
@@ -63,14 +59,12 @@ afterEach(() => {
     parent?.remove();
   });
   views.length = 0;
-  mockHandleAltClick.mockClear();
+  vi.restoreAllMocks();
 });
 
 describe("sourceMultiCursorExtensions", () => {
   describe("Escape key - collapse to single cursor", () => {
     it("collapses multiple cursors to primary cursor via collapseToSingleCursor", () => {
-      // EditorState.create in jsdom normalizes to single range, so we test
-      // by directly dispatching a multi-range selection after view creation
       const view = createSingleCursorView("hello world foobar", 0);
 
       // Add cursors by dispatching
@@ -81,17 +75,12 @@ describe("sourceMultiCursorExtensions", () => {
           EditorSelection.cursor(12),
         ], 2),
       });
+      expect(view.state.selection.ranges.length).toBe(3);
 
-      // If multi-cursor was preserved, Escape should collapse
-      if (view.state.selection.ranges.length > 1) {
-        const event = new KeyboardEvent("keydown", { key: "Escape" });
-        view.dom.dispatchEvent(event);
-        expect(view.state.selection.ranges.length).toBe(1);
-      } else {
-        // In jsdom, multi-cursor may not be preserved -- skip gracefully
-        // The collapseToSingleCursor function is still tested via "does not modify single cursor"
-        expect(view.state.selection.ranges.length).toBe(1);
-      }
+      const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+      view.contentDOM.dispatchEvent(event);
+      expect(view.state.selection.ranges.length).toBe(1);
+      expect(view.state.selection.main.head).toBe(12);
     });
 
     it("does not modify single cursor", () => {
@@ -99,8 +88,8 @@ describe("sourceMultiCursorExtensions", () => {
 
       expect(view.state.selection.ranges.length).toBe(1);
 
-      const event = new KeyboardEvent("keydown", { key: "Escape" });
-      view.dom.dispatchEvent(event);
+      const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+      view.contentDOM.dispatchEvent(event);
 
       // Still single cursor, position unchanged
       expect(view.state.selection.ranges.length).toBe(1);
@@ -116,8 +105,8 @@ describe("sourceMultiCursorExtensions", () => {
 
       const primaryHead = view.state.selection.main.head;
 
-      const event = new KeyboardEvent("keydown", { key: "Escape" });
-      view.dom.dispatchEvent(event);
+      const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+      view.contentDOM.dispatchEvent(event);
 
       expect(view.state.selection.ranges.length).toBe(1);
       expect(view.state.selection.main.head).toBe(primaryHead);
@@ -125,90 +114,76 @@ describe("sourceMultiCursorExtensions", () => {
   });
 
   describe("Alt+Click plugin", () => {
-    it("attaches mousedown listener on construction", () => {
-      const view = createSingleCursorView("hello", 0);
-      const _addEventSpy = vi.spyOn(view.dom, "addEventListener");
+    // jsdom has no layout, so `posAtCoords` (CodeMirror's layout query) is the
+    // one thing faked: each click lands on the document position given.
+    function click(view: EditorView, pos: number | null, init: MouseEventInit = { altKey: true }) {
+      vi.spyOn(view, "posAtCoords").mockReturnValue(pos as number);
+      const event = new MouseEvent("mousedown", { bubbles: true, cancelable: true, clientX: 1, clientY: 1, ...init });
+      view.dom.dispatchEvent(event);
+      return event;
+    }
+    const heads = (view: EditorView) => view.state.selection.ranges.map((r) => r.head);
 
-      // The listener was already attached during construction
-      // We verify by dispatching a mousedown with alt
-      const mouseEvent = new MouseEvent("mousedown", {
-        altKey: true,
-        clientX: 10,
-        clientY: 10,
-      });
-      view.dom.dispatchEvent(mouseEvent);
-
-      expect(mockHandleAltClick).toHaveBeenCalledWith(view, mouseEvent);
-    });
-
-    it("calls handleAltClick on mousedown", () => {
+    it("Alt+Click adds a cursor at the clicked position and makes it primary", () => {
       const view = createSingleCursorView("hello world", 0);
+      const event = click(view, 6);
 
-      const mouseEvent = new MouseEvent("mousedown", {
-        altKey: true,
-        clientX: 50,
-        clientY: 10,
-      });
-      view.dom.dispatchEvent(mouseEvent);
-
-      expect(mockHandleAltClick).toHaveBeenCalledTimes(1);
-      expect(mockHandleAltClick).toHaveBeenCalledWith(view, mouseEvent);
+      expect(heads(view)).toEqual([0, 6]);
+      expect(view.state.selection.main.head).toBe(6);
+      expect(event.defaultPrevented).toBe(true);
     });
 
-    it("passes non-alt clicks to handleAltClick (which filters them)", () => {
-      const view = createSingleCursorView("hello", 0);
+    it("Alt+Click on an existing secondary cursor removes it", () => {
+      const view = createView("hello world foo", [{ anchor: 0 }, { anchor: 6 }, { anchor: 12 }]);
+      click(view, 6);
 
-      const mouseEvent = new MouseEvent("mousedown", {
-        altKey: false,
-        clientX: 10,
-        clientY: 10,
-      });
-      view.dom.dispatchEvent(mouseEvent);
-
-      // handleAltClick still gets called; it returns false internally for non-alt clicks
-      expect(mockHandleAltClick).toHaveBeenCalledTimes(1);
+      expect(heads(view)).toEqual([0, 12]);
     });
 
-    it("removes mousedown listener on destroy", () => {
+    it("ignores a click without Alt", () => {
       const view = createSingleCursorView("hello", 0);
-      const removeEventSpy = vi.spyOn(view.dom, "removeEventListener");
+      const event = click(view, 3, { altKey: false });
 
-      view.destroy();
+      expect(heads(view)).toEqual([0]);
+      expect(event.defaultPrevented).toBe(false);
+    });
 
-      // Should have removed the mousedown handler
-      expect(removeEventSpy).toHaveBeenCalledWith("mousedown", expect.any(Function));
+    it("ignores Alt+Click combined with Meta or Ctrl", () => {
+      const view = createSingleCursorView("hello", 0);
+      click(view, 3, { altKey: true, metaKey: true });
+      click(view, 3, { altKey: true, ctrlKey: true });
+
+      expect(heads(view)).toEqual([0]);
+    });
+
+    it("ignores Alt+Click outside the text (no position under the pointer)", () => {
+      const view = createSingleCursorView("hello", 0);
+      const event = click(view, null);
+
+      expect(heads(view)).toEqual([0]);
+      expect(event.defaultPrevented).toBe(false);
     });
 
     it("handles multiple rapid Alt+Click events", () => {
       const view = createSingleCursorView("hello world foobar", 0);
+      for (const pos of [3, 6, 9, 12, 15]) click(view, pos);
 
-      for (let i = 0; i < 5; i++) {
-        const mouseEvent = new MouseEvent("mousedown", {
-          altKey: true,
-          clientX: i * 20,
-          clientY: 10,
-        });
-        view.dom.dispatchEvent(mouseEvent);
-      }
-
-      expect(mockHandleAltClick).toHaveBeenCalledTimes(5);
+      expect(heads(view)).toEqual([0, 3, 6, 9, 12, 15]);
+      expect(view.state.selection.main.head).toBe(15);
     });
 
-    it("handles click with meta+alt combination", () => {
+    it("stops listening once the view is destroyed", () => {
       const view = createSingleCursorView("hello", 0);
+      const removeEventSpy = vi.spyOn(view.dom, "removeEventListener");
+      const posAtCoords = vi.spyOn(view, "posAtCoords");
 
-      const mouseEvent = new MouseEvent("mousedown", {
-        altKey: true,
-        metaKey: true,
-        clientX: 10,
-        clientY: 10,
-      });
-      view.dom.dispatchEvent(mouseEvent);
+      view.destroy();
+      view.dom.dispatchEvent(new MouseEvent("mousedown", { altKey: true }));
 
-      expect(mockHandleAltClick).toHaveBeenCalledTimes(1);
+      expect(removeEventSpy).toHaveBeenCalledWith("mousedown", expect.any(Function));
+      expect(posAtCoords).not.toHaveBeenCalled();
     });
   });
-
   describe("Extension composition", () => {
     it("sourceMultiCursorExtensions is an array", () => {
       expect(Array.isArray(sourceMultiCursorExtensions)).toBe(true);
@@ -232,8 +207,8 @@ describe("sourceMultiCursorExtensions", () => {
       // collapseToSingleCursor: selection.ranges.length <= 1 → return false
       const view = createSingleCursorView("hello world", 5);
       // Manually invoke via keydown (covers the run: (view) => collapseToSingleCursor line 68)
-      const event = new KeyboardEvent("keydown", { key: "Escape" });
-      view.dom.dispatchEvent(event);
+      const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+      view.contentDOM.dispatchEvent(event);
       // No change expected
       expect(view.state.selection.main.head).toBe(5);
     });
@@ -245,8 +220,8 @@ describe("sourceMultiCursorExtensions", () => {
       const view = createSingleCursorView("hello", 0);
       expect(view.state.selection.main.head).toBe(0);
 
-      const event = new KeyboardEvent("keydown", { key: "Escape" });
-      view.dom.dispatchEvent(event);
+      const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+      view.contentDOM.dispatchEvent(event);
 
       // Single cursor, no change
       expect(view.state.selection.main.head).toBe(0);
@@ -256,8 +231,8 @@ describe("sourceMultiCursorExtensions", () => {
       const view = createSingleCursorView("hello", 5);
       expect(view.state.selection.main.head).toBe(5);
 
-      const event = new KeyboardEvent("keydown", { key: "Escape" });
-      view.dom.dispatchEvent(event);
+      const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+      view.contentDOM.dispatchEvent(event);
 
       expect(view.state.selection.main.head).toBe(5);
     });
@@ -266,8 +241,8 @@ describe("sourceMultiCursorExtensions", () => {
       const view = createSingleCursorView("", 0);
       expect(view.state.selection.main.head).toBe(0);
 
-      const event = new KeyboardEvent("keydown", { key: "Escape" });
-      view.dom.dispatchEvent(event);
+      const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+      view.contentDOM.dispatchEvent(event);
 
       expect(view.state.selection.main.head).toBe(0);
     });
@@ -275,8 +250,8 @@ describe("sourceMultiCursorExtensions", () => {
     it("handles cursor in multiline document", () => {
       const view = createSingleCursorView("hello\nworld\nfoo", 6);
 
-      const event = new KeyboardEvent("keydown", { key: "Escape" });
-      view.dom.dispatchEvent(event);
+      const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+      view.contentDOM.dispatchEvent(event);
 
       // Still single cursor, unchanged
       expect(view.state.selection.ranges.length).toBe(1);

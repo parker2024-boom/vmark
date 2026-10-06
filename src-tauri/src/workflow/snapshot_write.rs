@@ -3,13 +3,13 @@
 //! both inside a workspace root HELD OPEN for the whole restore.
 //!
 //! Two windows this closes, both found by audit:
-//!   - **The root itself (#74).** The anchored helpers used to take the root as
+//!   - **The root itself.** The anchored helpers used to take the root as
 //!     a PATH and open it again for every file, so a root swapped for a link
 //!     partway through a restore became "the workspace" for every file after
 //!     it — and each target, resolved through the same link, passed the
 //!     containment walk. [`HeldRoot`] opens it once; every walk compares
 //!     against that directory.
-//!   - **The delete (#75).** It checked a canonical parent and then called a
+//!   - **The delete.** It checked a canonical parent and then called a
 //!     path-based `remove_file`, which resolves the name again: a parent
 //!     swapped for an escaping link in between deleted a file outside. The
 //!     parent is now opened once, proved inside the held root, and the entry
@@ -20,7 +20,7 @@
 //! restore starts — there is no trusted identity to check that first
 //! resolution against, the same position `action/save-file` is in. That one
 //! resolution is also the only one: the canonical path is then opened with no
-//! link followed at any component (#74, round 2), so a swap between resolving
+//! link followed at any component, so a swap between resolving
 //! and opening is refused rather than followed. Off Unix
 //! there are no `*at` calls and both operations stay path-based; the fallback
 //! states its residual below, as `commit.rs` and `ensure_dir.rs` do.
@@ -43,7 +43,7 @@ pub(super) struct HeldRoot {
 
 impl HeldRoot {
     /// Hold `path`, which the caller has already canonicalized. Opened
-    /// without following a link at any component (#74): a root or ancestor
+    /// without following a link at any component: a root or ancestor
     /// swapped for a link after the canonicalization is refused, so the
     /// directory held is the one that was resolved.
     pub(super) fn open(path: PathBuf) -> Result<Self, String> {
@@ -124,7 +124,7 @@ pub(super) fn delete_created_with(
 
 /// Windows has no `unlinkat`, and is a best-effort platform here.
 ///
-/// **The residual, stated (#75).** This is check-then-remove by path: a
+/// **The residual, stated.** This is check-then-remove by path: a
 /// parent replaced with a junction between the canonical check and
 /// `remove_file` is followed. It is the same residual, for the same reason,
 /// as `commit.rs`'s and `ensure_dir.rs`'s fallbacks — the primitive that would

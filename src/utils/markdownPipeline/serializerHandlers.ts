@@ -1,5 +1,5 @@
 /**
- * Custom mdast-util-to-markdown handlers for images and links.
+ * Custom mdast-util-to-markdown handlers for images, links and raw HTML.
  *
  * Purpose: VMark overrides remark-stringify's default image/link handlers to
  * emit angle-bracket destinations for URLs containing whitespace instead of
@@ -12,13 +12,18 @@
  *     custom handler rewrote every autolink and bare GFM URL literal to
  *     `[https\://…](https://…)` — losing the authored form and injecting
  *     escapes into the label (#1102).
- *   - Destinations, image alt text, and titles are escaped: a raw
- *     destination cannot hold whitespace, control chars, unbalanced parens,
- *     or a leading `<` (those switch to the `<…>` literal form with `\`,
- *     `<`, `>` escaped and CR/LF percent-encoded); `"` in titles and
- *     `[`/`]` in alt text are backslash-escaped so they cannot terminate
- *     the construct early.
- *   - Both handlers carry a `peek` function (upstream Handle contract) so
+ *   - Destinations and titles are escaped: a raw destination cannot hold
+ *     whitespace, control chars, unbalanced parens, or a leading `<` (those
+ *     switch to the `<…>` literal form with `\`, `<`, `>` escaped and CR/LF
+ *     percent-encoded); `"` in titles is backslash-escaped so it cannot
+ *     terminate the construct early.
+ *   - Image alt text is escaped by the serializer's own text escaping, inside
+ *     the label construct. An alt is read back as inline markdown and
+ *     flattened to text, so every character that could start markup has to be
+ *     escaped, not only the brackets: `_c_` came back as `c`.
+ *   - Raw HTML is written as it is, except that a `|` inside a table cell is
+ *     escaped: a pipe ends the cell wherever it stands.
+ *   - The handlers carry a `peek` function (upstream Handle contract) so
  *     phrasing lookahead reads the first character without running the
  *     full serializer.
  *
@@ -39,6 +44,8 @@ export interface ToMarkdownState {
   ) => string;
   /** Push a construct onto the state stack; returns the matching exit. */
   enter: (construct: string) => () => void;
+  /** Escape `value` for the constructs currently on the stack. */
+  safe: (value: string, info: { before: string; after: string }) => string;
 }
 
 /**
@@ -142,11 +149,6 @@ function formatTitle(title: string): string {
   return title.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-/** Escape image alt text for the `![…]` label position. */
-function formatAltText(alt: string): string {
-  return alt.replace(/[\\[\]]/g, "\\$&");
-}
-
 /**
  * The text to place inside `<…>` when the link round-trips as an autolink,
  * or null when it must stay in `[text](url)` resource form. Mirrors
@@ -168,8 +170,14 @@ function autolinkValue(node: Link): string | null {
  * Custom image handler: escaped alt/title, angle-bracket destination when
  * the raw form cannot represent the URL.
  */
-function imageHandler(node: Image): string {
-  const alt = formatAltText(node.alt || "");
+function imageHandler(node: Image, _parent: Parents | undefined, state: ToMarkdownState): string {
+  // The alt text is read back as inline markdown and flattened to text, so it
+  // is escaped the way label text is: `_c_` would otherwise come back as `c`.
+  const exit = state.enter("image");
+  const subexit = state.enter("label");
+  const alt = state.safe(node.alt || "", { before: "![", after: "]" });
+  subexit();
+  exit();
   const formattedUrl = formatDestination(node.url);
 
   if (node.title) {
@@ -224,6 +232,33 @@ export const handleImage = Object.assign(imageHandler, {
 export const handleLink = Object.assign(linkHandler, {
   peek: (node: Link) => (autolinkValue(node) !== null ? "<" : "["),
 });
+
+/** `value` with every `|` that no backslash escapes given one. */
+function escapeBarePipes(value: string): string {
+  let out = "";
+  let backslashes = 0;
+  for (const char of value) {
+    if (char === "|" && backslashes % 2 === 0) out += "\\";
+    backslashes = char === "\\" ? backslashes + 1 : 0;
+    out += char;
+  }
+  return out;
+}
+
+/**
+ * `html` handler: the node's source as written — except inside a table cell,
+ * where an unescaped `|` ends the cell wherever it stands. HTML read from a
+ * cell keeps the backslash of its `\|`, so that is left alone; a pipe that
+ * arrives bare (text merged into an element, inlineHtmlMerge.ts) is escaped.
+ * Upstream writes HTML raw everywhere, which split the row.
+ */
+export const handleHtml = Object.assign(
+  (node: { value?: string }, _parent: unknown, state: { stack: readonly string[] }): string => {
+    const value = node.value ?? "";
+    return state.stack.includes("tableCell") ? escapeBarePipes(value) : value;
+  },
+  { peek: (): string => "<" },
+);
 
 /**
  * Custom mdast-util-to-markdown join: when the right sibling carries a captured

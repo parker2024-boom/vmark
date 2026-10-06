@@ -1,5 +1,5 @@
 /**
- * Status toasts (WI-UB3, re-audit 20260901)
+ * Status toasts
  *
  * Purpose: the status bar's RARE states — update lifecycle, auto-save
  * paused, divergent — live as transient/sticky toasts instead of inline
@@ -15,7 +15,8 @@
  *     toast rather than stacking, and a falling edge dismisses it.
  *   - Actionable states are STICKY (duration: Infinity) — ready/error/
  *     stalled carry the only recovery affordance now that the inline icon is
- *     gone; purely informational `available` auto-dismisses.
+ *     gone; purely informational `available` auto-dismisses, and is not
+ *     shown at all for the version the user chose to skip.
  *   - Transient states (checking/downloading/installing) are silent. The
  *     stall detector covers the case where silence would strand the user:
  *     a stalled flow raises a sticky warning with a Reset action (#1270).
@@ -62,6 +63,9 @@ export interface UpdateToastDescriptor {
 /**
  * What (if anything) the update lifecycle should show as a toast.
  * Pure — exhaustively table-tested in useStatusToasts.test.tsx.
+ *
+ * `skippedVersion` is the user's "Skip This Version" choice: an available
+ * update of exactly that version is not announced.
  */
 export function updateToastDescriptor(
   status: UpdateStatus,
@@ -69,6 +73,7 @@ export function updateToastDescriptor(
   stalled: boolean,
   autoDownload: boolean,
   version: string | null,
+  skippedVersion: string | null = null,
 ): UpdateToastDescriptor | null {
   // A stalled flow outranks its nominal status: checking/downloading/
   // installing are non-interactive, so the toast is the only way out.
@@ -86,6 +91,9 @@ export function updateToastDescriptor(
       // Auto-download consumes `available` immediately — announcing it would
       // toast every launch for a state the user never has to act on.
       if (autoDownload) return null;
+      // The user said not to be told about this version. useUpdateChecker
+      // drops it too, but only after this toast had already announced it.
+      if (version !== null && version === skippedVersion) return null;
       return {
         kind: "info",
         messageKey: version ? "updateAvailableVersion" : "updateAvailable",
@@ -135,6 +143,7 @@ export function useUpdateToasts(): void {
   const status = useMcpStore((state) => state.update.status);
   const version = useMcpStore((state) => state.update.updateInfo?.version ?? null);
   const autoDownload = useSettingsStore((state) => state.update.autoDownload);
+  const skippedVersion = useSettingsStore((state) => state.update.skipVersion);
   const stalled = useUpdateStall();
   const { checkForUpdates, restartApp } = useUpdateOperations();
   const prevStatusRef = useRef<UpdateStatus>(status);
@@ -142,7 +151,7 @@ export function useUpdateToasts(): void {
   useEffect(() => {
     const prevStatus = prevStatusRef.current;
     prevStatusRef.current = status;
-    const desc = updateToastDescriptor(status, prevStatus, stalled, autoDownload, version);
+    const desc = updateToastDescriptor(status, prevStatus, stalled, autoDownload, version, skippedVersion);
     if (!desc) {
       imeToast.dismiss(UPDATE_TOAST_ID);
       return;
@@ -168,7 +177,7 @@ export function useUpdateToasts(): void {
       ...(desc.sticky ? { duration: Infinity } : {}),
       action: { label: t(desc.actionKey), onClick },
     });
-  }, [status, stalled, autoDownload, version, t, checkForUpdates, restartApp]);
+  }, [status, stalled, autoDownload, version, skippedVersion, t, checkForUpdates, restartApp]);
 }
 
 /**

@@ -33,7 +33,7 @@ export function limitConsecutivePunctuation(
  * a line in the enclosing document — a protected region follows it on the same
  * line. Its trailing spaces are ordinary inter-word spaces, not end-of-line
  * junk, and deleting them is what turned `使用 \`printf\` 函数` into
- * `使用\`printf\` 函数` (WI-CJKF2.1).
+ * `使用\`printf\` 函数`.
  */
 export function removeTrailingSpaces(
   text: string,

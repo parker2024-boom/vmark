@@ -21,17 +21,17 @@ use super::types::Envelope;
 impl WorkspaceKernel {
     /// The single write path: durable ledger append, then index apply
     /// (I1/I2 — appends only). Two ambiguous-failure classes are handled so the
-    /// O(1) idem lookup can never miss a durable entry (re-review #3):
+    /// O(1) idem lookup can never miss a durable entry:
     /// - **append error** — `write_all` may have landed the line before a later
     ///   step (fsync) failed, so the ledger MAY hold the entry while the index
     ///   does not. Reconcile from the ledger and return an error asking the
     ///   caller to retry (a deterministic-idem accept then finds it, no double
     ///   append); poison the kernel if the reconcile itself fails.
     /// - **apply error** — the ledger is truth, so rebuild from it; poison on
-    ///   rebuild failure (audit R7).
+    ///   rebuild failure.
     pub fn append_and_apply(&mut self, env: &Envelope) -> Result<(), String> {
         // A lone append is itself a mutating operation: take the workspace lock
-        // for its whole span (re-review #1). When already inside a held
+        // for its whole span. When already inside a held
         // `with_write_lock` scope (a group's per-member appends), reuse it.
         if self.in_write_txn {
             return self.append_and_apply_inner(env);
@@ -69,7 +69,7 @@ impl WorkspaceKernel {
         Ok(())
     }
     /// Refuse writes/accepts once an ambiguous failure has poisoned the kernel
-    /// (re-review #3) — the caller must reopen to re-reconcile from the ledger.
+    /// — the caller must reopen to re-reconcile from the ledger.
     pub fn ensure_available(&self) -> Result<(), String> {
         match &self.unavailable {
             None => Ok(()),
@@ -290,3 +290,7 @@ impl WorkspaceKernel {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "state_write.test.rs"]
+mod tests;

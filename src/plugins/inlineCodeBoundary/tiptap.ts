@@ -3,6 +3,8 @@
  *
  * Wraps the ProseMirror plugin that fixes cursor behavior at the
  * left boundary of inline code marks.
+ *
+ * @module plugins/inlineCodeBoundary/tiptap
  */
 
 import { Extension } from "@tiptap/core";

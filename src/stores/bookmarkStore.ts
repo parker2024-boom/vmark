@@ -1,5 +1,5 @@
 /**
- * bookmarkStore — persisted browser bookmarks (WI-S3.1).
+ * bookmarkStore — persisted browser bookmarks.
  *
  * Identity is `lib/browser/bookmarkUrl`: path- and query-preserving, fragment-preserving.
  * The v2 plan deduped with the origin guard's `canonicalizeOrigin`, which discards the

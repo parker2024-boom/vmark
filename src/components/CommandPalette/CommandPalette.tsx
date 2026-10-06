@@ -30,13 +30,13 @@ import { buildPaletteSections, type PaletteSection } from "./paletteGrouping";
  * logs (rather than crashes the palette) on rejection so an action
  * failure never produces an unhandled promise rejection.
  *
- * The invoking window's label rides in the context (WI-S0.7). Without it,
+ * The invoking window's label rides in the context. Without it,
  * a window-scoped command falls back to "main" — so invoking "New Browser Tab"
  * from a second document window opened the tab in the FIRST one.
  */
 async function runCommand(id: string, windowLabel: string): Promise<void> {
   try {
-    // Supply the resolved command context (WI-2.1): editor commands' `when` /
+    // Supply the resolved command context: editor commands' `when` /
     // execution need mode, document, selection, node context — not just the
     // window label. Existing window-scoped commands still read `ctx.windowLabel`.
     await executeCommand(id, null, resolveCommandContext(windowLabel));
@@ -47,7 +47,7 @@ async function runCommand(id: string, windowLabel: string): Promise<void> {
 
 /**
  * Render the palette body. Browse-mode sections get a `role="group"` wrapper
- * with an `aria-label` (screen readers announce the group on entry, WI-4.3);
+ * with an `aria-label` (screen readers announce the group on entry);
  * the search-mode section (label === null) renders flat options with no header.
  * A single running index threads across all sections so `id`/`aria-selected`
  * match the flattened order the parent selects into.
@@ -95,7 +95,7 @@ function renderSections(
     return (
       <li
         key={`group-${section.id}`}
-        // APG grouped-listbox (WI-UI4.5): role=group is invalid on <li>, so the li is presentational and the inner list carries the group.
+        // APG grouped-listbox: role=group is invalid on <li>, so the li is presentational and the inner list carries the group.
         role="presentation"
         className="command-palette__group"
       >
@@ -120,7 +120,7 @@ export function CommandPalette() {
   const windowLabel = useWindowLabel();
   const isOpen = useCommandPaletteStore((s) => s.isOpen);
   // The native browser view paints over all React DOM in its rect, so freeze every
-  // mounted browser tab while this overlay is up (WI-SOC.1).
+  // mounted browser tab while this overlay is up.
   useBrowserOccluder(isOpen, "command-palette");
   const close = useCommandPaletteStore((s) => s.close);
   const [query, setQuery] = useState("");
@@ -144,7 +144,7 @@ export function CommandPalette() {
   // eslint can't see through the getters, so it reads `language` as unused here.
   const ranked: RankedCommand[] = useMemo(
     () => (isOpen ? searchCommands(query, resolveCommandContext(windowLabel)) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- language is a real dependency the rule cannot see: command titles are lazy i18n getters
     [isOpen, query, windowLabel, language],
   );
 
@@ -155,8 +155,8 @@ export function CommandPalette() {
     [t],
   );
 
-  // Browse (empty query) → labelled sections; search → one flat ranked section
-  // (WI-4.2). The sections' items, flattened in order, are the on-screen order —
+  // Browse (empty query) → labelled sections; search → one flat ranked section.
+  // The sections' items, flattened in order, are the on-screen order —
   // `flat` is what selection indexes into, so grouping never desyncs the caret.
   const sections = useMemo(
     () => buildPaletteSections(ranked, query, categoryLabel, language),
@@ -184,7 +184,7 @@ export function CommandPalette() {
   // Reset and focus on open; restore previous focus on close (a11y). Legitimate
   // setState-in-effect: bound to the open/close transition and bundled with focus
   // capture/restore + RAF focus, not derivable during render (#1063).
-  /* eslint-disable react-hooks/set-state-in-effect */
+  /* eslint-disable react-hooks/set-state-in-effect -- open/close transition resets bundled with focus capture/restore and RAF focus */
   useEffect(() => {
     if (isOpen) {
       previousFocusRef.current = document.activeElement;
@@ -201,7 +201,7 @@ export function CommandPalette() {
   }, [isOpen]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  // Keep the active row visible as the caret moves (WI-4.3) — without this,
+  // Keep the active row visible as the caret moves — without this,
   // arrowing into a group below the fold leaves the selection off-screen. Runs
   // on selection AND on `sections` changes (a new query re-lays-out the list).
   useEffect(() => {

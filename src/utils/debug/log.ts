@@ -98,6 +98,11 @@ export const contentSearchLog = isDev
   ? (...args: unknown[]) => console.log("[ContentSearch]", ...args)
   : () => {};
 
+/** Debug logger for the action registry's dev-time menu-mapping checks. */
+export const actionRegistryLog = isDev
+  ? (...args: unknown[]) => console.log("[ActionRegistry]", ...args)
+  : () => {};
+
 /** Debug logger for Table of Contents NodeView operations. */
 export const tocLog = isDev
   ? (...args: unknown[]) => console.log("[TOC]", ...args)

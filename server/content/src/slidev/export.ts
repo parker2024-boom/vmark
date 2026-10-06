@@ -34,7 +34,7 @@ export interface ExportDeps {
   nodeExe?: string;
   /** Hard timeout (ms) before the export child is killed. Default 180s. */
   timeoutMs?: number;
-  /** Cancellation: abort kills the export child and rejects (WI-7.3). */
+  /** Cancellation: abort kills the export child and rejects. */
   signal?: AbortSignal;
 }
 
@@ -61,7 +61,7 @@ export async function runSlidevExport(
 
   const timeoutMs = deps.timeoutMs ?? 180_000;
   const signal = deps.signal;
-  // Already-cancelled: never spawn (WI-7.3).
+  // Already-cancelled: never spawn.
   if (signal?.aborted) {
     throw new Error("slidev export cancelled");
   }
@@ -82,7 +82,7 @@ export async function runSlidevExport(
       child.kill?.("SIGKILL");
       finish(() => reject(new Error(`slidev export timed out after ${timeoutMs}ms`)));
     }, timeoutMs);
-    // WI-7.3 — cancellation: abort kills the child and rejects.
+    // Cancellation: abort kills the child and rejects.
     if (signal) {
       onAbort = () => {
         child.kill?.("SIGKILL");

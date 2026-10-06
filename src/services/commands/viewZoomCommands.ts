@@ -1,5 +1,5 @@
 /**
- * Editor zoom commands — split out of `viewCommands.ts` (audit #942), which was
+ * Editor zoom commands — split out of `viewCommands.ts`, which was
  * one 229-line builder against a file sitting 14 lines under the size cap.
  *
  * Zoom is the one view command family with real ARITHMETIC in it, and the
@@ -21,8 +21,7 @@ export const MAX_FONT_SIZE = 32;
 export const FONT_SIZE_STEP = 2;
 
 /**
- * One zoom step, clamped so it can STOP at the bound but never reverse
- * (audit #941).
+ * One zoom step, clamped so it can STOP at the bound but never reverse.
  *
  * The zoom bounds are narrower than the store's valid range for
  * `appearance.fontSize` (`clamp.ts`: [8, 48]), so a font size can legitimately

@@ -2,24 +2,23 @@
 // Routing coverage for dispatchV2 — every vmark.* action must reach its
 // handler exactly once, and unrecognized types must fall through (return
 // false) so the top-level handleRequest can answer with "Unknown request".
+//
+// The workspace and browser handler modules wrap Tauri, so they are replaced
+// here. The session, document, workflow and selection handlers are the app's
+// own logic and run for real: each first reads its payload against ITS
+// operation's contract, which reports an undeclared field by naming that
+// operation. A probe field therefore identifies the handler a request reached,
+// and the one answer it sends leaves through the Tauri `invoke` boundary.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
+import { invoke } from "@tauri-apps/api/core";
+import type { McpResponse } from "@/services/mcpBridge/types";
 import {
   BROWSER_ROUTED_OPERATIONS,
   ROUTED_OPERATIONS,
   SUPPORTED_TOOL_PREFIXES,
   dispatchV2,
 } from "@/services/mcpBridge/v2/dispatch";
-
-vi.mock("@/services/mcpBridge/v2/session", () => ({
-  handleSessionGetState: vi.fn(async () => undefined),
-}));
-
-vi.mock("@/services/mcpBridge/v2/document", () => ({
-  handleDocumentRead: vi.fn(async () => undefined),
-  handleDocumentWrite: vi.fn(async () => undefined),
-  handleDocumentTransform: vi.fn(async () => undefined),
-}));
 
 vi.mock("@/services/mcpBridge/v2/workspace", () => ({
   handleWorkspaceNew: vi.fn(async () => undefined),
@@ -35,15 +34,6 @@ vi.mock("@/services/mcpBridge/v2/workspaceOpenFolder", () => ({
   handleWorkspaceOpenWorkspace: vi.fn(async () => undefined),
 }));
 
-vi.mock("@/services/mcpBridge/v2/workflow", () => ({
-  handleWorkflowApplyPatch: vi.fn(async () => undefined),
-  handleWorkflowValidate: vi.fn(async () => undefined),
-}));
-
-vi.mock("@/services/mcpBridge/v2/selection", () => ({
-  handleSelectionGet: vi.fn(async () => undefined),
-  handleSelectionSet: vi.fn(async () => undefined),
-}));
 vi.mock("@/services/mcpBridge/v2/browser", () => ({
   handleBrowserRead: vi.fn(async () => undefined),
   handleBrowserAct: vi.fn(async () => undefined),
@@ -66,12 +56,6 @@ vi.mock("@/services/mcpBridge/v2/browser", () => ({
   handleBrowserClose: vi.fn(async () => undefined),
 }));
 
-import { handleSessionGetState } from "@/services/mcpBridge/v2/session";
-import {
-  handleDocumentRead,
-  handleDocumentWrite,
-  handleDocumentTransform,
-} from "@/services/mcpBridge/v2/document";
 import {
   handleWorkspaceNew,
   handleWorkspaceOpen,
@@ -82,11 +66,6 @@ import {
   handleWorkspaceFocusWindow,
 } from "@/services/mcpBridge/v2/workspace";
 import { handleWorkspaceOpenWorkspace } from "@/services/mcpBridge/v2/workspaceOpenFolder";
-import {
-  handleWorkflowApplyPatch,
-  handleWorkflowValidate,
-} from "@/services/mcpBridge/v2/workflow";
-import { handleSelectionGet, handleSelectionSet } from "@/services/mcpBridge/v2/selection";
 import {
   handleBrowserRead,
   handleBrowserAct,
@@ -109,27 +88,41 @@ import {
   handleBrowserClose,
 } from "@/services/mcpBridge/v2/browser";
 
+const PROBE = "routeProbe";
+let consoleWarn: MockInstance<typeof console.warn>;
+
 beforeEach(() => {
   vi.clearAllMocks();
+  consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+});
+afterEach(() => {
+  consoleWarn.mockRestore();
 });
 
-// Table of (request type, handler mock, fixture args). Each row asserts:
-//   - dispatchV2 returns true (the type was recognized)
-//   - the matching handler was called exactly once
-//   - the handler received (id, args)  [session is special: id + APP_VERSION string]
+/** The operations whose contract a real handler read, in order. */
+function operationsParsed(): string[] {
+  return consoleWarn.mock.calls
+    .filter((call) => call[0] === "[MCP Contract]")
+    .map((call) => String(call[1]).split(" carried undeclared field(s) ")[0]);
+}
+
+/** The answers sent back across the Tauri boundary. */
+function responses(): McpResponse[] {
+  return vi.mocked(invoke).mock.calls
+    .filter(([command]) => command === "mcp_bridge_respond")
+    .map(([, payload]) => (payload as { payload: McpResponse }).payload);
+}
+
+// Table of (request type, fixture args, and — for a handler module that wraps
+// Tauri — its mock). Each row asserts that dispatchV2 returns true and that the
+// request reached the handler for ITS type exactly once, args included.
 const ROUTES: Array<{
   type: string;
-  handler: ReturnType<typeof vi.fn>;
+  /** The mocked handler; absent where the real handler runs. */
+  handler?: ReturnType<typeof vi.fn>;
   args?: Record<string, unknown>;
-  /** When true, the handler signature is `(id, value)` not `(id, args)` */
-  passesArgsObject?: boolean;
 }> = [
-  {
-    type: "vmark.session.get_state",
-    handler: handleSessionGetState as unknown as ReturnType<typeof vi.fn>,
-    args: { clientProtocol: "0.3.0" },
-    passesArgsObject: false,
-  },
+  { type: "vmark.session.get_state", args: { clientProtocol: "0.3.0" } },
   {
     type: "vmark.workspace.new",
     handler: handleWorkspaceNew as unknown as ReturnType<typeof vi.fn>,
@@ -172,41 +165,13 @@ const ROUTES: Array<{
     handler: handleWorkspaceFocusWindow as unknown as ReturnType<typeof vi.fn>,
     args: { windowLabel: "main" },
   },
-  {
-    type: "vmark.document.read",
-    handler: handleDocumentRead as unknown as ReturnType<typeof vi.fn>,
-    args: {},
-  },
-  {
-    type: "vmark.document.write",
-    handler: handleDocumentWrite as unknown as ReturnType<typeof vi.fn>,
-    args: { content: "x" },
-  },
-  {
-    type: "vmark.document.transform",
-    handler: handleDocumentTransform as unknown as ReturnType<typeof vi.fn>,
-    args: { kind: "cjk-spacing" },
-  },
-  {
-    type: "vmark.workflow.apply_patch",
-    handler: handleWorkflowApplyPatch as unknown as ReturnType<typeof vi.fn>,
-    args: { patches: [] },
-  },
-  {
-    type: "vmark.workflow.validate",
-    handler: handleWorkflowValidate as unknown as ReturnType<typeof vi.fn>,
-    args: {},
-  },
-  {
-    type: "vmark.selection.get",
-    handler: handleSelectionGet as unknown as ReturnType<typeof vi.fn>,
-    args: {},
-  },
-  {
-    type: "vmark.selection.set",
-    handler: handleSelectionSet as unknown as ReturnType<typeof vi.fn>,
-    args: { content: "x" },
-  },
+  { type: "vmark.document.read", args: {} },
+  { type: "vmark.document.write", args: { content: "x" } },
+  { type: "vmark.document.transform", args: { kind: "cjk-spacing" } },
+  { type: "vmark.workflow.apply_patch", args: { patches: [] } },
+  { type: "vmark.workflow.validate", args: {} },
+  { type: "vmark.selection.get", args: {} },
+  { type: "vmark.selection.set", args: { content: "x" } },
   {
     type: "vmark.browser.read",
     handler: handleBrowserRead as unknown as ReturnType<typeof vi.fn>,
@@ -266,45 +231,57 @@ describe("dispatchV2 — routing", () => {
 
   it.each(ROUTES)("routes $type to its handler", async (route) => {
     const id = `req-${route.type}`;
-    const args = route.args ?? {};
-    const matched = await dispatchV2({ id, type: route.type, args });
-
-    expect(matched).toBe(true);
-    expect(route.handler).toHaveBeenCalledTimes(1);
-
-    if (route.passesArgsObject === false) {
-      // session.get_state takes (id, version-string, args) — the app version
-      // plus the request args, which carry the client's declared protocol.
-      expect(route.handler).toHaveBeenCalledWith(id, expect.any(String), args);
-    } else {
+    if (route.handler) {
+      const args = route.args ?? {};
+      expect(await dispatchV2({ id, type: route.type, args })).toBe(true);
+      expect(route.handler).toHaveBeenCalledTimes(1);
       expect(route.handler).toHaveBeenCalledWith(id, args);
+      return;
     }
+    const args = { ...route.args, [PROBE]: true };
+    expect(await dispatchV2({ id, type: route.type, args })).toBe(true);
+    // The handler that parsed THIS operation saw these args, once…
+    expect(operationsParsed()).toEqual([route.type]);
+    // …and answered this request, once.
+    expect(responses().map((r) => r.id)).toEqual([id]);
+  });
+
+  it("session.get_state carries the app version into the answer", async () => {
+    await dispatchV2({ id: "req-version", type: "vmark.session.get_state", args: {} });
+    expect(responses()).toEqual([
+      expect.objectContaining({
+        id: "req-version",
+        success: true,
+        data: expect.objectContaining({
+          capabilities: expect.objectContaining({ version: __VMARK_VERSION__ }),
+        }),
+      }),
+    ]);
   });
 
   it("returns false for unrecognized request types", async () => {
     const matched = await dispatchV2({
       id: "req-unknown",
       type: "vmark.bogus.action",
-      args: {},
+      args: { [PROBE]: true },
     });
     expect(matched).toBe(false);
 
-    // No handler should have been invoked.
-    expect(handleSessionGetState).not.toHaveBeenCalled();
-    expect(handleDocumentRead).not.toHaveBeenCalled();
-    expect(handleSelectionGet).not.toHaveBeenCalled();
+    // No handler ran: nothing parsed a payload, answered, or was called.
+    expect(operationsParsed()).toEqual([]);
+    expect(responses()).toEqual([]);
+    for (const route of ROUTES) if (route.handler) expect(route.handler).not.toHaveBeenCalled();
   });
 
   it("does not forward to other handlers when one matches", async () => {
     await dispatchV2({
       id: "req-iso",
       type: "vmark.selection.get",
-      args: {},
+      args: { [PROBE]: true },
     });
-    expect(handleSelectionGet).toHaveBeenCalledTimes(1);
-    expect(handleSelectionSet).not.toHaveBeenCalled();
-    expect(handleDocumentRead).not.toHaveBeenCalled();
-    expect(handleSessionGetState).not.toHaveBeenCalled();
+    expect(operationsParsed()).toEqual(["vmark.selection.get"]);
+    expect(responses().map((r) => r.id)).toEqual(["req-iso"]);
+    for (const route of ROUTES) if (route.handler) expect(route.handler).not.toHaveBeenCalled();
   });
 
   it("the routed handler list is exactly the supported tool surface", () => {

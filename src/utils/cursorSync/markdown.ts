@@ -6,7 +6,8 @@
  *
  * Key decisions:
  *   - Only strips leading block markers (headings, lists, blockquotes) — not inline formatting
- *   - Code fence tracking uses fence-type matching (``` vs ~~~) to avoid false toggles
+ *   - Works on one line at a time; which code block a line sits in is a
+ *     document-level question answered by cursorSync/fenceIndex.ts
  *
  * @coordinates-with cursorSync/codemirror.ts — calls these for source mode extraction
  * @module utils/cursorSync/markdown
@@ -152,48 +153,4 @@ export function stripInlineFormatting(text: string): string {
       // Images: ![alt](url)
       .replace(/!\[(.+?)\]\([^)]+\)/g, "$1")
   );
-}
-
-/**
- * Find the opening fence line for a code block containing the given line index.
- * Returns the 0-based line index of the opening fence, or null if not in a code block.
- */
-export function findCodeFenceStartLine(
-  lines: string[],
-  lineIndex: number
-): number | null {
-  let currentFence: string | null = null;
-  let fenceStartLine = -1;
-
-  for (let i = 0; i <= lineIndex && i < lines.length; i++) {
-    const trimmed = lines[i].trim();
-
-    if (currentFence === null) {
-      if (/^```/.test(trimmed)) {
-        currentFence = "```";
-        fenceStartLine = i;
-      } else if (/^~~~/.test(trimmed)) {
-        currentFence = "~~~";
-        fenceStartLine = i;
-      }
-    } else {
-      if (currentFence === "```" && /^```/.test(trimmed)) {
-        currentFence = null;
-        fenceStartLine = -1;
-      } else if (currentFence === "~~~" && /^~~~/.test(trimmed)) {
-        currentFence = null;
-        fenceStartLine = -1;
-      }
-    }
-  }
-
-  return currentFence !== null ? fenceStartLine : null;
-}
-
-/**
- * Check if currently inside a code block.
- * Tracks fence type (``` vs ~~~) to avoid toggling on different markers.
- */
-export function isInsideCodeBlock(lines: string[], lineIndex: number): boolean {
-  return findCodeFenceStartLine(lines, lineIndex) !== null;
 }

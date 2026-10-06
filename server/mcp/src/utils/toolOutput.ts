@@ -89,7 +89,7 @@ export const RECOVERY = {
   // you can see, then call again", which advises a NON-UNDOABLE, audit-logged
   // ledger write purely to page through a READ — a write the caller usually
   // cannot even perform, since `coherence_resolve` needs a live delegation
-  // grant (audit R2 #219). Same correction `browserConsole` already carries.
+  // grant. Same correction `browserConsole` already carries.
   coherenceEdges:
     'this workspace has more non-fresh edges than fit in one response, and `edges` has no pagination. DO NOT resolve or waive edges to reveal the rest: that WRITES a non-undoable, audit-logged ledger entry (and needs a delegation grant) to page through a read. Work from the edges you can see, or ask the user which derived document to look at and use `status` for the counts.',
   coherenceList:

@@ -9,7 +9,7 @@
  */
 
 import type { EditorView } from "@codemirror/view";
-import { getAnchorRectFromRange } from "@/plugins/sourcePopup/sourcePopupUtils";
+import { getAnchorRectFromRange } from "@/plugins/shared/sourcePopupUtils";
 import { hostPopups } from "@/plugins/shared/hostPopups";
 import { generateSlug, makeUniqueSlug, type HeadingWithId } from "@/utils/headingSlug";
 import { getBoundaryRects, getViewportBounds } from "@/utils/popupPosition";

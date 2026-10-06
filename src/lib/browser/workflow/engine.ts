@@ -1,5 +1,5 @@
 /**
- * Web workflow execution engine (WI-4.2 / R8/R8a/R11).
+ * Web workflow execution engine (R8/R8a/R11).
  *
  * WIRED: `runner.ts` → `services/workflow/workflowRunService.ts` drives every
  * `workflow_run` through this engine, and the per-attempt approval gate lives in
@@ -40,7 +40,7 @@ export interface EngineStep {
   readonly write: boolean;
   /** Whether a retryable failure may be re-executed automatically (default true).
    *  `false` for a human gate (`confirm`): re-running it means re-asking a human who
-   *  already answered, so the run pauses instead (plan WI-4.2 — "confirm blocks"). */
+   *  already answered, so the run pauses instead. */
   readonly retryable?: boolean;
 }
 

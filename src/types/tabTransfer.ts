@@ -1,3 +1,10 @@
+/**
+ * tabTransfer — types for moving a tab between windows: the transfer payload,
+ * the drop-preview event, and the removal request and acknowledgement.
+ *
+ * @module types/tabTransfer
+ */
+
 import type { HardBreakStyle, LineEnding } from "@/utils/linebreakDetection";
 
 /**

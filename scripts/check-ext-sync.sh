@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ADR-12 / WI-1B.4 — verify Rust SUPPORTED_EXTENSIONS matches the TS
+# ADR-12 — verify Rust SUPPORTED_EXTENSIONS matches the TS
 # format-registry's getSupportedExtensions() output.
 #
 # Delegates to a vitest test (src/lib/formats/extSync.test.ts) which

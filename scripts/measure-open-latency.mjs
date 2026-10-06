@@ -4,7 +4,7 @@
  *
  * Purpose: Measure the markdown parse / pipeline latency across the large-file
  * corpus and print a `size → ms` table referenced against the thresholds in
- * `dev-docs/plans/20260422-large-file-open-ux.md`. This is the "Harness"
+ * the Large-file open UX plan. This is the "Harness"
  * deliverable of the Cross-phase § perf harness — it makes the plan's
  * acceptance numbers reproducible instead of aspirational.
  *
@@ -41,7 +41,7 @@
  * @coordinates-with scripts/gen-large-file-corpus.mjs — produces the corpus.
  * @coordinates-with src/bench/largeFile.bench.ts — the measured bench.
  * @coordinates-with scripts/perf/README.md — the real-webview manual gate.
- * Origin: Large-file open UX plan (2026-04-22, retired) — the thresholds this harness measures against.
+ * Origin: Large-file open UX plan (retired) — the thresholds this harness measures against.
  */
 
 import { spawnSync } from "node:child_process";

@@ -1,5 +1,5 @@
 /**
- * Undo/redo chords — the single source of truth (ADR-018, WI-4.3).
+ * Undo/redo chords — the single source of truth (ADR-018).
  *
  * Both editor keymaps bind undo/redo from HERE instead of hardcoding the chords
  * independently, so the WYSIWYG (`editorPlugins.tiptap.ts`) and Source

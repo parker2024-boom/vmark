@@ -59,4 +59,14 @@ describe("docFingerprint", () => {
   it("treats CJK text as significant", () => {
     expect(fp("中文文本\n")).not.toBe(fp("日本語テキスト\n"));
   });
+
+  // WI-RA26.2 — which gaps of a loose list carry the blank line is spacing;
+  // that the list is loose at all is meaning.
+  it("ignores which gaps of a loose list carry the blank line", () => {
+    expect(fp("- a\n- b\n\n- c\n")).toBe(fp("- a\n\n- b\n\n- c\n"));
+  });
+
+  it("detects a loose list read back tight", () => {
+    expect(fp("- a\n\n- b\n")).not.toBe(fp("- a\n- b\n"));
+  });
 });

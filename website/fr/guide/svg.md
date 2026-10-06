@@ -117,7 +117,7 @@ Les assistants de codage IA peuvent générer des SVG directement dans vos docum
 
 **Exemple de prompt :**
 
-> Créez un graphique à barres montrant le chiffre d'affaires trimestriel : T1 2,1 M€, T2 2,8 M€, T3 3,2 M€, T4 3,9 M€
+> Créez un graphique à barres montrant le chiffre d'affaires trimestriel : T1 2,1 M$, T2 2,8 M$, T3 3,2 M$, T4 3,9 M$
 
 L'IA génère un graphique à barres SVG qui s'affiche en ligne dans votre document, avec panoramique/zoom et exportation PNG disponibles immédiatement.
 
@@ -138,6 +138,12 @@ L'IA génère un graphique à barres SVG qui s'affiche en ligne dans votre docum
 ### Sécurité
 
 VMark désinfecte le contenu SVG avant le rendu. Les balises de script et les attributs de gestionnaire d'événements (`onclick`, `onerror`, etc.) sont supprimés. Cela protège contre les attaques XSS lors du collage de SVG provenant de sources non fiables.
+
+Les références externes sont également supprimées : `<use>` et `<image>` peuvent pointer vers un fragment du même document (`href="#arrowhead"`) ou vers une charge utile `data:image/…` intégrée, mais une URL pointant hors de la machine est retirée. Sans cela, le simple fait d'ouvrir un document contenant un diagramme non fiable irait chercher cette URL — révélant votre adresse IP et le moment où vous avez ouvert le fichier. Les outils de diagramme comme Mermaid ne référencent jamais que des fragments, donc les diagrammes normaux ne sont pas affectés.
+
+La feuille de style propre d'un SVG (`<style>`) est confinée à ce SVG : chaque sélecteur est réécrit pour ne pouvoir correspondre qu'à l'intérieur du SVG dont il provient, de sorte qu'un diagramme ne peut pas modifier le style de l'éditeur ni d'un autre diagramme. Seules les règles de style, `@media` et `@keyframes` sont conservées (les noms d'animation sont rendus uniques par SVG) ; `@import`, `@font-face` et les autres règles @, les références `url()` externes et `position: fixed` / `sticky` sont supprimés. Les éléments `<form>` sont retirés (leur contenu est conservé).
+
+Les liens à l'intérieur d'un SVG rendu ne font jamais naviguer VMark lui-même. Cliquer sur un lien web l'ouvre dans le navigateur de votre système ; un lien relatif vers un fichier ouvre ce fichier dans un onglet VMark ; les liens `javascript:`, `file:` et `data:` ne sont jamais ouverts.
 
 ### Dimensionnement
 

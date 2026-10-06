@@ -28,7 +28,7 @@ export async function openFixtureInNewTab(client, { before, track, guardId, file
   // here rather than restated by each caller.
   //
   // It used to be "basename sans .md", and callers passed it themselves. commit
-  // 6848de868 (2026-08-07) made `general.showFileExtensions` default TRUE and
+  // 6848de868 made `general.showFileExtensions` default TRUE and
   // routed the tab strip through it, so tabs render `notes.md`, not `notes` —
   // and every Tier-0 journey that opens a fixture has been broken since. Nobody
   // saw it because nothing ran this suite: it was CI-verified only as mock
@@ -39,8 +39,8 @@ export async function openFixtureInNewTab(client, { before, track, guardId, file
 
   // Assert the assumption instead of depending on it silently. If the default
   // ever flips back, this fails saying so, rather than timing out on a tab that
-  // is sitting right there under a different name — which is exactly how the
-  // 2026-08-07 breakage presented.
+  // is sitting right there under a different name — which is exactly how that
+  // breakage presented.
   const showsExtensions = await evalJs(
     client,
     `(() => {

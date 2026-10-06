@@ -14,6 +14,8 @@
  *   - Both operations are combined into a single transaction for atomicity
  *   - collectFootnoteNodes does a single doc traversal returning both refs and defs,
  *     avoiding repeated walks in createRenumberTransaction and createCleanupAndRenumberTransaction
+ *   - Both transactions are built by one function (rebuildFootnotes); they differ only
+ *     in when they apply and in which definitions keep their content (keepLabels)
  *
  * @coordinates-with tiptap.ts — calls these functions from appendTransaction
  * @coordinates-with tiptapNodes.ts — footnote node type definitions
@@ -79,51 +81,42 @@ export function getDefinitionInfo(doc: PMNode): Array<{ label: string; pos: numb
   return collectFootnoteNodes(doc).defs;
 }
 
-export function createRenumberTransaction(
-  state: EditorState,
-  refType: NodeType,
-  defType: NodeType,
-  preCollected?: ReturnType<typeof collectFootnoteNodes>,
-): Transaction | null {
-  const { doc, schema } = state;
+type FootnoteNodes = ReturnType<typeof collectFootnoteNodes>;
 
-  const { refs, defs } = preCollected ?? collectFootnoteNodes(doc);
-
-  if (refs.length === 0) return null;
-
-  // Number by distinct label in first-seen order so refs and the recreated
-  // definitions (orderedLabels below) always share one numbering, even when
-  // the same footnote is referenced more than once.
+/**
+ * New label for each distinct reference label, in first-seen order. One map
+ * numbers both the references and the recreated definitions, so they cannot
+ * desync when a footnote is referenced more than once.
+ */
+function numberLabels(refs: FootnoteNodes["refs"]): Map<string, string> {
   const labelMap = new Map<string, string>();
   for (const ref of refs) {
     if (!labelMap.has(ref.label)) {
       labelMap.set(ref.label, String(labelMap.size + 1));
     }
   }
+  return labelMap;
+}
 
-  let needsRenumber = false;
-  for (const [oldLabel, newLabel] of labelMap) {
-    if (oldLabel !== newLabel) {
-      needsRenumber = true;
-      break;
-    }
-  }
-  if (!needsRenumber) return null;
-
-  let tr = state.tr;
-
-  const sortedRefs = [...refs].sort((a, b) => b.pos - a.pos);
-  for (const ref of sortedRefs) {
-    const newLabel = labelMap.get(ref.label);
-    if (newLabel && newLabel !== ref.label) {
-      const mappedPos = tr.mapping.map(ref.pos);
-      const newRefNode = refType.create({ label: newLabel });
-      tr = tr.replaceWith(mappedPos, mappedPos + ref.size, newRefNode);
-    }
-  }
+/**
+ * Relabel every reference per `labelMap`, drop every definition, and append
+ * one definition per referenced label in reference order. A definition's
+ * content is carried over when its label is in `keepLabels` (all labels when
+ * omitted); any other referenced label gets an empty definition.
+ */
+function rebuildFootnotes(
+  state: EditorState,
+  refType: NodeType,
+  defType: NodeType,
+  { refs, defs }: FootnoteNodes,
+  labelMap: Map<string, string>,
+  keepLabels?: Set<string>,
+): Transaction {
+  const { doc, schema } = state;
 
   const defContentByLabel = new Map<string, PMNode>();
   for (const def of defs) {
+    if (keepLabels && !keepLabels.has(def.label)) continue;
     const node = doc.nodeAt(def.pos);
     /* v8 ignore start -- @preserve else branch: node is always present at valid position */
     if (node) {
@@ -132,73 +125,9 @@ export function createRenumberTransaction(
     /* v8 ignore stop */
   }
 
-  const sortedDefs = [...defs].sort((a, b) => b.pos - a.pos);
-  for (const def of sortedDefs) {
-    const mappedPos = tr.mapping.map(def.pos);
-    tr = tr.delete(mappedPos, mappedPos + def.size);
-  }
-
-  const orderedLabels: string[] = [];
-  const seenLabels = new Set<string>();
-  for (const ref of refs) {
-    if (!seenLabels.has(ref.label)) {
-      seenLabels.add(ref.label);
-      orderedLabels.push(ref.label);
-    }
-  }
-
-  let insertPos = tr.doc.content.size;
-  const paragraphType = schema.nodes.paragraph;
-
-  for (let i = 0; i < orderedLabels.length; i++) {
-    const oldLabel = orderedLabels[i];
-    const newLabel = String(i + 1);
-    const oldDef = defContentByLabel.get(oldLabel);
-
-    const paragraph = paragraphType.create();
-    const newDefNode = oldDef ? defType.create({ label: newLabel }, oldDef.content) : defType.create({ label: newLabel }, [paragraph]);
-
-    tr = tr.insert(insertPos, newDefNode);
-    insertPos += newDefNode.nodeSize;
-  }
-
-  return tr;
-}
-
-export function createCleanupAndRenumberTransaction(
-  state: EditorState,
-  remainingRefLabels: Set<string>,
-  refType: NodeType,
-  defType: NodeType,
-  preCollected?: ReturnType<typeof collectFootnoteNodes>,
-): Transaction | null {
-  const { doc, schema } = state;
-
-  const { refs, defs: allDefs } = preCollected ?? collectFootnoteNodes(doc);
-
-  // Distinct-label first-seen numbering — must match orderedLabels below
-  // (see createRenumberTransaction for rationale).
-  const labelMap = new Map<string, string>();
-  for (const ref of refs) {
-    if (!labelMap.has(ref.label)) {
-      labelMap.set(ref.label, String(labelMap.size + 1));
-    }
-  }
-
-  const defContentByLabel = new Map<string, PMNode>();
-  for (const def of allDefs) {
-    if (remainingRefLabels.has(def.label)) {
-      const node = doc.nodeAt(def.pos);
-      /* v8 ignore start -- @preserve else branch: node is always present at valid position */
-      if (node) {
-        defContentByLabel.set(def.label, node);
-      }
-      /* v8 ignore stop */
-    }
-  }
-
   let tr = state.tr;
 
+  // Back to front, so earlier positions stay valid while later ones change.
   const sortedRefs = [...refs].sort((a, b) => b.pos - a.pos);
   for (const ref of sortedRefs) {
     const newLabel = labelMap.get(ref.label);
@@ -209,31 +138,17 @@ export function createCleanupAndRenumberTransaction(
     }
   }
 
-  const sortedDefs = [...allDefs].sort((a, b) => b.pos - a.pos);
+  const sortedDefs = [...defs].sort((a, b) => b.pos - a.pos);
   for (const def of sortedDefs) {
     const mappedPos = tr.mapping.map(def.pos);
     tr = tr.delete(mappedPos, mappedPos + def.size);
   }
 
-  const orderedLabels: string[] = [];
-  const seenLabels = new Set<string>();
-  for (const ref of refs) {
-    if (!seenLabels.has(ref.label)) {
-      seenLabels.add(ref.label);
-      orderedLabels.push(ref.label);
-    }
-  }
-
   let insertPos = tr.doc.content.size;
-  const paragraphType = schema.nodes.paragraph;
-
-  for (let i = 0; i < orderedLabels.length; i++) {
-    const oldLabel = orderedLabels[i];
-    const newLabel = String(i + 1);
+  for (const [oldLabel, newLabel] of labelMap) {
     const oldDef = defContentByLabel.get(oldLabel);
-
-    const paragraph = paragraphType.create();
-    const newDefNode = oldDef ? defType.create({ label: newLabel }, oldDef.content) : defType.create({ label: newLabel }, [paragraph]);
+    const content = oldDef ? oldDef.content : [schema.nodes.paragraph.create()];
+    const newDefNode = defType.create({ label: newLabel }, content);
 
     tr = tr.insert(insertPos, newDefNode);
     insertPos += newDefNode.nodeSize;
@@ -242,3 +157,44 @@ export function createCleanupAndRenumberTransaction(
   return tr;
 }
 
+/**
+ * Renumber footnotes sequentially, keeping every definition's content.
+ * Returns null when there are no references or the labels are already 1..n.
+ */
+export function createRenumberTransaction(
+  state: EditorState,
+  refType: NodeType,
+  defType: NodeType,
+  preCollected?: FootnoteNodes,
+): Transaction | null {
+  const collected = preCollected ?? collectFootnoteNodes(state.doc);
+  if (collected.refs.length === 0) return null;
+
+  const labelMap = numberLabels(collected.refs);
+  const needsRenumber = [...labelMap].some(([oldLabel, newLabel]) => oldLabel !== newLabel);
+  if (!needsRenumber) return null;
+
+  return rebuildFootnotes(state, refType, defType, collected, labelMap);
+}
+
+/**
+ * Remove orphaned definitions and renumber in one transaction. Only
+ * definitions whose label is in `remainingRefLabels` keep their content.
+ */
+export function createCleanupAndRenumberTransaction(
+  state: EditorState,
+  remainingRefLabels: Set<string>,
+  refType: NodeType,
+  defType: NodeType,
+  preCollected?: FootnoteNodes,
+): Transaction | null {
+  const collected = preCollected ?? collectFootnoteNodes(state.doc);
+  return rebuildFootnotes(
+    state,
+    refType,
+    defType,
+    collected,
+    numberLabels(collected.refs),
+    remainingRefLabels,
+  );
+}

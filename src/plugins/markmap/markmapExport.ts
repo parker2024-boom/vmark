@@ -3,6 +3,8 @@
  *
  * Adds a PNG export button to markmap mindmap containers.
  * Renders SVG with the chosen theme, converts to 2x PNG, and saves via Tauri dialog.
+ *
+ * @module plugins/markmap/markmapExport
  */
 
 import { save } from "@tauri-apps/plugin-dialog";

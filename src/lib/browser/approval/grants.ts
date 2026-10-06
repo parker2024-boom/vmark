@@ -1,5 +1,5 @@
 /**
- * Operation-based approval + scoped standing grants (WI-2.6 / R5).
+ * Operation-based approval + scoped standing grants (R5).
  *
  * Purpose: decide whether an AI-initiated browser action may proceed without a
  * fresh human approval. A **standing grant** scopes what the AI may do
@@ -39,8 +39,8 @@ export const KNOWN_OPERATIONS: ReadonlySet<string> = new Set(BROWSER_OPERATIONS)
 
 /** Operations the AI may NEVER perform autonomously, even with a grant. An
  *  AI-chosen file upload is an exfiltration path — upload targets are always
- *  human-chosen (WI-1.7). The `upload` membership is SOURCED from the UX policy
- *  (WI-NB8.1): `uxPolicy.aiMayChooseUploadFile()` is the security decision, so
+ *  human-chosen. The `upload` membership is SOURCED from the UX policy:
+ *  `uxPolicy.aiMayChooseUploadFile()` is the security decision, so
  *  this set defers to it rather than hardcoding the answer a second time —
  *  which makes `uxPolicy` load-bearing in production instead of a dormant
  *  decision record. */
@@ -52,7 +52,7 @@ const NEVER_AUTOMATED: ReadonlySet<string> = new Set<BrowserOperation>([
  *  become a standing grant — an origin can't be "remembered" for them. Raw
  *  isolated-world `eval` (`execute_js`) is too powerful to grant once and reuse
  *  silently; every call raises a fresh approval showing the script (ADR-A6).
- *  `record` (WI-NB7.3) joins them: starting a recording of the user's own actions
+ *  `record` joins them: starting a recording of the user's own actions
  *  is a per-use consent, never a standing "this site may be recorded" permission. */
 export const NEVER_GRANTABLE: ReadonlySet<string> = new Set<BrowserOperation>(["eval", "session", "record"]);
 

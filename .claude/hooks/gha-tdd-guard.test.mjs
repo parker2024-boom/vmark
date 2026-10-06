@@ -140,6 +140,9 @@ describe("gha-tdd-guard — embedded-browser scope is live", () => {
       "src/lib/sites/__probe__.ts",
       "src/components/Browser/__probe__.tsx",
       "src/services/browser/__probe__.ts",
+      // The automation lease's state moved out of services/browser into
+      // src/stores; it keeps the guard it had there.
+      "src/stores/browserLease__probe__.ts",
       // "src/stores/webWorkflowStore.ts" used to be asserted here as an
       // exact-path store scope. It never existed, so it blocked on the
       // no-such-file branch and this row proved nothing — WI-19 removed both

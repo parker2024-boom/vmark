@@ -4,11 +4,11 @@
 //! files. Snapshots preserve the full relative path from the workspace root
 //! to prevent filename collisions between files in different directories.
 //!
-//! The copy is bounded and cancellable (#267, `snapshot_copy.rs`): a cancel
+//! The copy is bounded and cancellable (`snapshot_copy.rs`): a cancel
 //! that lands while the snapshot is being taken is observed within one
 //! chunk, and a file past `MAX_SNAPSHOT_FILE_BYTES` — or a snapshot past
 //! `MAX_SNAPSHOT_TOTAL_BYTES` — refuses the run rather than copying without
-//! end. A snapshot directory is CREATED, never reused (#264): an execution
+//! end. A snapshot directory is CREATED, never reused: an execution
 //! id that already has one is refused, so a repeated id cannot overwrite or
 //! mix with an earlier run's files.
 
@@ -83,7 +83,7 @@ pub async fn create_snapshot(
     .await
 }
 
-/// [`create_snapshot`] that stops as soon as `should_stop` says so (#267) —
+/// [`create_snapshot`] that stops as soon as `should_stop` says so —
 /// the runner's cancel flag, checked between chunks of every copy.
 pub async fn create_snapshot_unless(
     app_data_dir: &Path,
@@ -101,7 +101,7 @@ pub async fn create_snapshot_unless(
         .await
         .map_err(|e| format!("Failed to create snapshot directory: {}", e))?;
     // `create_dir`, not `create_dir_all`: this id's directory must not exist
-    // yet (#264). Reusing an id would write this run's files over — and
+    // yet. Reusing an id would write this run's files over — and
     // among — an earlier run's.
     tokio::fs::create_dir(&snapshot_dir)
         .await
@@ -115,7 +115,7 @@ pub async fn create_snapshot_unless(
     // Everything from here can fail, and until `metadata.json` lands the
     // directory is not a recovery point — it is a partial copy of the user's
     // files under an id nothing can reuse, because the `create_dir` above is
-    // the reuse guard (audit #554). So the body is fallible-in-one-place and
+    // the reuse guard. So the body is fallible-in-one-place and
     // the directory is removed unless it completes.
     let outcome = fill_snapshot(
         &snapshot_dir,
@@ -141,7 +141,7 @@ pub async fn create_snapshot_unless(
 
 /// Copy every file into an already-created `snapshot_dir` and write its
 /// metadata. Split out so the whole fallible span has one exit for the
-/// caller's cleanup to hang on (#554).
+/// caller's cleanup to hang on.
 async fn fill_snapshot(
     snapshot_dir: &Path,
     execution_id: &str,
@@ -168,7 +168,7 @@ async fn fill_snapshot(
         let path = match super::sandbox::validate_path(&path_str, workspace_root) {
             Ok(p) => p,
             Err(e) => {
-                log::warn!("Skipping snapshot of '{}' — {}", path_str, e);
+                log::warn!("Skipping snapshot of {:?} — {}", path_str, e);
                 continue;
             }
         };
@@ -182,7 +182,7 @@ async fn fill_snapshot(
 
         // Use relative path from workspace root to preserve directory structure
         let Ok(relative) = path.strip_prefix(&canonical_root) else {
-            log::warn!("Skipping snapshot of '{}' — outside workspace", path_str);
+            log::warn!("Skipping snapshot of {:?} — outside workspace", path_str);
             continue;
         };
         let dest = snapshot_dir.join(relative);
@@ -195,7 +195,7 @@ async fn fill_snapshot(
         }
 
         // Bounded on the bytes copied, by the per-file cap or by what is
-        // left of the total, and cancellable between chunks (#267).
+        // left of the total, and cancellable between chunks.
         let remaining = MAX_SNAPSHOT_TOTAL_BYTES.saturating_sub(total_bytes);
         let limit = MAX_SNAPSHOT_FILE_BYTES.min(remaining);
         let copied = copy_bounded(&path, &dest, limit, should_stop)
@@ -255,7 +255,7 @@ async fn cleanup_old_snapshots(app_data_dir: &Path) {
     let mut entries: Vec<(PathBuf, u64)> = Vec::new();
     if let Ok(mut dir) = tokio::fs::read_dir(&snapshots_dir).await {
         while let Ok(Some(entry)) = dir.next_entry().await {
-            // The same bounded, id-checked loader list and restore use (#76).
+            // The same bounded, id-checked loader list and restore use.
             let id = entry.file_name().to_string_lossy().into_owned();
             if let Ok(info) = super::snapshot_restore::load_metadata(&entry.path(), &id).await {
                 entries.push((entry.path(), info.timestamp));

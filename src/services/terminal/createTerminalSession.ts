@@ -7,35 +7,34 @@
  * between call sites — the panel/init auto-create, the tab bar's +,
  * "Open Terminal Here", and Run-in-Terminal's reuse-or-create all did it by
  * hand before. `canCreateTerminalSessionHere` is the AUTHORITATIVE can-create
- * predicate: it computes the same creation-time union (D-T5) the slice's cap
+ * predicate: it computes the same creation-time union (D-T5) the store's cap
  * gate applies, owner included, so a UI gate can never say yes while creation
  * says no.
  *
- * @coordinates-with stores/uiStore/terminalSlice.ts — terminalCreateSession + creationUnion
+ * @coordinates-with stores/terminalStore/sessionActions.ts — terminalCreateSession + creationUnion
  * @coordinates-with resolveTerminalOwnerInstanceId.ts — the D-T1 carve-outs
  * @module services/terminal/createTerminalSession
  */
-import { MAX_TERMINAL_SESSIONS, useUIStore } from "@/stores/uiStore";
-import { creationUnion } from "@/stores/uiStore/terminalSlice";
-import type { TerminalSession } from "@/stores/uiStore/types";
+import { creationUnion } from "@/stores/terminalStore/sessionActions";
+import { MAX_TERMINAL_SESSIONS, useTerminalStore, type TerminalSession } from "@/stores/terminalStore";
 import { resolveTerminalOwnerInstanceId } from "./resolveTerminalOwnerInstanceId";
 
 /** Whether a session created NOW in this window would pass the cap gate —
- *  the SAME union the slice applies, owner and all (never a bare count). */
+ *  the SAME union the store applies, owner and all (never a bare count). */
 export function canCreateTerminalSessionHere(windowLabel: string): boolean {
   const owner = resolveTerminalOwnerInstanceId(windowLabel);
-  const sessions = useUIStore.getState().terminal.sessions;
+  const sessions = useTerminalStore.getState().sessions;
   return creationUnion(sessions, owner).length < MAX_TERMINAL_SESSIONS;
 }
 
 /** Create a session in the active scope (owner stamped per D-T1's carve-outs).
- *  Returns null at the creation-union cap, exactly like the slice action. */
+ *  Returns null at the creation-union cap, exactly like the store action. */
 export function createTerminalSessionInScope(
   windowLabel: string,
   options?: { requestedCwd?: string },
 ): TerminalSession | null {
   const owner = resolveTerminalOwnerInstanceId(windowLabel);
-  return useUIStore.getState().terminalCreateSession({
+  return useTerminalStore.getState().terminalCreateSession({
     ...(options?.requestedCwd ? { requestedCwd: options.requestedCwd } : {}),
     ...(owner ? { ownerInstanceId: owner } : {}),
   });

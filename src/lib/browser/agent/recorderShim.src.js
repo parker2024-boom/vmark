@@ -1,12 +1,12 @@
-// The page-world recorder-capture shim (WI-NB7.1) — THE ONLY COPY of the capture
+// The page-world recorder-capture shim — THE ONLY COPY of the capture
 // logic, written as a BODY. The includer wraps it, with the shared perception core
 // first, as `(function(){ <agentCore.src.js> <this file> })();`. Rust
 // (`recorder_shim_macos.rs`) concat!s exactly that for injection into AI-owned tabs'
 // page world at document start; `recorderShim.ts` assembles the identical string as
 // RECORDER_SHIM_SRC, which `recorderShim.test.ts` (jsdom) and
 // `recorder.webkit.test.ts` (real WebKit) execute — the tested bytes ARE the shipped
-// bytes. `__vmarkRole` / `__vmarkName` / `__vmarkParent` come from the core (audit
-// 2026-09-03 S-02): the recorder's own role and name rules had drifted from the
+// bytes. `__vmarkRole` / `__vmarkName` / `__vmarkParent` come from the core (an
+// audit finding): the recorder's own role and name rules had drifted from the
 // replayer's, so it emitted locators the replayer could not resolve. Now a recorded
 // locator resolves by construction; a target the core gives no role is recorded
 // WITHOUT `role`, and the converter turns that into a human `confirm:` step.
@@ -30,7 +30,7 @@
 // It records the LOCATOR (ARIA role + accessible name) and, for a typed field, a
 // `sensitive` HINT — NEVER the typed value. The sensitivity rules, the two marks
 // that carry an observation across an attribute rewrite, and the vocabulary that
-// names a secret all live in `recorderShimSensitivity.src.js` (S-11, WI-FL6.4 +
+// names a secret all live in `recorderShimSensitivity.src.js` (S-11 and
 // audit 20260907), which this file is concatenated with. A value never enters this
 // buffer; trusted host-side redaction (recorder.ts) makes the final call.
 //
@@ -133,10 +133,10 @@ var ACTIONABLE_ROLE = /^(button|link|checkbox|radio|switch|tab|menuitem|menuitem
 // anywhere above falls back to the clicked element itself. A <label> answers
 // with its own control, but only once nothing clickable has been found BELOW
 // it — resolving the label FIRST recorded a link inside "I accept the [terms]"
-// as a checkbox toggle (audit R2, #772) — and an actionable ancestor above a
+// as a checkbox toggle — and an actionable ancestor above a
 // control-less label still wins, because the walk simply continues.
 //
-// The exit condition is STRUCTURAL, not numeric (audit R3 #773): 8 hops read as
+// The exit condition is STRUCTURAL, not numeric: 8 hops read as
 // a safety bound and behaved as a claim about markup depth, stopping inside a
 // design-system button's own icon/svg/g/path wrappers and recording the roleless
 // inner node. WALK_BACKSTOP only guards a parent chain that never terminates.
@@ -173,7 +173,7 @@ function locator(type, el) {
 }
 
 // The ONE way a field commit is recorded — `change` and contenteditable
-// focusout alike (audit R3 #779). Written twice before.
+// focusout alike. Written twice before.
 function recordTypeCommit(el) {
   flushSensitivity();
   var ev = locator("type", el);
@@ -255,8 +255,8 @@ try {
         var el = target(e);
         el = el && el.nodeType === 1 ? editingHost(el) : null;
         if (!el || !dirtyEditable) return;
-        // Moving BETWEEN descendants of one editing host is not leaving it (audit
-        // R3 #778): a focusable widget inside made every hop commit a `type` step
+        // Moving BETWEEN descendants of one editing host is not leaving it:
+        // a focusable widget inside made every hop commit a `type` step
         // and forget the edit. A null relatedTarget means focus left the document.
         var to = e.relatedTarget;
         if (to && to.nodeType === 1 && el.contains(to)) return;

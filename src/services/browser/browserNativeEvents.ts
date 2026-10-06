@@ -1,5 +1,5 @@
 /**
- * The fan-out hub for the embedded browser's native events (audit round 3, #80).
+ * The fan-out hub for the embedded browser's native events.
  *
  * Purpose: hold ONE Tauri subscription per native event, decode each payload once
  * through `browserNativeEventDecoder`, and deliver the typed event to every
@@ -13,7 +13,7 @@
  *    listeners, the last unsubscribe unlistens them. An unsubscribe that lands
  *    before `listen()` resolved undoes the registration when it does.
  *  - Each event's registration is retried with backoff and every failure is logged —
- *    a silent registration failure was a dead tab (#81). The subscription's `ready`
+ *    a silent registration failure was a dead tab. The subscription's `ready`
  *    resolves once every event is live and REJECTS once one of them has spent its
  *    budget: the UI consumer ignores it (it warned and carries on with whatever is
  *    live), the broker's `start()` propagates it so an MCP caller fails loudly

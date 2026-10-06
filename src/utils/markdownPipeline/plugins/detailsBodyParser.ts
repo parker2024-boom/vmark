@@ -4,7 +4,7 @@
  *
  * The body dialect deliberately EXCLUDES `remarkDetailsBlock`: that is what
  * stops a body parser needing a body parser. Nested `<details>` are handled by
- * the outer pass's depth tracking (WI-3.1). Because it excludes that plugin,
+ * the outer pass's depth tracking. Because it excludes that plugin,
  * the chain can be built here from leaf imports without touching the document
  * chain — so there is no cycle, and no need for anyone to import `dialect.ts`
  * to make the plugin work.

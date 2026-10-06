@@ -2,7 +2,7 @@
  * TabStripButton
  *
  * Purpose: the one add/close button for the tab strips that use it — the
- * document strip (StatusBar/Tab) and the browser page tabs. Before WI-UI2.3
+ * document strip (StatusBar/Tab) and the browser page tabs. Previously
  * each strip drew its own: three sizes, two radii, two glyph sizes. The
  * terminal tab bar was NOT adopted: its buttons (new/swap/restart/close) are
  * icon ACTIONS on raw `.vm-icon-btn--sm` elements, not strip add/close

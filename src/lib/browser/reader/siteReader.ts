@@ -1,24 +1,24 @@
 /**
- * Pluggable page readers (WI-3.3).
+ * Pluggable page readers.
  *
  * Purpose: the plugin contract that lets a site opt into a bespoke reader while
- * everything else falls back to the generic one (WI-2.4). A `SiteReader` is
+ * everything else falls back to the generic one. A `SiteReader` is
  * chosen by URL match; the built-in `genericReader` matches any http(s) page.
  * This keeps the common case zero-config and the special cases (a site whose DOM
  * the generic heuristic mangles) a small, isolated plugin — hardened against a
  * fixture corpus.
  *
- * WIRED (WI-NB4.1/4.2): `browser_read.extract` is the production consumer.
+ * WIRED: `browser_read.extract` is the production consumer.
  * Readers register ATOMICALLY with their manifest (`registerSite(manifest,
  * reader)`), and `registry.readerForUrl` is the dispatch point — origin
  * security from `dispatchSite`, URL refinement from the reader's own `match`,
- * `genericReader` as the fallback. `health.ts` was deleted in the same pass
- * (WI-NB4.4): its probe contract had no honest consumer without the
+ * `genericReader` as the fallback. `health.ts` was deleted in the same pass:
+ * its probe contract had no honest consumer without the
  * credentialed site flows that left with `SitePublisher`.
  *
- * PUBLISHING WAS REMOVED (WI-DP1.2, 2026-08-09). `SitePublisher`, `PublishInput`
+ * PUBLISHING WAS REMOVED (WI-DP1.2). `SitePublisher`, `PublishInput`
  * and `PublishResult` were declared here "for symmetry" against an
- * implementation that would land in WI-3.4. Nothing ever imported them, and the
+ * implementation that was planned but never landed. Nothing ever imported them, and the
  * header's own warning said the draft-only guarantee was documented but
  * unenforced by either the type or the driver. A contract with no implementation
  * and no caller is not symmetry, it is a promise the compiler cannot keep — so

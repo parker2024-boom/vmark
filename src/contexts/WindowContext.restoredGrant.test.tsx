@@ -10,17 +10,17 @@
  * Rust for the grant and waits for the answer before anything reads the tree.
  *
  * Every mock is a module boundary WindowContext imports; the grant is a
- * deferred `invoke` so a test can hold it pending.
+ * deferred `invoke` so a test can hold it pending. Startup file opening and the
+ * open policy (which derives a file's workspace) run for real.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, waitFor } from "@testing-library/react";
 
-const { mockInvoke, mockOpenWorkspaceWithConfig, mockDerivedRoot } = vi.hoisted(() => ({
+const { mockInvoke, mockOpenWorkspaceWithConfig } = vi.hoisted(() => ({
   mockInvoke: vi.fn((_cmd: string, _args?: unknown): Promise<unknown> => Promise.resolve(null)),
   mockOpenWorkspaceWithConfig: vi.fn(
     (_root: string, _options?: unknown): Promise<null> => Promise.resolve(null),
   ),
-  mockDerivedRoot: vi.fn((_file: string): string | null => null),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mockInvoke }));
@@ -42,20 +42,14 @@ vi.mock("./tabTransferHandlers", () => ({
   handleTabTransfer: vi.fn(() => Promise.resolve(false)),
   handleTabRemovalRequest: vi.fn(),
 }));
-vi.mock("./startupFileOpen", () => ({
-  openStartupContent: vi.fn(() => Promise.resolve()),
-  parseStartupFilesParam: vi.fn(() => []),
-}));
-vi.mock("./prepareWindowStorage", () => ({ prepareWindowStorage: vi.fn() }));
 vi.mock("@/services/persistence/windowBrowserSession", () => ({
   restoreWindowBrowserSession: vi.fn(),
 }));
 vi.mock("@/hooks/useWorkspaceSync", () => ({ useWorkspaceSync: vi.fn() }));
-vi.mock("../utils/openPolicy", () => ({
-  resolveWorkspaceRootForExternalFile: mockDerivedRoot,
-}));
 
 import { WindowProvider } from "./WindowContext";
+import { useTabStore } from "@/stores/tabStore";
+import { useDocumentStore } from "@/stores/documentStore";
 
 const SLOW_ROOT = "/Volumes/slow/proj";
 
@@ -93,7 +87,12 @@ async function settle(): Promise<void> {
 beforeEach(() => {
   vi.clearAllMocks();
   mockInvoke.mockImplementation(() => Promise.resolve(null));
-  mockDerivedRoot.mockReturnValue(null);
+  // Startup opening is real, so a file an earlier case opened is a real tab —
+  // and a window that already has tabs skips its startup init entirely.
+  useTabStore.getState().removeWindow("main");
+  for (const id of Object.keys(useDocumentStore.getState().documents)) {
+    useDocumentStore.getState().removeDocument(id);
+  }
 });
 
 describe("a window restored onto a workspace waits for its grant (#38)", () => {
@@ -116,8 +115,8 @@ describe("a window restored onto a workspace waits for its grant (#38)", () => {
   });
 
   it("does the same for the workspace derived from the file it opens", async () => {
+    // The real open policy derives the workspace from the file's folder.
     const grant = holdTheGrant();
-    mockDerivedRoot.mockReturnValue(SLOW_ROOT);
 
     startWith(`?file=${encodeURIComponent(`${SLOW_ROOT}/README.md`)}`);
 

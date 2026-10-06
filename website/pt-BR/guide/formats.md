@@ -25,7 +25,7 @@ Na primeira execução após atualizar para o suporte a múltiplos formatos, o V
 |---|---|---|---|---|
 | Markdown | `.md`, `.markdown`, `.mdown`, `.mkd`, `.mdx` | sempre ativo | modos WYSIWYG + Fonte | prosa renderizada |
 | Texto simples | `.txt` | sempre ativo | fonte | — |
-| Dados — YAML | `.yaml`, `.yml` | sempre ativo | fonte + árvore | árvore navegável, com reconhecimento de esquema (GitHub Actions) |
+| Dados — YAML | `.yaml`, `.yml` | sempre ativo | fonte + árvore | árvore navegável, com reconhecimento de esquema (GitHub Actions, workflows do VMark) |
 | Dados — JSON | `.json`, `.jsonl` | requer a alternância **Formatos de dados** | fonte + árvore | árvore JSON navegável, com reconhecimento de esquema (`package.json`) |
 | Dados — TOML | `.toml` | requer a alternância **Formatos de dados** | fonte + árvore | árvore navegável, com reconhecimento de esquema (`Cargo.toml`, `pyproject.toml`) |
 | Diagramas | `.mmd` | requer a alternância **Diagramas e SVG** | fonte + renderização | diagrama Mermaid ao vivo |
@@ -78,7 +78,8 @@ Como funciona e o que esperar:
   plataforma, então o suporte acompanha o que a webview do seu sistema consegue decodificar. No macOS
   isso é amplo — HEIC, TIFF, `.mov`/H.264 e FLAC funcionam. Formatos que a
   webview não consegue decodificar (por exemplo, `.mkv`, `.avi`, `.wmv`) ainda abrem, mostrando um
-  painel alternativo com **Abrir com o aplicativo padrão** e **Mostrar no Finder**.
+  painel alternativo com **Abrir com o aplicativo padrão** e **Mostrar no Finder**
+  (**Mostrar no Explorador** no Windows, **Mostrar no gerenciador de arquivos** no Linux).
 - **Somente leitura.** Abas de mídia nunca ficam com alterações pendentes e fecham sem pedir para salvar.
 
 ## Prévias com reconhecimento de esquema
@@ -91,6 +92,14 @@ Abre com a bancada de workflow: o canvas interativo do DAG de jobs mais um edito
 
 - Detecção por caminho: um arquivo `.yml` / `.yaml` em `.github/workflows/` é roteado para o renderizador de workflow — mesmo com YAML malformado, você vê a visualização degradada com diagnósticos em vez de uma árvore em branco. (O arquivo deve chegar primeiro ao adaptador YAML; isso requer a extensão `.yml`/`.yaml`.)
 - Detecção por conteúdo: chaves de nível superior `on:` e `jobs:`.
+
+### Workflow do VMark (`steps:` no nível superior)
+
+Abre com o painel de execução de workflow: uma barra de ferramentas **Executar** / **Cancelar** com uma linha de status, o grafo de etapas ao vivo (ou o erro de análise) e **Restaurar arquivos** depois de uma execução que gravou arquivos. Veja o [guia de Workflows](/pt-BR/guide/workflows).
+
+- Detecção por caminho: nunca em `.github/workflows/` — o GitHub é dono dessa pasta.
+- Detecção por conteúdo: o YAML é analisado sem erros, não tem `jobs:` no nível superior e tem uma lista `steps:` no nível superior em que o `uses:` de pelo menos uma etapa começa com `genie/`, `action/` ou `webhook/`. YAML quebrado nunca é um workflow do VMark.
+- O painel requer **Configurações → Avançado → Motor de workflow**. Com o motor desativado, o arquivo mostra a árvore YAML simples (a menos que uma execução iniciada nesta aba ainda esteja ativa, para que o seu Cancelar continue acessível).
 
 ### `Cargo.toml`
 
@@ -121,6 +130,12 @@ Abre com uma árvore de dependências Python — tanto PEP 621 (`[project]` + `[
 - **Formatos visuais** (Mermaid, SVG, HTML) são exibidos no painel de fonte com a visualização renderizada no painel direito. A prévia é renderizada com prioridade menor que a sua digitação, então, em um documento grande, ela acompanha um instante atrás do cursor em vez de ser renderizada de novo a cada tecla.
 - **Formatos de código** abrem como visualizadores com realce de sintaxe; ative a edição no local ou abra no seu editor externo (veja abaixo).
 
+## Dialeto Markdown
+
+O VMark lê e grava Markdown com o remark (micromark por baixo): CommonMark, mais GitHub Flavored Markdown (tabelas, listas de tarefas, tachado com `~~`, autolinks, notas de rodapé), front matter YAML, matemática `$…$` / `$$…$$`, wiki links (`[[target]]`), alertas do GitHub (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`), blocos `<details>`, `[TOC]` e quatro marcas inline: `==highlight==`, `~subscript~`, `^superscript^` e `++underline++`. Um til simples é subscrito, nunca tachado.
+
+**Limite de aninhamento.** O WYSIWYG suporta citações e listas aninhadas até 1000 níveis de profundidade. Um documento mais profundo abre no **modo Fonte** com uma mensagem informando a profundidade, e a barra de status mostra *"Aberto no modo Fonte (não pode ser exibido no WYSIWYG)."* Enquanto estiver nesse estado, o arquivo fica protegido contra ser sobrescrito pelo editor rico. Reduza o aninhamento e então use **Mudar para WYSIWYG**. Blocos de código cercados, quebras temáticas e ênfase inline não contam para o limite. Veja também [Arquivos grandes](/pt-BR/guide/large-files).
+
 ## Como o VMark decide o tipo de um arquivo
 
 O VMark trata o **markdown como uma lista de permissões, não como padrão**. A regra, em ordem:
@@ -132,6 +147,25 @@ O VMark trata o **markdown como uma lista de permissões, não como padrão**. A
 Isso significa que um arquivo de configuração nunca é renderizado silenciosamente como markdown. Um `.env.local` abre como texto simples, com suas linhas `KEY=value`, comentários `#` e sublinhados exatamente como foram digitados.
 
 Famílias de dotfiles são reconhecidas em grupo: uma substituição em `.env` vale para `.env.local`, `.env.production` e assim por diante.
+
+### Abrindo arquivos a partir do sistema
+
+O instalador registra o VMark no seu sistema operacional como editor destes tipos de arquivo, para que eles apareçam em **Abrir com** e possam ser abertos no VMark com um clique duplo:
+
+| Extensões | Registrado como |
+|---|---|
+| `.md`, `.markdown`, `.mdown`, `.mkd`, `.mdx` | Markdown Document |
+| `.txt` | Plain Text Document |
+| `.json`, `.jsonl` | JSON Document |
+| `.yaml`, `.yml` | YAML Document |
+| `.toml` | TOML Document |
+| `.mmd` | Mermaid Diagram |
+| `.svg` | SVG Image |
+| `.html`, `.htm` | HTML Document |
+
+No **Windows**, o instalador não assume um tipo de arquivo que outro programa já trata: para cada extensão que já tem um programa padrão, o VMark se adiciona a **Abrir com** e mantém esse padrão. Ele só se torna o padrão onde nada estava registrado — na prática, as extensões Markdown, e não `.txt`, `.html`, `.htm` ou `.svg`. Um padrão que você mesmo escolhe nas configurações do Windows sempre prevalece. A desinstalação restaura a entrada de menu **Novo → Documento de Texto** do Windows e o manipulador anterior.
+
+Um arquivo registrado só abre no VMark se o seu formato estiver habilitado (veja [Habilitando formatos](#habilitando-formatos)); caso contrário, ele abre como texto simples.
 
 ### Realce de sintaxe para arquivos simples
 
@@ -162,7 +196,7 @@ De acordo com o ADR-4 do plano multi-formato, a prévia HTML se apoia em três c
 2. **Sanitização com DOMPurify** executada primeiro — remove `<script>`, URLs `javascript:`, manipuladores de eventos inline, truques de base-href.
 3. **Injeção de CSP `<meta>`** — `default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; base-uri 'none';` — restringe o carregamento de recursos dentro do iframe.
 
-O validador exibe tags de script, URLs `javascript:` e manipuladores de eventos inline como avisos para que você veja o que está sendo bloqueado.
+O validador exibe tags de script, URLs `javascript:` e manipuladores de eventos inline como avisos para que você veja o que está sendo bloqueado. Depois que você [confia no arquivo](#previa-html-confiavel-opcional), eles passam a ser mostrados como informação, para que nada contradiga o banner de confiança. Duas mensagens dizem o que a prévia nunca permite, confiável ou não: um script externo (`<script src="…">`) nunca é carregado, já que nenhum script vem de um arquivo ou URL, e um link `javascript:` direcionado a outra janela ou à página de nível superior (`target="_top"`, `_blank` ou um `<base target>`) nunca navega, já que a prévia não pode sair de si mesma. A detecção lê as tags da página de forma aproximada; ela rotula as descobertas e nunca decide o que é executado — quem decide é o sandbox.
 
 A aprovação formal de segurança desta prévia ainda está pendente, e a prévia avisa isso em um aviso acima da página renderizada: **A prévia HTML é isolada, mas está aguardando a aprovação OWASP**. As três camadas acima estão em vigor; a etapa que falta é confirmá-las contra os payloads XSS do OWASP dentro da webview do aplicativo em execução.
 
@@ -221,7 +255,7 @@ relaxá-la — então nenhum atributo de iframe sozinho consegue fazer um script
 
 Para arquivos de código, o botão **Abrir no editor externo** no banner de somente leitura inicia o editor de sua escolha. Ordem de resolução:
 
-1. **Configurações → Formatos → Editor externo** (o campo da interface — veja [Configurações](/pt-BR/guide/settings#formatos)). Escolha um bundle `.app` no macOS, um executável no Linux/Windows, ou qualquer coisa que seu shell resolva.
+1. **Configurações → Formatos → Editor externo** (o campo da interface — veja [Configurações](/pt-BR/guide/settings#formatos)). Informe o **nome de um editor conhecido** (`code`, `cursor`, `zed`, `subl`, `bbedit`, `idea`, `vim`, `nvim`, `emacs`, `notepad++`, …) ou o **caminho completo** de um editor — um bundle `.app` no macOS, um executável no Linux/Windows. O campo contém um único programa, nunca argumentos; para passar argumentos, use `$VMARK_EXTERNAL_EDITOR`.
 2. `$VMARK_EXTERNAL_EDITOR` (sobrescrita de ambiente por projeto)
 3. `$VISUAL`
 4. `$EDITOR`
@@ -233,7 +267,16 @@ O VMark roteia através de um PATH de login-shell para que wrappers do VS Code /
 
 ### Barreira de segurança
 
-O comando Tauri `open_in_external_editor` rejeita:
+A própria configuração **Editor externo** é verificada antes de qualquer execução. O VMark recusa:
+
+- caracteres de shell (`;`, `|`, `&`, `` ` ``, `$`, `<`, `>`, aspas, quebras de linha) e um `-` inicial
+- um nome simples que não seja um editor que o VMark conheça — *"“X” não é um editor que o VMark reconheça pelo nome: informe o caminho completo do editor"*
+- um caminho relativo, um caminho com um segmento `..` ou uma barra final, ou um caminho que não existe
+- um programa que executa os arquivos que recebe em vez de abri-los — um shell (`sh`, `bash`, `zsh`, `pwsh`, `cmd`, …), um interpretador (`python`, `node`, `ruby`, `perl`, `osascript`, …), um lançador (`env`, `sudo`, `open`, `xdg-open`, …) ou um emulador de terminal — verificado tanto pelo nome que você digitou quanto pelo nome para o qual um link aponta
+
+As variáveis de ambiente da cadeia de fallback não são restritas: elas são definidas fora do VMark, por você.
+
+O comando Tauri `open_in_external_editor` também rejeita:
 
 - caminhos inexistentes
 - diretórios e outros arquivos não regulares (sockets, dispositivos)

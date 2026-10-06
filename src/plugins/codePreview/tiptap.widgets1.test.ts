@@ -481,16 +481,16 @@ describe("codePreview widget factory invocation — covers lines 263-354", () =>
 
     useBlockMathEditingStore.getState().exitEditing();
     viewResult.destroy!();
-    // Explicit timeout: this is the one markmap test that reaches the render
-    // path, so it pays for `Promise.all([import("markmap-lib"),
-    // import("markmap-view")])` (plugins/markmap/plugin.ts) — two d3-backed
-    // libraries, lazily loaded and NOT mocked here, because sibling tests in
-    // this file spy on the real `@/plugins/markmap`. `runAllTimersAsync` awaits
-    // that real settlement, and under full-suite parallel load the transform +
-    // eval exceeds the 5s default. It passes in isolation; it reddened the
-    // v0.9.16 pre-push gate. Same root cause and same remedy as the
-    // WorkflowCanvas lazy-chunk bump in df896e22.
-  }, 20_000);
+    // This is the one markmap test that reaches the render path, so it pays
+    // for `Promise.all([import("markmap-lib"), import("markmap-view")])`
+    // (plugins/markmap/plugin.ts) — two d3-backed libraries, lazily loaded and
+    // NOT mocked here, because sibling tests in this file spy on the real
+    // `@/plugins/markmap`. `runAllTimersAsync` awaits that real settlement,
+    // and under full-suite parallel load the transform + eval exceeded
+    // vitest's 5s default. The tier's liveness bound (`testTimeout` in
+    // vitest.config.ts) covers it; a per-test number below that bound would
+    // only measure how busy the machine is.
+  });
 
   it("live preview: updateLivePreview token cancellation — rapid calls only execute last (line 104)", async () => {
     const { useBlockMathEditingStore } = await import("@/stores/blockMathEditingStore");

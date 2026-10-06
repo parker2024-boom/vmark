@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * File-size regression gate (audit 20260612 deferred #2).
+ * File-size regression gate (deferred from an earlier audit).
  *
  * The project rule is ~300 lines per code file (AGENTS.md). 153 files
  * already exceed it; burning them all down is a long campaign. This gate
@@ -23,15 +23,19 @@ import { isMainModule } from "./lib/isMainModule.mjs";
 
 // ─── Pure, testable core ───
 
-// `server/mcp/src` was invisible to this gate until the 2026-07-28 MCP
-// audit named it (§4); `server/content/src` had the same blind spot until
-// the 2026-07-29 audit. Every workspace source tree must be listed.
-export const ROOTS = ["src", "src-tauri/src", "server/mcp/src", "server/content/src"];
+// `server/mcp/src` was invisible to this gate until an MCP
+// audit named it; `server/content/src` had the same blind spot until
+// a later audit. Every workspace source tree must be listed —
+// including `scripts`: the gates obey the rule they enforce, and with no
+// baseline entries (each over-limit gate was split instead). `.claude/hooks`
+// holds the Claude Code hooks the repo runs on every edit — code under the
+// same rule, with no baseline entries either.
+export const ROOTS = ["src", "src-tauri/src", "server/mcp/src", "server/content/src", "scripts", ".claude/hooks"];
 // .js/.mjs are code too — src/export/reader/vmark-reader.js bypassed the
-// gate entirely while every .ts file ratcheted (audit 20260729).
+// gate entirely while every .ts file ratcheted.
 export const EXTS = [".ts", ".tsx", ".rs", ".js", ".jsx", ".mjs"];
 export const BASELINE_PATH = "scripts/file-size-baseline.json";
-/** Separate, more generous cap for test/bench files (WI-7): suites grow
+/** Separate, more generous cap for test/bench files: suites grow
  * legitimately faster than production files, but 3,000-line suites are
  * maintainability debt too. Same ratchet-down semantics as the main gate. */
 export const DEFAULT_TEST_LIMIT = 800;
@@ -39,7 +43,7 @@ export const DEFAULT_TEST_LIMIT = 800;
 /**
  * Files named types.ts that are exempt because they are DECLARATIONS ONLY.
  * A blanket `types.ts` exemption let runtime-bearing code hide behind the
- * name (audit 20260729 C1); every entry here is a reviewed claim that the
+ * name; every entry here is a reviewed claim that the
  * file contains no runtime logic. Adding one requires reading the file.
  */
 export const TYPE_ONLY_ALLOWLIST = new Set([
@@ -71,7 +75,7 @@ const GENERATED_HEADER_LINES = 12;
 
 /**
  * A generated file: inside a `generated/` directory AND declaring itself so in
- * its header (WI-15). Exempt because the ~300-line rule protects HUMAN
+ * its header. Exempt because the ~300-line rule protects HUMAN
  * maintainability — a generated contract grows one block per operation, and
  * "split it" is not an action available to anyone. Drift is policed by its
  * own regenerate-and-compare gate instead.

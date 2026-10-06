@@ -38,7 +38,7 @@
  * @module plugins/latex/scheduleInlineMathRender
  */
 
-import { loadKatex, getKatexModule, isKatexLoaded, type KatexModule } from "./katexLoader";
+import { loadKatex, getKatexModule, isKatexLoaded, type KatexModule } from "@/plugins/shared/katexLoader";
 import { renderInlineMath } from "./inlineMathRenderCache";
 import { whenNearViewport } from "@/plugins/shared/nearViewport";
 import { editorScrollRoot } from "@/plugins/shared/editorScrollRoot";

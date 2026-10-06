@@ -61,8 +61,8 @@ export function fitAndResizePty(
   // Cancel any resize this entry had pending BEFORE fitting. If fit() throws
   // (hidden container), we return with no resize scheduled — otherwise a resize
   // queued by an earlier successful fit would still fire and push now-stale
-  // dimensions to the PTY, contradicting this function's cancellation contract
-  // (audit Low-15). A successful fit re-schedules below.
+  // dimensions to the PTY, contradicting this function's cancellation contract.
+  // A successful fit re-schedules below.
   clearTimeout(entry.ptyResizeTimer);
   entry.ptyResizeTimer = undefined;
 

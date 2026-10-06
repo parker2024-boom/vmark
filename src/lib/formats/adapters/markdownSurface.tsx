@@ -2,14 +2,14 @@
  * MarkdownEditorSurface — the markdown WYSIWYG rendering surface.
  *
  * Purpose: the component the markdown adapter's `wysiwygComponent` thunk
- *   loads. Split out of `markdown.tsx` by WI-13: the adapter module is
+ *   loads. Split out of `markdown.tsx`: the adapter module is
  *   evaluated by `bootstrapFormats()` in EVERY window before
  *   `import("./App")`, so keeping the surface in it meant Settings and
  *   PDF-export windows statically imported Tiptap + the CodeMirror markdown
  *   pack at cold start. Behavior is unchanged — only the module boundary
  *   moved, and with it the whole WYSIWYG chunk off the cold-start graph.
  *
- *   Extracted from the Editor.tsx body originally (WI-1A.3) so the format
+ *   Extracted from the Editor.tsx body originally so the format
  *   registry could dispatch it as kind="wysiwyg" without a circular reference
  *   back through Editor().
  *
@@ -37,7 +37,7 @@ import { TiptapEditorInner } from "@/components/Editor/TiptapEditor";
 import { MarkdownSplitView } from "@/components/Editor/MarkdownSplitView";
 import { HeadingPicker } from "@/components/Editor/HeadingPicker";
 import { DropZoneIndicator } from "@/components/Editor/DropZoneIndicator";
-// WI-19: the engine flag and its lazy panel live behind this slot, which has a
+// The engine flag and its lazy panel live behind this slot, which has a
 // test. The surface no longer knows the workflow engine exists.
 import { WorkflowEngineSlot } from "@/components/Editor/WorkflowPanel/WorkflowEngineSlot";
 

@@ -17,6 +17,7 @@
  *      to find the correct position and set selection there.
  *
  * @coordinates-with shared/listHelpers.ts — shared list item lookup and ancestor walk
+ * @module plugins/listClickFix/tiptap
  */
 
 import { Extension } from "@tiptap/core";

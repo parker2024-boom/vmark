@@ -1,12 +1,13 @@
 //! # External Editor
 //!
 //! Purpose: Launch the user's `$EDITOR` (or platform default) on a file
-//! path. Backs the WI-4.4 "Open in external editor" button surfaced
+//! path. Backs the "Open in external editor" button surfaced
 //! inside the read-only code viewer.
 //!
-//! Pipeline: frontend `invoke("open_in_external_editor", { path })` →
-//! `spawn_blocking` (path checks + spawn stay off the main thread) →
-//! resolve editor command via `$VMARK_EXTERNAL_EDITOR` → `$VISUAL` →
+//! Pipeline: frontend `invoke("open_in_external_editor", { path,
+//! editorOverride })` → `spawn_blocking` (path checks + spawn stay off the
+//! main thread) → validate the override (`override_guard`) → resolve editor
+//! command via the override → `$VMARK_EXTERNAL_EDITOR` → `$VISUAL` →
 //! `$EDITOR` → platform default → spawn detached → return.
 //!
 //! Key decisions:
@@ -14,8 +15,12 @@
 //!     through `ai_provider::login_shell_path()` (already used for
 //!     Codex / Claude CLI launch) so VS Code, Cursor, JetBrains
 //!     wrappers, etc. resolve.
-//!   - `ai_provider::build_command()` handles `.cmd` shims on Windows
-//!     transparently. Same pattern as elsewhere in the codebase.
+//!   - The override is webview-supplied, so it may only name an editor:
+//!     a known editor name or an existing path that is not an interpreter
+//!     or a shell (`override_guard.rs`). The env vars are not
+//!     webview-supplied and are not restricted.
+//!   - Spawned through `ai_provider::build_command()`, so a Windows `.cmd`
+//!     launcher (`code.cmd`) gets the file path as an escaped argument.
 //!   - Spawn detached: we don't wait for the editor to exit. The
 //!     Tauri command returns as soon as the child is launched.
 //!   - Best-effort: spawn failures return a `Result::Err` with a
@@ -29,87 +34,11 @@
 //!     override (a single absolute path, never split) or a wrapper script.
 
 use crate::ai_provider::{build_command, login_shell_path};
+use override_guard::validate_editor_override;
 use std::path::Path;
 
-/// Reject editor overrides that look like shell commands.
-///
-/// `editor_override` is webview-supplied (the GUI Settings value). The
-/// threat model is: a compromised webview (XSS-style attack) calls
-/// `invoke("open_in_external_editor", { editorOverride: "<malicious>" })`.
-/// We never invoke a shell, so the malicious string isn't *interpreted*
-/// as shell — but `python -c "..."` style overrides would still execute
-/// arbitrary code via the editor's own interpreter.
-///
-/// Mitigation: the override must be a SINGLE token (no whitespace, no
-/// args). Multi-arg invocations belong in `$VMARK_EXTERNAL_EDITOR` env
-/// var — env vars aren't webview-supplied so they can't be poisoned by
-/// XSS. Combined with the no-shell-metachar check and the exists-on-disk
-/// check, this leaves a webview attacker with only two options: pick a
-/// bare command name (where they don't control the args) or pick an
-/// existing absolute path (which they don't control either).
-///
-/// Returns the trimmed override on success, or an `Err` describing why
-/// the input was refused.
-fn validate_editor_override(raw: &str) -> Result<String, String> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return Ok(String::new());
-    }
-    // The entire override is treated as a single executable path or
-    // command name (NOT split into exe + args). Args belong in
-    // $VMARK_EXTERNAL_EDITOR env var, which isn't webview-supplied so
-    // an XSS attacker can't poison it.
-    //
-    // Reject shell metacharacters as defense-in-depth — they would
-    // never be interpreted (we don't shell-out) but accepting them
-    // here makes a future shell-out refactor a security regression
-    // by accident.
-    const FORBIDDEN: &[char] = &[
-        ';', '|', '&', '`', '$', '<', '>', '\n', '\r', '\0', '"', '\'',
-    ];
-    if let Some(c) = trimmed.chars().find(|c| FORBIDDEN.contains(c)) {
-        return Err(format!(
-            "external editor override contains forbidden character {c:?}; \
-             pick an executable path or app bundle without shell metacharacters"
-        ));
-    }
-    // Reject overrides that start with `-` — a bare leading-flag has
-    // no useful semantics for an executable path/name and matches the
-    // shape of "interpreter inline-code" exploits (`-c`, `--eval`, …).
-    if trimmed.starts_with('-') {
-        return Err(format!(
-            "external editor override must not start with '-' (looks like a \
-             command-line flag). Got: {trimmed:?}"
-        ));
-    }
-    let is_absolute = trimmed.starts_with('/')
-        || trimmed.starts_with('\\')
-        || (trimmed.len() >= 2 && trimmed.chars().nth(1) == Some(':'));
-    if is_absolute {
-        // Absolute path: must exist on disk. This blocks the XSS
-        // attacker from aiming the editor button at a writable
-        // download folder they control.
-        if !Path::new(trimmed).exists() {
-            return Err(format!(
-                "external editor override path '{trimmed}' does not exist"
-            ));
-        }
-    } else {
-        // Relative / bare-name override: must be a single token (no
-        // whitespace, no separators). Real macOS `.app` paths use
-        // spaces ("Visual Studio Code.app") but those are absolute and
-        // covered above. Bare names like `code` / `subl` are safe.
-        if trimmed.contains(char::is_whitespace) {
-            return Err(format!(
-                "external editor override with whitespace must be an absolute \
-                 path that exists on disk (e.g. /Applications/My App.app). To \
-                 pass arguments, set the $VMARK_EXTERNAL_EDITOR environment \
-                 variable instead. Got: {trimmed:?}"
-            ));
-        }
-    }
-    Ok(trimmed.to_string())
-}
+mod override_guard;
+mod program_names;
 
 /// Resolve which editor command to launch. Order:
 ///   1. `editor_override` from the GUI setting (explicit beats implicit;
@@ -224,11 +153,10 @@ fn open_in_external_editor_blocking(
     }
 
     // Validate the GUI override BEFORE feeding it into the resolution
-    // chain. This catches XSS-style attacks where the webview supplies
-    // `editor_override = "/usr/bin/python -c 'malicious'"` — the
-    // forbidden-character check rejects shell metacharacters and the
-    // existence check rejects absolute paths the user can't possibly
-    // have configured intentionally.
+    // chain. The webview supplies it, and `path` above can be a script
+    // (`.sh`, `.py`, `.rb`, `.js` are openable), so an override naming an
+    // interpreter would run the file instead of opening it: only a known
+    // editor name or an existing non-interpreter path gets through.
     let validated_override = match editor_override.as_deref() {
         Some(raw) => Some(validate_editor_override(raw)?),
         None => None,

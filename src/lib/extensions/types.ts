@@ -1,5 +1,5 @@
 /**
- * Extension descriptor contract — ADR-015 D1, WI-1.1.
+ * Extension descriptor contract — ADR-015 D1.
  *
  * Purpose: the single shape every VMark feature declares itself as, so that the
  * registry IS the composition rather than metadata describing it.

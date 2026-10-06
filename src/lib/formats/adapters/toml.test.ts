@@ -1,7 +1,7 @@
 // @vitest-environment node
 // WI-2.2 — TOML adapter tests.
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   __resetRegistry,
   dispatchEditor,
@@ -9,6 +9,13 @@ import {
 } from "../registry";
 import { tomlFormat, registerTomlFormat, tomlValidator } from "./toml";
 import { registerMarkdownFormat } from "./markdown";
+import { loadTomlParser } from "./tomlParser";
+
+// The parser loads on first use (tomlParser.ts); the validator answers
+// synchronously, so load it first.
+beforeAll(async () => {
+  await loadTomlParser();
+});
 
 describe("toml adapter", () => {
   beforeEach(() => __resetRegistry());

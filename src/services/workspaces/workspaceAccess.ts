@@ -26,8 +26,8 @@
  *     it does wait for Rust to say the dialog is SHOWN, so the caller can tell
  *     that from "another dialog is open" and from a failure.
  *
- * @coordinates-with src-tauri/src/workspace_grants/commands.rs — allow_workspace_access
- * @coordinates-with src-tauri/src/workspace_grants/picker.rs — pick_workspace_folder, request_workspace_confirmation
+ * @coordinates-with src-tauri/src/workspace/grants/commands.rs — allow_workspace_access
+ * @coordinates-with src-tauri/src/workspace/grants/picker.rs — pick_workspace_folder, request_workspace_confirmation
  * @coordinates-with contexts/WindowContext.tsx — a startup workspace waits for its grant
  * @coordinates-with services/persistence/resilience/_hotExitRestore.ts — so do restored ones
  * @coordinates-with services/commands/workspaceCommands.ts — File → Open Workspace (the picker)

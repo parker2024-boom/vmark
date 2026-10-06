@@ -3,7 +3,7 @@
 //! Pure — no Tauri, no locks, no i18n — so the rule can be read and tested on
 //! its own. `WorkflowRunnerState::request_cancel` applies it under the
 //! `current_execution` lock, which is what makes the match and the store one
-//! step (#273).
+//! step.
 //!
 //! @coordinates-with workflow/state.rs — the caller, and the lock
 //! @module workflow::state_cancel

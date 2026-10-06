@@ -74,3 +74,38 @@ describe("menu-commands barrier scope", () => {
     expect(signals.length, "success and failure paths both signal").toBeGreaterThanOrEqual(2);
   });
 });
+
+/**
+ * WI-RA7C.8 — the same join for the second barrier. `useWindowReady` makes
+ * every DOCUMENT window wait for its close listeners; the signal comes from
+ * `useWindowClose`, reached only through `useWindowLifecycle` →
+ * `DocumentWindowMount`, which `MainLayout` renders for document windows only.
+ */
+describe("close-listener barrier scope", () => {
+  it("mounts the close hook exactly where document windows mount", () => {
+    const lifecycle = readFileSync("src/hooks/lifecycle/useWindowLifecycle.ts", "utf8");
+    expect(lifecycle.match(/^\s*useWindowClose\(\);/gm) ?? []).toHaveLength(1);
+
+    const mount = readFileSync("src/hooks/lifecycle/DocumentWindowMount.tsx", "utf8");
+    expect(mount.match(/^\s*useWindowLifecycle\(\);/gm) ?? []).toHaveLength(1);
+
+    expect(APP).toContain("{isDocumentWindow && <DocumentWindowMount />}");
+    expect(APP.match(/<DocumentWindowMount\b/g) ?? []).toHaveLength(1);
+  });
+
+  it("signals on both ways out of the listener setup", () => {
+    const hook = readFileSync("src/hooks/useWindowClose.ts", "utf8");
+    // A setup that failed and said nothing would hold the handshake for its
+    // whole budget; one that said `true` would announce listeners that are
+    // not there.
+    expect(hook).toContain("signalCloseListenersMounted(true)");
+    expect(hook).toContain("signalCloseListenersMounted(false)");
+    expect(hook).not.toMatch(/signalCloseListenersMounted\(\s*\)/);
+  });
+
+  it("is waited on by the handshake, beside the menu barrier", () => {
+    const handshake = readFileSync("src/contexts/useWindowReady.ts", "utf8");
+    expect(handshake).toContain("waitForMenuCommands(");
+    expect(handshake).toContain("waitForCloseListeners(");
+  });
+});

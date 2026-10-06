@@ -1,3 +1,10 @@
+/**
+ * testSchema — a ProseMirror schema declaring the nodes and marks that the
+ * markdown pipeline tests parse into and serialize from.
+ *
+ * @module utils/markdownPipeline/testSchema
+ */
+
 import { Schema } from "@tiptap/pm/model";
 
 // Mirror of the production `blankLinesBefore` attribute (see

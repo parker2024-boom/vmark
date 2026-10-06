@@ -1,0 +1,37 @@
+# cargo-about configuration for the Rust half of THIRD_PARTY_LICENSES.txt,
+# read by scripts/gen-third-party-licenses.mjs (`cargo about generate --fail`).
+#
+# `accepted` is every license the shipped crate graph uses, most preferred
+# first: where a crate offers a choice ("MIT OR Apache-2.0"), the first
+# accepted license is the one reproduced. A crate under a license missing here
+# fails the generator, so a new license family is a decision, not an accident.
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "ISC",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Zlib",
+    "BSL-1.0",
+    "Unicode-3.0",
+    "MPL-2.0",
+    "MIT-0",
+    "CC0-1.0",
+]
+
+# The release matrix in .github/workflows/release.yml. Listing all four makes
+# every release leg generate the same file, whichever platform it runs on.
+targets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu",
+]
+
+# Build scripts and test-only crates are not distributed.
+ignore-build-dependencies = true
+ignore-dev-dependencies = true
+
+# Read license files from the crate sources only: an external lookup service
+# would make the output depend on the network at generation time.
+no-clearly-defined = true

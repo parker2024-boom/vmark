@@ -7,7 +7,7 @@
  * bridge parser extracts `type` as the request_type and forwards every other
  * key as args, so all extra fields here are flat (not nested under `args`).
  *
- * Origin: MCP pruning plan (2026-05-04, retired)
+ * Origin: MCP pruning plan (retired)
  */
 
 /**
@@ -21,7 +21,7 @@ export const MCP_PROTOCOL_VERSION = '0.3.0';
  * Bridge request types — every command the MCP server can send.
  *
  * GENERATED from `operationSchemas.ts`, which is the one declaration of the
- * payload contract (WI-15). This used to be a hand-written union kept in step
+ * payload contract. This used to be a hand-written union kept in step
  * with the Rust pass-through and the webview's `typeof` narrowing by nothing
  * but care; `pnpm lint:mcp-contracts` now proves the copies agree.
  */

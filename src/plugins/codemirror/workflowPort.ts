@@ -33,7 +33,7 @@ interface WorkflowPortState {
    *  cannot clobber each other. Absent key = no workflow. */
   gha: { byTab: Record<string, WorkflowIR> };
   view: { selectedJobId: string | null };
-  /** The preview writes are per tab too (#129), for the same reason. */
+  /** The preview writes are per tab too, for the same reason. */
   setGraph: (tabId: string, graph: WorkflowGraph | null, error?: string) => void;
   previewOpenPanel: (tabId: string) => void;
   previewClosePanel: (tabId: string) => void;

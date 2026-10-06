@@ -3,7 +3,7 @@
  * Single-line popup: input + icon buttons
  */
 
-/* Shell chrome comes from `.popup-container` (WI-UI3.2). */
+/* Shell chrome comes from `.popup-container`. */
 .link-popup {
   align-items: center;
   gap: var(--space-half);

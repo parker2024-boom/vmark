@@ -1,8 +1,12 @@
-// WI-4.1 — IR → Mermaid flowchart string.
-//
-// Plan §6 Phase 4. Pure function — no DOM, no renderer dependency.
-// One node per job; edges from needs[]. Reusable-workflow jobs get a
-// distinct class so the Mermaid stylesheet can color them.
+/**
+ * IR → Mermaid flowchart string, for exporting a workflow as a diagram.
+ *
+ * Pure function — no DOM, no renderer dependency.
+ * One node per job; edges from needs[]. Reusable-workflow jobs get a
+ * distinct class so the Mermaid stylesheet can color them.
+ *
+ * @module lib/ghaWorkflow/export/toMermaid
+ */
 
 import type { JobIR, MatrixIR, WorkflowIR } from "../types";
 import { expandMatrix } from "../parser/matrix";

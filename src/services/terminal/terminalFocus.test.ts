@@ -9,6 +9,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { useUIStore } from "@/stores/uiStore";
+import { useTerminalStore } from "@/stores/terminalStore";
 import { useEditorStore } from "@/stores/editorStore";
 import { registerTerminalResolver } from "./activeTerminal";
 import {
@@ -46,8 +47,8 @@ beforeEach(() => {
   useUIStore.setState({
     terminalVisible: false,
     sourceMode: false,
-    terminal: { ...useUIStore.getState().terminal, activeSessionId: null },
   });
+  useTerminalStore.setState({ activeSessionId: null });
   document.body.innerHTML = "";
 });
 
@@ -62,7 +63,7 @@ afterEach(() => {
 describe("focusActiveTerminal", () => {
   it("focuses the live terminal for the active session", () => {
     const focus = registerTerminal("s1");
-    useUIStore.setState({ terminal: { ...useUIStore.getState().terminal, activeSessionId: "s1" } });
+    useTerminalStore.setState({ activeSessionId: "s1" });
     expect(focusActiveTerminal()).toBe(true);
     expect(focus).toHaveBeenCalledOnce();
   });
@@ -73,7 +74,7 @@ describe("focusActiveTerminal", () => {
   });
 
   it("reports failure when the session has no mounted terminal yet", () => {
-    useUIStore.setState({ terminal: { ...useUIStore.getState().terminal, activeSessionId: "ghost" } });
+    useTerminalStore.setState({ activeSessionId: "ghost" });
     expect(focusActiveTerminal()).toBe(false);
   });
 });
@@ -81,7 +82,7 @@ describe("focusActiveTerminal", () => {
 describe("focusActiveTerminalSoon", () => {
   it("defers, because the panel is still display:none in the commit that showed it", async () => {
     const focus = registerTerminal("s1");
-    useUIStore.setState({ terminal: { ...useUIStore.getState().terminal, activeSessionId: "s1" } });
+    useTerminalStore.setState({ activeSessionId: "s1" });
     focusActiveTerminalSoon();
     expect(focus).not.toHaveBeenCalled();
     await new Promise((r) => requestAnimationFrame(() => r(null)));

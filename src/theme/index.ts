@@ -1,3 +1,10 @@
+/**
+ * Theme barrel — the public entry point of the theme system: the theme
+ * catalog, theme application, CSS variable names and terminal theme helpers.
+ *
+ * @module theme
+ */
+
 export { applyTheme, tokensToCssEntries } from "./applyTheme";
 export { cssVars } from "./cssVars";
 

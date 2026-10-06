@@ -6,7 +6,7 @@
 //! how one of them ends up asserting something the other does not.
 //!
 //! Both copies also named the scratch directory after the PROCESS ID and then
-//! guarded it with `exists()` (#253). That guard is real — a leftover directory
+//! guarded it with `exists()`. That guard is real — a leftover directory
 //! would make the destination VALID, and the case would render and fail for a
 //! reason it does not name — but the guard is a failure, not a fix: pids are
 //! reused, so one crashed run leaves the case red on every later run with that

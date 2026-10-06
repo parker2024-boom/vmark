@@ -175,12 +175,12 @@ describe("BreakdownPanel — grouped list", () => {
 
   // The only way to prove the cap holds is to exceed it, so this renders
   // RESULT_CAP + 5 = 205 rows through jsdom — by far the heaviest render in the
-  // suite. It measures ~4-6s, which straddles vitest's 5s default: it passes
-  // alone and intermittently times out under `--coverage` with a full worker
-  // pool — 20s was exceeded once on an otherwise idle machine as the suite
-  // grew, hence the current budget. The generous timeout is for the LOAD, not
-  // for the assertions, which are synchronous and either hold immediately or
-  // not at all; a real hang here would still fail, just later.
+  // suite. It measures ~4-6s alone, which straddled vitest's 5s default under
+  // `--coverage` with a full worker pool, and once exceeded 20s. It runs under
+  // the tier's liveness bound (`testTimeout` in vitest.config.ts) rather than
+  // a number of its own: the bound is for the LOAD, not for the assertions,
+  // which are synchronous and either hold immediately or not at all; a real
+  // hang here would still fail, just later.
   //
   // Shrinking the fixture is not an option — a cap test that renders fewer rows
   // than the cap tests nothing.
@@ -194,7 +194,7 @@ describe("BreakdownPanel — grouped list", () => {
     expect(
       screen.getByText(`Showing ${RESULT_CAP} of ${RESULT_CAP + 5} edges`),
     ).toBeInTheDocument();
-  }, 45000);
+  });
 });
 
 describe("BreakdownPanel — actions", () => {

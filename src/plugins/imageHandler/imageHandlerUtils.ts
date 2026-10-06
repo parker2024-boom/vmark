@@ -2,7 +2,7 @@
  * Image Handler Utilities
  *
  * Purpose: Shared utility functions for image handler operations —
- * path conversion, validation, view checking, toast positioning,
+ * file-URL conversion, the unsaved-document warning, toast positioning,
  * image file detection, and filename generation.
  *
  * @coordinates-with plugins/imageHandler/tiptap.ts — extension entry point
@@ -17,6 +17,10 @@ import i18n from "@/i18n";
 import { activeFilePathForCurrentWindow } from "@/plugins/shared/hostDocument";
 import { hasImageExtension } from "@/utils/imagePathDetection";
 import { imageHandlerWarn } from "@/utils/debug";
+import { isViewConnected } from "@/plugins/shared/imagePasteResolve";
+
+// The connectivity check is shared with Source mode; re-exported for this plugin.
+export { isViewConnected };
 
 /**
  * Convert a file:// URL to a filesystem path.
@@ -51,50 +55,12 @@ export async function showUnsavedDocWarning(): Promise<void> {
   );
 }
 
-/**
- * Check if editor view is still valid and connected.
- */
-export function isViewConnected(view: EditorView): boolean {
-  try {
-    return view.dom?.isConnected ?? false;
-  } catch {
-    return false;
-  }
-}
-
 /** Returns the file path of the active document in the current window, or null. */
 export function getActiveFilePathForCurrentWindow(): string | null {
   try {
     return activeFilePathForCurrentWindow();
   } catch (error) {
     imageHandlerWarn("Failed to get active file path:", error);
-    return null;
-  }
-}
-
-/**
- * Validate a local image path exists (async file check).
- */
-export async function validateLocalPath(path: string): Promise<boolean> {
-  try {
-    const { exists } = await import("@tauri-apps/plugin-fs");
-    return await exists(path);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Expand home path (~/) to absolute path.
- */
-export async function expandHomePath(path: string): Promise<string | null> {
-  if (!path.startsWith("~/")) return path;
-
-  try {
-    const { homeDir, join } = await import("@tauri-apps/api/path");
-    const home = await homeDir();
-    return await join(home, path.slice(2));
-  } catch {
     return null;
   }
 }

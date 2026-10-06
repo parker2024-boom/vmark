@@ -5,12 +5,12 @@
  * Uses CommonMark label normalization (case-insensitive, whitespace-collapsed).
  * First occurrence wins; second+ are flagged.
  *
- * Position is required only to REPORT, never to remember (audit R3 #816). The
+ * Position is required only to REPORT, never to remember. The
  * rule used to `return` before recording the label when a node carried no
  * position, so a positionless first occurrence made the next real one look
  * like the first and the duplicate went unreported.
  *
- * The dedup key is the parser's own `identifier` where it exists (#817).
+ * The dedup key is the parser's own `identifier` where it exists.
  * micromark normalizes it with CommonMark's case fold — `toLowerCase()`,
  * `toUpperCase()`, `toLowerCase()` again — which `normalizeLabel`'s single
  * `toLowerCase()` does not reproduce: Greek final sigma `ς` lowercases to
@@ -18,7 +18,9 @@
  * `normalizeLabel` stays as the fallback for synthetic trees with no
  * identifier, and `label` stays the string shown to the user. The reported
  * offset comes from `startOffset` — the shared answer to a position the parser
- * left without one (#856).
+ * left without one.
+ *
+ * @module lib/lintEngine/rules/noDuplicateDefs
  */
 
 import { visit } from "unist-util-visit";

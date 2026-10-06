@@ -2,7 +2,7 @@
 //!
 //! Purpose: split from `mod.rs` for the size limit, and because this is the
 //! one piece with real invariants rather than plumbing — settle-once,
-//! settle-on-drop, and (since WI-FL6.2) no progress after settling.
+//! settle-on-drop, and no progress after settling.
 //!
 //! It is passed IN rather than returned, because two of the three platforms
 //! cannot produce a result before the UI closure must return (ADR-PDF6):
@@ -17,17 +17,17 @@
 //!   - **Progress** goes through the sink, so a stage reported after the
 //!     outcome — WebKitGTK's `finished` after `failed` — is dropped: settling
 //!     CLOSES the reporter under the outcome lock, and the reporter refuses
-//!     what arrives after. ABANDONING closes it too (#457): the caller's
+//!     what arrives after. ABANDONING closes it too: the caller's
 //!     timeout has already reported failure, so a platform callback arriving
 //!     afterwards must not move the export dialog on to "finishing". The
-//!     reporter itself runs with that lock released (#231), so a sink closure
+//!     reporter itself runs with that lock released, so a sink closure
 //!     that re-enters the sink cannot deadlock. Call sites do not guard.
 //!   - **A `shown` phase**, for the print dialog only. Everything up to the
 //!     dialog is the app's own work and is bounded by a timeout; everything
-//!     after it is the user's time and is not (WI-FL6.3). Settling closes the
+//!     after it is the user's time and is not. Settling closes the
 //!     phase too, so a failure before the dialog never waits out the bound.
-//!   - **A claim, atomic with abandonment AND with settlement** (#227, #443,
-//!     #444 — all three take the outcome lock). A timeout in `wait.rs`
+//!   - **A claim, atomic with abandonment AND with settlement** (all three
+//!     take the outcome lock). A timeout in `wait.rs`
 //!     returns to the caller, but the platform work continues on the main
 //!     thread or in a native callback. The platform [`claim`](RenderSink::claim)s
 //!     the sink immediately before its irreversible step — presenting a
@@ -37,13 +37,13 @@
 //!     presenting a dialog for a command that already reported failure, and a
 //!     caller that loses learns the dialog IS (about to be) on screen and
 //!     keeps waiting rather than report a timeout over a live sheet.
-//!   - **The staging file** (#224). A render writes a sibling of the output,
+//!   - **The staging file**. A render writes a sibling of the output,
 //!     never the output; the caller publishes it on a DELIVERED `Ok`, and the
 //!     sink removes it in every other case — an `Err`, a delivery nobody
 //!     received because the caller had given up, an abandoned sink — so a
 //!     print that completes after its caller's timeout leaves nothing behind
 //!     and never touches the path a retry is writing.
-//!   - **The teardown** (#224, #227). A platform that builds a window arms
+//!   - **The teardown**. A platform that builds a window arms
 //!     the sink with its close; the caller's timeout runs it (`wait.rs` says
 //!     which timeouts), settling disarms it, and an unsettled Drop runs it —
 //!     `teardown.rs`. A timeout used to leave the window at the platform's
@@ -84,13 +84,13 @@ pub(crate) struct RenderSink<T = ()> {
     /// Render path only. `None` on the print path, where the dialog is the
     /// progress.
     progress: Option<ProgressReporter>,
-    /// The one word `claim` and `abandon` race on — `sink_phase.rs` (#227).
+    /// The one word `claim` and `abandon` race on — `sink_phase.rs`.
     phase: Phase,
     temp_html: PathBuf,
-    /// Render path only: the file the platform writes (#224). Kept for the
+    /// Render path only: the file the platform writes. Kept for the
     /// caller to publish on a delivered `Ok`; removed here otherwise.
     staging: Option<PathBuf>,
-    /// The platform's window close, for the caller's timeout (#224, #227).
+    /// The platform's window close, for the caller's timeout.
     pub(super) teardown: Teardown,
 }
 
@@ -138,7 +138,7 @@ impl<T> RenderSink<T> {
     /// reporter.
     ///
     /// The pending check is made under the outcome lock and the lock is
-    /// released BEFORE the reporter runs (#231); a settle racing this call
+    /// released BEFORE the reporter runs; a settle racing this call
     /// closes the reporter under that same lock, so the stage is refused
     /// there rather than let out after the result.
     pub(super) fn progress(&self, stage: PdfProgress) {
@@ -152,12 +152,12 @@ impl<T> RenderSink<T> {
 
     /// The platform is about to do the irreversible thing — present a dialog,
     /// start a print. `true` once, and never after the caller abandoned: the
-    /// same word `abandon` writes, so the two cannot both succeed (#227).
+    /// same word `abandon` writes, so the two cannot both succeed.
     /// Never after the outcome was delivered either — there is nothing left
     /// to present a dialog for.
     ///
     /// The settled check and the swap are ONE critical section under the
-    /// outcome lock (#443): separated, a `settle` between them left this
+    /// outcome lock: separated, a `settle` between them left this
     /// returning `true`, and the platform then presented a dialog — or
     /// printed into a staging file the settle had discarded — for a command
     /// that had already reported its outcome.
@@ -171,7 +171,7 @@ impl<T> RenderSink<T> {
     /// on the clock: a dialog that won the race is on screen and is waited
     /// for; an outcome that was already delivered is not lost.
     ///
-    /// Same one critical section as `claim` (#444): separated, a settle in
+    /// Same one critical section as `claim`: separated, a settle in
     /// between made this report `Marked` — "nothing was delivered" — over a
     /// success the caller was about to receive.
     pub(super) fn abandon(&self) -> Abandoned {
@@ -181,7 +181,7 @@ impl<T> RenderSink<T> {
         if pending.is_none() {
             return Abandoned::Settled;
         }
-        // Nobody is waiting for a stage any more (#457): a callback that
+        // Nobody is waiting for a stage any more: a callback that
         // arrives after the caller's timeout used to report `Finishing` for a
         // render the command had already failed. Closed under the SAME lock
         // `settle` closes it under, so a `progress` call that has just passed
@@ -207,7 +207,7 @@ impl<T> RenderSink<T> {
     ///
     /// The staging file survives only a DELIVERED `Ok` to a caller still
     /// waiting — that caller publishes it. An `Err`, a receiver that has gone
-    /// away, or an abandoned sink all remove it here (#224).
+    /// away, or an abandoned sink all remove it here.
     pub(super) fn settle(&self, result: Outcome<T>) {
         let (taken, abandoned) = {
             let mut pending = self.tx.lock().unwrap_or_else(|p| p.into_inner());
@@ -221,7 +221,7 @@ impl<T> RenderSink<T> {
             }
             // Read in the SAME critical section as the take: the
             // linearization point, past which `abandon` cannot swap the
-            // phase (#443, #444).
+            // phase.
             (taken, self.phase.is_abandoned())
         };
         if let Some(tx) = taken {

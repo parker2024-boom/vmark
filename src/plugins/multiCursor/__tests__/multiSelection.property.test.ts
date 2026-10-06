@@ -18,17 +18,17 @@
  * Mapping properties live in `multiSelectionMapping.property.test.ts`; the
  * contract itself is stated once in `multiSelectionInvariants.ts`.
  *
- * @coordinates-with ../MultiSelection.ts — the structure under test
- * @coordinates-with ../rangeUtils.ts — normalizeRangesWithPrimary enforces the rules
+ * @coordinates-with shared/MultiSelection.ts — the structure under test
+ * @coordinates-with shared/rangeUtils.ts — normalizeRangesWithPrimary enforces the rules
  * @coordinates-with ./multiSelectionInvariants.ts — the contract
  * @module plugins/multiCursor/__tests__/multiSelection.property.test
  */
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { SelectionRange } from "@tiptap/pm/state";
-import { MultiSelection } from "../MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 import { checkInvariants, formatViolations } from "./multiSelectionInvariants";
-import { build, docArb, makeDoc, rangesArb, PROPERTY_TIMEOUT_MS } from "./multiSelectionArbitraries";
+import { build, docArb, makeDoc, rangesArb } from "./multiSelectionArbitraries";
 
 describe("MultiSelection — construction invariants (property-based)", () => {
   it("normalizes ANY set of ranges into a valid selection", () => {
@@ -54,7 +54,7 @@ describe("MultiSelection — construction invariants (property-based)", () => {
       ),
       { numRuns: 300 },
     );
-  }, PROPERTY_TIMEOUT_MS);
+  });
 
   it("range shape is idempotent — rebuilding preserves the ranges", () => {
     fc.assert(
@@ -77,7 +77,7 @@ describe("MultiSelection — construction invariants (property-based)", () => {
       ),
       { numRuns: 300 },
     );
-  }, PROPERTY_TIMEOUT_MS);
+  });
 
   /**
    * Guards #311 directly.
@@ -111,7 +111,7 @@ describe("MultiSelection — construction invariants (property-based)", () => {
       ),
       { numRuns: 300 },
     );
-  }, PROPERTY_TIMEOUT_MS);
+  });
 
   it("clamps an out-of-range primaryIndex instead of addressing a missing range", () => {
     fc.assert(
@@ -128,7 +128,7 @@ describe("MultiSelection — construction invariants (property-based)", () => {
       }),
       { numRuns: 200 },
     );
-  }, PROPERTY_TIMEOUT_MS);
+  });
 
   it("rejects an empty range set rather than constructing a meaningless selection", () => {
     expect(() => new MultiSelection([], 0)).toThrow();

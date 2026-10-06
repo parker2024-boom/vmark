@@ -1,4 +1,4 @@
-//! Workspace-keyed lifecycle registry for spawned content servers (WI-1.2).
+//! Workspace-keyed lifecycle registry for spawned content servers.
 //!
 //! `ContentServerManager` keeps one running server per workspace with a
 //! monotonic generation id so a stale shutdown cannot tear down a newer server
@@ -12,7 +12,7 @@
 //! the lock), because killing and reaping a child under the registry lock let
 //! one slow reap block every other workspace's status, stop, start and
 //! supervisor poll (audit 20260907 #121). A child a teardown could not stop
-//! is kept as an orphan rather than forgotten (`retain_orphan`, #122); the
+//! is kept as an orphan rather than forgotten (`retain_orphan`); the
 //! orphans, `shutdown_all` and `Drop` live in `manager_teardown.rs`.
 
 use std::collections::HashMap;
@@ -30,12 +30,12 @@ pub struct RunningServer {
     pub generation: u64,
     /// The workspace trust the child was spawned with (`--trusted`), which its
     /// CSP enforces for the rest of its life — a start with the other value
-    /// must restart it (WI-FL3.6).
+    /// must restart it.
     pub trusted: bool,
 }
 
 /// Liveness of the managed child for a given (workspace, generation), as
-/// observed by the supervisor monitor (WI-1.2, ADR-10).
+/// observed by the supervisor monitor (ADR-10).
 #[derive(Debug, PartialEq, Eq)]
 pub enum ChildState {
     /// No current registration for this (root, generation) — intentional stop
@@ -53,7 +53,7 @@ pub enum ChildState {
 pub enum RegisterOutcome {
     /// The child was registered as the current server for the root — either
     /// the root was free, or the server already there enforced the OTHER
-    /// trust value and was replaced (killed + reaped) by this one (#120).
+    /// trust value and was replaced (killed + reaped) by this one.
     Registered,
     /// A concurrent start already won with the SAME trust: its server is
     /// returned, and the child handed in was killed + reaped.
@@ -97,7 +97,7 @@ pub(super) struct ManagerState {
     /// rejected so an in-flight spawn cannot orphan a child at exit.
     pub(super) shutting_down: bool,
     /// Children a teardown could not stop or reap without proof they are
-    /// gone (#122, `ChildFailure::retains_handle`), keyed by root: no longer
+    /// gone (`ChildFailure::retains_handle`), keyed by root: no longer
     /// servers, still this app's processes. `shutdown_all` tries each once
     /// more at quit.
     pub(super) orphans: Vec<(String, Child)>,
@@ -157,7 +157,7 @@ impl ContentServerManager {
 
     /// The server AND its token from ONE lock acquisition. Reading them in
     /// two calls let a restart in between pair the old port with the new
-    /// token — and send that token to whatever listens on the old port (#128).
+    /// token — and send that token to whatever listens on the old port.
     pub fn server_and_token(&self, workspace_root: &str) -> Option<(RunningServer, String)> {
         self.state()
             .servers
@@ -169,10 +169,10 @@ impl ContentServerManager {
     /// for the root with the same trust (a concurrent-start race winner) or
     /// the manager is shutting down. A resident server with the OTHER trust
     /// value is replaced: it enforces the wrong CSP, and returning it would
-    /// hand the caller a server it must immediately restart (#120). Whichever
+    /// hand the caller a server it must immediately restart. Whichever
     /// child loses — the one handed in, or the one replaced — is killed +
     /// reaped here AFTER the lock is released (std::process::Child does NOT
-    /// kill on drop), or kept as an orphan if it could not be (#122);
+    /// kill on drop), or kept as an orphan if it could not be;
     /// port-file cleanup for the handed-in child stays the caller's job.
     pub fn register_or_existing(
         &self,
@@ -201,7 +201,7 @@ impl ContentServerManager {
                     )
                 } else {
                     log::info!(
-                        "[content-server {workspace_root}] replacing the running server: its trust ({}) is not the requested {trusted}",
+                        "[content-server {workspace_root:?}] replacing the running server: its trust ({}) is not the requested {trusted}",
                         m.server.trusted
                     );
                     let mut displaced = state.servers.remove(workspace_root).map(Managed::detach);
@@ -236,7 +236,7 @@ impl ContentServerManager {
 
     /// Remove a workspace's record ONLY if it is still the generation the
     /// caller observed. A `get` followed by `take` let another start replace
-    /// the server in between, and the stop then killed the newer one (#116).
+    /// the server in between, and the stop then killed the newer one.
     pub fn take_if_generation(&self, workspace_root: &str, generation: u64) -> Option<Detached> {
         let mut state = self.state();
         match state.servers.get(workspace_root) {

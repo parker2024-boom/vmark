@@ -23,6 +23,7 @@ import type { StoreApi } from "zustand";
 import { WikiLinkPopupView } from "./WikiLinkPopupView";
 import type { WikiLinkPopupState } from "@/plugins/shared/popupPorts";
 import { wikiLinkPopupWarn } from "@/utils/debug";
+import { requirePort } from "@/plugins/shared/requirePort";
 import "./wiki-link-popup.css";
 
 const wikiLinkPopupPluginKey = new PluginKey("wikiLinkPopup");
@@ -160,21 +161,16 @@ export interface WikiLinkPopupOptions {
    * state this popup drives", so a host that forgets to supply one is told
    * so rather than crashing inside the view (ADR-015).
    */
-  store: StoreApi<WikiLinkPopupState>;
+  store: StoreApi<WikiLinkPopupState> | undefined;
 }
 
 export const wikiLinkPopupExtension = Extension.create<WikiLinkPopupOptions>({
   name: "wikiLinkPopup",
   addOptions() {
-    return { store: undefined as unknown as StoreApi<WikiLinkPopupState> };
+    return { store: undefined };
   },
   addProseMirrorPlugins() {
-    const { store } = this.options;
-    if (!store) {
-      throw new Error(
-        "wikiLinkPopupExtension requires a `store` option — see services/assembly/tiptapExtensions.ts"
-      );
-    }
+    const store = requirePort(this.options.store, "wikiLinkPopupExtension", "store");
     return [
       new Plugin({
         key: wikiLinkPopupPluginKey,

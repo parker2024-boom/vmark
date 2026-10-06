@@ -22,7 +22,6 @@ import {
   convertCodeBlock,
   convertBlockquote,
   convertAlertBlock,
-  convertDetailsBlock,
   convertList,
   convertListItem,
   convertHorizontalRule,
@@ -36,6 +35,7 @@ import {
   convertHtmlBlock,
   type PmToMdastContext,
 } from "./pmBlockConverters";
+import { convertDetailsBlock } from "./pmDetailsConverter";
 
 /** Schema with video_embed for testing */
 const mediaSchema = new Schema({

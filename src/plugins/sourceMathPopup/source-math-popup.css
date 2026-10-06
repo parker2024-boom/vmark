@@ -5,7 +5,7 @@
  * Follows popup-shared patterns: compact padding, tokens, dark theme.
  */
 
-/* Shell chrome comes from `.popup-container` (WI-UI3.2). */
+/* Shell chrome comes from `.popup-container`. */
 .source-math-popup {
   flex-direction: column;
   align-items: stretch;

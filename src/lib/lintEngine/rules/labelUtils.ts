@@ -6,6 +6,8 @@
  * escaped bracket from a real one. Both rules scan the SAME shapes with the
  * same regex, so a helper here is what keeps them from disagreeing about one
  * document.
+ *
+ * @module lib/lintEngine/rules/labelUtils
  */
 
 /**

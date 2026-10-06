@@ -5,6 +5,8 @@
  * Handles: bold, italic, underline, strikethrough, highlight, superscript,
  * subscript, inline code, and link syntax (extracts text from links).
  * Images are intentionally preserved unchanged.
+ *
+ * @module plugins/sourceContextDetection/clearFormatting
  */
 
 import { FORMAT_MARKERS, type WrapFormatType } from "./formatTypes";

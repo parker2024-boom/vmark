@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import type { LinkInfo } from "@/plugins/toolbarContext/types";
+import type { LinkInfo } from "@/plugins/shared/toolbarContextTypes";
 import { resolveLinkPopupPayload } from "./linkPopupUtils";
 
 describe("resolveLinkPopupPayload", () => {

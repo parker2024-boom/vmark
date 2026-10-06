@@ -4,13 +4,19 @@
 // against the source it ships.
 import { describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const GATE = join(ROOT, "scripts", "check-keybinding-manifest.mjs");
-const src = readFileSync(GATE, "utf8");
+// The gate is the CLI plus its legs under lib/keybindingManifest/ (split to
+// keep every file under the size rule, WI-RA13B.7); the source pins below are
+// properties of the gate as a whole, so they read all of it, CLI first.
+const LEGS = join(ROOT, "scripts", "lib", "keybindingManifest");
+const src = [GATE, ...readdirSync(LEGS).filter((f) => f.endsWith(".mjs")).sort().map((f) => join(LEGS, f))]
+  .map((f) => readFileSync(f, "utf8"))
+  .join("\n");
 
 describe("check-keybinding-manifest", () => {
   it("is green against the real tree (accels AND labels aligned)", () => {
@@ -185,7 +191,7 @@ describe("check-keybinding-manifest", () => {
   // hand-copied port under a "keep in sync" comment. It has one home now, and
   // keybindingFormat.test.mjs proves it agrees with the app's.
   it("imports prosemirrorToTauri rather than carrying its own copy", () => {
-    expect(src).toContain("prosemirrorToTauri } from \"./lib/keybindingFormat.mjs\"");
+    expect(src).toMatch(/prosemirrorToTauri \} from "(?:\.\/lib|\.\.)\/keybindingFormat\.mjs"/);
     expect(src).not.toContain("function prosemirrorToTauri");
   });
 

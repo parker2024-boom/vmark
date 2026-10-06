@@ -29,7 +29,7 @@ export interface HistoryCheckpoint {
    * Redoing is only meaningful while the document still sits at that point. If
    * the user typed something instead, history has branched and this entry
    * describes an abandoned future: applying it would replace what they just
-   * wrote (audit 20260906, F4). Native editor history discards its redo stack
+   * wrote. Native editor history discards its redo stack
    * on a new edit; the checkpoint stack could not, because an ordinary edit
    * never reaches this store.
    *

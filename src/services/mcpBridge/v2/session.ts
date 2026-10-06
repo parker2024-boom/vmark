@@ -5,11 +5,11 @@
  *   workspace.list_windows) with a single call that returns every window,
  *   every tab, and per-tab metadata including a revision token.
  *
- * Origin: MCP pruning plan (2026-05-04, retired) ADR-6.
+ * Origin: MCP pruning plan (retired) ADR-6.
  *
  * Key decisions:
  *   - The per-tab and per-window serialization, the human-tab privacy rule and
- *     the protocol gate live in `sessionSerializers.ts` (round 3, #76); this
+ *     the protocol gate live in `sessionSerializers.ts`; this
  *     module composes them into the payload and answers the request.
  *   - `focused` comes from the PLATFORM, not from this webview's own label.
  *     The bridge routes a request to whichever window owns the workspace, so
@@ -20,8 +20,14 @@
  *     presents itself. The bundled sidecar is version-locked in shipped builds,
  *     so this only matters under version skew (a stale or swapped local sidecar);
  *     the gate closes that case rather than relying on the bundling alone.
+ *   - The request handler flushes the mounted editors before the state is
+ *     built. Each tab's `dirty` flag and kind are read from the store, which
+ *     trails the editor by a debounce; without the flush a tab the user is
+ *     typing in is reported clean.
  *
  * @coordinates-with services/mcpBridge/v2/sessionSerializers.ts — tab + window records
+ * @coordinates-with services/mcpBridge/v2/liveEditor.ts — the flush
+ * @coordinates-with services/mcpBridge/v2/readOperationArgs.ts — the one payload parse
  * @coordinates-with stores/tabStore.ts — the windows to enumerate
  * @coordinates-with services/mcpBridge/focusedWindow.ts — real focused window
  * @module services/mcpBridge/v2/session
@@ -32,6 +38,8 @@ import { getCurrentWindowLabel } from "@/services/persistence/workspaceStorage";
 import { resolveFocusedWindowLabel } from "@/services/mcpBridge/focusedWindow";
 import { respond } from "@/services/mcpBridge/utils";
 import { wrapHandler } from "./wrapHandler";
+import { flushLiveEditors } from "./liveEditor";
+import { readOperationArgs } from "./readOperationArgs";
 import type { SessionState } from "./types";
 import { clientSupportsBrowserTabs, serializeWindow } from "./sessionSerializers";
 
@@ -83,13 +91,16 @@ export function buildSessionState(
 export async function handleSessionGetState(
   id: string,
   appVersion: string,
-  args?: Record<string, unknown>,
+  args: Record<string, unknown> = {},
 ): Promise<void> {
   return wrapHandler(id, async () => {
-    const clientProtocol = typeof args?.clientProtocol === "string" ? args.clientProtocol : undefined;
+    const { clientProtocol } = readOperationArgs("vmark.session.get_state", args);
     // Ask the platform which window is actually on screen; this webview may not
     // be it (#1208).
-    const state = buildSessionState(appVersion, clientProtocol, await resolveFocusedWindowLabel());
+    const focusedLabel = await resolveFocusedWindowLabel();
+    // Last before the stores are read, so what is reported is what the user has.
+    flushLiveEditors();
+    const state = buildSessionState(appVersion, clientProtocol, focusedLabel);
     await respond({ id, success: true, data: state });
   });
 }

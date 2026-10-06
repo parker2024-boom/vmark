@@ -2,6 +2,8 @@
  * Shared types for source-mode table detection and actions.
  *
  * Extracted to break circular dependency between tableDetection and tableActions.
+ *
+ * @module plugins/sourceContextDetection/tableTypes
  */
 
 /**

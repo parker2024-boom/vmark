@@ -4,8 +4,9 @@
  * Purpose: Pure builders for SourcePane's CodeMirror wiring — the lint
  * extension (format.validator → gutter + hoisted diagnostics, presented at
  * the severity the path's trust calls for), the base extension list, the
- * diagnostic-to-CodeMirror mapping, and the lazy compartment loader
- * (language pack, per-format extras). Extracted from SourcePane so its mount
+ * diagnostic-to-CodeMirror mapping, the lazy compartment loader
+ * (language pack, per-format extras), and `revalidate`, the re-lint a
+ * validator asks for when its answer changes (FormatConfig.validatorUpdates). Extracted from SourcePane so its mount
  * effect is a thin assembler. No React, no DOM — unit-testable in isolation.
  *
  * @coordinates-with SourcePane.tsx — sole caller
@@ -15,11 +16,11 @@
  *   supplies `trustSeverity`, the listener that reconciles each installed lint
  * @module components/Editor/SplitPaneEditor/sourcePaneExtensions
  */
-import { Compartment, EditorState, type Extension, type Text } from "@codemirror/state";
+import { Compartment, EditorState, StateEffect, type Extension, type Text } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
-import { linter, type Diagnostic } from "@codemirror/lint";
+import { forceLinting, linter, type Diagnostic } from "@codemirror/lint";
 import { syntaxHighlighting } from "@codemirror/language";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -111,15 +112,31 @@ export function buildValidationLinter(
   onRawLint?: (raw: RawLint) => void,
 ): Extension | null {
   if (!validator) return null;
-  return linter((view) => {
-    const text = view.state.doc.toString();
-    const path = useDocumentStore.getState().documents?.[tabId]?.filePath ?? undefined;
-    const diagnostics = validator(text, path ?? undefined);
-    onDiagnostics(diagnostics);
-    onRawLint?.({ doc: view.state.doc, diagnostics });
-    return presentDiagnostics(diagnostics, infoWhenTrusted, isDocumentTrusted(path))
-      .map((d) => diagnosticToCodemirror(view.state.doc, d));
-  });
+  return linter(
+    (view) => {
+      const text = view.state.doc.toString();
+      const path = useDocumentStore.getState().documents?.[tabId]?.filePath ?? undefined;
+      const diagnostics = validator(text, path ?? undefined);
+      onDiagnostics(diagnostics);
+      onRawLint?.({ doc: view.state.doc, diagnostics });
+      return presentDiagnostics(diagnostics, infoWhenTrusted, isDocumentTrusted(path))
+        .map((d) => diagnosticToCodemirror(view.state.doc, d));
+    },
+    // Lint runs on document changes; a revalidation also counts.
+    { needsRefresh: (update) => update.transactions.some((tr) => tr.effects.some((e) => e.is(revalidateEffect))) },
+  );
+}
+
+const revalidateEffect = StateEffect.define<null>();
+
+/**
+ * Run the validation linter again on unchanged content — for a validator
+ * whose answer changed (FormatConfig.validatorUpdates). `forceLinting` alone
+ * does nothing once a lint has run, so the effect marks one as needed first.
+ */
+export function revalidate(view: EditorView): void {
+  view.dispatch({ effects: revalidateEffect.of(null) });
+  forceLinting(view);
 }
 
 export interface BuildExtensionsArgs {
@@ -194,7 +211,7 @@ export function buildSourcePaneExtensions(args: BuildExtensionsArgs): Extension[
     ...(extrasCompartment ? [extrasCompartment.of([])] : []),
     persistOnUpdate,
     // Right-click menu, reduced to clipboard + Select All — split panes
-    // have no markdown context detection (plan WI-3.3).
+    // have no markdown context detection.
     reducedEditorContextMenuExtension,
   ];
 

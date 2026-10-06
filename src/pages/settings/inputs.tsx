@@ -4,6 +4,8 @@
  * Part of the shared Settings UI primitives; see `components.tsx` (the
  * barrel) for the naming/decision rules that govern this family — in
  * particular the SearchInput vs FieldInput vs Select decision rule.
+ *
+ * @module pages/settings/inputs
  */
 
 import React from "react";
@@ -22,7 +24,7 @@ export function Toggle({
   "aria-labelledby"?: string;
   "aria-describedby"?: string;
 }) {
-  // WI-UI3.4: thin wrapper over the canonical `.vm-switch` (panel-shared.css).
+  // Thin wrapper over the canonical `.vm-switch` (panel-shared.css).
   return (
     <button
       role="switch"
@@ -60,7 +62,7 @@ export function Select<T extends string>({
   "aria-labelledby"?: string;
   "aria-describedby"?: string;
 }) {
-  // WI-UI2.4: thin wrapper over the canonical `.vm-select` primitive
+  // Thin wrapper over the canonical `.vm-select` primitive
   // (select-shared.css) — the wrapper span owns the chevron via ::after.
   return (
     <span className="vm-select-field w-auto!">

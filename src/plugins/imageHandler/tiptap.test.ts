@@ -7,6 +7,11 @@
  *   - processClipboardImage: file reading, saving, view disconnection
  *   - processDroppedFiles: multi-file handling, non-image filtering
  *   - Edge cases: no dataTransfer, empty clipboard, error handling
+ *
+ * The text-paste offer (imageHandlerToast) and the multi-image insert
+ * (imageHandlerInsert) run for real: an offer is observed at the host's toast
+ * port, an insert as block images in the dispatched transaction. The
+ * boundaries are the filesystem check, the copy into assets and the dialog.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -20,9 +25,19 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 
 const mockSaveImageToAssets = vi.fn(() => Promise.resolve(".assets/saved.png"));
 const mockInsertBlockImageNode = vi.fn();
+const mockCopyImageToAssets = vi.fn((source: string, _documentPath: string) =>
+  Promise.resolve(`.assets/${source.split("/").pop()}`),
+);
 vi.mock("@/services/media/imageOperations", () => ({
   saveImageToAssets: (...args: unknown[]) => mockSaveImageToAssets(...args),
   insertBlockImageNode: (...args: unknown[]) => mockInsertBlockImageNode(...args),
+  copyImageToAssets: (source: string, documentPath: string) => mockCopyImageToAssets(source, documentPath),
+}));
+
+// The text-paste offer checks that a local path exists before it asks.
+const mockExists = vi.fn((_path: string) => Promise.resolve(true));
+vi.mock("@tauri-apps/plugin-fs", () => ({
+  exists: (path: string) => mockExists(path),
 }));
 
 const mockGetWindowLabel = vi.fn(() => "main");
@@ -47,16 +62,6 @@ vi.mock("@/utils/reentryGuard", () => ({
   }),
 }));
 
-const mockInsertMultipleImages = vi.fn(() => Promise.resolve());
-vi.mock("./imageHandlerInsert", () => ({
-  insertMultipleImages: (...args: unknown[]) => mockInsertMultipleImages(...args),
-}));
-
-const mockTryTextImagePaste = vi.fn(() => false);
-vi.mock("./imageHandlerToast", () => ({
-  tryTextImagePaste: (...args: unknown[]) => mockTryTextImagePaste(...args),
-}));
-
 const mockIsViewConnected = vi.fn(() => true);
 const mockIsImageFile = vi.fn((file: File) => file.type.startsWith("image/"));
 const mockGenerateClipboardImageFilename = vi.fn(() => "clipboard-123-abcd.png");
@@ -73,6 +78,7 @@ vi.mock("./imageHandlerUtils", () => ({
   getActiveFilePathForCurrentWindow: () => mockGetActiveFilePathForCurrentWindow(),
   showUnsavedDocWarning: () => mockShowUnsavedDocWarning(),
   fileUrlToPath: (...args: unknown[]) => mockFileUrlToPath(...args),
+  getToastAnchorRect: () => ({ top: 0, left: 0, bottom: 0, right: 0 }),
 }));
 
 vi.mock("@/utils/imagePathDetection", () => ({
@@ -110,6 +116,33 @@ import { EditorState } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import { imageHandlerExtension } from "./tiptap";
 import { imageHandlerError } from "@/utils/debug";
+import { bindHostPopups } from "@/plugins/shared/hostPopups";
+import type { Node as PMNode } from "@tiptap/pm/model";
+
+// The toast is the HOST's to show; the plugin only asks for it.
+const mockShowImagePasteToast = vi.fn();
+bindHostPopups({ showImagePasteToast: (request) => mockShowImagePasteToast(request) });
+
+/** A real schema with the block image node an insert creates. */
+function imageSchema(): Schema {
+  return new Schema({
+    nodes: {
+      doc: { content: "(paragraph | block_image)+" },
+      paragraph: { content: "text*" },
+      block_image: { atom: true, attrs: { src: { default: "" }, alt: { default: "" }, title: { default: "" } } },
+      text: { inline: true },
+    },
+  });
+}
+
+/** `src` of every block image in the document a dispatched transaction produced. */
+function insertedImages(tr: { doc: PMNode }): string[] {
+  const out: string[] = [];
+  tr.doc.descendants((node) => {
+    if (node.type.name === "block_image") out.push(node.attrs.src as string);
+  });
+  return out;
+}
 
 // --- Helpers ---
 
@@ -214,7 +247,6 @@ describe("handlePaste behavior", () => {
     mockIsViewConnected.mockReturnValue(true);
     mockGetActiveFilePathForCurrentWindow.mockReturnValue("/docs/test.md");
     mockSaveImageToAssets.mockResolvedValue(".assets/saved.png");
-    mockTryTextImagePaste.mockReturnValue(false);
   });
 
   // Since handlePaste is a module-private function, we test the mock interactions
@@ -243,15 +275,6 @@ describe("handlePaste behavior", () => {
     }
 
     expect(mockShowUnsavedDocWarning).toHaveBeenCalled();
-  });
-
-  it("tryTextImagePaste is called for text clipboard content", () => {
-    const view = createMockView();
-    const text = "https://example.com/photo.png";
-
-    mockTryTextImagePaste(view, text);
-
-    expect(mockTryTextImagePaste).toHaveBeenCalledWith(view, text);
   });
 });
 
@@ -304,13 +327,6 @@ describe("handleDrop behavior", () => {
     const path = mockFileUrlToPath(uri);
 
     expect(path).toBe("/Users/test/photo.png");
-  });
-
-  it("text drop with image paths triggers insertMultipleImages", () => {
-    const _text = "/Users/test/photo.png";
-    mockInsertMultipleImages("/Users/test/photo.png");
-
-    expect(mockInsertMultipleImages).toHaveBeenCalled();
   });
 
   it("processDroppedFiles: aborts when view disconnects after saving", async () => {
@@ -393,7 +409,6 @@ describe("handlePaste edge cases", () => {
     mockIsViewConnected.mockReturnValue(true);
     mockGetActiveFilePathForCurrentWindow.mockReturnValue("/docs/test.md");
     mockSaveImageToAssets.mockResolvedValue(".assets/saved.png");
-    mockTryTextImagePaste.mockReturnValue(false);
   });
 
   it("handles clipboard with both image and text items (image takes priority)", () => {
@@ -426,25 +441,6 @@ describe("handlePaste edge cases", () => {
     const items = Array.from(event.clipboardData?.items ?? []);
     const hasImage = items.some((item) => item.type.startsWith("image/"));
     expect(hasImage).toBe(false);
-  });
-
-  it("calls tryTextImagePaste when text contains image path", () => {
-    mockTryTextImagePaste.mockReturnValue(true);
-    const view = createMockView();
-    const text = "/path/to/image.png";
-
-    const result = mockTryTextImagePaste(view, text);
-    expect(result).toBe(true);
-    expect(mockTryTextImagePaste).toHaveBeenCalledWith(view, text);
-  });
-
-  it("returns false from tryTextImagePaste for non-image text", () => {
-    mockTryTextImagePaste.mockReturnValue(false);
-    const view = createMockView();
-    const text = "just some regular text";
-
-    const result = mockTryTextImagePaste(view, text);
-    expect(result).toBe(false);
   });
 });
 
@@ -536,7 +532,6 @@ describe("imageHandler plugin handler integration", () => {
     mockIsViewConnected.mockReturnValue(true);
     mockGetActiveFilePathForCurrentWindow.mockReturnValue("/docs/test.md");
     mockSaveImageToAssets.mockResolvedValue(".assets/saved.png");
-    mockTryTextImagePaste.mockReturnValue(false);
 
     // Extract plugin handlers from the extension
     const extensionContext = {
@@ -567,8 +562,7 @@ describe("imageHandler plugin handler integration", () => {
       expect(event.preventDefault).toHaveBeenCalled();
     });
 
-    it("returns true when tryTextImagePaste returns true", () => {
-      mockTryTextImagePaste.mockReturnValue(true);
+    it("takes over a pasted image path and asks the host to offer the image", async () => {
       const event = createMockClipboardEvent([
         { type: "text/plain", data: "/path/to/image.png" },
       ]);
@@ -577,9 +571,15 @@ describe("imageHandler plugin handler integration", () => {
       const result = handlePaste(view, event);
       expect(result).toBe(true);
       expect(event.preventDefault).toHaveBeenCalled();
+
+      await vi.waitFor(() => {
+        expect(mockShowImagePasteToast).toHaveBeenCalledTimes(1);
+      });
+      expect(mockExists).toHaveBeenCalledWith("/path/to/image.png");
+      expect(mockShowImagePasteToast.mock.calls[0][0]).toMatchObject({ imagePath: "/path/to/image.png" });
     });
 
-    it("returns false when no image items and tryTextImagePaste returns false", () => {
+    it("leaves ordinary pasted text to the editor and offers nothing", async () => {
       const event = createMockClipboardEvent([
         { type: "text/plain", data: "just regular text" },
       ]);
@@ -587,6 +587,9 @@ describe("imageHandler plugin handler integration", () => {
 
       const result = handlePaste(view, event);
       expect(result).toBe(false);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      await Promise.resolve();
+      expect(mockShowImagePasteToast).not.toHaveBeenCalled();
     });
 
     it("returns false when clipboardData is null", () => {
@@ -611,18 +614,23 @@ describe("imageHandler plugin handler integration", () => {
       expect(result).toBe(false);
     });
 
-    it("prioritizes binary image over text items", () => {
+    it("prioritizes binary image over text items", async () => {
       const file = new File(["img"], "photo.png", { type: "image/png" });
       const event = createMockClipboardEvent([
-        { type: "text/plain", data: "some text" },
+        // An image PATH, which on its own would be offered as an image.
+        { type: "text/plain", data: "/path/to/other.png" },
         { type: "image/png", file },
       ]);
       const view = createMockView();
 
       const result = handlePaste(view, event);
       expect(result).toBe(true);
-      // Should NOT have called tryTextImagePaste since image was found first
-      expect(mockTryTextImagePaste).not.toHaveBeenCalled();
+      // The binary image won: the text was never examined, so nothing is offered.
+      await vi.waitFor(() => {
+        expect(mockSaveImageToAssets).toHaveBeenCalled();
+      });
+      expect(mockExists).not.toHaveBeenCalled();
+      expect(mockShowImagePasteToast).not.toHaveBeenCalled();
     });
   });
 
@@ -700,13 +708,7 @@ describe("imageHandler plugin handler integration", () => {
         },
       });
       // Use a real EditorState so Selection.near works
-      const realSchema = new Schema({
-        nodes: {
-          doc: { content: "paragraph+" },
-          paragraph: { content: "text*" },
-          text: { inline: true },
-        },
-      });
+      const realSchema = imageSchema();
       const realState = EditorState.create({
         doc: realSchema.node("doc", null, [
           realSchema.node("paragraph", null, [realSchema.text("hello world")]),
@@ -728,7 +730,7 @@ describe("imageHandler plugin handler integration", () => {
       expect(mockFileUrlToPath.mock.calls[0][0]).toBe("file:///Users/test/photo.png");
     });
 
-    it("handles text drop with image paths", () => {
+    it("handles text drop with image paths", async () => {
       const event = createMockDragEvent({
         dataTransfer: {
           files: [] as File[],
@@ -737,13 +739,7 @@ describe("imageHandler plugin handler integration", () => {
         },
       });
       // Use a real EditorState so Selection.near works
-      const realSchema = new Schema({
-        nodes: {
-          doc: { content: "paragraph+" },
-          paragraph: { content: "text*" },
-          text: { inline: true },
-        },
-      });
+      const realSchema = imageSchema();
       const realState = EditorState.create({
         doc: realSchema.node("doc", null, [
           realSchema.node("paragraph", null, [realSchema.text("hello world")]),
@@ -759,7 +755,13 @@ describe("imageHandler plugin handler integration", () => {
 
       const result = handleDrop(view, event, null, false);
       expect(result).toBe(true);
-      expect(mockInsertMultipleImages).toHaveBeenCalled();
+
+      // Copied next to the saved document, then inserted as a block image.
+      await vi.waitFor(() => {
+        expect(view.dispatch).toHaveBeenCalledTimes(2);
+      });
+      expect(mockCopyImageToAssets).toHaveBeenCalledWith("/Users/test/photo.png", "/docs/test.md");
+      expect(insertedImages(view.dispatch.mock.calls[1][0])).toEqual([".assets/photo.png"]);
     });
 
     it("returns false for text drop with non-image paths", () => {
@@ -840,13 +842,7 @@ describe("imageHandler plugin handler integration", () => {
         },
       });
 
-      const realSchema = new Schema({
-        nodes: {
-          doc: { content: "paragraph+" },
-          paragraph: { content: "text*" },
-          text: { inline: true },
-        },
-      });
+      const realSchema = imageSchema();
       const realState = EditorState.create({
         doc: realSchema.node("doc", null, [
           realSchema.node("paragraph", null, [realSchema.text("hello")]),
@@ -897,7 +893,7 @@ describe("imageHandler plugin handler integration", () => {
       expect(result).toBe(false);
     });
 
-    it("handles text drop with image paths and no posAtCoords result", () => {
+    it("handles text drop with image paths and no posAtCoords result", async () => {
       const event = createMockDragEvent({
         dataTransfer: {
           files: [] as File[],
@@ -905,13 +901,7 @@ describe("imageHandler plugin handler integration", () => {
             type === "text/plain" ? "/path/to/image.png" : "",
         },
       });
-      const realSchema = new Schema({
-        nodes: {
-          doc: { content: "paragraph+" },
-          paragraph: { content: "text*" },
-          text: { inline: true },
-        },
-      });
+      const realSchema = imageSchema();
       const realState = EditorState.create({
         doc: realSchema.node("doc", null, [
           realSchema.node("paragraph", null, [realSchema.text("hello")]),
@@ -927,7 +917,11 @@ describe("imageHandler plugin handler integration", () => {
 
       const result = handleDrop(view, event, null, false);
       expect(result).toBe(true);
-      expect(mockInsertMultipleImages).toHaveBeenCalled();
+
+      await vi.waitFor(() => {
+        expect(view.dispatch).toHaveBeenCalledTimes(2);
+      });
+      expect(insertedImages(view.dispatch.mock.calls[1][0])).toEqual([".assets/image.png"]);
     });
 
     it("handles image file drop with posAtCoords returning null", () => {
@@ -1021,7 +1015,6 @@ describe("imageHandler plugin handler integration", () => {
   describe("insertMultipleImages error handling in handleDrop", () => {
     it("catches error from insertMultipleImages in file:// URI drop path", async () => {
       mockSettingsGetState.mockReturnValue({ image: { copyToAssets: false } });
-      mockInsertMultipleImages.mockRejectedValueOnce(new Error("insert failed"));
 
       const file = new File(["img"], "photo.png", { type: "image/png" });
       const event = createMockDragEvent({
@@ -1031,13 +1024,7 @@ describe("imageHandler plugin handler integration", () => {
             type === "text/uri-list" ? "file:///Users/test/photo.png" : "",
         },
       });
-      const realSchema = new Schema({
-        nodes: {
-          doc: { content: "paragraph+" },
-          paragraph: { content: "text*" },
-          text: { inline: true },
-        },
-      });
+      const realSchema = imageSchema();
       const realState = EditorState.create({
         doc: realSchema.node("doc", null, [
           realSchema.node("paragraph", null, [realSchema.text("hello")]),
@@ -1047,24 +1034,28 @@ describe("imageHandler plugin handler integration", () => {
       const view = {
         ...createMockView(),
         state: realState,
-        dispatch: vi.fn(),
+        // The drop-position selection goes through; the image insert does not.
+        dispatch: vi
+          .fn()
+          .mockImplementationOnce(() => {})
+          .mockImplementationOnce(() => {
+            throw new Error("insert failed");
+          }),
         posAtCoords: vi.fn(() => ({ pos: 3 })),
       };
 
       const result = handleDrop(view, event, null, false);
       expect(result).toBe(true);
 
-      // Wait for the rejection to be caught
-      await new Promise((r) => setTimeout(r, 50));
-      expect(imageHandlerError).toHaveBeenCalledWith(
-        "Failed to insert dropped images:",
-        expect.any(Error)
-      );
+      await vi.waitFor(() => {
+        expect(imageHandlerError).toHaveBeenCalledWith(
+          "Failed to insert dropped images:",
+          expect.objectContaining({ message: "insert failed" })
+        );
+      });
     });
 
     it("catches error from insertMultipleImages in text drop path", async () => {
-      mockInsertMultipleImages.mockRejectedValueOnce(new Error("insert failed"));
-
       const event = createMockDragEvent({
         dataTransfer: {
           files: [] as File[],
@@ -1072,13 +1063,7 @@ describe("imageHandler plugin handler integration", () => {
             type === "text/plain" ? "/Users/test/photo.png" : "",
         },
       });
-      const realSchema = new Schema({
-        nodes: {
-          doc: { content: "paragraph+" },
-          paragraph: { content: "text*" },
-          text: { inline: true },
-        },
-      });
+      const realSchema = imageSchema();
       const realState = EditorState.create({
         doc: realSchema.node("doc", null, [
           realSchema.node("paragraph", null, [realSchema.text("hello")]),
@@ -1088,18 +1073,25 @@ describe("imageHandler plugin handler integration", () => {
       const view = {
         ...createMockView(),
         state: realState,
-        dispatch: vi.fn(),
+        // The drop-position selection goes through; the image insert does not.
+        dispatch: vi
+          .fn()
+          .mockImplementationOnce(() => {})
+          .mockImplementationOnce(() => {
+            throw new Error("insert failed");
+          }),
         posAtCoords: vi.fn(() => ({ pos: 3 })),
       };
 
       const result = handleDrop(view, event, null, false);
       expect(result).toBe(true);
 
-      await new Promise((r) => setTimeout(r, 50));
-      expect(imageHandlerError).toHaveBeenCalledWith(
-        "Failed to insert dropped images:",
-        expect.any(Error)
-      );
+      await vi.waitFor(() => {
+        expect(imageHandlerError).toHaveBeenCalledWith(
+          "Failed to insert dropped images:",
+          expect.objectContaining({ message: "insert failed" })
+        );
+      });
     });
   });
 
@@ -1401,13 +1393,7 @@ describe("handleDrop — uncovered branch coverage", () => {
           type === "text/uri-list" ? "file:///Users/test/photo.png" : "",
       },
     });
-    const realSchema = new Schema({
-      nodes: {
-        doc: { content: "paragraph+" },
-        paragraph: { content: "text*" },
-        text: { inline: true },
-      },
-    });
+    const realSchema = imageSchema();
     const realState = EditorState.create({
       doc: realSchema.node("doc", null, [
         realSchema.node("paragraph", null, [realSchema.text("hello")]),

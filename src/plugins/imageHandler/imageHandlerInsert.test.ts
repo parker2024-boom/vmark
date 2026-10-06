@@ -3,7 +3,7 @@
  * Tests for imageHandlerInsert — image insertion and text paste operations.
  *
  * Covers:
- *   - resolveImagePath (via insertImageFromPath)
+ *   - path resolution through the shared resolver (via insertImageFromPath)
  *   - insertImageFromPath (single image insert with alt text, selection restore)
  *   - insertMultipleImages (multi-image insert with position tracking)
  *   - pasteAsText (plain text fallback)
@@ -38,19 +38,21 @@ vi.mock("@/utils/debug", () => ({
 
 const mockIsViewConnected = vi.fn(() => true);
 const mockGetActiveFilePathForCurrentWindow = vi.fn(() => "/docs/test.md");
-const mockShowUnsavedDocWarning = vi.fn(() => Promise.resolve());
 const mockExpandHomePath = vi.fn();
 
 vi.mock("./imageHandlerUtils", () => ({
   isViewConnected: (...args: unknown[]) => mockIsViewConnected(...args),
   getActiveFilePathForCurrentWindow: () => mockGetActiveFilePathForCurrentWindow(),
-  showUnsavedDocWarning: () => mockShowUnsavedDocWarning(),
+}));
+
+vi.mock("@/plugins/shared/localImagePath", () => ({
   expandHomePath: (...args: unknown[]) => mockExpandHomePath(...args),
 }));
 
 // --- Imports (after mocks) ---
 
 import { insertImageFromPath, insertMultipleImages, pasteAsText } from "./imageHandlerInsert";
+import { bindHostNotify, resetHostNotify } from "@/plugins/shared/hostNotify";
 import type { ImagePathResult } from "@/utils/imagePathDetection";
 import type { EditorView } from "@tiptap/pm/view";
 
@@ -217,7 +219,11 @@ describe("insertImageFromPath", () => {
 
     await insertImageFromPath(view, detection, 0, 0, "");
 
-    expect(mockShowUnsavedDocWarning).toHaveBeenCalled();
+    expect(mockMessage).toHaveBeenCalledWith(
+      expect.stringContaining("save the document first"),
+      expect.objectContaining({ kind: "warning" })
+    );
+    expect(mockCopyImageToAssets).not.toHaveBeenCalled();
     expect(mockInsertBlockImageNode).not.toHaveBeenCalled();
   });
 
@@ -429,9 +435,14 @@ describe("insertMultipleImages", () => {
     (view.state.schema.nodes as Record<string, unknown>).block_image = undefined;
     const results = [makeDetection({ needsCopy: false })];
 
+    const error = vi.fn();
+    bindHostNotify({ error });
+
     await insertMultipleImages(view, results, 0, 0);
 
     expect(view.dispatch).not.toHaveBeenCalled();
+    expect(error.mock.calls).toEqual([["Cannot insert image — editor schema unavailable"]]);
+    resetHostNotify();
   });
 
   it("aborts when view disconnects after async resolution", async () => {

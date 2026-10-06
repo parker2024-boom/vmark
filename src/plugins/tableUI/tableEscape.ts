@@ -4,6 +4,8 @@
  * Handles ArrowUp/ArrowDown at table boundaries:
  * - ArrowUp at first row of first-block table → insert paragraph before
  * - ArrowDown at last row of last-block table → insert paragraph after
+ *
+ * @module plugins/tableUI/tableEscape
  */
 
 import type { EditorView } from "@tiptap/pm/view";

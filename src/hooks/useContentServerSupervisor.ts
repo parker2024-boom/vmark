@@ -10,7 +10,7 @@
  * acknowledges a user stop of this root is absorbed rather than restarted
  * (the one-shot `stopIntentRoot` guard — useContentServer's header says why).
  *
- * The listener mounts ONCE (audit #724). It used to depend on
+ * The listener mounts ONCE. It used to depend on
  * `useTranslation`'s `t`, whose identity changes with the language, so a
  * language switch tore the listener down and re-registered it through an
  * `await` — and a crash inside that window reached nothing at all. The message
@@ -30,7 +30,7 @@ import { contentServerWarn } from "@/utils/debug";
 import type { StartServerRef } from "./useContentServerWorkspaceSync";
 
 /**
- * Auto-restarts the supervisor may issue per USER start (WI-1.2). Replenished
+ * Auto-restarts the supervisor may issue per USER start. Replenished
  * only by a manual Start/Retry — never by time or by a restart that held — so it
  * caps crashes per manual session, not "consecutive" ones: the third crash in a
  * session is the last one restarted; the next surfaces an error to retry.

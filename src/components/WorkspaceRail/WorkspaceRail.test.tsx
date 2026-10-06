@@ -270,7 +270,7 @@ describe("WorkspaceRail", () => {
     });
     fireEvent(button, event);
 
-    expect(mockMoveWorkspace).toHaveBeenCalledWith("main", "wsi-a", expect.any(Object));
+    expect(mockMoveWorkspace).toHaveBeenCalledWith("main", "wsi-a");
   });
 
   it("does not move a workspace when drag ends inside the viewport", () => {
@@ -548,7 +548,7 @@ describe("WorkspaceRail", () => {
 
       await openMenu("alpha");
       await userEvent.click(screen.getByRole("menuitem", { name: "Move to New Window" }));
-      expect(mockMoveWorkspace).toHaveBeenCalledWith("main", "wsi-a", expect.anything());
+      expect(mockMoveWorkspace).toHaveBeenCalledWith("main", "wsi-a");
     });
 
     it("focuses the first item and roves with arrow keys", async () => {

@@ -2,18 +2,25 @@
 // Round 3, #71 — the pieces of wait_for on their own: request validation, the
 // mirror-answered URL poll, and the deadline-raced eval poll. The tab store is real;
 // the eval is a function the test supplies, so no driver mock decides the timing.
-import { describe, it, expect, beforeEach, vi } from "vitest";
+// The clock is fake: every deadline and poll interval is moved explicitly, so a
+// timeout lands at exactly its budget and no assertion depends on machine load.
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 vi.mock("@/services/persistence/workspaceStorage", () => ({ getCurrentWindowLabel: () => "main" }));
 
 import { useTabStore } from "@/stores/tabStore";
 import { MAX_WAIT_MS, type BrowserTarget } from "@/services/mcpBridge/v2/browserHelpers";
+import { readOperationArgsChecked } from "@/services/mcpBridge/v2/readOperationArgs";
 import {
   pollScript,
   pollUrl,
   readWaitRequest,
   type PollContext,
 } from "@/services/mcpBridge/v2/browserWaitForPoll";
+
+/** Parse as the handler does: from the request's checked payload read. */
+const readWait = (args: Record<string, unknown>) =>
+  readWaitRequest(readOperationArgsChecked("vmark.browser.wait_for", args));
 
 const SITE = "https://x.example.com/start?token=1#frag";
 function seed(): string {
@@ -30,54 +37,69 @@ const matched = (ref?: string) => Promise.resolve(JSON.stringify(ref ? { matched
 const unmatched = () => Promise.resolve(JSON.stringify({ matched: false }));
 
 beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(Date.UTC(2026, 0, 15, 12, 0, 0));
   useTabStore.setState({ tabs: {}, activeTabId: {}, untitledCounter: 0 });
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+/** Track whether a poll has answered, without awaiting it. */
+function track<T>(promise: Promise<T>): { promise: Promise<T>; settled: () => boolean } {
+  let done = false;
+  void promise.finally(() => {
+    done = true;
+  }).catch(() => undefined);
+  return { promise, settled: () => done };
+}
+
 describe("readWaitRequest", () => {
   it("defaults the timeout to the single wait budget and refuses one outside it", () => {
-    expect(readWaitRequest({ text: "Done" })).toEqual({
+    expect(readWait({ text: "Done" })).toEqual({
       ok: true,
       request: { timeoutMs: MAX_WAIT_MS, mode: { kind: "script", condition: { text: "Done" } } },
     });
     for (const timeoutMs of [0, -1, 1.5, MAX_WAIT_MS + 1, "5000", NaN]) {
-      expect(readWaitRequest({ text: "Done", timeoutMs })).toEqual({ ok: false, error: "INVALID_TIMEOUT" });
+      expect(readWait({ text: "Done", timeoutMs })).toEqual({ ok: false, error: "INVALID_TIMEOUT" });
     }
   });
 
   it("accepts exactly one condition and maps each to its mode", () => {
-    expect(readWaitRequest({ ref: "e2" }).ok && readWaitRequest({ ref: "e2" })).toMatchObject({
+    expect(readWait({ ref: "e2" }).ok && readWait({ ref: "e2" })).toMatchObject({
       request: { mode: { kind: "script", condition: { ref: "e2" } } },
     });
-    expect(readWaitRequest({ role: "heading", name: "Done" })).toMatchObject({
+    expect(readWait({ role: "heading", name: "Done" })).toMatchObject({
       request: { mode: { kind: "script", condition: { role: "heading", name: "Done" } } },
     });
-    expect(readWaitRequest({ role: "heading" })).toMatchObject({
+    expect(readWait({ role: "heading" })).toMatchObject({
       request: { mode: { kind: "script", condition: { role: "heading" } } },
     });
-    expect(readWaitRequest({ urlContains: "/orders" })).toMatchObject({
+    expect(readWait({ urlContains: "/orders" })).toMatchObject({
       request: { mode: { kind: "url", needle: "/orders" } },
     });
   });
 
   it("refuses zero conditions, two conditions, and blank ones that count as absent", () => {
     const error = "wait_for needs exactly one of: ref, role (+optional name), text, or urlContains";
-    expect(readWaitRequest({})).toEqual({ ok: false, error });
-    expect(readWaitRequest({ text: "a", role: "button" })).toEqual({ ok: false, error });
-    expect(readWaitRequest({ ref: "  ", text: "" })).toEqual({ ok: false, error });
+    expect(readWait({})).toEqual({ ok: false, error });
+    expect(readWait({ text: "a", role: "button" })).toEqual({ ok: false, error });
+    expect(readWait({ ref: "  ", text: "" })).toEqual({ ok: false, error });
     // A name alone is not a condition — it qualifies a role.
-    expect(readWaitRequest({ name: "Done" })).toEqual({ ok: false, error });
+    expect(readWait({ name: "Done" })).toEqual({ ok: false, error });
   });
 
   it("refuses a urlContains needle that can never match the redacted url (A-06)", () => {
     for (const needle of ["?token=", "#frag", "/a?b"]) {
-      const out = readWaitRequest({ urlContains: needle });
+      const out = readWait({ urlContains: needle });
       expect(out.ok).toBe(false);
       if (!out.ok) expect(out.error).toContain("redacted URL");
     }
   });
 
   it("checks the timeout before the condition", () => {
-    expect(readWaitRequest({ timeoutMs: 0 })).toEqual({ ok: false, error: "INVALID_TIMEOUT" });
+    expect(readWait({ timeoutMs: 0 })).toEqual({ ok: false, error: "INVALID_TIMEOUT" });
   });
 });
 
@@ -89,8 +111,12 @@ describe("pollUrl", () => {
 
   it("matches once a navigation lands mid-wait", async () => {
     const id = seed();
-    setTimeout(() => useTabStore.getState().updateBrowserTab(id, { url: "https://x.example.com/orders/done" }), 20);
-    expect(await pollUrl(ctx(id, 2000), "/orders/done")).toEqual({
+    const wait = track(pollUrl(ctx(id, 2000), "/orders/done"));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(wait.settled()).toBe(false);
+    useTabStore.getState().updateBrowserTab(id, { url: "https://x.example.com/orders/done" });
+    await vi.advanceTimersByTimeAsync(5);
+    expect(await wait.promise).toEqual({
       kind: "matched",
       url: "https://x.example.com/orders/done",
     });
@@ -98,7 +124,12 @@ describe("pollUrl", () => {
 
   it("times out with the url it last saw", async () => {
     const id = seed();
-    expect(await pollUrl(ctx(id, 15), "/never")).toEqual({ kind: "timeout", url: "https://x.example.com/start" });
+    const wait = track(pollUrl(ctx(id, 15), "/never"));
+    await vi.advanceTimersByTimeAsync(14);
+    expect(wait.settled()).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(wait.settled()).toBe(true);
+    expect(await wait.promise).toEqual({ kind: "timeout", url: "https://x.example.com/start" });
   });
 
   it("reports a tab that left the store, and stops when the guard refuses", async () => {
@@ -126,17 +157,22 @@ describe("pollScript", () => {
   it("polls until the condition holds, re-resolving the tab each round", async () => {
     const id = seed();
     const evaluate = vi.fn<(tab: BrowserTarget) => Promise<string>>().mockImplementationOnce(unmatched).mockImplementationOnce(() => matched());
+    const wait = track(pollScript(ctx(id, 2000), evaluate));
     // The second round sees the generation the mirror advanced to meanwhile.
-    setTimeout(() => useTabStore.getState().updateBrowserTab(id, { generation: 2 }), 1);
-    expect(await pollScript(ctx(id, 2000), evaluate)).toEqual({ kind: "matched", url: "https://x.example.com/start" });
+    useTabStore.getState().updateBrowserTab(id, { generation: 2 });
+    await vi.advanceTimersByTimeAsync(5);
+    expect(await wait.promise).toEqual({ kind: "matched", url: "https://x.example.com/start" });
     expect(evaluate).toHaveBeenCalledTimes(2);
+    expect(evaluate.mock.calls[0][0].generation).toBe(1);
     expect(evaluate.mock.calls[1][0].generation).toBe(2);
   });
 
   it("samples more than once inside a short budget — no floor turns a short wait into one poll", async () => {
     const id = seed();
     const evaluate = vi.fn<(tab: BrowserTarget) => Promise<string>>(unmatched);
-    expect(await pollScript(ctx(id, 60), evaluate)).toMatchObject({ kind: "timeout" });
+    const wait = track(pollScript(ctx(id, 60), evaluate));
+    await vi.advanceTimersByTimeAsync(60);
+    expect(await wait.promise).toMatchObject({ kind: "timeout" });
     expect(evaluate.mock.calls.length).toBeGreaterThan(1);
   });
 
@@ -144,12 +180,16 @@ describe("pollScript", () => {
     const id = seed();
     let rejectLate: (e: unknown) => void = () => {};
     const evaluate = () => new Promise<string>((_, reject) => { rejectLate = reject; });
-    const started = Date.now();
-    expect(await pollScript(ctx(id, 30), evaluate)).toEqual({ kind: "timeout", url: "https://x.example.com/start" });
-    expect(Date.now() - started).toBeLessThan(1000);
-    // Nothing is listening any more: a late rejection must not become an unhandled one.
+    const wait = track(pollScript(ctx(id, 30), evaluate));
+    // On time: still waiting a millisecond before the deadline, answered at it.
+    await vi.advanceTimersByTimeAsync(29);
+    expect(wait.settled()).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(wait.settled()).toBe(true);
+    expect(await wait.promise).toEqual({ kind: "timeout", url: "https://x.example.com/start" });
+    // Nothing is listening any more: a late rejection must not become an
+    // unhandled one (Vitest fails the run on any unhandled rejection).
     rejectLate(new Error("EVAL_TIMEOUT: late"));
-    await new Promise((r) => setTimeout(r, 10));
   });
 
   it("propagates a driver rejection that arrives in time, so the model sees its token", async () => {

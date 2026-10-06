@@ -3,7 +3,7 @@
  * operations. Each meaningful edit bumps the revision so external readers
  * (the MCP server, in particular) can detect changes between reads.
  *
- * Revisions are keyed **per tab** (WI-0.10, C5). A previous global revision
+ * Revisions are keyed **per tab**. A previous global revision
  * meant an MCP `document.write` targeting a non-active tab was validated
  * against the *active* tab's revision — causing false STALE rejections or
  * missed staleness. Each tab now carries its own revision; an unknown tab is

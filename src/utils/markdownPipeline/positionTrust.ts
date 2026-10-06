@@ -19,7 +19,7 @@
  *   | underline   | absent   | remarkCustomInline, same                       |
  *   | details     | absent   | rebuilt from html nodes                        |
  *
- * CORRECTED 2026-08-01. An earlier version of this file claimed the `<details>`
+ * CORRECTED. An earlier version of this file claimed the `<details>`
  * BODY carried positions local to the extracted substring — inherited from a
  * plan review and repeated here as though measured. It is FALSE. Measured
  * node by node against the real parser, every descendant of a details block

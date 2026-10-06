@@ -10,18 +10,18 @@
  *   - Bridge runs in Rust process, frontend only controls and monitors
  *   - Port reported back to frontend for display and sidecar config
  *   - Lifecycle operations (start, stop, refresh) run one at a time, in the
- *     order issued (audit #382): Rust sees them in that order, and an older
+ *     order issued: Rust sees them in that order, and an older
  *     completion can never land on top of a newer one. `loading` stays on
  *     until the LAST pending mutation settles.
  *   - Events from Rust bypass the queue — they report transitions that have
- *     already happened — and either direction clears a stale error (#385).
+ *     already happened — and either direction clears a stale error.
  *     They are the source of truth: a command's returned status is a snapshot
  *     taken before the response travelled, and responses and events reach the
  *     webview on different channels with no ordering between them, so a
  *     snapshot that raced an event is older than what the event wrote and is
- *     dropped (#382).
+ *     dropped.
  *   - The frontend CANNOT order an event against a command response, and does
- *     not need to (#382, round 3). Two facts about `mcp_server.rs` carry it:
+ *     not need to. Two facts about `mcp_bridge/control.rs` carry it:
  *     every bridge transition emits (`announce_started` on the last line of
  *     `mcp_bridge_start`; `mcp_bridge_stop` emits before its `Ok`), and both
  *     emits go out BEFORE their command returns, on one ordered channel. So
@@ -35,7 +35,7 @@
  *     an `app.emit` ever fails (Rust swallows it with `let _ =`) the value
  *     stays stale until the next `refresh()`. Closing either one means putting
  *     a sequence number on the event — a Rust change, not a frontend one.
- *   - The listeners are live BEFORE the first status read (audit #384), so no
+ *   - The listeners are live BEFORE the first status read, so no
  *     transition can fall between the snapshot and the subscription.
  *
  * @coordinates-with useMcpAutoStart.ts — auto-starts on app launch
@@ -55,7 +55,7 @@ interface McpServerStatus {
 }
 
 /**
- * A bound TCP port, or null when the payload is not one (audit #749).
+ * A bound TCP port, or null when the payload is not one.
  *
  * `mcp-server:started` carries a `u16` from `announce_started`, so anything
  * else is a broken contract rather than a value to display. The old check —
@@ -89,7 +89,7 @@ interface UseMcpServerResult {
   /**
    * Refresh the bridge status. Resolves with the status as the hook now knows
    * it — the fetched snapshot, or the newer event-derived state that superseded
-   * it (#382) — or null on error.
+   * it — or null on error.
    */
   refresh: () => Promise<McpServerStatus | null>;
 }
@@ -124,7 +124,7 @@ export function useMcpServer(): UseMcpServerResult {
   // Mutations requested but not yet settled; `loading` is on while this is non-zero.
   const pendingMutations = useRef(0);
   // Bumped by every event from Rust: a command whose response arrives under a
-  // later epoch raced an event and carries an older snapshot (#382).
+  // later epoch raced an event and carries an older snapshot.
   const eventEpoch = useRef(0);
   // The status this hook currently believes — what a superseded refresh resolves with.
   const known = useRef<McpServerStatus>({ running: false, port: null });
@@ -171,7 +171,7 @@ export function useMcpServer(): UseMcpServerResult {
     [adopt, serialized],
   );
 
-  // One bridge mutation (audit #383): loading on until the last pending one
+  // One bridge mutation: loading on until the last pending one
   // settles, the previous error cleared, the reported status adopted, and a
   // failure recorded then rethrown so the caller can react. The command
   // literal stays at each call site so the IPC-contract gate can still
@@ -185,7 +185,7 @@ export function useMcpServer(): UseMcpServerResult {
         const epoch = eventEpoch.current;
         try {
           adopt(epoch, await request());
-          // Cleared on SUCCESS, not only on enqueue (audit #748). The clear
+          // Cleared on SUCCESS, not only on enqueue. The clear
           // above happens when a command joins the queue, so an earlier queued
           // command that fails AFTER a later one was enqueued leaves its error
           // on screen over the later command's success — the bridge stopped,
@@ -221,7 +221,7 @@ export function useMcpServer(): UseMcpServerResult {
   useEffect(() => {
     let disposed = false;
 
-    // mcp_server.rs emits the bound port with `mcp-server:started`; adopt it so
+    // mcp_bridge/control.rs emits the bound port with `mcp-server:started`; adopt it so
     // a bridge started elsewhere (auto-start, another window) reports its port
     // without waiting for the next refresh(). `mcp-server:stopped` carries
     // nothing, and a stopped bridge has no port (the interface says null).
@@ -237,7 +237,7 @@ export function useMcpServer(): UseMcpServerResult {
       setError(null);
       // …but an unusable port is not a state to sit in: ASK for the real
       // status rather than leave the panel advertising a bridge with no
-      // address until something else happens to refresh (audit #749).
+      // address until something else happens to refresh.
       if (port === null) void refresh();
     });
 
@@ -247,7 +247,7 @@ export function useMcpServer(): UseMcpServerResult {
       setError(null);
     });
 
-    // The first read waits until both subscriptions are live (audit #384):
+    // The first read waits until both subscriptions are live:
     // `listen` resolves once Rust has registered the handler. If it rejects
     // (outside Tauri) the status is still worth fetching.
     void Promise.allSettled([unlistenStarted, unlistenStopped]).then(() => {

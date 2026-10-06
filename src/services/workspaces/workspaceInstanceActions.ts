@@ -1,3 +1,10 @@
+/**
+ * workspaceInstanceActions — opens a workspace root as a workspace instance in
+ * a window, or activates the existing instance for the same root.
+ *
+ * @module services/workspaces/workspaceInstanceActions
+ */
+
 import { isWorkspaceRailEnabled } from "@/services/featureFlags/workspaceRailFeatureFlag";
 import {
   useWorkspaceInstancesStore,
@@ -19,14 +26,14 @@ export interface OpenWorkspaceInstanceOptions {
   workspaceInstanceId?: string;
   createdFrom?: WorkspaceInstanceCreatedFrom;
   platform?: WorkspacePlatform;
-  /** WI-13.3: config the open path already read — the coordinator skips its
+  /** Config the open path already read — the coordinator skips its
    *  disk re-read. `null` = no config file; `undefined` = not preloaded. */
   preloadedConfig?: WorkspaceConfig | null;
 }
 
 /**
  * Resolve a possibly variant root spelling to the STORED rootPath of an
- * existing same-identity instance in the window (WI-17.2). The Rust config
+ * existing same-identity instance in the window. The Rust config
  * layer hashes the exact path string, so reading with `c:\repo` and writing
  * with `C:\Repo` would address two different config files on Windows. When no
  * instance matches (or the path is invalid), the input is returned unchanged.
@@ -69,7 +76,7 @@ export function openOrActivateWorkspaceInstance(
   );
 
   if (existingId) {
-    // WI-13.3: File > Open of an already-railed root performs the SAME full
+    // File > Open of an already-railed root performs the SAME full
     // context switch as clicking its rail entry (stash outgoing, restore
     // incoming, sidebar re-root) — not a raw activation flip.
     switchWorkspaceInstance(windowLabel, existingId, {

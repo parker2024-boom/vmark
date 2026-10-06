@@ -16,11 +16,14 @@
  *   - Skips save if document is currently in the middle of an operation
  *   - Reentry guard prevents overlapping save cycles on slow filesystems
  *   - Re-reads doc state per tab (not a snapshot) so content is fresh before each save
+ *   - Flushes the WYSIWYG editor only when it holds an edit the store has not
+ *     seen (wysiwygEditPending); an idle tick serializes nothing
  *
  * @coordinates-with saveToPath.ts — shared save logic with line ending handling
  * @coordinates-with reentryGuard.ts — prevents concurrent save operations
  * @coordinates-with settingsStore.ts — reads autoSaveEnabled and autoSaveInterval
  * @coordinates-with wysiwygFlush.ts — flushActiveWysiwygNow ensures content is synced before save
+ * @coordinates-with wysiwygEditPending.ts — whether there is an edit to flush
  * @module hooks/useAutoSave
  */
 
@@ -32,6 +35,7 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import { saveToPath } from "@/services/persistence/saveToPath";
 import { isOperationInProgress } from "@/utils/reentryGuard";
 import { flushActiveWysiwygNow } from "@/utils/wysiwygFlush";
+import { hasPendingWysiwygEdit } from "@/utils/wysiwygEditPending";
 import { autoSaveLog, saveError } from "@/utils/debug";
 
 const MIN_INTERVAL_MS = 1000;
@@ -69,8 +73,10 @@ export function useAutoSave() {
 
       isSavingRef.current = true;
       try {
-        // Ensure WYSIWYG content is synced to store before reading
-        flushActiveWysiwygNow();
+        // An edit the editor has not written to the store yet must get there
+        // before isDirty is read. With no such edit the flush would only
+        // re-serialize the whole document, so an idle tick skips it.
+        if (hasPendingWysiwygEdit()) flushActiveWysiwygNow();
 
         // Iterate ALL tabs for this window — not just the active one
         const tabs = useTabStore.getState().tabs[windowLabel] ?? [];

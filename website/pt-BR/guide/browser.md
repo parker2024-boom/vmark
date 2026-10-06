@@ -8,7 +8,7 @@ O navegador integrado está disponível no **macOS**, onde vem ativado por padr�
 
 
 ::: info Barra de espaços de trabalho
-Com a [barra de espaços de trabalho](/guide/workspace-rail) experimental ativada, as páginas do navegador são **globais na janela**: elas permanecem acessíveis a partir de todos os espaços de trabalho da janela e nunca ficam vinculadas às abas de um único espaço de trabalho.
+Com a [barra de espaços de trabalho](/pt-BR/guide/workspace-rail) experimental ativada, as páginas do navegador são **globais na janela**: elas permanecem acessíveis a partir de todos os espaços de trabalho da janela e nunca ficam vinculadas às abas de um único espaço de trabalho.
 :::
 
 ## Como desativá-lo
@@ -17,9 +17,9 @@ O navegador vem **ativado por padrão** no macOS. **Nova aba do navegador** est�
 **Arquivo** (`Alt + Mod + Shift + B`) e na paleta de comandos — nada precisa ser
 ativado antes.
 
-Para desativá-lo, vá em **Configurações → Avançado → macOS** e desative
-**Navegador integrado**. Isso também fecha quaisquer abas de navegador abertas e retira a
-superfície de automação por IA descrita abaixo.
+Para desativá-lo, vá em **Configurações → Avançado** e desative **Navegador
+incorporado**. Isso fecha quaisquer abas de navegador abertas, revoga todas as permissões de site que a IA
+havia acumulado e retira a superfície de automação por IA descrita abaixo.
 
 Duas configurações de postura da IA ficam logo abaixo da chave e aparecem somente enquanto
 ela está ativada. Ambas vêm com valores conservadores e não são alteradas pelo fato de o
@@ -44,7 +44,13 @@ Uma aba do navegador abre na área do editor, ao lado dos seus documentos — a 
 | Barra de endereços | Uma **omnibox**: digite uma URL para ir até ela, ou qualquer outra coisa para pesquisar |
 | ☆ / ★ | Adicionar esta página aos favoritos |
 
+Uma nova aba do navegador abre no DuckDuckGo (`https://duckduckgo.com`), e a omnibox pesquisa com o DuckDuckGo. Uma entrada que começa com `http://` ou `https://` é aberta como foi digitada; um nome de host simples sem espaços (`example.com`, `localhost:3000`, um endereço IPv4) é aberto como endereço web — `http` para endereços locais, `https` para todo o resto; qualquer outra coisa é pesquisada. Ainda não é possível alterar nem a página inicial nem o mecanismo de pesquisa.
+
 A barra de endereços acompanha a página automaticamente: se um site redireciona, ou um link leva você para outro lugar, a barra é atualizada para mostrar onde você realmente está.
+
+**Uma aba mantém sua página quando você muda para outra.** Olhar um documento e voltar não recarrega a página nem perde o que você tinha digitado nela — a página fica apenas oculta, e é desmontada quando você fecha a aba. É isso também que permite que uma IA continue trabalhando em uma aba do navegador enquanto você escreve (veja *Codirigindo* abaixo).
+
+Se uma página tenta abrir uma janela pop-up (`window.open`, um link `target="_blank"`), o VMark a bloqueia e mostra o endereço bloqueado no topo da página com um botão **Abrir em nova aba**, de modo que um login que insiste em um pop-up fica a um clique de distância, em vez de um clique que não fez nada.
 
 ## A barra lateral acompanha a aba
 
@@ -76,16 +82,16 @@ As sessões (logins, cookies) persistem por perfil no próprio armazenamento de 
 
 Um assistente de IA conectado por [MCP](./mcp-tools) pode operar a aba do navegador:
 
-- **Ler** — obtém um instantâneo de acessibilidade estruturado da página (cada elemento interativo ou estrutural como papel + nome acessível, mais um identificador **ref** estável como `e5`).
-- **Agir** — clica ou digita em um alvo, seja pelo seu **ref** preciso de uma leitura anterior, seja pelo **papel + nome acessível** do ARIA (por exemplo, clicar no link chamado "Learn more"). Um ref só é aceito para uma ação já concedida; qualquer coisa que precise da sua aprovação usa papel + nome, para que o prompt possa mostrar um elemento legível. Um clique **verifica que ele de fato aconteceu**: ele rola o alvo até a visão, exige que ele esteja renderizado visivelmente — um botão duplicado dentro de uma seção recolhida é ignorado, não clicado — e faz um teste de acerto no ponto do clique, de modo que um alvo coberto por uma sobreposição é reportado como "coberto por …" em vez de ser clicado por baixo. A IA é informada sobre o que *aconteceu*, não apenas que tentou, então ela não pode agir silenciosamente na coisa errada e relatar sucesso.
-- **Rolar** — traz um elemento (por ref) até a visão, ou rola por uma quantidade de pixels. Classe Agir (exige aprovação, como Clicar).
-- **Tecla** — envia um pressionamento de tecla (`Enter`, `Escape`, `Tab`, setas, com Ctrl/Shift/Alt/Meta opcionais) para um elemento em foco ou um ref — por exemplo, enviar um formulário ou dispensar uma caixa de diálogo. Classe Agir. Observação: teclas e rolagens são eventos **sintéticos** do DOM, então um site que só confia em entrada real de hardware pode ignorá-los.
+- **Ler** — obtém um instantâneo de acessibilidade estruturado da página (cada elemento interativo ou estrutural como papel + nome acessível, mais um identificador **ref** estável como `e5`). O instantâneo percorre shadow roots abertas e diz honestamente o que não conseguiu alcançar (shadow roots fechadas, frames) e se foi cortado por seus limites de tamanho.
+- **Agir** — clica ou digita em um alvo, seja pelo seu **ref** preciso de uma leitura anterior, seja pelo **papel + nome acessível** do ARIA (por exemplo, clicar no link chamado "Learn more"). Um ref só é aceito para uma ação já concedida; qualquer coisa que precise da sua aprovação usa papel + nome, para que o prompt possa mostrar um elemento legível. Um clique **verifica que ele de fato aconteceu**: ele rola o alvo até a visão, exige que ele esteja renderizado visivelmente — um botão duplicado dentro de uma seção recolhida é ignorado, não clicado — e faz um teste de acerto no ponto do clique, de modo que um alvo coberto por uma sobreposição é reportado como "coberto por …" em vez de ser clicado por baixo. Quando vários elementos visíveis compartilham o mesmo papel e nome, o clique é **recusado como ambíguo** em vez de resolvido pelo que vier primeiro na página — uma página não consegue colocar seu próprio link "Learn more" na frente do link do site. A IA é informada sobre o que *aconteceu*, não apenas que tentou, então ela não pode agir silenciosamente na coisa errada e relatar sucesso. Campos de arquivo nunca são clicados.
+- **Rolar** — traz um elemento (por ref) até a visão, ou rola por uma quantidade de pixels. Classe Agir (exige aprovação, como Clicar); a aprovação vincula exatamente a rolagem solicitada.
+- **Tecla** — envia um pressionamento de tecla (`Enter`, `Escape`, `Tab`, setas, com Ctrl/Shift/Alt/Meta opcionais) para um elemento em foco ou um ref — por exemplo, enviar um formulário ou dispensar uma caixa de diálogo. Classe Agir, e a aprovação vincula exatamente a tecla e os modificadores. Enter dentro de um formulário o envia e Tab move o foco, como faria uma entrada real; as outras teclas são eventos **sintéticos** do DOM, então um site que só confia em entrada real de hardware pode ignorá-las.
 - **Consultar** — detecção estruturada do DOM que o instantâneo de acessibilidade não consegue nomear (tabelas, valores computados, atributos) por seletor CSS. Classe Ler.
 - **Extrair** — a página como Markdown em modo de leitura (título, autoria, texto do artigo, com o conteúdo repetitivo removido), para páginas que a IA quer *ler* em vez de operar. Plugins de site refinam a extração por origem — o plugin embutido da Wikipédia remove a interface do wiki pelo nome — com um leitor genérico como alternativa. A página apenas exporta bytes; a extração é executada no VMark. Classe Ler.
 - **Estilo** — manipulação de CSS (dispensar uma sobreposição que bloqueia, destacar um alvo) definindo estilos inline, alternando classes ou injetando um bloco `<style>` (para toda a página, não restrito a um seletor). Classe Agir, e a aprovação vincula a estilização exata — ela não pode ser trocada por outro CSS depois que você permite.
 - **Executar JS** — a saída de emergência: executa um script para o que os verbos estruturados não conseguem expressar. Ele roda no **mundo de conteúdo isolado** (DOM + CSS, **nunca** o JavaScript da própria página), é aprovado **a cada chamada** (nunca lembrado — não existe "Permitir neste site" para ele), e seu resultado é tratado como **não confiável**. O prompt de aprovação mostra o **script exato**, e é esse script que roda — a IA não consegue fazer você aprovar um script e então executar outro. Prefira Consultar/Estilo; recorra a isto apenas quando eles não bastarem.
 - **Salvar / carregar sessão** — salva a sessão atual da aba sob um **handle** (um nome que você aprova), e mais tarde a restaura para que um fluxo comece já autenticado — *sem que a IA jamais veja seus cookies ou tokens*. Os valores são armazenados no **keychain do sistema operacional** (criptografados em repouso), e a IA recebe apenas o handle e um resumo de contagem. Tanto salvar quanto carregar são **aprovados a cada chamada**, e uma aprovação para um handle não pode ser usada em outro. Uma restauração só se aplica a uma página na **mesma origem** de onde foi salva. Isto é credencial **por referência**: a IA nomeia uma sessão, o VMark guarda o segredo.
-- **Console** — lê a saída `console.*` capturada da página (log/warn/error…), **além de erros não capturados e rejeições de promessa não tratadas** — o sinal que uma página emite quando seu próprio script quebra, que o registro `console` comum nunca mostra — para que a IA possa depurar uma página que está controlando. Somente leitura, e a saída é tratada como dados **não confiáveis** da página. Isto foi construído para preservar a garantia de privacidade por design: a captura escreve no próprio DOM da página e o VMark a lê de lá, então nenhum canal de mensagens é aberto de volta para o aplicativo.
+- **Console** — lê a saída `console.*` capturada da página (log/warn/error…), **além de erros não capturados e rejeições de promessa não tratadas** — o sinal que uma página emite quando seu próprio script quebra, que o registro `console` comum nunca mostra — para que a IA possa depurar uma página que está controlando. Somente leitura, apenas em abas de propriedade da IA (suas próprias abas não carregam o shim de captura), e a saída é tratada como dados **não confiáveis** da página. Isto foi construído para preservar a garantia de privacidade por design: a captura escreve no próprio DOM da página e o VMark a lê de lá, então nenhum canal de mensagens é aberto de volta para o aplicativo.
 
 ::: tip Salvar/carregar sessão — escopo
 Uma sessão salva cobre o **`localStorage` e os cookies**, ambos restritos à origem à qual a
@@ -93,15 +99,15 @@ página estava vinculada quando você a salvou. Os cookies são lidos e reproduz
 armazenamento de cookies nativo e têm **escopo de domínio nos dois sentidos** — salvar nunca
 copia todo o seu pote de cookies, e restaurar nunca planta um cookie sob um site não relacionado.
 :::
-- **Abrir** — cria uma aba de propriedade da IA e carrega uma URL HTTP(S).
-- **Navegar** — navega em uma aba de propriedade da IA e aguarda seu ticket de navegação. Quando a página que carrega se apresenta como uma **barreira** em vez do conteúdo solicitado — um muro de login, um interstício de consentimento, um desafio de verificação humana (reCAPTCHA/Turnstile) ou um aviso de limite de taxa — o resultado diz isso, e a IA é instruída a **envolver você** em vez de tentar contornar. A detecção prioriza a precisão: um preço que menciona "$429" ou um rodapé que diz "Cloudflare" não a aciona.
+- **Abrir** — cria uma aba de propriedade da IA, a traz para a frente e carrega uma URL HTTP(S). No máximo oito abas de propriedade da IA podem estar abertas ao mesmo tempo, e a IA **fecha** suas próprias abas quando termina (fechar nunca exige aprovação — parar é sempre permitido). Opcionalmente, a aba abre com um **perfil nomeado**, um contexto persistente para que um login possa ser reutilizado pelo nome; abrir um deles pede sua aprovação a cada vez, e a IA nunca vê as credenciais.
+- **Navegar** — navega em uma aba de propriedade da IA (trazendo-a para a frente) e aguarda seu ticket de navegação. Quando a página que carrega se apresenta como uma **barreira** em vez do conteúdo solicitado — um muro de login, um interstício de consentimento, um desafio de verificação humana (reCAPTCHA/Turnstile) ou um aviso de limite de taxa — o resultado diz isso, e a IA é instruída a **envolver você** em vez de tentar contornar. A detecção prioriza a precisão: um preço que menciona "$429" ou um rodapé que diz "Cloudflare" não a aciona.
 - **Aguardar** — aguarda um ticket de navegação específico sem iniciar outro carregamento.
-- **Aguardar por** — consulta repetidamente até que uma condição se mantenha (um elemento por ref ou papel + nome, um trecho de texto visível, ou a **URL da aba contendo** uma substring — este último confirma que uma navegação disparada por clique aconteceu) ou até que um tempo limite se esgote, relatando se houve correspondência. Torna um fluxo de várias etapas determinístico — agir, então aguardar pelo resultado, então ler — em vez de adivinhar.
-- **Captura de tela** — obtém uma imagem JPEG da renderização atual da página, para que a IA possa ver o layout e o estado renderizado que o instantâneo de acessibilidade não nomeia. Assim como *Ler*, não é mutante: permitida em uma aba de propriedade da IA e em uma aba humana apenas enquanto você a tiver anexado.
-- **Executar um fluxo de trabalho** — reproduz uma sequência curta e salva de etapas (clicar / digitar / navegar / extrair, escrita em uma pequena gramática de texto e passada como `source`) como uma única **execução assíncrona**: ela retorna um id de execução imediatamente e você consulta seu status, porque uma execução de várias etapas dura mais que uma única requisição. Cada etapa dentro dela é **individualmente sujeita a aprovação**, exatamente como uma ação emitida manualmente — um fluxo de trabalho não é uma forma de contornar os prompts — e etapas que a IA não consegue realizar de forma determinística (um "objetivo" em prosa livre, uma "confirmação") pausam a execução para que você as trate manualmente. Uma reexecução pula etapas que já tiveram sucesso, então reexecutar após uma pausa nunca envia duas vezes. As execuções são limitadas e ocorrem uma por vez por aba, e podem ser canceladas — cancelar é sempre permitido, e assumir o navegador você mesmo interrompe a execução.
+- **Aguardar por** — consulta repetidamente até que uma condição se mantenha (um elemento por ref ou papel + nome, um trecho de texto visível, ou a **URL da aba contendo** uma substring — este último confirma que uma navegação disparada por clique aconteceu; a string de consulta e o fragmento nunca são comparados, porque um token que um redirecionamento colocou ali não pode ser sondável) ou até que um tempo limite se esgote, relatando se houve correspondência. Torna um fluxo de várias etapas determinístico — agir, então aguardar pelo resultado, então ler — em vez de adivinhar. Nem *Aguardar* nem *Aguardar por* mudam a aba que você está vendo.
+- **Captura de tela** — obtém uma imagem JPEG da renderização atual da página, para que a IA possa ver o layout e o estado renderizado que o instantâneo de acessibilidade não nomeia. Assim como *Ler*, não é mutante: permitida em uma aba de propriedade da IA e em uma aba humana apenas enquanto você a tiver anexado. Uma aba que não é a página visível pode ser renderizada em branco.
+- **Executar um fluxo de trabalho** — reproduz uma sequência curta e salva de etapas (clicar / digitar / navegar / extrair, escrita em uma pequena gramática de texto e passada como `source`) como uma única **execução assíncrona**: ela retorna um id de execução imediatamente e você consulta seu status, porque uma execução de várias etapas dura mais que uma única requisição. Cada etapa dentro dela é **individualmente sujeita a aprovação**, exatamente como uma ação emitida manualmente — um fluxo de trabalho não é uma forma de contornar os prompts — e etapas que a IA não consegue realizar de forma determinística (um "objetivo" em prosa livre, uma "confirmação") pausam a execução para que a IA as trate manualmente. Para continuar após uma pausa, a etapa pausada é feita manualmente e uma nova execução **retoma** a partir da pausada: ela herda as etapas concluídas e trata a etapa pausada como feita, então nada é enviado duas vezes; uma reexecução do mesmo fluxo de trabalho com as mesmas entradas também pula etapas de escrita que já tiveram sucesso. As execuções são limitadas (apenas pelo tempo de execução — o tempo gasto esperando por você não conta), ocorrem uma por vez por aba e podem ser canceladas — cancelar é sempre permitido, mesmo enquanto uma etapa aguarda sua aprovação, e assumir o navegador você mesmo interrompe a execução.
 - **Gravar um fluxo de trabalho** — em vez de escrever a gramática à mão, você pode **gravar** um: com a sua aprovação (pedida a cada vez — a gravação nunca é uma permissão permanente), o VMark captura os **cliques e edições de campos** que você realiza na aba e devolve um texto de fluxo de trabalho pronto para executar. É **livre de valores por construção**: nada do que você digita é salvo — cada campo vira um `{input}` nomeado que você preenche na reprodução, um campo de senha vira um passo `confirm:` manual, e as URLs são reduzidas a origem + caminho. Ele grava *quais* controles você tocou, nunca *o que* você digitou.
 
-A postura do navegador da IA é configurada em **Configurações → Avançado → Navegador integrado**:
+A postura do navegador da IA é configurada em **Configurações → Avançado**:
 
 - **Sandbox** (recomendado) usa um único armazenamento de webview da IA, compartilhado e não
   persistente. Ele compartilha cookies com outras abas em sandbox, mas não com abas humanas.
@@ -116,11 +122,11 @@ As ações **exigem aprovação**: uma operação que você não autorizou não 
 
 ### Aprovando uma ação
 
-Quando a IA pede para agir, o VMark exibe um prompt e pausa a página. Ele informa exatamente três coisas — o **site**, a **ação** e o **elemento** (seu papel e seu nome acessível, por exemplo `button "Publish"`):
+Quando a IA pede para agir, o VMark exibe um prompt e pausa a página. Ele informa o **site**, a **ação** e o **elemento** (seu papel e seu nome acessível, por exemplo `button "Publish"`) — e, para uma ação que carrega conteúdo, o próprio conteúdo: o texto que um *Digitar* vai inserir, a tecla que um *Tecla* vai pressionar, o script exato que um *Executar script* ou *Estilo* vai executar. É isso que a aprovação vincula; uma nova tentativa com conteúdo diferente pergunta de novo.
 
 - **Permitir uma vez** — autoriza exatamente aquela única ação, naquele elemento, naquela página. É consumida imediatamente e não se torna uma permissão permanente.
 - **Permitir neste site** — a IA pode realizar *aquela operação* naquele *site* sem perguntar novamente. Isso não se estende a outras operações ou a outros sites.
-- **Negar** — nada acontece. Pressionar `Escape`, ou simplesmente apertar `Enter`, também nega: o prompt é deliberadamente tendencioso a recusar.
+- **Negar** — nada acontece. Pressionar `Escape`, ou simplesmente apertar `Enter`, também nega: o prompt é deliberadamente tendencioso a recusar. Um **Permitir** no primeiro meio segundo após o prompt aparecer é ignorado, e um clique precisa começar e terminar no mesmo prompt — assim, um prompt retirado sob o seu dedo não pode entregar o seu clique ao próximo.
 
 O prompt mostra uma **descrição da ação, não uma imagem da página** — e isso é proposital. Uma página da web controla seus próprios pixels, então uma página hostil poderia estilizar um botão "Delete everything" para parecer "Publish". O que o VMark mostra é exatamente aquilo que a barreira de segurança impõe, obtido do mecanismo do navegador em vez das próprias afirmações da página sobre si mesma.
 
@@ -132,18 +138,33 @@ O que sustenta o peso, porém, é o próprio descritor. Um site pode reescrever 
 
 ### Revisando e revogando permissões
 
-**Configurações → Avançado → Permissões de site** lista todos os sites aos quais você concedeu permissão e o que cada um pode fazer. **Revogar** a retira imediatamente — a próxima ação da IA naquele site pergunta novamente.
+A **barra lateral do navegador** (na janela que as detém) lista todos os sites aos quais você concedeu permissão e o que cada um pode fazer. **Revogar** a retira imediatamente — a próxima ação da IA naquele site pergunta novamente. As permissões pertencem à janela em que foram concedidas.
 
-As permissões de site são mantidas apenas na memória: **nunca são gravadas em disco** e expiram quando o VMark é encerrado. Deixar uma IA manter a capacidade de clicar em um site entre reinicializações é uma promessa maior do que parece, então o VMark não a faz silenciosamente.
+As permissões de site são mantidas apenas na memória: **nunca são gravadas em disco**, expiram quando o VMark é encerrado, e desativar o navegador revoga todas elas. Deixar uma IA manter a capacidade de clicar em um site entre reinicializações é uma promessa maior do que parece, então o VMark não a faz silenciosamente.
 
 Quando uma IA mira uma aba criada por humano, o VMark primeiro pergunta se deve anexar o acesso da IA
 àquela aba. A anexação é vinculada à geração de navegação atual. **Permitir uma vez** é
-consumido após uma leitura ou ação bem-sucedida; **Permitir até a navegação** expira na próxima
-navegação completa ou dentro da página, ao fechar, desativar ou reiniciar.
+consumido pela primeira leitura ou ação que o mecanismo do navegador autorizar (um clique que depois
+se revela coberto ou oculto ainda o consome); **Permitir até a navegação** expira na próxima
+navegação completa ou dentro da página, ao fechar, desativar ou reiniciar. Até você anexar uma aba, a
+IA vê apenas sua origem — não seu título nem seu caminho. Se a anexação falhar (o driver recusou,
+ou a página mudou enquanto você decidia), o prompt permanece aberto e informa isso; você pode
+tentar novamente ou negar.
 
 A navegação da IA rejeita por padrão alvos de loopback, LAN privada, link-local, metadados,
-malformados e de esquema não suportado. O DNS rebinding permanece uma limitação de responsabilidade
-do WebKit; o VMark não afirma eliminá-la.
+malformados e de esquema não suportado, e nas abas de propriedade da IA uma lista de regras de conteúdo aplica
+a mesma recusa ao que uma página incorpora — frames, imagens, scripts, requisições — para que uma página
+pública não possa usar a aba da IA para alcançar a sua rede. Antes de um `open` ou `navigate`
+iniciado pela IA ser emitido, o VMark também resolve o nome de host do destino e recusa a
+navegação (`SSRF_BLOCKED`, `reason: resolves-private`) quando qualquer resposta é um desses
+endereços bloqueados, ou (`reason: unresolved`) quando o nome não resolve dentro de uma
+espera limitada — um nome de aparência pública que aponta para a sua LAN ou para um serviço de metadados
+de nuvem é barrado antes de o WebKit enviar uma requisição. Restam dois limites, ditos com clareza: a
+verificação prévia cobre as navegações que a IA emite, não destinos de redirecionamento, cliques em links
+dentro da página nem o que uma página incorpora (esses continuam sendo verificações do texto da URL mais a lista
+de regras de conteúdo para endereços privados literais), e uma resposta de DNS que muda após a verificação prévia
+(rebinding) não é verificada novamente, porque o WKWebView não expõe um gancho por requisição para o
+endereço que uma conexão realmente usa.
 
 ## Codirigindo: assista a uma IA controlar o navegador a partir do terminal
 

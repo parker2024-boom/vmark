@@ -64,7 +64,7 @@ impl CoherenceIndex {
         Ok(dag)
     }
     /// Load ONLY the revisions of the given objects — the bounded sub-dag a
-    /// preview needs (WI-3.4 perf, design-accept-consistency Blocker 2). A
+    /// preview needs (design-accept-consistency Blocker 2). A
     /// preview projects a candidate's incident edges, each resolving its own
     /// upstream+downstream objects; those objects' full revision histories are
     /// all `resolve`/`project_edge` touch, so a whole-corpus `load_dag` (+ clone)

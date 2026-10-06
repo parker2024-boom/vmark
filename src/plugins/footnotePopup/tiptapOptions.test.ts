@@ -12,12 +12,6 @@
 import { describe, it, expect, vi } from "vitest";
 
 vi.mock("./footnote-popup.css", () => ({}));
-vi.mock("./FootnotePopupView", () => ({
-  FootnotePopupView: class {
-    update() {}
-    destroy() {}
-  },
-}));
 
 import { footnotePopupExtension } from "./tiptap";
 

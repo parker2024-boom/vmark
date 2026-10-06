@@ -11,9 +11,7 @@ use std::path::PathBuf;
 
 use uuid::Uuid;
 
-use super::canonical::{
-    binary_content_hash, canonical_masked_bytes, insert_identity, text_content_hash,
-};
+use super::canonical::{binary_content_hash, insert_identity, masked_text, MaskedText};
 use super::types::ContentHash;
 
 #[derive(Debug)]
@@ -49,10 +47,14 @@ impl SnapshotStore {
 
     /// Store a text document: identity-masked canonical bytes (spec §4.2).
     pub fn put_text(&self, content: &str) -> Result<ContentHash, String> {
-        let bytes = canonical_masked_bytes(content);
-        let hash = text_content_hash(content);
-        self.put_raw(&hash, bytes.as_bytes())?;
-        Ok(hash)
+        self.put_masked(&masked_text(content))
+    }
+
+    /// Store text the caller already canonicalized, masked and hashed — the
+    /// write paths that need the hash anyway compute it once and hand it here.
+    pub fn put_masked(&self, masked: &MaskedText) -> Result<ContentHash, String> {
+        self.put_raw(&masked.hash, masked.bytes.as_bytes())?;
+        Ok(masked.hash.clone())
     }
 
     /// Store binary content: raw bytes (spec §3.4).
@@ -65,7 +67,7 @@ impl SnapshotStore {
     fn put_raw(&self, hash: &ContentHash, bytes: &[u8]) -> Result<(), String> {
         let target = self.path_for(hash);
         if target.exists() {
-            // Verify before trusting (audit R20): a corrupt pre-existing
+            // Verify before trusting: a corrupt pre-existing
             // snapshot must not let capture succeed with a dangling
             // reference — repair it in place via the same tmp+rename.
             use sha2::{Digest, Sha256};

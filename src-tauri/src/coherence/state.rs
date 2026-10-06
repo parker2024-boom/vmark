@@ -1,4 +1,4 @@
-//! Per-workspace kernel lifecycle (WI-1.12, ADR-C4 services tier).
+//! Per-workspace kernel lifecycle (ADR-C4 services tier).
 //!
 //! One `WorkspaceKernel` per workspace root, shared across windows via
 //! `KernelRegistry` (spec §5.1: all in-app writes serialize through one
@@ -40,12 +40,12 @@ pub struct WorkspaceKernel {
     pub(super) index: CoherenceIndex,
     initialized: bool,
     /// Set when an ambiguous append/apply failure may have left the ledger and
-    /// index inconsistent (re-review #3): the durable ledger line may exist while
+    /// index inconsistent: the durable ledger line may exist while
     /// the index lacks it, so the O(1) idem lookup can no longer be trusted. All
     /// writes and accepts refuse until reopen re-reconciles from the ledger.
     pub(super) unavailable: Option<String>,
     /// How many entries the last reconcile had to SKIP because they carry a
-    /// format this build cannot parse (WI-2.2). Cached so the command layer can
+    /// format this build cannot parse. Cached so the command layer can
     /// classify a refused write WITHOUT matching the message text — rule 50
     /// forbids recovering a code from a string, and everything below these
     /// commands still returns `String`. A refused write is `unsupported` (this
@@ -69,19 +69,21 @@ pub struct WorkspaceKernel {
     /// (most of them) skips it and pays nothing.
     pub(super) appended_in_txn: bool,
     /// True while a `with_write_lock` scope holds the exclusive workspace `flock`
-    /// across its whole read-validate-append span (re-review #1, R1). The `flock`
+    /// across its whole read-validate-append span. The `flock`
     /// itself lives in a stack local in `with_write_lock` (so it releases on every
-    /// exit incl. panic-unwind — #5); this flag only tells nested
+    /// exit incl. panic-unwind); this flag only tells nested
     /// `append_and_apply` calls that the lock is already held, so they reuse it
     /// instead of re-locking (flock is not re-entrant across fds).
     pub(super) in_write_txn: bool,
     /// True until the `.gitignore` runtime rules have been verified/augmented once
     /// for this kernel (see `ignore_rules_complete`).
     ignore_rules_unchecked: bool,
-    /// Last git observation for scan classification (WI-1.7).
+    /// Last git observation for scan classification.
     pub last_git: Option<GitObservation>,
     /// Quarantined-line count from the last ledger read (status surface).
     pub quarantined: usize,
+    /// What scans already read, so an unchanged file is not read again.
+    pub(super) scan_cache: super::scan_cache::ScanCache,
 }
 
 impl WorkspaceKernel {
@@ -130,8 +132,8 @@ impl WorkspaceKernel {
             quarantined = read.quarantined.len();
             index.rebuild_from(&read.entries)?;
         } else {
-            // Heal-on-open (design-accept-consistency Fix A, hardened for
-            // re-review #1/#2). A schema-valid index is loaded, not rebuilt, so
+            // Heal-on-open (design-accept-consistency Fix A, hardened
+            // against branch switches). A schema-valid index is loaded, not rebuilt, so
             // it must be reconciled against the ledger — but on EXACT identity,
             // never cardinality: the ledger is git-*tracked*, so a branch switch
             // can REPLACE it with a same-count-but-different history while the
@@ -164,6 +166,7 @@ impl WorkspaceKernel {
             ignore_rules_unchecked,
             last_git: None,
             quarantined,
+            scan_cache: Default::default(),
         })
     }
 
@@ -196,8 +199,8 @@ impl WorkspaceKernel {
         self.quarantined = read.quarantined.len();
         index.rebuild_from(&read.entries)?;
         self.index = index;
-        // The merge=union rule is written LAST as the completion marker
-        // (re-review #4): its presence is exactly what `open` trusts to mean
+        // The merge=union rule is written LAST as the completion marker:
+        // its presence is exactly what `open` trusts to mean
         // "fully initialized", so a crash before this leaves the workspace
         // re-initializable rather than falsely "done".
         ensure_line(&vmark.join(".gitattributes"), MERGE_UNION_RULE)?;

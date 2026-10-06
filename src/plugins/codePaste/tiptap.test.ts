@@ -7,6 +7,7 @@ import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { Slice } from "@tiptap/pm/model";
 import { codePasteExtension } from "./tiptap";
+import { DEFAULT_PASTE_SETTINGS } from "@/plugins/shared/pasteSettings";
 
 // Mock the settings store
 vi.mock("@/stores/settingsStore", () => ({
@@ -303,4 +304,15 @@ export default App;`;
     });
   });
 
+});
+
+describe("codePaste with no host configuration", () => {
+  it("falls back to the default paste settings rather than shipping dead", () => {
+    // A plugin lifted out of this repo has no settings store to read. The
+    // default is what makes it a working extension rather than a no-op.
+    const options = codePasteExtension.config.addOptions!.call({} as never) as {
+      getPasteSettings: () => unknown;
+    };
+    expect(options.getPasteSettings()).toEqual(DEFAULT_PASTE_SETTINGS);
+  });
 });

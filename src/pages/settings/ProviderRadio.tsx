@@ -5,6 +5,8 @@
  * IntegrationsSettings.tsx) so the a11y test for audit #953 can import
  * just this component, instead of pulling the whole 60-line page module
  * into the coverage denominator with no other tests to balance it.
+ *
+ * @module pages/settings/ProviderRadio
  */
 
 interface ProviderRadioProps {

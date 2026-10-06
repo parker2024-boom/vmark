@@ -3,7 +3,7 @@
  *
  * The handler validates the request and reads the AI posture ONCE — it is awaited
  * across, and a setting change mid-flight must not let a profile slip into a shared
- * creation — then runs the stages in `browserOpenFlow` (round 3, #54): profile
+ * creation — then runs the stages in `browserOpenFlow`: profile
  * parsing, profile authorization, the creation transaction. Audit 2026-09-03: one
  * wait budget per request (timing); the driver's AI-tab cap surfaces as its own
  * token (X-01). Split from `browserNavigation.ts` for the file-size gate.

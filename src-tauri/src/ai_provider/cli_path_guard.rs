@@ -1,4 +1,4 @@
-//! `cli_path` boundary guard — WI-0B.2.
+//! `cli_path` boundary guard.
 //!
 //! Purpose: stop `run_ai_prompt`'s `cli_path` parameter from being an arbitrary
 //! process-execution primitive.
@@ -26,15 +26,16 @@ const KNOWN_CLI_PROVIDERS: [&str; 3] = ["claude", "codex", "gemini"];
 /// Executable suffixes Windows uses for shims; stripped before comparison, and
 /// ONLY on Windows (see `basename_matches`).
 ///
-/// `.ps1` is intentionally absent: `ai_provider::build_command` wraps `.cmd`
-/// and `.bat` shims for `CreateProcess`, but a PowerShell script cannot be
-/// spawned directly, so accepting one would let a path pass the guard that can
-/// never actually run.
+/// `.ps1` is intentionally absent: a `.cmd` or `.bat` shim can be spawned (the
+/// standard library runs it through cmd.exe), but a PowerShell script cannot,
+/// so accepting one would let a path pass the guard that can never actually
+/// run.
 const WINDOWS_SUFFIXES: [&str; 3] = [".cmd", ".bat", ".exe"];
 
 /// Characters that must never appear in a path we are about to execute.
-/// `build_command` does not use a shell, so these cannot inject today — this is
-/// defence in depth against a future caller that does.
+/// `build_command` never places a shell in front of the program, so these
+/// cannot inject today — this is defence in depth against a future caller that
+/// does.
 const FORBIDDEN: [char; 9] = ['\0', '\n', '\r', ';', '|', '&', '$', '`', '\''];
 
 /// Reject a `cli_path` that does not point at the expected provider binary.

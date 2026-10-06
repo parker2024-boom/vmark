@@ -4,7 +4,7 @@
  * Pipeline: drag-drop event / file explorer / tab title → check by
  * extension → keep or strip.
  *
- * Phase 1B (WI-1B.3) replaced the legacy MARKDOWN_EXTENSIONS blob
+ * This module replaced the legacy MARKDOWN_EXTENSIONS blob
  * (which conflated markdown with .txt) with two distinct concepts:
  *
  *   - `MARKDOWN_ONLY_EXTENSIONS`: the five canonical markdown
@@ -88,7 +88,7 @@ export function isVMarkFileName(name: string): boolean {
  *
  * `isVMarkFileName` is the OR, not a duplicate of `isSupportedFileName`: it
  * covers the pre-bootstrap edge where the format registry has not been
- * populated yet, and a standalone `.yml` is a VMark file regardless (WI-19).
+ * populated yet, and a standalone `.yml` is a VMark file regardless.
  */
 export function opensInVMark(name: string): boolean {
   if (!name) return false;

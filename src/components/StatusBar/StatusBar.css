@@ -58,7 +58,7 @@
   white-space: nowrap;
 }
 
-/* Role-group divider in the right cluster (WI-UA11, audit 20260901):
+/* Role-group divider in the right cluster:
    document signals | connectivity | editor state. */
 .status-bar-divider {
   width: var(--border-thin);
@@ -132,7 +132,7 @@
    ======================================== */
 
 /* The scroll REGION owns the cap and the scrolling; the tablist inside is a
-   plain flex row. Split in WI-TNAV1.2 so the chevrons can be positioned
+   plain flex row. Split so the chevrons can be positioned
    against a non-scrolling parent — inside the region they would scroll away
    with the content. */
 .status-tabs-wrap {
@@ -242,8 +242,8 @@
 }
 
 .tab-pill:hover {
-  /* R6 hover vocabulary (WI-UA2, audit 20260901) — this reverses the
-     2026-08-31 negative-hover exception: the ink inversion was the loudest
+  /* R6 hover vocabulary — this reverses the
+     earlier negative-hover exception: the ink inversion was the loudest
      hover in the app and spoke a vocabulary nothing else used. */
   background-color: var(--hover-bg-strong);
   color: var(--text-color);
@@ -254,12 +254,13 @@
 }
 
 .tab-pill.active {
-  /* ui-ok(state): current-tab is the NEGATIVE treatment (maintainer direction
-     2026-09-02, WI-UC1) — ink and page swap tokens, so the pair's contrast is
+  /* ui-ok(state): current-tab is the NEGATIVE treatment (maintainer direction)
+     — ink and page swap tokens, so the pair's contrast is
      the body ratio, AA by construction on every theme; stronger than
-     WI-UA1's ring on exactly the dark themes the audit flagged. Not a
+     the outline ring it replaced on exactly the dark themes the audit
+     flagged. Not a
      selected list row, so not the accent wash C9 would ask for. Unambiguous
-     because hover speaks the R6 vocabulary (WI-UA2), not the inversion. */
+     because hover speaks the R6 vocabulary, not the inversion. */
   background-color: var(--text-color);
   color: var(--bg-color);
 }
@@ -314,14 +315,14 @@
 
 .browser-workspace-tab:hover {
   /* Matches .tab-pill:hover — the two share one strip and must speak one
-     hover language (WI-UA2, audit 20260901). */
+     hover language. */
   color: var(--text-color);
   background: var(--hover-bg-strong);
 }
 
 .browser-workspace-tab.active {
   /* ui-ok(state): same NEGATIVE current-tab treatment as .tab-pill.active
-     (WI-UC1) — the two share one strip and must speak one active language.
+     — the two share one strip and must speak one active language.
      Under .status-bar--browser the pair resolves to the browser neutrals. */
   color: var(--bg-color);
   background: var(--text-color);
@@ -345,13 +346,13 @@
   border-radius: var(--radius-pill);
   color: var(--text-secondary);
   background: var(--hover-bg);
-  /* 11px floor for informative chrome text (WI-UA8, audit 20260901). */
+  /* 11px floor for informative chrome text. */
   font-size: var(--font-size-xs);
   text-align: center;
 }
 
 .tab-title {
-  /* WI-UA12 (audit 20260901): cap raised 100 → 150px — at 12px, 100px was
+  /* Cap raised 100 → 150px — at 12px, 100px was
      ~12 characters, so similarly-prefixed files all read identically. The
      BASE span ellipsizes; the extension span never shrinks. */
   display: inline-flex;
@@ -372,7 +373,7 @@
 
 /* Inline rename editor — borderless, caret is the focus indicator (per popup
    input convention); sized to match the title so the pill doesn't jump. */
-/* One rename treatment: `.vm-input` (WI-UI3.3). Residual = strip layout. */
+/* One rename treatment: `.vm-input`. Residual = strip layout. */
 .tab-title-input {
   max-width: 150px;
   padding: 0;
@@ -388,7 +389,7 @@
 }
 
 .tab-dirty-dot {
-  /* 6px + a soft accent halo (WI-UA9, audit 20260901): the old 5px dot was
+  /* 6px + a soft accent halo: the old 5px dot was
      below noticing threshold for the one state that protects user data. */
   width: 6px;
   height: 6px;
@@ -481,7 +482,7 @@
   app-region: no-drag;
 }
 
-/* The sidebar toggle and the new-tab button are canonical (WI-UI2.3):
+/* The sidebar toggle and the new-tab button are canonical:
    `.vm-icon-btn--sm` and TabStripButton respectively. Residual hooks
    `.status-sidebar-toggle` / `.status-new-tab` remain in the DOM for
    automation, with no styling of their own. */
@@ -537,7 +538,7 @@
   }
 }
 
-/* KEPT under the global duration-collapse (D9/WI-UI1.7): the activity indicator must rest in its FINISHED colour, not the first keyframe */
+/* KEPT under the global duration-collapse (D9): the activity indicator must rest in its FINISHED colour, not the first keyframe */
 @media (prefers-reduced-motion: reduce) {
   .tab-pill,
   .tab-drag-ghost,
@@ -668,7 +669,7 @@
 }
 
 .status-mcp.connected {
-  /* Flat (maintainer, 2026-09-02): the WI-UI1.3 badge tint predated the
+  /* Flat (maintainer): the earlier badge tint predated the
      retint — lint:theme-contrast now holds semantic.success ≥ 4.5:1 on every
      theme, so the green satellite speaks alone, matching the bar's one
      resting idiom (coloured icon = state, like the lock and terminal). */
@@ -851,7 +852,7 @@
   animation: status-file-load-fade-in 150ms ease-out 150ms forwards;
 }
 
-/* `.vm-spinner` (WI-UI3.4); residual = the accent tint this bar uses. */
+/* `.vm-spinner`; residual = the accent tint this bar uses. */
 .status-file-load__spinner {
   border-top-color: var(--accent-primary);
 }
@@ -873,7 +874,7 @@
   }
 }
 
-/* WI-DSPL1.1 — the document shown in the OTHER split pane: visible, but not
+/* The document shown in the OTHER split pane: visible, but not
    where typing goes. Deliberately weaker than `.active` so the two never read
    as equals; `aria-selected` stays on the focused tab alone (D8). */
 .tab-pill.tab-other-pane:not(.active) {
@@ -892,7 +893,7 @@
 }
 
 
-/* WI-UI4.5 (R13) / WI-UA10: the state WORD beside the satellite icon — the
+/* R13: the state WORD beside the satellite icon — the
    second channel for the MCP state. A word instead of the old ✓/⟳/✗/○ glyph
    set (cryptic without the tooltip), at the 11px informative-text floor. */
 .status-mcp__state {
@@ -900,7 +901,7 @@
   line-height: 1;
 }
 
-/* WI-UI4.5 (R13): the MCP states and the active pill survive forced-colors
+/* R13: the MCP states and the active pill survive forced-colors
    mode with system inks + a real border. */
 @media (forced-colors: active) {
   .tab-pill.active {

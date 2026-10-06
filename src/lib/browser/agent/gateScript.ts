@@ -1,5 +1,5 @@
 /**
- * Injected gate-signals script (WI-NB2.2) — the DOM half of gate detection.
+ * Injected gate-signals script — the DOM half of gate detection.
  *
  * Purpose: one isolated-world round trip after a navigation collecting the
  * signals `classifyGate` consumes: `{url, title, textHead, challengeWidget,
@@ -18,7 +18,7 @@
  *     aware), and the selectors run over the document AND every open shadow root
  *     the composed walk finds — a login form or challenge widget rendered by a
  *     web component is no longer invisible to gate detection.
- *   - Field visibility has two tiers, in a fixed order (audit round 2, #114): the
+ *   - Field visibility has two tiers, in a fixed order: the
  *     computed-style tier (visibility/display/opacity, up the ancestor chain)
  *     needs no layout and runs in every engine; the box-size tier runs only where
  *     `__vmGateHasLayout`. The check is LOCAL to this script — it ships with the

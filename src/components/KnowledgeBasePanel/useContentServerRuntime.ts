@@ -1,5 +1,5 @@
 /**
- * useContentServerRuntime (WI-FL1.1) — probes `content_server_runtime` when the
+ * useContentServerRuntime — probes `content_server_runtime` when the
  * panel mounts and on demand, and holds the result as a `RuntimeProbe`.
  *
  * Purpose: the React adapter between the service probe and the panel. It never

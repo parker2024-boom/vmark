@@ -21,7 +21,7 @@
  * @module services/terminal/terminalFocus
  */
 
-import { useUIStore } from "@/stores/uiStore";
+import { useTerminalStore } from "@/stores/terminalStore";
 import { focusEditorSurface } from "@/services/editor/clipboardBridge";
 import { resolveClipboardSurface } from "@/services/commands/clipboardCommands";
 import { getTerminalForSession } from "./activeTerminal";
@@ -41,7 +41,7 @@ function soon(run: () => void): void {
  * `false` means there is no active session, or its xterm is not mounted yet.
  */
 export function focusActiveTerminal(): boolean {
-  const sessionId = useUIStore.getState().terminal.activeSessionId;
+  const sessionId = useTerminalStore.getState().activeSessionId;
   if (!sessionId) return false;
   const term = getTerminalForSession(sessionId);
   if (!term) return false;

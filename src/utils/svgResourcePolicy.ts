@@ -60,7 +60,7 @@ import { normalizeCss } from "./cssNormalize";
 
 /** Strip what a URL parser ignores: leading/embedded C0 controls and spaces. */
 function canonicalize(value: string): string {
-  // eslint-disable-next-line no-control-regex
+  // eslint-disable-next-line no-control-regex -- matching C0 controls is the point: URL parsers drop them, so they are stripped before scheme checks
   return value.replace(/[\u0000-\u0020\u007f]/g, "");
 }
 

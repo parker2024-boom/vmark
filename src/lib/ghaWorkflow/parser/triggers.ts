@@ -1,12 +1,16 @@
-// WI-1.3 — trigger normalization.
-//
-// Accepts the three GitHub Actions trigger shapes:
-//   on: push                          (single string)
-//   on: [push, pull_request]          (array of strings)
-//   on: { push: { ... }, ... }        (mapping of event → filters)
-//
-// Each event becomes one TriggerIR; `schedule` is special-cased to one
-// TriggerIR per cron entry per plan §4.
+/**
+ * Trigger normalization — turns a workflow's `on:` block into the IR.
+ *
+ * Accepts the three GitHub Actions trigger shapes:
+ *   on: push                          (single string)
+ *   on: [push, pull_request]          (array of strings)
+ *   on: { push: { ... }, ... }        (mapping of event → filters)
+ *
+ * Each event becomes one TriggerIR; `schedule` is special-cased to one
+ * TriggerIR per cron entry.
+ *
+ * @module lib/ghaWorkflow/parser/triggers
+ */
 
 import type { TemplateToken } from "@actions/workflow-parser/templates/tokens/template-token";
 import type {

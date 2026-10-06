@@ -190,7 +190,7 @@ describe("uint8ArrayToBase64", () => {
       expect(decoded).toEqual(data);
     });
 
-    it("encodes 500,000 bytes (large image)", { timeout: 30_000 }, () => {
+    it("encodes 500,000 bytes (large image)", () => {
       const data = makeData(500_000);
       const result = uint8ArrayToBase64(data);
       const decoded = base64ToBytes(result);

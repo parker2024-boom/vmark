@@ -8,7 +8,7 @@
  *
  * Why it exists: the CI step was `continue-on-error: true` at
  * `--audit-level=critical`, so a vulnerable dependency could merge with the
- * advisory check visibly red (audit 20260906, C3). Its stated justification —
+ * advisory check visibly red. Its stated justification —
  * that pnpm 10's audit endpoint returns 410 — did not reproduce: the scan runs
  * fine and returns real findings. So the gate was disabled for a reason that
  * had stopped being true, which is the worst kind of disabled gate: one nobody
@@ -20,6 +20,9 @@
  *     outlive the risk they were granted for;
  *   - a baseline entry with no `reason` fails, because an exception nobody
  *     justified is indistinguishable from one nobody noticed.
+ *
+ * Fails closed on a scan it cannot read (exit 64): no output, output that is
+ * not an audit report, or an advisory with no id or an unknown severity.
  *
  * An accepted advisory is a claim that the code is not reachable in the shipped
  * app, or that no fix exists — NOT that upgrading is inconvenient. Package
@@ -37,6 +40,7 @@
  *
  * @coordinates-with scripts/npm-audit-baseline.json — the reviewed allowlist
  * @coordinates-with .github/workflows/ci.yml — the fe-static step
+ * @coordinates-with scripts/check-npm-audit.test.mjs — runs this against a stub scanner
  * @module scripts/check-npm-audit
  */
 import { execFileSync } from "node:child_process";
@@ -51,11 +55,27 @@ const BASELINE = path.join(REPO, "scripts/npm-audit-baseline.json");
 /** Severities that fail when unlisted. `low` is reported, never blocking. */
 export const BLOCKING_SEVERITIES = new Set(["moderate", "high", "critical"]);
 
+/** Every severity the registry reports. Anything else is an unreadable scan. */
+const KNOWN_SEVERITIES = new Set(["info", "low", ...BLOCKING_SEVERITIES]);
+
+/** Thrown when scanner output cannot be read as an audit report. */
+export class UnreadableScanError extends Error {}
+
+const isRecord = (value) =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 /**
  * Normalize `pnpm audit --json` into a flat list.
  *
  * Exported so tests can drive the comparison without a network call — the
  * fetching and the deciding are separate on purpose.
+ *
+ * THROWS `UnreadableScanError` unless the output is an audit report: a JSON
+ * object with an `advisories` map whose entries each carry an id and a known
+ * severity. Anything else — a truncated body, an HTML error page, pnpm's
+ * `{ "error": … }` object — used to normalize to an EMPTY list, and an empty
+ * list is exactly what a clean scan looks like. With no baseline entries left
+ * to trip the stale check, a failed scan exited 0.
  */
 export function parseAdvisories(raw) {
   let parsed;
@@ -66,21 +86,36 @@ export function parseAdvisories(raw) {
     parsed = {};
     for (const line of raw.split("\n")) {
       if (!line.trim()) continue;
+      let value;
       try {
-        Object.assign(parsed, JSON.parse(line));
+        value = JSON.parse(line);
       } catch {
-        /* a non-JSON progress line */
+        continue; // a non-JSON progress line
       }
+      if (isRecord(value)) Object.assign(parsed, value);
     }
   }
-  const advisories = parsed.advisories ?? {};
-  return Object.values(advisories).map((a) => ({
-    id: a.github_advisory_id || String(a.id),
-    module: a.module_name,
-    severity: a.severity,
-    title: a.title,
-    patched: a.patched_versions,
-  }));
+  if (!isRecord(parsed) || !isRecord(parsed.advisories)) {
+    throw new UnreadableScanError("no `advisories` map in the output");
+  }
+  return Object.entries(parsed.advisories).map(([key, a]) => {
+    if (!isRecord(a)) throw new UnreadableScanError(`advisory ${key} is not an object`);
+    const id = a.github_advisory_id || (a.id == null ? "" : String(a.id));
+    if (!id) throw new UnreadableScanError(`advisory ${key} has no id`);
+    if (!KNOWN_SEVERITIES.has(a.severity)) {
+      // An unrecognized severity would be neither blocking nor reviewed.
+      throw new UnreadableScanError(
+        `advisory ${id} has unknown severity ${JSON.stringify(a.severity)}`,
+      );
+    }
+    return {
+      id,
+      module: a.module_name,
+      severity: a.severity,
+      title: a.title,
+      patched: a.patched_versions,
+    };
+  });
 }
 
 /**
@@ -127,7 +162,23 @@ function main() {
     }
   }
 
-  const findings = parseAdvisories(raw);
+  if (!raw.trim()) {
+    // Reached when the scanner exited 0 and printed nothing.
+    console.error("npm-audit: the scan produced no output");
+    process.exit(64);
+  }
+
+  let findings;
+  try {
+    findings = parseAdvisories(raw);
+  } catch (error) {
+    if (!(error instanceof UnreadableScanError)) throw error;
+    // Fail closed, and before `--report` is consulted: listing "no findings"
+    // for a scan nobody could read is the same false claim, only quieter.
+    console.error(`npm-audit: cannot read the scan output — ${error.message}`);
+    console.error(raw.slice(0, 400));
+    process.exit(64);
+  }
   const baseline = JSON.parse(readFileSync(BASELINE, "utf8"));
   const { unlisted, stale, unjustified } = evaluate(findings, baseline);
 

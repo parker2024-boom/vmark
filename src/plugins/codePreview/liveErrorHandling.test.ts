@@ -1,26 +1,38 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import { EditorState } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { Editor, getSchema } from "@tiptap/core";
-import { Decoration } from "@tiptap/pm/view";
+import i18n from "@/i18n";
 
-// Mock the mermaid renderer to reject — covers the try/catch around
-// setTimeout's awaited render calls in updateLivePreview.
-vi.mock("./renderers/renderMermaidPreview", () => ({
-  updateMermaidLivePreview: vi.fn(async () => {
-    throw new Error("boom");
-  }),
-  createMermaidPreviewWidget: vi.fn((nodeEnd: number) =>
-    Decoration.widget(nodeEnd, () => document.createElement("div"), {
-      key: "mock-mermaid",
-    }),
-  ),
+// The real mermaid live renderer runs; only the third-party `mermaid` engine
+// is faked (it is heavy and needs layout jsdom lacks).
+vi.mock("mermaid", () => ({
+  default: {
+    initialize: vi.fn(),
+    render: vi.fn(async () => ({ svg: "<svg></svg>" })),
+  },
 }));
 
 import {
   codePreviewExtension,
   EDITING_STATE_CHANGED,
 } from "./tiptap";
+import { renderMermaid } from "@/plugins/mermaid";
+
+/**
+ * Make the renderer THROW — covers the try/catch around setTimeout's awaited
+ * render calls in updateLivePreview. The fault is injected at the DOM
+ * boundary: the mermaid renderer reads the editor's mono font size from
+ * `getComputedStyle(document.documentElement)` on every locked render, outside
+ * its own error handling, so a throwing style read propagates as a rejection.
+ */
+function failStyleReads() {
+  const original = window.getComputedStyle.bind(window);
+  return vi.spyOn(window, "getComputedStyle").mockImplementation((el, pseudo) => {
+    if (el === document.documentElement) throw new Error("boom");
+    return original(el, pseudo);
+  });
+}
 
 type DecorationLike = { type?: { attrs?: Record<string, string> } };
 
@@ -66,6 +78,12 @@ function makeDispatchView(baseState: EditorState) {
 }
 
 describe("updateLivePreview error handling", () => {
+  beforeAll(async () => {
+    // Load and initialize the engine once, so the injected style-read
+    // failure lands in the render, not in the (null-returning) init.
+    expect(await renderMermaid("graph TD; A-->B")).toBe("<svg></svg>");
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -134,13 +152,18 @@ describe("updateLivePreview error handling", () => {
       const previewEl = (livePreviewDec as any).type.toDOM(mockView);
       expect(previewEl).toBeInstanceOf(HTMLElement);
 
-      // Fire the debounced callback; mocked renderer rejects with "boom".
-      await vi.runAllTimersAsync();
-      // Let microtasks flush so the catch runs.
-      await Promise.resolve();
-      await Promise.resolve();
-
-      expect(previewEl.innerHTML).toContain("code-block-live-preview-error");
+      // Fire the debounced callback; the renderer rejects with "boom".
+      const styleSpy = failStyleReads();
+      try {
+        await vi.runAllTimersAsync();
+        await vi.waitFor(() =>
+          expect(previewEl.querySelector(".code-block-live-preview-error")?.textContent).toBe(
+            i18n.t("editor:preview.renderFailed"),
+          ),
+        );
+      } finally {
+        styleSpy.mockRestore();
+      }
 
       useBlockMathEditingStore.getState().exitEditing();
       viewResult.destroy!();

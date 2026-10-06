@@ -15,6 +15,7 @@
  *     widget decorations, replacing this DOM before a click would fire.
  *
  * @coordinates-with plugins/aiSuggestion/tiptap.ts — builds the decorations
+ * @coordinates-with plugins/aiSuggestion/displayText.ts — the ghost text's wording
  * @module plugins/aiSuggestion/widgets
  */
 
@@ -23,7 +24,7 @@ import type { EditorView } from "@tiptap/pm/view";
 import { hostDocument } from "@/plugins/shared/hostDocument";
 import { captureAiEdit } from "@/services/coherence/captureFunnel";
 import { runOrQueueProseMirrorAction } from "@/utils/imeGuard";
-import { cleanMarkdownForClipboard } from "@/plugins/markdownCopy/tiptap";
+import { suggestionDisplayText } from "./displayText";
 import { applySuggestionToTr } from "./applySuggestion";
 import type { AiSuggestion, AiSuggestionStore } from "./types";
 
@@ -58,17 +59,17 @@ export function createGhostText(text: string, isFocused: boolean): HTMLSpanEleme
   span.className = `ai-suggestion-ghost${isFocused ? " ai-suggestion-ghost-focused" : ""}`;
   // Strip markdown backslash escapes (\$, \~, \@ …) and collapse autolinks
   // so ghost text matches what the user will see after accepting.
-  span.textContent = cleanMarkdownForClipboard(text);
+  span.textContent = suggestionDisplayText(text);
   return span;
 }
 /**
- * Coherence capture (WI-1.6): report an accepted suggestion to the kernel
+ * Coherence capture: report an accepted suggestion to the kernel
  * after the buffer settles. Dirty state is read BEFORE the apply — it
  * decides exact vs. inferred provenance (spec §8). Fire-and-forget.
  */
 export function captureAcceptedSuggestion(tabId: string, bufferWasDirty: boolean): void {
   // Called synchronously after dispatch: tiptap's onUpdate has already
-  // synced the store, and captureAiEdit snapshots at entry (audit T3) —
+  // synced the store, and captureAiEdit snapshots at entry —
   // a rapid second apply cannot change what this capture records.
   void captureAiEdit({
     tabId,

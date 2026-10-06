@@ -34,7 +34,7 @@ export function messageOf(error: unknown): string {
  * so only a trailing separator on the root needs normalizing.
  */
 export function resolveWorkspacePath(workspaceRoot: string, relative: string): string | null {
-  // Ledger data crosses a trust boundary (audit T13): refuse traversal
+  // Ledger data crosses a trust boundary: refuse traversal
   // segments, absolute paths, and backslashes before opening anything.
   if (relative.length === 0 || relative.startsWith("/") || relative.includes("\\")) return null;
   const segments = relative.split("/");
@@ -42,7 +42,7 @@ export function resolveWorkspacePath(workspaceRoot: string, relative: string): s
   return `${workspaceRoot.replace(/[/\\]+$/, "")}/${relative}`;
 }
 
-/** Mirror of the Rust `ResolveRequest` (WI-1.9a). */
+/** Mirror of the Rust `ResolveRequest`. */
 export interface ResolveEdgeRequest {
   action: "accept-newer" | "waive";
   txf: string;

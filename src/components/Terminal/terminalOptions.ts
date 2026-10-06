@@ -10,6 +10,7 @@
  * @module components/Terminal/terminalOptions
  */
 import { buildXtermThemeForId, drawBoldTextInBrightColorsForId } from "@/theme";
+import { getRuntimePlatform, type RuntimePlatform } from "@/utils/platform";
 
 /** User-configurable settings for creating a terminal instance. */
 export interface TerminalInstanceSettings {
@@ -20,15 +21,15 @@ export interface TerminalInstanceSettings {
   useWebGL: boolean;
   macOptionIsMeta: boolean;
   /** Expose terminal output to assistive tech (VoiceOver). Off by default for
-   *  performance; live-settable (G3/WI-3.1). */
+   *  performance; live-settable (G3). */
   screenReaderMode: boolean;
   /** xterm foreground-lift floor (WCAG): 1 = off … 4.5 = AA … 21 = max.
    *  Live-settable. */
   minimumContrastRatio: number;
-  /** Number of scrollback lines retained (G7/WI-4.2). */
+  /** Number of scrollback lines retained (G7). */
   scrollback: number;
   /** Allow programs in the terminal (ssh/tmux) to WRITE the host clipboard via
-   *  OSC 52 (WI-3.5). Reads are denied regardless of this flag. Read at
+   *  OSC 52. Reads are denied regardless of this flag. Read at
    *  creation, like the other addon toggles — a change applies to new sessions. */
   osc52Clipboard: boolean;
   /** Active app theme — used to compose the xterm ITheme. The factory
@@ -63,6 +64,19 @@ export function clampContrastRatio(value: number): number {
   return Math.min(Math.max(Number.isFinite(value) ? value : 4.5, 1), 21);
 }
 
+/**
+ * Whether to load xterm's WebGL renderer. Never on Linux: WebKitGTK presents a
+ * WebGL canvas frame only on the next unrelated repaint, so a keystroke's echo
+ * stayed invisible until the following key (#1511). The DOM renderer paints at
+ * once.
+ */
+export function shouldUseWebglRenderer(
+  useWebGL: boolean,
+  platform: RuntimePlatform = getRuntimePlatform(),
+): boolean {
+  return useWebGL && platform !== "linux";
+}
+
 /** Build the xterm options for a set of user settings. */
 export function buildTerminalOptions(
   settings: TerminalInstanceSettings,
@@ -87,7 +101,7 @@ export function buildTerminalOptions(
     // background color (default 4.5 = WCAG AA; user-adjustable for a11y).
     // Fall back to 4.5 when unset; clamp to xterm's valid 1–21 range.
     minimumContrastRatio: clampContrastRatio(settings.minimumContrastRatio),
-    // Per-theme (WI-UI1.4/D10): false where a bright slot doubles as a text
+    // Per-theme (D10): false where a bright slot doubles as a text
     // tier (solarized), else xterm's default true.
     drawBoldTextInBrightColors: drawBoldTextInBrightColorsForId(settings.themeId),
     allowProposedApi: true,

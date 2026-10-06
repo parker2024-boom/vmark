@@ -4,15 +4,14 @@
 //! A restore writes the files a `save-file` step writes, so it takes the same
 //! `running` flag a start takes, under the same admission lock — and releases
 //! it through the same `AdmissionGuard`, never committed. It used to carry its
-//! own RAII type and CAS in `snapshot_commands.rs` (#71), a second copy of the
+//! own RAII type and CAS in `snapshot_commands.rs`, a second copy of the
 //! one transition this module's parent exists to keep in one place.
 //!
 //! It also keeps the spawn bookkeeping both claims share. `note_spawned`
 //! (on `AdmissionGuard::commit`) records the last run that spawned, which
-//! answers whether a snapshot is SUPERSEDED (#108). `release_unspawned` (on an
+//! answers whether a snapshot is SUPERSEDED. `release_unspawned` (on an
 //! uncommitted drop) releases the flag, the published id and the id's USE: a
-//! start refused after its claim never ran, so its id is free for the retry
-//! (#91).
+//! start refused after its claim never ran, so its id is free for the retry.
 //!
 //! @coordinates-with workflow/state.rs — `AdmissionGuard`, the admission lock
 //! @coordinates-with workflow/snapshot_commands.rs — the one caller
@@ -26,7 +25,7 @@ impl WorkflowRunnerState {
     /// Claim `running` for a restore (WI-LX2.3), or `None` while a run or
     /// another restore holds it. Publishes NO execution id: a restore is not
     /// a run, so no cancel can name it and the engine-off transition does not
-    /// mistake it for one (#72). Dropping the guard releases the flag however
+    /// mistake it for one. Dropping the guard releases the flag however
     /// the restore ends.
     pub(in crate::workflow) fn claim_for_restore(&self) -> Option<AdmissionGuard<'_>> {
         let _serial = self.admission_lock();
@@ -39,7 +38,7 @@ impl WorkflowRunnerState {
         })
     }
 
-    /// An admission dropped before spawning (#91): forget the published id's
+    /// An admission dropped before spawning: forget the published id's
     /// use, then release the claim. `running` is still held while the id is
     /// read, so no other start can publish in between.
     pub(super) fn release_unspawned(&self) {
@@ -67,7 +66,7 @@ impl WorkflowRunnerState {
     }
 
     /// Whether a run spawned after the one `snapshot_id` preserved, so its
-    /// writes postdate the snapshot and a restore would undo them (#108).
+    /// writes postdate the snapshot and a restore would undo them.
     /// Asked while the restore holds the claim: no run can spawn until it is
     /// released, so the answer cannot go stale before the restore runs. A
     /// snapshot from before this process spawned anything is not superseded

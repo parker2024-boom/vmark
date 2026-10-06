@@ -4,6 +4,8 @@
  * Purpose: bridge `Uint8Array<ArrayBufferLike>` values (e.g. from Tauri IPC)
  * to DOM APIs (`Blob`, `crypto.subtle`) whose TypeScript 6 lib types require
  * `ArrayBuffer`-backed views and reject possibly-SharedArrayBuffer-backed ones.
+ *
+ * @module utils/binary
  */
 
 /**

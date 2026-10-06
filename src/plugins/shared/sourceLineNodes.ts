@@ -2,7 +2,12 @@
  * Extended StarterKit nodes with sourceLine attribute.
  *
  * These extensions add the sourceLine attribute to built-in nodes
- * for cursor sync between Source and WYSIWYG modes.
+ * for cursor sync between Source and WYSIWYG modes. The bullet and ordered
+ * lists also carry `spread` (a loose list: blank lines between its items) so
+ * a document round-trips it; it is markdown-only, never rendered to HTML or
+ * read from pasted HTML, and a new list starts tight.
+ *
+ * @module plugins/shared/sourceLineNodes
  */
 
 import { Heading } from "@tiptap/extension-heading";
@@ -28,10 +33,26 @@ export const ParagraphWithSourceLine = withBlankLinesBefore(withSourceLine(Parag
 export const CodeBlockWithSourceLine = withBlankLinesBefore(withSourceLine(CodeBlockWithLineNumbers));
 /** Blockquote extension with sourceLine + blankLinesBefore attributes. */
 export const BlockquoteWithSourceLine = withBlankLinesBefore(withSourceLine(Blockquote));
-/** Bullet list extension with sourceLine + blankLinesBefore attributes. */
-export const BulletListWithSourceLine = withBlankLinesBefore(withSourceLine(BulletList));
-/** Ordered list extension with sourceLine + blankLinesBefore attributes. */
-export const OrderedListWithSourceLine = withBlankLinesBefore(withSourceLine(OrderedList));
+/** Whether a list is loose (`spread`); markdown-only, and a new list is tight. */
+const spreadAttr = {
+  spread: { default: false, rendered: false, parseHTML: () => false },
+} as const;
+
+const LooseAwareBulletList = BulletList.extend({
+  addAttributes() {
+    return { ...this.parent?.(), ...spreadAttr };
+  },
+});
+const LooseAwareOrderedList = OrderedList.extend({
+  addAttributes() {
+    return { ...this.parent?.(), ...spreadAttr };
+  },
+});
+
+/** Bullet list extension with sourceLine + blankLinesBefore + spread attributes. */
+export const BulletListWithSourceLine = withBlankLinesBefore(withSourceLine(LooseAwareBulletList));
+/** Ordered list extension with sourceLine + blankLinesBefore + spread attributes. */
+export const OrderedListWithSourceLine = withBlankLinesBefore(withSourceLine(LooseAwareOrderedList));
 /** Horizontal rule extension with sourceLine + blankLinesBefore attributes. */
 export const HorizontalRuleWithSourceLine = withBlankLinesBefore(withSourceLine(HorizontalRule));
 /** Table row extension with sourceLine attribute for cursor sync. */

@@ -1,5 +1,7 @@
 /**
  * Shared types for cursor synchronization between editors.
+ *
+ * @module types/cursorSync
  */
 
 /**

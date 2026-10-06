@@ -24,7 +24,7 @@ import { isInCodeBlock } from "./utils";
 // 1 = code mark activated, 2 = code mark deactivated, 3 = create code block.
 // Keyed by view: module-global state let two live editors corrupt each
 // other's count (a first backtick in window A + one in window B read as B's
-// second), and a destroyed editor left a shared timer alive (audit round 1).
+// second), and a destroyed editor left a shared timer alive.
 interface BacktickState {
   consecutive: number;
   lastFrom: number;
@@ -62,7 +62,7 @@ function scheduleReset(view: EditorView): void {
   // The timer DELETES the entry (not just the count): a Map has no
   // view-destruction hook, so entry lifetime is bounded by the reset delay —
   // a destroyed view is unreferenced within 500ms instead of retained
-  // indefinitely (audit round 1 verify).
+  // indefinitely.
   s.resetTimeout = setTimeout(() => {
     states.delete(view);
   }, BACKTICK_RESET_DELAY);

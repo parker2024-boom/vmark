@@ -5,7 +5,7 @@
 //! menu item is worse than no item". A greyed control reads as "not right now";
 //! these mean "not ever, and nothing here will tell you why", because the
 //! enabling toggle sits behind developer mode. Users reported both as bugs:
-//! "New Browser Tab" first (WI-S0.5), then Knowledge Base (#1425), filed as a
+//! "New Browser Tab" first, then Knowledge Base (#1425), filed as a
 //! Linux packaging fault when in truth NO packaged build carries the content
 //! server (`content_server::bundle_manifest::BUNDLED_CLI_RESOURCE` is `None`).
 //!

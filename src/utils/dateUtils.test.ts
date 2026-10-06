@@ -1,6 +1,10 @@
 // @vitest-environment node
 /**
  * Tests for date utilities.
+ *
+ * WI-RA14A.2 — every test runs against a fixed clock in the app tier's pinned
+ * time zone (UTC) and locale (en-US), so the formatted strings are asserted
+ * exactly and "today" cannot roll over mid-test at midnight.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -11,106 +15,96 @@ import {
   groupByDay,
 } from "./dateUtils";
 
+/** Thursday 2026-01-15 14:30:45 UTC. */
+const NOW = Date.UTC(2026, 0, 15, 14, 30, 45);
+const SECOND = 1000;
+const MINUTE = 60 * SECOND;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+/**
+ * ICU builds differ on the space before AM/PM: some emit U+202F (narrow
+ * no-break space), some a plain space. Which one is not this module's
+ * behaviour, so it is folded to a plain space; every other character is
+ * asserted exactly.
+ */
+const plain = (s: string) => s.replaceAll(String.fromCharCode(0x202f), " ");
+
+beforeEach(() => {
+  vi.setSystemTime(NOW);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe("dateUtils", () => {
   describe("formatRelativeTime", () => {
-    let nowSpy: ReturnType<typeof vi.spyOn>;
-
-    beforeEach(() => {
-      const fixedNow = 1700000000000; // Fixed timestamp
-      nowSpy = vi.spyOn(Date, "now").mockReturnValue(fixedNow);
-    });
-
-    afterEach(() => {
-      nowSpy.mockRestore();
-    });
-
     it('returns "just now" for < 5 seconds ago', () => {
-      const timestamp = Date.now() - 2000; // 2 seconds ago
-      expect(formatRelativeTime(timestamp)).toBe("just now");
+      expect(formatRelativeTime(NOW - 2 * SECOND)).toBe("just now");
     });
 
     it("returns seconds ago for < 60 seconds", () => {
-      const timestamp = Date.now() - 30000; // 30 seconds ago
-      expect(formatRelativeTime(timestamp)).toBe("30s ago");
+      expect(formatRelativeTime(NOW - 30 * SECOND)).toBe("30s ago");
     });
 
     it("returns minutes ago for < 60 minutes", () => {
-      const timestamp = Date.now() - 300000; // 5 minutes ago
-      expect(formatRelativeTime(timestamp)).toBe("5m ago");
+      expect(formatRelativeTime(NOW - 5 * MINUTE)).toBe("5m ago");
     });
 
     it("returns hours ago for >= 60 minutes", () => {
-      const timestamp = Date.now() - 7200000; // 2 hours ago
-      expect(formatRelativeTime(timestamp)).toBe("2h ago");
+      expect(formatRelativeTime(NOW - 2 * HOUR)).toBe("2h ago");
+    });
+
+    it("handles boundary at 5 seconds", () => {
+      expect(formatRelativeTime(NOW - 5 * SECOND)).toBe("5s ago");
     });
 
     it("handles boundary at 59 seconds", () => {
-      const timestamp = Date.now() - 59000; // 59 seconds ago
-      expect(formatRelativeTime(timestamp)).toBe("59s ago");
+      expect(formatRelativeTime(NOW - 59 * SECOND)).toBe("59s ago");
     });
 
     it("handles boundary at 60 seconds", () => {
-      const timestamp = Date.now() - 60000; // 60 seconds = 1 minute ago
-      expect(formatRelativeTime(timestamp)).toBe("1m ago");
+      expect(formatRelativeTime(NOW - 60 * SECOND)).toBe("1m ago");
     });
 
     it("handles boundary at 59 minutes", () => {
-      const timestamp = Date.now() - 59 * 60 * 1000; // 59 minutes ago
-      expect(formatRelativeTime(timestamp)).toBe("59m ago");
+      expect(formatRelativeTime(NOW - 59 * MINUTE)).toBe("59m ago");
     });
 
     it("handles boundary at 60 minutes", () => {
-      const timestamp = Date.now() - 60 * 60 * 1000; // 60 minutes = 1 hour ago
-      expect(formatRelativeTime(timestamp)).toBe("1h ago");
+      expect(formatRelativeTime(NOW - 60 * MINUTE)).toBe("1h ago");
     });
   });
 
   describe("formatExactTime", () => {
-    it("returns a formatted time string", () => {
-      const timestamp = Date.now();
-      const result = formatExactTime(timestamp);
-      // Should be a valid time string (locale-dependent)
-      expect(typeof result).toBe("string");
-      expect(result.length).toBeGreaterThan(0);
+    it("formats the time of day in the default locale", () => {
+      expect(plain(formatExactTime(NOW))).toBe("2:30:45 PM");
     });
 
-    it("formats different timestamps differently", () => {
-      const morning = new Date();
-      morning.setHours(9, 30, 0);
-      const evening = new Date();
-      evening.setHours(21, 30, 0);
-
-      const morningTime = formatExactTime(morning.getTime());
-      const eveningTime = formatExactTime(evening.getTime());
-
-      // They should be different
-      expect(morningTime).not.toBe(eveningTime);
+    it("formats morning and evening distinctly", () => {
+      expect(plain(formatExactTime(Date.UTC(2026, 0, 15, 9, 30, 0)))).toBe("9:30:00 AM");
+      expect(plain(formatExactTime(Date.UTC(2026, 0, 15, 21, 30, 0)))).toBe("9:30:00 PM");
     });
   });
 
   describe("formatSnapshotTime", () => {
-    it("includes 'Today' for today's timestamps", () => {
-      const now = Date.now();
-      const result = formatSnapshotTime(now);
-      expect(result).toContain("Today");
+    it("prefixes 'Today' for today's timestamps", () => {
+      expect(plain(formatSnapshotTime(NOW))).toBe("Today 02:30 PM");
     });
 
-    it("includes 'Yesterday' for yesterday's timestamps", () => {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const result = formatSnapshotTime(yesterday.getTime());
-      expect(result).toContain("Yesterday");
+    it("prefixes 'Yesterday' for yesterday's timestamps", () => {
+      expect(plain(formatSnapshotTime(NOW - DAY))).toBe("Yesterday 02:30 PM");
     });
 
-    it("includes date for older timestamps", () => {
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      const result = formatSnapshotTime(weekAgo.getTime());
-      // Should not contain Today or Yesterday
-      expect(result).not.toContain("Today");
-      expect(result).not.toContain("Yesterday");
-      // Should contain some date info
-      expect(result.length).toBeGreaterThan(0);
+    it("shows the month and day for older timestamps", () => {
+      expect(plain(formatSnapshotTime(NOW - 7 * DAY))).toBe("Jan 8, 02:30 PM");
+    });
+
+    it("treats the first second of today as today and the last of yesterday as yesterday", () => {
+      const midnight = Date.UTC(2026, 0, 15);
+      expect(plain(formatSnapshotTime(midnight))).toBe("Today 12:00 AM");
+      expect(plain(formatSnapshotTime(midnight - SECOND))).toBe("Yesterday 11:59 PM");
     });
   });
 
@@ -121,22 +115,17 @@ describe("dateUtils", () => {
     }
 
     it("groups items by day", () => {
-      const now = Date.now();
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-
       const items: TestItem[] = [
-        { id: 1, timestamp: now },
-        { id: 2, timestamp: now - 1000 },
-        { id: 3, timestamp: yesterday.getTime() },
+        { id: 1, timestamp: NOW },
+        { id: 2, timestamp: NOW - SECOND },
+        { id: 3, timestamp: NOW - DAY },
       ];
 
       const groups = groupByDay(items, (item) => item.timestamp);
 
-      expect(groups.has("Today")).toBe(true);
-      expect(groups.has("Yesterday")).toBe(true);
-      expect(groups.get("Today")?.length).toBe(2);
-      expect(groups.get("Yesterday")?.length).toBe(1);
+      expect([...groups.keys()]).toEqual(["Today", "Yesterday"]);
+      expect(groups.get("Today")?.map((i) => i.id)).toEqual([1, 2]);
+      expect(groups.get("Yesterday")?.map((i) => i.id)).toEqual([3]);
     });
 
     it("handles empty array", () => {
@@ -145,42 +134,25 @@ describe("dateUtils", () => {
     });
 
     it("handles single item", () => {
-      const items: TestItem[] = [{ id: 1, timestamp: Date.now() }];
-      const groups = groupByDay(items, (item) => item.timestamp);
-      expect(groups.size).toBe(1);
-      expect(groups.has("Today")).toBe(true);
+      const groups = groupByDay([{ id: 1, timestamp: NOW }], (item) => item.timestamp);
+      expect([...groups.keys()]).toEqual(["Today"]);
     });
 
-    it("groups items from 5 days ago under a date label (not Today/Yesterday)", () => {
-      const fiveDaysAgo = new Date();
-      fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-
-      const items: TestItem[] = [{ id: 1, timestamp: fiveDaysAgo.getTime() }];
-      const groups = groupByDay(items, (item) => item.timestamp);
-
-      expect(groups.size).toBe(1);
-      // The key should NOT be "Today" or "Yesterday"
-      const key = [...groups.keys()][0];
-      expect(key).not.toBe("Today");
-      expect(key).not.toBe("Yesterday");
-      // Should contain a weekday name (from toLocaleDateString with weekday: "long")
-      expect(key.length).toBeGreaterThan(0);
+    it("labels items from 5 days ago with the weekday, month and day", () => {
+      const groups = groupByDay([{ id: 1, timestamp: NOW - 5 * DAY }], (item) => item.timestamp);
+      expect([...groups.keys()]).toEqual(["Saturday, Jan 10"]);
     });
 
     it("preserves item order within groups", () => {
-      const now = Date.now();
       const items: TestItem[] = [
-        { id: 1, timestamp: now },
-        { id: 2, timestamp: now - 1000 },
-        { id: 3, timestamp: now - 2000 },
+        { id: 1, timestamp: NOW },
+        { id: 2, timestamp: NOW - SECOND },
+        { id: 3, timestamp: NOW - 2 * SECOND },
       ];
 
       const groups = groupByDay(items, (item) => item.timestamp);
-      const todayItems = groups.get("Today")!;
 
-      expect(todayItems[0].id).toBe(1);
-      expect(todayItems[1].id).toBe(2);
-      expect(todayItems[2].id).toBe(3);
+      expect(groups.get("Today")?.map((i) => i.id)).toEqual([1, 2, 3]);
     });
   });
 });

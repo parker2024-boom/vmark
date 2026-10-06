@@ -7,8 +7,8 @@
  *   the per-family mutators below, then the Document is serialized
  *   via stringifyCst().
  *
- * Origin: GitHub Actions workflow viewer plan (2026-05-04, retired)
- *   §6 Phase 8 / WI-8.2.
+ * Origin: GitHub Actions workflow viewer plan (retired)
+ *   §6 Phase 8.
  *
  * Key decisions:
  *   - Patches are typed by `kind` so the dispatcher is exhaustive.
@@ -112,20 +112,20 @@ interface TriggerSetFiltersPatch {
   value: string[];
 }
 
-/** Add a new job to jobs:. WI-C.1 */
+/** Add a new job to jobs:. */
 interface JobCreatePatch {
   kind: "job.create";
   jobId: string;
   runsOn?: string;
 }
 
-/** Remove a job from jobs:. WI-C.1 */
+/** Remove a job from jobs:. */
 interface JobDeletePatch {
   kind: "job.delete";
   jobId: string;
 }
 
-/** Insert a new step in a job's steps[] at the given index. WI-C.2 */
+/** Insert a new step in a job's steps[] at the given index. */
 interface StepInsertPatch {
   kind: "step.insert";
   jobId: string;
@@ -133,14 +133,14 @@ interface StepInsertPatch {
   step: { name?: string; uses?: string; run?: string };
 }
 
-/** Delete a step. WI-C.2 */
+/** Delete a step. */
 interface StepDeletePatch {
   kind: "step.delete";
   jobId: string;
   stepIndex: number;
 }
 
-/** Move a step to a new index within the same job. WI-C.2 */
+/** Move a step to a new index within the same job. */
 interface StepMovePatch {
   kind: "step.move";
   jobId: string;
@@ -148,7 +148,7 @@ interface StepMovePatch {
   toIndex: number;
 }
 
-/** Set workflow-level permissions. WI-C.3 */
+/** Set workflow-level permissions. */
 interface PermissionsSetPatch {
   kind: "workflow.permissions.set";
   /** "read-all" | "write-all" | "none" | record of scope→level | null (delete to restore default). */
@@ -160,7 +160,7 @@ interface PermissionsSetPatch {
     | null;
 }
 
-/** Set workflow-level concurrency. WI-C.3 */
+/** Set workflow-level concurrency. */
 interface ConcurrencySetPatch {
   kind: "workflow.concurrency.set";
   value:
@@ -257,7 +257,7 @@ export function applyPatch(doc: Document, patch: IRPatch): void {
   }
 }
 
-// ─── Job CRUD (WI-C.1) ─────────────────────────────────────────────────
+// ─── Job CRUD ─────────────────────────────────────────────────
 
 function createJob(doc: Document, jobId: string, runsOn: string): void {
   let jobs = doc.get("jobs", true);
@@ -283,7 +283,7 @@ function deleteJob(doc: Document, jobId: string): void {
   jobs.delete(jobId);
 }
 
-// ─── Step CRUD (WI-C.2) ───────────────────────────────────────────────
+// ─── Step CRUD ───────────────────────────────────────────────
 
 function insertStep(
   doc: Document,
@@ -337,7 +337,7 @@ function moveStep(
   });
 }
 
-// ─── Workflow-level forms (WI-C.3) ────────────────────────────────────
+// ─── Workflow-level forms ────────────────────────────────────
 
 function setPermissions(
   doc: Document,
@@ -358,7 +358,7 @@ function setPermissions(
   }
   // Per-scope mapping. The form passes IR-shape (camelCase) keys; we
   // convert to YAML-shape (kebab-case) before serializing so the file
-  // matches GHA convention. Codex audit HIGH-2 fix.
+  // matches GHA convention.
   const map = new YAMLMap();
   for (const [k, v] of Object.entries(value)) {
     const kebab = irToYamlMap({ [k]: v });

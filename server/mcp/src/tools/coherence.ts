@@ -13,7 +13,7 @@
  * `coherence_resolve`, so the name, the header and the annotation agree again
  * and a client can auto-approve the reads.
  *
- * Origin: Coherence layer plan (2026-07-18, retired) WI-1.10.
+ * Origin: Coherence layer plan (retired).
  *
  * @coordinates-with tools/coherenceResolve.ts (the one mutating action)
  */
@@ -82,7 +82,7 @@ export function registerCoherenceTool(server: VMarkMcpServer): void {
       });
       // Action-specific, and never the default: this tool takes only a
       // `workspace_root`, so "target a specific tabId, or ask for one part at
-      // a time" names two things it does not have (audit R2 #219). `status`
+      // a time" names two things it does not have. `status`
       // returns five counters and cannot overflow, so it keeps the default.
       return VMarkMcpServer.successJsonResult(
         data,

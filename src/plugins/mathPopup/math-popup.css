@@ -2,7 +2,7 @@
  * Math Popup Styles
  */
 
-/* Shell chrome comes from `.popup-container` (WI-UI3.2). */
+/* Shell chrome comes from `.popup-container`. */
 .math-popup {
   flex-direction: column;
   align-items: stretch;
@@ -62,7 +62,7 @@
   background: transparent;
   color: var(--text-color);
   font-size: var(--font-size-sm);
-  cursor: var(--cursor-interactive, default); /* D7, platform-scoped (WI-UA15) */
+  cursor: var(--cursor-interactive, default); /* D7, platform-scoped */
 }
 
 .math-popup-btn:hover {

@@ -136,5 +136,5 @@ describe("WebGL atlas page upload (addon-webgl 0.19.0 version collision)", () =>
       term.dispose();
       host.remove();
     }
-  }, 120_000);
+  });
 });

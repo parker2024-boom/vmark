@@ -3,7 +3,7 @@
 //! included via `#[path]`).
 
 use super::*;
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 /// Cache-lifecycle tests share the module-scoped `ACCEL_CACHE`, so they
 /// must not run in parallel with each other. Acquire this lock at the
@@ -121,4 +121,21 @@ fn baseline_survives_a_rebuild_that_never_commits() {
 
     let snap = accel_cache_snapshot_for_test().expect("cache still Some");
     assert_eq!(snap, map(&[("bold", "CmdOrCtrl+B")]));
+}
+
+/// WI-RA7C.1 — the baseline is replaced whole, so a panic while it was held
+/// cannot have torn it. Skipping the commit on a poisoned lock left every later
+/// shortcut edit diffing against a stale baseline for the rest of the session.
+#[test]
+fn a_poisoned_cache_still_takes_a_rebuild() {
+    let _guard = STATIC_CACHE_LOCK
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    crate::lock_policy::tests::poison(&ACCEL_CACHE);
+
+    commit_rebuild(map(&[("save", "CmdOrCtrl+S")]));
+
+    let snap = accel_cache_snapshot_for_test();
+    ACCEL_CACHE.clear_poison();
+    assert_eq!(snap, Some(map(&[("save", "CmdOrCtrl+S")])));
 }

@@ -1,4 +1,6 @@
 //! WI-TP1.1: preserve existing hooks; refuse arbitrary file reads.
+//! WI-RA6.4: one token encoding; a binding to a FIFO is refused, not opened.
+//! WI-RA6.5: a read that carries a cursor gets only what was appended.
 use super::*;
 #[test]
 fn merges_hooks_without_destroying_settings() {
@@ -22,8 +24,28 @@ fn invalid_hook_config_is_not_overwritten() {
 #[test]
 fn tokens_are_opaque_uuids() {
     assert!(valid_token("cb28fc00-2c1b-4eaf-9d09-71d9d5392926"));
+    assert!(valid_token(&terminal_transcript_prepare()));
     assert!(!valid_token("../secret"));
     assert!(!valid_token(""));
+}
+#[test]
+fn a_token_is_accepted_only_in_the_encoding_vmark_issues() {
+    // Every one of these names the same UUID as the accepted form above, and
+    // each would name a DIFFERENT binding file.
+    for other in [
+        "CB28FC00-2C1B-4EAF-9D09-71D9D5392926",
+        "cb28fc002c1b4eaf9d0971d9d5392926",
+        "{cb28fc00-2c1b-4eaf-9d09-71d9d5392926}",
+        "urn:uuid:cb28fc00-2c1b-4eaf-9d09-71d9d5392926",
+        " cb28fc00-2c1b-4eaf-9d09-71d9d5392926",
+        "cb28fc00-2c1b-4eaf-9d09-71d9d5392926\n",
+    ] {
+        assert!(!valid_token(other), "{other:?}");
+    }
+    // Thirty-six characters the hook's own pattern lets through.
+    assert!(!valid_token("------------------------------------"));
+    assert!(!valid_token("cb28fc002c1b4eaf9d0971d9d5392926abcd"));
+    assert!(!valid_token("令牌令牌令牌令牌令牌令牌"));
 }
 #[test]
 fn canonical_paths_are_confined_to_session_roots() {
@@ -43,19 +65,6 @@ fn canonical_paths_are_confined_to_session_roots() {
         &root.join("test.json"),
         std::slice::from_ref(&root)
     ));
-    std::fs::remove_dir_all(root).unwrap();
-}
-#[test]
-fn tail_reader_bounds_bytes_and_drops_split_records() {
-    let root = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
-    std::fs::create_dir_all(&root).unwrap();
-    let path = root.join("tail.jsonl");
-    std::fs::write(&path, b"first\nsecond\npartial").unwrap();
-    assert_eq!(read_tail(&path, 12).unwrap(), "partial");
-    assert_eq!(read_tail(&path, 14).unwrap(), "second\npartial");
-    assert_eq!(read_tail(&path, 100).unwrap(), "first\nsecond\npartial");
-    std::fs::write(&path, b"truncated\n").unwrap();
-    assert_eq!(read_tail(&path, 100).unwrap(), "truncated\n");
     std::fs::remove_dir_all(root).unwrap();
 }
 fn snapshot_fixture() -> (PathBuf, PathBuf, String) {
@@ -89,15 +98,62 @@ fn snapshot_waits_until_enabled_bound_and_written() {
         .is_none());
     std::fs::write(&transcript, b"{\"a\":1}\n").unwrap();
     let first = read_snapshot(&root, &roots, &token, None).unwrap().unwrap();
-    assert_eq!(first.data.as_deref(), Some("{\"a\":1}\n"));
-    let same = read_snapshot(&root, &roots, &token, Some(&first.revision))
+    assert!(first.reset, "the first answer is a fresh tail");
+    assert_eq!(first.data, "{\"a\":1}\n");
+    let same = read_snapshot(&root, &roots, &token, Some(&first.cursor))
         .unwrap()
         .unwrap();
-    assert!(same.data.is_none(), "unchanged revision skips the read");
+    assert!(
+        !same.reset && same.data.is_empty(),
+        "nothing new, nothing sent"
+    );
+    assert_eq!(same.cursor, first.cursor);
     std::fs::remove_file(root.join("enabled")).unwrap();
     assert!(read_snapshot(&root, &roots, &token, None)
         .unwrap()
         .is_none());
+    std::fs::remove_dir_all(root.parent().unwrap()).unwrap();
+}
+#[test]
+fn a_read_that_carries_a_cursor_gets_only_what_was_appended() {
+    let (root, sessions, token) = snapshot_fixture();
+    let roots = [sessions.clone()];
+    let transcript = sessions.join("t.jsonl");
+    bind(&root, &token, &transcript);
+    std::fs::write(&transcript, "{\"n\":1}\n{\"n\":2}\n").unwrap();
+    let first = read_snapshot(&root, &roots, &token, None).unwrap().unwrap();
+    assert_eq!(first.data, "{\"n\":1}\n{\"n\":2}\n");
+
+    std::fs::write(&transcript, "{\"n\":1}\n{\"n\":2}\n{\"n\":\"三\"}\n").unwrap();
+    let second = read_snapshot(&root, &roots, &token, Some(&first.cursor))
+        .unwrap()
+        .unwrap();
+
+    assert!(!second.reset);
+    assert_eq!(second.data, "{\"n\":\"三\"}\n");
+    std::fs::remove_dir_all(root.parent().unwrap()).unwrap();
+}
+#[test]
+fn a_binding_that_moves_to_another_transcript_starts_over() {
+    let (root, sessions, token) = snapshot_fixture();
+    let roots = [sessions.clone()];
+    let (old, new) = (sessions.join("old.jsonl"), sessions.join("new.jsonl"));
+    std::fs::write(&old, "old-1\nold-2\n").unwrap();
+    std::fs::write(&new, "new-1\nnew-2\nnew-3\n").unwrap();
+    bind(&root, &token, &old);
+    let first = read_snapshot(&root, &roots, &token, None).unwrap().unwrap();
+
+    // The CLI in this shell was restarted: same token, another transcript.
+    bind(&root, &token, &new);
+    let second = read_snapshot(&root, &roots, &token, Some(&first.cursor))
+        .unwrap()
+        .unwrap();
+
+    assert!(
+        second.reset,
+        "a cursor for another file must not be resumed"
+    );
+    assert_eq!(second.data, "new-1\nnew-2\nnew-3\n");
     std::fs::remove_dir_all(root.parent().unwrap()).unwrap();
 }
 #[test]
@@ -157,4 +213,37 @@ fn enabling_leaves_already_configured_cli_files_untouched() {
         )
     );
     std::fs::remove_dir_all(base).unwrap();
+}
+#[cfg(unix)]
+#[test]
+fn a_binding_to_a_fifo_is_refused_without_blocking_a_thread() {
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::fs::OpenOptionsExt;
+    let (root, sessions, token) = snapshot_fixture();
+    let fifo = sessions.join("t.jsonl");
+    let name = std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();
+    // SAFETY: `name` is a valid NUL-terminated path for the whole call.
+    assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0, "mkfifo");
+    bind(&root, &token, &fifo);
+
+    // Opening a FIFO for reading waits for a writer, so the read runs on its
+    // own thread and has to answer within the deadline.
+    let (done, answer) = std::sync::mpsc::channel();
+    let (thread_root, thread_roots) = (root.clone(), [sessions.clone()]);
+    std::thread::spawn(move || {
+        let outcome = read_snapshot(&thread_root, &thread_roots, &token, None);
+        let _ = done.send(outcome.map(|_| ()).map_err(|error| error.to_string()));
+    });
+    let answer = answer.recv_timeout(std::time::Duration::from_secs(10));
+    // Release a reader that did block, so a failing run leaves no thread behind.
+    let _unblock = std::fs::OpenOptions::new()
+        .write(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(&fifo);
+
+    let error = answer
+        .expect("a FIFO must be refused, not opened")
+        .expect_err("a FIFO is not a transcript");
+    assert!(error.contains("regular file"), "{error}");
+    std::fs::remove_dir_all(root.parent().unwrap()).unwrap();
 }

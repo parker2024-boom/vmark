@@ -6,8 +6,10 @@
  * from the position (see the hook doc below).
  *
  * Key decisions:
- *   - Uses the handlersRef cleanup pattern (stores mousemove/mouseup references)
- *     to ensure exact listener removal on mouseup, blur, or unmount.
+ *   - The document listeners belong to `useDocumentDrag`, which removes them on
+ *     mouseup, window blur and unmount, and ends a drag that is still attached
+ *     when the next press arrives (a mouseup delivered outside the window never
+ *     reaches the document), so listeners never stack.
  *   - Grow sign flips per side: right/bottom grow on negative client delta;
  *     left/top grow on positive (their handle is on the far edge).
  *   - Sets document.body cursor during drag and disables text selection.
@@ -15,8 +17,9 @@
  *     store setters only enforce the absolute pixel floor.
  *   - Calls onResize callback on every move to let the parent refit xterm.
  *   - On drag end, computes the ratio from final pixel / available dimension
- *     and persists it to settingsStore.
- *   - `toggleMaximize` (WI-4.5/F6) snaps the panel to the cap and back to the
+ *     and persists it to settingsStore — for every end except unmount, where
+ *     the panel that was being measured is going away.
+ *   - `toggleMaximize` (F6) snaps the panel to the cap and back to the
  *     STORED ratio, without rewriting that ratio.
  *   - The cap was 50%, on the reasoning that a bigger panel is a temporary
  *     need the maximize toggle covers. That reasoning did not survive contact:
@@ -30,11 +33,13 @@
  * @coordinates-with uiStore — updates terminalHeight / terminalWidth during drag
  * @coordinates-with settingsStore — persists panelRatio on drag end
  * @coordinates-with useTerminalPosition.ts — pixelsToRatio / getAvailableDimension helpers
+ * @coordinates-with hooks/useDocumentDrag.ts — document listener lifetime
  * @module components/Terminal/useTerminalResize
  */
-import { useCallback, useRef, useEffect } from "react";
+import { useCallback } from "react";
 import { useUIStore, TERMINAL_MAX_RATIO, type EffectiveTerminalPosition } from "@/stores/uiStore";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { useDocumentDrag } from "@/hooks/useDocumentDrag";
 import {
   pixelsToRatio,
   getAvailableDimension,
@@ -66,57 +71,25 @@ export function useTerminalResize(
   const horizontal = isHorizontalTerminalAxis(position);
   // right/bottom grow on negative client delta; left/top grow on positive.
   const growSign = position === "right" || position === "bottom" ? -1 : 1;
-  const isResizing = useRef(false);
-  const startPos = useRef(0);
-  const startSize = useRef(0);
-  // Whether the pointer actually moved during this press. A double-click
-  // delivers two full mousedown/mouseup pairs, and persisting on every mouseup
-  // would write the CURRENT size back as the stored ratio — so the second
-  // double-click would save the maximized 0.5 and "restore" would become a
-  // no-op. Only a real drag may change the persisted size.
-  const didDrag = useRef(false);
-
-  const handlersRef = useRef<{
-    move: ((e: MouseEvent) => void) | null;
-    up: (() => void) | null;
-  }>({ move: null, up: null });
-
-  const cleanup = useCallback(() => {
-    isResizing.current = false;
-    if (handlersRef.current.move) {
-      document.removeEventListener("mousemove", handlersRef.current.move);
-    }
-    if (handlersRef.current.up) {
-      document.removeEventListener("mouseup", handlersRef.current.up);
-      window.removeEventListener("blur", handlersRef.current.up);
-    }
-    handlersRef.current = { move: null, up: null };
-    document.body.style.cursor = "";
-    document.body.style.userSelect = "";
-  }, []);
-
-  useEffect(() => {
-    return cleanup;
-  }, [cleanup]);
+  const drag = useDocumentDrag();
 
   const handleResizeStart = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
-      isResizing.current = true;
-      didDrag.current = false;
 
+      // Per-press state lives in this closure, so a drag that is still
+      // attached when the next press arrives keeps its own numbers.
       const ui = useUIStore.getState();
-      if (horizontal) {
-        startPos.current = e.clientX;
-        startSize.current = ui.terminalWidth;
-      } else {
-        startPos.current = e.clientY;
-        startSize.current = ui.terminalHeight;
-      }
+      const startPos = horizontal ? e.clientX : e.clientY;
+      const startSize = horizontal ? ui.terminalWidth : ui.terminalHeight;
+      // Whether the pointer actually moved during this press. A double-click
+      // delivers two full mousedown/mouseup pairs, and persisting on every
+      // mouseup would write the CURRENT size back as the stored ratio — so the
+      // second double-click would save the maximized size and "restore" would
+      // become a no-op. Only a real drag may change the persisted size.
+      let didDrag = false;
 
       const handleMouseMove = (e: MouseEvent) => {
-        if (!isResizing.current) return;
-
         const ui = useUIStore.getState();
         // Cap live drag at 80% of available space (TERMINAL_MAX_RATIO); the
         // store setters only enforce the pixel floor.
@@ -128,28 +101,17 @@ export function useTerminalResize(
         );
         const maxPixels = available * TERMINAL_MAX_RATIO;
 
-        if (horizontal) {
-          // growSign flips drag direction for left vs right panels.
-          const delta = (e.clientX - startPos.current) * growSign;
-          if (delta !== 0) didDrag.current = true;
-          ui.setTerminalWidth(Math.min(maxPixels, startSize.current + delta));
-        } else {
-          const delta = (e.clientY - startPos.current) * growSign;
-          if (delta !== 0) didDrag.current = true;
-          ui.setTerminalHeight(Math.min(maxPixels, startSize.current + delta));
-        }
+        // growSign flips drag direction for left/top vs right/bottom panels.
+        const pointer = horizontal ? e.clientX : e.clientY;
+        const delta = (pointer - startPos) * growSign;
+        if (delta !== 0) didDrag = true;
+        const size = Math.min(maxPixels, startSize + delta);
+        if (horizontal) ui.setTerminalWidth(size);
+        else ui.setTerminalHeight(size);
         onResize?.();
       };
 
-      const handleMouseUp = () => {
-        // A press with no movement is a click, not a resize — persisting there
-        // would overwrite the user's stored ratio with whatever the panel
-        // happens to measure right now (see `didDrag`).
-        if (!didDrag.current) {
-          cleanup();
-          return;
-        }
-        // Persist ratio from final pixel size
+      const persistRatio = () => {
         const ui = useUIStore.getState();
         const pos = ui.effectiveTerminalPosition;
         const pixels = isHorizontalTerminalAxis(pos) ? ui.terminalWidth : ui.terminalHeight;
@@ -161,24 +123,24 @@ export function useTerminalResize(
         );
         const ratio = pixelsToRatio(pixels, available);
         useSettingsStore.getState().updateTerminalSetting("panelRatio", ratio);
-
-        cleanup();
       };
 
-      handlersRef.current = { move: handleMouseMove, up: handleMouseUp };
-
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-      window.addEventListener("blur", handleMouseUp);
-
-      document.body.style.cursor = horizontal ? "col-resize" : "row-resize";
-      document.body.style.userSelect = "none";
+      drag.start({
+        cursor: horizontal ? "col-resize" : "row-resize",
+        onMove: handleMouseMove,
+        onEnd: (reason) => {
+          // A press with no movement is a click, not a resize — persisting
+          // there would overwrite the user's stored ratio with whatever the
+          // panel happens to measure right now (see `didDrag`).
+          if (didDrag && reason !== "unmount") persistRatio();
+        },
+      });
     },
-    [cleanup, horizontal, growSign, onResize]
+    [drag, horizontal, growSign, onResize]
   );
 
   /**
-   * Toggle between the persisted ratio and the cap (WI-4.5). Deliberately does
+   * Toggle between the persisted ratio and the cap. Deliberately does
    * NOT write `panelRatio`: restoring must land on whatever the user chose,
    * and a maximize should not silently become their new default.
    */

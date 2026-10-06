@@ -15,7 +15,7 @@
  *     CJK-aware versions; custom marks (highlight, underline, sub/superscript)
  *   - Media extensions (block_video, block_audio, video_embed) with NodeViews,
  *     plus media popup/handler extensions; tocExtension for [TOC] navigation
- *   - Composition order is pinned via WYSIWYG_COMPOSITION_ORDER (WI-3.4)
+ *   - Composition order is pinned via WYSIWYG_COMPOSITION_ORDER
  *
  * The Link mark lives in `linkExtension.ts` with its round-trip attributes.
  *
@@ -126,7 +126,7 @@ export interface TiptapExtensionConfig {
 
 /**
  * The extension list. Not the composition path — `createTiptapExtensions` routes
- * it through the resolver (ADR-015 D1). WI-3.4: array position is not load-bearing
+ * it through the resolver (ADR-015 D1). Array position is not load-bearing
  * — order is declared once in `WYSIWYG_COMPOSITION_ORDER` and pinned via explicit
  * `after` constraints, so this list is sorted alphabetically before composition
  * yet resolves to the canonical order. Kept in logical/grouped order here for
@@ -228,7 +228,7 @@ export function buildExtensionList(config: TiptapExtensionConfig = {}): Extensio
     blockMathKeymapExtension,
     listContinuationExtension,
     // Enter on a cross-block selection, ahead of StarterKit's splitBlock,
-    // which throws on that shape (audit 20260906, F5).
+    // which throws on that shape.
     safeBlockSplitExtension,
     listBackspaceExtension,
     listClickFixExtension,

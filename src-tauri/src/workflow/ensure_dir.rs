@@ -1,5 +1,5 @@
 //! `action/save-file` creates the parents its target needs — inside the
-//! workspace, and nowhere else (#257).
+//! workspace, and nowhere else.
 //!
 //! `commit.rs` anchored the WRITE to a directory descriptor. The mkdir that
 //! runs before it was still `create_dir_all` on a path, and that is a second
@@ -61,7 +61,7 @@ mod anchored {
     }
 
     /// [`create_parents_with`] against a root the caller already HOLDS open,
-    /// for a snapshot restore's many writes (#74).
+    /// for a snapshot restore's many writes.
     pub(in crate::workflow) fn create_parents_in(
         target_parent: &Path,
         root: &Dir,
@@ -92,7 +92,7 @@ mod anchored {
     /// then `mkdirat` sees `EEXIST` and `open_child` refuses it. Either way
     /// nothing is followed.
     ///
-    /// `try_exists`, not `exists` (#539): the latter answers `false` for a
+    /// `try_exists`, not `exists`: the latter answers `false` for a
     /// component it could not STAT, so an ancestor the user cannot traverse
     /// read as missing and the walk climbed past it — out of the workspace,
     /// where `assert_within` refused with a containment message about a
@@ -129,7 +129,7 @@ mod fallback {
     /// (`AGENTS.md`). The residual is stated rather than papered over: this
     /// resolves the path a second time, so an ancestor replaced between
     /// `sandbox::validate_path` and this call is followed, exactly as it was
-    /// everywhere before #257.
+    /// everywhere before the descriptor-anchored commit.
     ///
     /// Closing it properly needs `NtCreateFile` with the parent's HANDLE in
     /// `OBJECT_ATTRIBUTES.RootDirectory` — the only Windows primitive that

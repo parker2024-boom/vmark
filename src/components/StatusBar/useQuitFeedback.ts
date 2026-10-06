@@ -1,3 +1,10 @@
+/**
+ * useQuitFeedback — React hook that shows the press-again-to-quit hint for a
+ * short time after the first quit keypress.
+ *
+ * @module components/StatusBar/useQuitFeedback
+ */
+
 import { useEffect, useState } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { safeUnlistenAsync } from "@/utils/safeUnlisten";

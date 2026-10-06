@@ -17,7 +17,7 @@
  *   - Wrapped in React.memo to avoid re-rendering all tabs when only one
  *     tab's active state changes; dirty/missing/divergent are per-tab selectors.
  *   - Uses role="tab" with aria-selected for accessibility; roving tabindex
- *     plus Arrow/Home/End focus movement in tabKeyboard.ts (audit H27)
+ *     plus Arrow/Home/End focus movement in tabKeyboard.ts
  *     (0 for active, -1 for others) enables keyboard navigation.
  *   - Close button is hidden for pinned tabs to prevent accidental closure.
  *   - The label is derived here rather than stored: `tab.title` is the real
@@ -225,7 +225,7 @@ export const Tab = memo(function Tab({
             fileName={getFileName(filePath) || tab.title}
           />
         ) : (
-          /* WI-UA12: the NAME span ellipsizes; the extension span never
+          /* The NAME span ellipsizes; the extension span never
              shrinks, so similarly-prefixed files stay tellable apart. */
           <span className="tab-title">
             <span className="tab-title__base">{labelParts.base}</span>

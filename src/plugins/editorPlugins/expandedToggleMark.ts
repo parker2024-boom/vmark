@@ -12,14 +12,14 @@
  *   - Tracks last removed mark to enable re-toggling at the same position
  *
  * @coordinates-with syntaxReveal/marks.ts — mark range detection utilities
- * @coordinates-with multiCursor/MultiSelection.ts — multi-cursor support
+ * @coordinates-with shared/MultiSelection.ts — multi-cursor support
  * @module plugins/editorPlugins/expandedToggleMark
  */
 
 import { TextSelection } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import { findAnyMarkRangeAtCursor, findMarkRange, findWordAtCursor } from "@/plugins/syntaxReveal/marks";
-import { MultiSelection } from "@/plugins/multiCursor";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 
 interface LastRemovedMark {
   markType: string;

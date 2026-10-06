@@ -102,6 +102,24 @@ describe("handleBrowserStyle (act-class, op=style)", () => {
     expect(String(lastResponse().error)).toContain("single class tokens");
   });
 
+  // WI-RA18.8 — read from the contract, a field of the wrong shape is refused by
+  // name, never dropped while the rest of the request is applied.
+  it("rejects an array 'set' payload rather than reading its indices as properties", async () => {
+    const id = seed();
+    grant("style");
+    await handleBrowserStyle("s-set-arr", { tabId: id, selector: ".x", set: ["red"] });
+    expect(invoke).not.toHaveBeenCalled();
+    expect(String(lastResponse().error)).toContain("'set' must be an object");
+  });
+
+  it("rejects a non-string 'injectCss' instead of applying the rest of the request", async () => {
+    const id = seed();
+    grant("style");
+    await handleBrowserStyle("s-css", { tabId: id, selector: ".x", set: { color: "red" }, injectCss: 7 });
+    expect(invoke).not.toHaveBeenCalled();
+    expect(String(lastResponse().error)).toContain("'injectCss' must be a string");
+  });
+
   it("rejects a non-object 'set' payload", async () => {
     const id = seed();
     grant("style");
@@ -180,6 +198,21 @@ describe("handleBrowserExecuteJs (eval — per-call approval only)", () => {
     const res = lastResponse();
     expect((res.data as { needsApproval?: boolean }).needsApproval).toBe(true);
     expect(useBrowserApprovalStore.getState().pending[0]).toMatchObject({ operation: "eval" });
+  });
+
+  // WI-RA18.7 — the script excerpt in the needs-approval reply crosses IPC as
+  // JSON; a lone surrogate there is an escape Rust's JSON parser refuses.
+  it.each([
+    ["an emoji straddling the cut", `${"a".repeat(1999)}😀tail`, "a".repeat(1999)],
+    ["CJK text over the cut", "中".repeat(2100), "中".repeat(2000)],
+    ["a script within the cut", "return '😀';", "return '😀';"],
+  ])("cuts the script excerpt without splitting a character: %s", async (_label, script, excerpt) => {
+    const id = seed();
+    await handleBrowserExecuteJs("x-cut", { tabId: id, script });
+    const data = lastResponse().data as { needsApproval?: boolean; script?: string };
+    expect(data.needsApproval).toBe(true);
+    expect(data.script).toBe(excerpt);
+    expect(data.script?.isWellFormed()).toBe(true);
   });
 
   it("runs the caller script after an Allow-once and flags the result untrusted", async () => {

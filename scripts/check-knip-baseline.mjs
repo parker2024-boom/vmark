@@ -15,7 +15,12 @@
  * mirrors the sibling pattern instead: freeze today's counts, fail on growth,
  * and fail on an un-recorded shrink so a win cannot be quietly reabsorbed.
  *
+ * Fails closed: no output, no JSON, or JSON that is not a knip report is an
+ * error, never "zero findings".
+ *
  * Usage: node scripts/check-knip-baseline.mjs
+ *
+ * @coordinates-with scripts/check-knip-baseline.test.mjs — runs this against a stub knip
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -77,11 +82,24 @@ function runKnip() {
     process.exit(1);
   }
 
+  // The baseline is all zeros, so "no findings" is the PASSING answer — and it
+  // is also what any JSON that is not a knip report used to count as (a
+  // `{ "error": … }` object has no `issues`, so every family summed to 0).
+  // Anything that does not have the report's shape is a failed run.
+  const unreadable = (why) => {
+    console.error(`❌ knip output is not a report (${why}) — refusing to count it as zero findings.`);
+    process.exit(1);
+  };
+  if (!Array.isArray(parsed?.issues)) unreadable("no `issues` array");
+
   const counts = Object.fromEntries(WARN_FAMILIES.map((f) => [f, 0]));
-  for (const issue of parsed.issues ?? []) {
+  for (const issue of parsed.issues) {
+    if (typeof issue !== "object" || issue === null) unreadable("an issue is not an object");
     for (const family of WARN_FAMILIES) {
       const found = issue[family];
-      if (Array.isArray(found)) counts[family] += found.length;
+      if (found === undefined) continue;
+      if (!Array.isArray(found)) unreadable(`\`${family}\` is not an array`);
+      counts[family] += found.length;
     }
   }
   return counts;

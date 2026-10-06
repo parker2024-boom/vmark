@@ -16,16 +16,16 @@
 //!   - a runtime fs grant is NOT read-only: the fs plugin accepts a
 //!     runtime-granted path for every command the capability permits (write,
 //!     rename, remove). The recursive workspace grant therefore lives in
-//!     `workspace_grants/scope.rs`, private to the module that decides a root
+//!     `workspace/grants/scope.rs`, private to the module that decides a root
 //!     was chosen, never here;
 //!   - Tauri resolves a granted name AGAIN while granting, and also allows
 //!     whatever it resolves to then (`confirm_grant_target`).
 //!
-//! Split out of `file_open.rs` when that file crossed the 300-line limit:
+//! Split out of `files/open.rs` when that file crossed the 300-line limit:
 //! granting scope is a separate concern from queueing Finder/CLI opens.
 //!
-//! @coordinates-with file_open.rs — queues the opens these grants make readable
-//! @coordinates-with workspace_grants/scope.rs — the recursive workspace grant
+//! @coordinates-with files/open.rs — queues the opens these grants make readable
+//! @coordinates-with workspace/grants/scope.rs — the recursive workspace grant
 //! @coordinates-with asset_access.rs — the media grant, confirmed the same way
 
 use tauri::Manager;
@@ -44,22 +44,14 @@ pub(crate) fn allow_fs_read<R: tauri::Runtime, P: AsRef<std::path::Path>>(
     use tauri_plugin_fs::FsExt;
     let path = path.as_ref();
     if let Err(e) = app.fs_scope().allow_file(path) {
-        log::warn!(
-            "[fs-scope] Failed to allow file '{}': {}",
-            path.display(),
-            e
-        );
+        log::warn!("[fs-scope] Failed to allow file {:?}: {}", path, e);
     }
     if let Err(e) = app.asset_protocol_scope().allow_file(path) {
-        log::warn!(
-            "[asset-scope] Failed to allow file '{}': {}",
-            path.display(),
-            e
-        );
+        log::warn!("[asset-scope] Failed to allow file {:?}: {}", path, e);
     }
 }
 
-/// [`allow_fs_read`], reporting whether `path` ended up READABLE (#481).
+/// [`allow_fs_read`], reporting whether `path` ended up READABLE.
 ///
 /// `allow_fs_read` is best-effort by design — it logs a failed grant and
 /// returns — which is right for the Finder/CLI callers, where the static scope
@@ -98,7 +90,7 @@ pub(crate) fn grant_fs_read<R: tauri::Runtime>(
 }
 
 /// Confirm, after a grant, that a name still resolves to the target the caller
-/// judged (#250).
+/// judged.
 ///
 /// `Scope::allow_file` / `allow_directory` resolve the name they are given
 /// AGAIN and also allow whatever it resolves to at that instant: tauri 2.11.5's

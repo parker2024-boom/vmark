@@ -4,7 +4,7 @@
  * dependency graph, computed from the real import graph by dependency-cruiser
  * (node_modules, tests, and benches excluded). This is the COMPUTED counterpart
  * to the hand-authored `architecture.md` C4 map; when they disagree, this is the
- * ground truth (hand docs drift — the 2026-07-22 ADR audit proved it).
+ * ground truth (hand docs drift — an ADR reality audit proved it).
  *
  * Regenerate: `pnpm arch:graph`. Do not hand-edit the output.
  */

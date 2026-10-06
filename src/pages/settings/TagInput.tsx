@@ -4,6 +4,8 @@
  *
  * Part of the shared Settings UI primitives; see `components.tsx` (the
  * barrel) for the naming/decision rules that govern this family.
+ *
+ * @module pages/settings/TagInput
  */
 
 import { useState, useRef } from "react";

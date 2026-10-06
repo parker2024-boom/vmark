@@ -82,6 +82,9 @@ beforeEach(() => {
   invoke.mockReset().mockResolvedValue(undefined);
 });
 
+/** Every Tauri command invoked, in order — `close_window` takes no arguments, so only its name shows a close. */
+const invokedCommands = () => invoke.mock.calls.map(([command]) => command);
+
 describe("closeWorkspaceInstance", () => {
   it("closes the workspace's tabs through the shared dirty-check path", async () => {
     seedInstance("doc-1", "wsi-a", "/tmp/alpha", ["tab-1", "tab-2"]);
@@ -179,7 +182,7 @@ describe("closeWorkspaceInstance", () => {
     const ids = idsIn("main");
     expect(ids).toHaveLength(1);
     expect(ids[0]).not.toBe("wsi-only");
-    expect(invoke).not.toHaveBeenCalledWith("close_window", expect.anything());
+    expect(invokedCommands()).not.toContain("close_window");
   });
 
   it("closes a non-main window once its last workspace is gone", async () => {
@@ -187,7 +190,7 @@ describe("closeWorkspaceInstance", () => {
 
     await closeWorkspaceInstance("doc-2", "wsi-only", { closeTabs: closeTabsWithDirtyCheck });
 
-    expect(invoke).toHaveBeenCalledWith("close_window", { label: "doc-2" });
+    expect(invoke).toHaveBeenCalledWith("close_window");
   });
 
   it("leaves other windows alone when one still holds a workspace", async () => {
@@ -196,7 +199,7 @@ describe("closeWorkspaceInstance", () => {
 
     await closeWorkspaceInstance("doc-2", "wsi-a", { closeTabs: closeTabsWithDirtyCheck });
 
-    expect(invoke).not.toHaveBeenCalledWith("close_window", expect.anything());
+    expect(invokedCommands()).not.toContain("close_window");
   });
 
   it("reports a missing instance instead of throwing", async () => {

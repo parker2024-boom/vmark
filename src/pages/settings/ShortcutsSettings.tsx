@@ -2,6 +2,8 @@
  * Shortcuts Settings
  *
  * UI for viewing and customizing keyboard shortcuts.
+ *
+ * @module pages/settings/ShortcutsSettings
  */
 
 import { useState, useRef } from "react";
@@ -20,10 +22,12 @@ import {
   getShortcutDescription,
 } from "@/stores/settingsShortcutLabels";
 import { KeyCapture } from "./KeyCapture";
+import { describeShortcutImportError } from "./shortcutImportErrors";
 import { Button, SearchInput } from "./components";
 import { confirmAction } from "@/services/dialogs/confirmAction";
 import i18n from "@/i18n";
 import { appError } from "@/utils/debug";
+import { imeToast as toast } from "@/services/ime/imeToast";
 
 export function ShortcutsSettings() {
   const { t } = useTranslation("settings");
@@ -48,7 +52,7 @@ export function ShortcutsSettings() {
 
   // Every definition stays listed, including the ones with no effective key.
   // An unbound shortcut renders as "Unassigned" and is bound from here like any
-  // other (WI-FL3.13). The pane used to filter those rows out, so a definition
+  // other. The pane used to filter those rows out, so a definition
   // that ships unbound (or one the user had cleared) could never be given a key
   // again without a JSON import.
   const unassignedLabel = t("shortcuts.unassigned");
@@ -101,8 +105,11 @@ export function ShortcutsSettings() {
       // entry applies NOTHING, so this message can say so — it used to report
       // errors after the valid entries had already replaced the user's map.
       const result = importConfig(reader.result as string);
-      if (!result.success && result.errors) {
-        alert(`${t("shortcuts.importFailed")}\n${result.errors.join("\n")}`);
+      if (!result.success) {
+        toast.error(t("shortcuts.importFailed"), {
+          description: result.errors.map(describeShortcutImportError).join("\n"),
+          pin: true,
+        });
       }
     };
     reader.readAsText(file);

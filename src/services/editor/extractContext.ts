@@ -3,6 +3,8 @@
  *
  * Walks the document's top-level children to find neighbors of the
  * content range, serializing ±radius blocks as markdown.
+ *
+ * @module services/editor/extractContext
  */
 
 import type { EditorState } from "@tiptap/pm/state";

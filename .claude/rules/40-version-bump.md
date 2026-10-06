@@ -8,6 +8,7 @@ paths:
   - "server/mcp/src/cli.ts"
   - "scripts/bump-version.sh"
   - ".github/workflows/release*.yml"
+  - "CHANGELOG.md"
 ---
 
 # 40 - Version Bump Procedure
@@ -25,6 +26,25 @@ with them (`cargo update -p vmark --manifest-path src-tauri/Cargo.toml`).
 | `server/mcp/src/cli.ts` | `VERSION` — declared with SINGLE quotes; a double-quote-only `sed` silently matches nothing |
 
 Mismatches show as `Version 0.2.5 (0.3.0)` in About, or a stale MCP health-check version.
+
+## Release notes and notices (same commit as the bump)
+
+1. **Write the release's `CHANGELOG.md` section before bumping.** Move the
+   `## [Unreleased]` entries under `## [x.y.z] - YYYY-MM-DD` (Keep a Changelog:
+   Added, Changed, Fixed, Removed, Security), complete them from
+   `git log vPREV..HEAD` in words a user understands, and add the `[x.y.z]:`
+   link at the bottom. The section is the GitHub release body and the update
+   card's "what's new" text. `release.yml` refuses a tag without one
+   (`scripts/extract-changelog-section.mjs`), and the gates tier fails while
+   the tree's own version has none.
+2. **Refresh the bundled notices:** `node scripts/gen-third-party-licenses.mjs`
+   (needs `cargo about` 0.8.2: `cargo install cargo-about --locked --version 0.8.2`)
+   and commit `src-tauri/resources/generated/THIRD_PARTY_LICENSES.txt`. The
+   release regenerates the file before building, so the shipped copy is exact
+   either way; this keeps the tracked copy from falling behind.
+
+`scripts/bump-version.sh` checks the first and runs the second; it exits 1
+while the section is missing.
 
 ## Landing and tagging
 

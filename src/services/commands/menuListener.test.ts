@@ -27,15 +27,6 @@ vi.mock("@tauri-apps/api/webviewWindow", () => ({
   }),
 }));
 
-const executeCommandMock = vi.fn();
-// Registered command ids, as the mount-time preflight sees them (#916). The
-// default is "every id exists", so the tests below that are about the payload
-// filter say nothing about registration; the preflight tests set it.
-const registeredIds = { has: (_id: string) => true };
-vi.mock("./CommandBus", () => ({
-  executeCommand: (...args: unknown[]) => executeCommandMock(...args),
-  hasCommand: (id: string) => registeredIds.has(id),
-}));
 
 const safeUnlistenAllMock = vi.fn();
 vi.mock("@/utils/safeUnlisten", () => ({
@@ -49,15 +40,50 @@ vi.mock("@/utils/debug", () => ({
 
 // Import after mocks register so hoisting wires correctly.
 import { decodeMenuPayload, mountMenuCommands } from "./menuListener";
+import { _resetCommandBus, registerCommand } from "./CommandBus";
 import { getEditorActionOwner } from "@/services/editor/editorActionOwner";
+
+// The real CommandBus runs. Every id these tests bind is registered with a spy
+// body, so the tests about the payload filter say nothing about registration;
+// the preflight tests take ids away. `cmd.missing` is never registered.
+const KNOWN_IDS = [
+  "cmd.do",
+  "cmd.a",
+  "cmd.b",
+  "cmd.c",
+  "cmd.ok",
+  "file.open",
+  "file.save",
+  "file.saveOther",
+  "file.openRecent",
+] as const;
+type RunSpy = ReturnType<typeof vi.fn<(args: unknown, ctx: unknown) => Promise<void>>>;
+const runs = new Map<string, RunSpy>();
+
+/** The body of a registered command — what the bus runs on dispatch. */
+function run(id: string): RunSpy {
+  const spy = runs.get(id);
+  if (!spy) throw new Error(`no registered command ${id}`);
+  return spy;
+}
+
+/** Whether ANY registered command body ran. */
+function anyCommandRan(): boolean {
+  return [...runs.values()].some((spy) => spy.mock.calls.length > 0);
+}
 
 beforeEach(() => {
   listenSpy.mockReset();
   unlistenSpies.length = 0;
-  executeCommandMock.mockReset();
   safeUnlistenAllMock.mockReset();
   menuErrorMock.mockReset();
-  registeredIds.has = () => true;
+  _resetCommandBus();
+  runs.clear();
+  for (const id of KNOWN_IDS) {
+    const spy: RunSpy = vi.fn(async () => {});
+    runs.set(id, spy);
+    registerCommand({ id, title: id, run: spy });
+  }
 
   // Default listen implementation: capture the callback and return a
   // fresh unlisten spy per call so tests can verify cleanup per binding.
@@ -88,7 +114,7 @@ describe("mountMenuCommands — payload-shape filter (#957)", () => {
     // The ARGUMENT is `undefined`, not the payload: a bare string payload is
     // the routing target and carries no data (audit #915). This case is about
     // the filter dispatching at all; the argument itself is pinned below.
-    expect(executeCommandMock).toHaveBeenCalledWith("cmd.do", undefined, {
+    expect(run("cmd.do")).toHaveBeenCalledWith(undefined, {
       windowLabel: "main",
     });
   });
@@ -96,7 +122,7 @@ describe("mountMenuCommands — payload-shape filter (#957)", () => {
   it("ignores a string payload that targets a different window", async () => {
     const { callback } = await mountSingle("foo");
     await callback?.({ payload: "other" });
-    expect(executeCommandMock).not.toHaveBeenCalled();
+    expect(anyCommandRan()).toBe(false);
     expect(menuErrorMock).not.toHaveBeenCalled();
   });
 
@@ -105,9 +131,7 @@ describe("mountMenuCommands — payload-shape filter (#957)", () => {
     await callback?.({ payload: [123, "main"] });
     // Only the tuple's DATA element reaches the command — the envelope's window
     // label is routing, not an argument (audit #915).
-    expect(executeCommandMock).toHaveBeenCalledWith(
-      "cmd.do",
-      123,
+    expect(run("cmd.do")).toHaveBeenCalledWith(123,
       { windowLabel: "main" },
     );
   });
@@ -115,7 +139,7 @@ describe("mountMenuCommands — payload-shape filter (#957)", () => {
   it("ignores a tuple payload that targets a different window", async () => {
     const { callback } = await mountSingle("foo");
     await callback?.({ payload: [123, "other"] });
-    expect(executeCommandMock).not.toHaveBeenCalled();
+    expect(anyCommandRan()).toBe(false);
     expect(menuErrorMock).not.toHaveBeenCalled();
   });
 
@@ -124,7 +148,7 @@ describe("mountMenuCommands — payload-shape filter (#957)", () => {
     for (const bad of [42, { not: "expected" }, null] as const) {
       await callback?.({ payload: bad });
     }
-    expect(executeCommandMock).not.toHaveBeenCalled();
+    expect(anyCommandRan()).toBe(false);
     expect(menuErrorMock).toHaveBeenCalledTimes(3);
     // All three calls should mention the "unexpected payload shape" reason.
     for (const call of menuErrorMock.mock.calls) {
@@ -147,7 +171,7 @@ describe("mountMenuCommands — menu: auto-prefix (#957)", () => {
 
 describe("mountMenuCommands — execution errors are swallowed (#957)", () => {
   it("does not propagate a rejection from executeCommand to the listener", async () => {
-    executeCommandMock.mockRejectedValueOnce(new Error("command exploded"));
+    run("cmd.do").mockRejectedValueOnce(new Error("command exploded"));
     const { callback } = await mountSingle("foo");
     // The listener satisfies Tauri's EventCallback, so it returns void rather
     // than a promise — awaiting its return would assert the old shape, not the
@@ -292,7 +316,7 @@ describe("routing envelope is decoded away before dispatch (audit #915)", () => 
     // `[data, windowLabel]` is the transport, not the argument. Forwarding it
     // verbatim handed every recent-entry command the window label as part of
     // its own payload.
-    expect(executeCommandMock).toHaveBeenCalledWith("file.openRecent", "/tmp/notes.md", {
+    expect(run("file.openRecent")).toHaveBeenCalledWith("/tmp/notes.md", {
       windowLabel: "main",
     });
   });
@@ -304,7 +328,7 @@ describe("routing envelope is decoded away before dispatch (audit #915)", () => 
 
     // A string payload is the routing target and carries no data at all.
     // Forwarding it made `parseRecentPathArgs` read "main" as a FILE PATH.
-    expect(executeCommandMock).toHaveBeenCalledWith("file.openRecent", undefined, {
+    expect(run("file.openRecent")).toHaveBeenCalledWith(undefined, {
       windowLabel: "main",
     });
   });
@@ -312,7 +336,6 @@ describe("routing envelope is decoded away before dispatch (audit #915)", () => 
 
 describe("unregistered command targets (audit #916)", () => {
   it("does not mount a binding whose command does not exist, and reports it", async () => {
-    registeredIds.has = (id) => id !== "cmd.missing";
 
     const { failed } = await mountMenuCommands([
       { menuEvent: "menu:ok", commandId: "cmd.ok" },
@@ -329,7 +352,7 @@ describe("unregistered command targets (audit #916)", () => {
   });
 
   it("does not preflight editor-action bindings, which never touch the bus", async () => {
-    registeredIds.has = () => false;
+    _resetCommandBus(); // no command exists at all
 
     const { failed } = await mountMenuCommands([
       { kind: "editorAction", menuEvent: "menu:bold", mapping: { actionId: "bold" } },

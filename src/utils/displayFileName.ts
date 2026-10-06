@@ -52,7 +52,7 @@ const DISPLAY_EXTENSION_RE = /\.[A-Za-z0-9]{1,8}$/;
 
 /**
  * Split a display label so the tab strip can ellipsize the NAME while the
- * extension stays visible (WI-UA12): `design-system.md` → `design-system` +
+ * extension stays visible: `design-system.md` → `design-system` +
  * `.md`. A label with no extension-shaped suffix — dotfiles, trailing dots,
  * prose after the last dot, or a name that is ALL extension — stays whole in
  * `base` (never an empty base; same rule as formatFileDisplayName).

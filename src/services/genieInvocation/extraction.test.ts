@@ -237,3 +237,65 @@ describe("fillTemplate", () => {
     expect(fillTemplate("Rewrite: {{content}}", "")).toBe("Rewrite: ");
   });
 });
+
+// WI-RA1C.3 — the text a genie is given is the user's document. Whatever it
+// contains reaches the prompt as written: it is not a template and not a
+// replacement pattern.
+describe("fillTemplate — substituted text is passed through verbatim", () => {
+  const TEMPLATE = "Rewrite:\n{{content}}\n\nNearby:\n{{context}}";
+  const filled = (content: string, context?: string) => fillTemplate(TEMPLATE, content, context);
+
+  it("leaves a {{context}} written in the selected text alone when context is given", () => {
+    expect(filled("how to use {{context}} in a genie", "[Before]\nprev")).toBe(
+      "Rewrite:\nhow to use {{context}} in a genie\n\nNearby:\n[Before]\nprev",
+    );
+  });
+
+  it("leaves a {{context}} written in the selected text alone when there is no context", () => {
+    expect(filled("keep {{ context }} here")).toBe("Rewrite:\nkeep {{ context }} here\n\nNearby:\n");
+  });
+
+  it("leaves a {{content}} written in the selected text or the context alone", () => {
+    expect(filled("about {{content}}", "see {{content}} and {{ context }}")).toBe(
+      "Rewrite:\nabout {{content}}\n\nNearby:\nsee {{content}} and {{ context }}",
+    );
+  });
+
+  it.each([
+    { name: "a doubled dollar", text: "it costs $$5, or $$$ for three" },
+    { name: "the whole-match pattern", text: "awk prints $& here" },
+    { name: "the before-match pattern", text: "shell: echo $`date`" },
+    { name: "the after-match pattern", text: "perl's $' variable" },
+    { name: "a numbered group", text: "sed 's/(a)/$1$2/' and $0" },
+    { name: "a named group", text: "use $<name> in the replacement" },
+    { name: "LaTeX display math", text: "$$\n\\int_0^1 x\\,dx\n$$" },
+    { name: "CJK around dollars", text: "价格是 $$100，折后 $&50" },
+  ])("passes $name through in the selected text", ({ text }) => {
+    expect(filled(text)).toBe(`Rewrite:\n${text}\n\nNearby:\n`);
+  });
+
+  it.each([
+    { name: "a doubled dollar", text: "[Before]\nit costs $$5" },
+    { name: "the whole-match pattern", text: "[After]\nawk prints $& here" },
+    { name: "the before- and after-match patterns", text: "a $` b $' c" },
+  ])("passes $name through in the context", ({ text }) => {
+    expect(filled("body", text)).toBe(`Rewrite:\nbody\n\nNearby:\n${text}`);
+  });
+
+  it("fills every slot of a template that repeats them, each from the right value", () => {
+    expect(fillTemplate("{{context}}|{{content}}|{{ context }}|{{ content }}", "C$$", "X$&")).toBe(
+      "X$&|C$$|X$&|C$$",
+    );
+  });
+
+  it("carries CRLF and a large selection through unchanged", () => {
+    const large = "line with $$ and {{context}}\r\n".repeat(20_000);
+    const result = fillTemplate("{{content}}", large, "ctx");
+    expect(result.length).toBe(large.length);
+    expect(result).toBe(large);
+  });
+
+  it("an empty template stays empty", () => {
+    expect(fillTemplate("", "content", "context")).toBe("");
+  });
+});

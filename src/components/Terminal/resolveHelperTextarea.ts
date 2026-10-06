@@ -2,8 +2,8 @@
  * resolveHelperTextarea
  *
  * Purpose: resolve the terminal's helper textarea via the PUBLIC `term.textarea`
- * getter (WI-1.1) and assert the DOM-topology invariant the gate path relies on
- * (WI-1.2), failing LOUD instead of the old silent no-op that disabled the whole
+ * getter and assert the DOM-topology invariant the gate path relies on,
+ * failing LOUD instead of the old silent no-op that disabled the whole
  * IME layer when an internal `.xterm-helper-textarea` lookup returned null.
  *
  * Fail-loud policy: throw in dev (surface the misconfiguration immediately); in

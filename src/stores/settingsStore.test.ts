@@ -501,7 +501,7 @@ describe("settingsStore update settings", () => {
   });
 
   it("updates lastCheckTimestamp", () => {
-    const ts = Date.now();
+    const ts = Date.UTC(2026, 0, 2, 3, 4, 5);
     useSettingsStore.getState().updateUpdateSetting("lastCheckTimestamp", ts);
     expect(useSettingsStore.getState().update.lastCheckTimestamp).toBe(ts);
   });

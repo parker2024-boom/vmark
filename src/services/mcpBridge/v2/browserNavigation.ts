@@ -49,7 +49,7 @@ import {
   type BrowserTarget,
 } from "./browserHelpers";
 import { browserGate } from "./browserAccess";
-import { readOperationArgs } from "./readOperationArgs";
+import { readOperationArgsChecked } from "./readOperationArgs";
 import {
   failure,
   failureFrom,
@@ -66,13 +66,14 @@ export { handleBrowserOpen } from "./browserOpen";
 export async function handleBrowserNavigate(id: string, args: Record<string, unknown>): Promise<void> {
   return wrapHandler(id, async () => {
     if (!(await browserGate(id))) return;
-    const wire = readOperationArgs("vmark.browser.navigate", args);
+    const read = readOperationArgsChecked("vmark.browser.navigate", args);
+    const wire = read.wire;
     if (!validateNonEmptyString(wire.url)) return failure(id, "INVALID_URL");
     const url = wire.url;
     const timeoutMs = validateTimeout(wire.timeoutMs);
     if (timeoutMs === null) return failure(id, "INVALID_TIMEOUT");
     const deadline = Date.now() + timeoutMs;
-    const tabIdArg = readTabIdArg(args);
+    const tabIdArg = readTabIdArg(read);
     if (tabIdArg === null) return failure(id, "INVALID_TAB");
     const target = resolveBrowserTab(tabIdArg ?? undefined);
     if (!target) return failure(id, "TAB_NOT_FOUND");
@@ -126,14 +127,15 @@ export async function handleBrowserNavigate(id: string, args: Record<string, unk
 export async function handleBrowserWait(id: string, args: Record<string, unknown>): Promise<void> {
   return wrapHandler(id, async () => {
     if (!(await browserGate(id))) return;
-    const wire = readOperationArgs("vmark.browser.wait", args);
+    const read = readOperationArgsChecked("vmark.browser.wait", args);
+    const wire = read.wire;
     const timeoutMs = validateTimeout(wire.timeoutMs);
     if (timeoutMs === null) return failure(id, "INVALID_TIMEOUT");
     const deadline = Date.now() + timeoutMs;
     if (wire.navigationId !== undefined && !validateNonEmptyString(wire.navigationId)) {
       return failure(id, "INVALID_NAVIGATION");
     }
-    const tabIdArg = readTabIdArg(args);
+    const tabIdArg = readTabIdArg(read);
     if (tabIdArg === null) return failure(id, "INVALID_TAB");
     const target = resolveBrowserTab(tabIdArg ?? undefined);
     if (!target) return failure(id, "TAB_NOT_FOUND");

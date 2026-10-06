@@ -1,4 +1,4 @@
-//! Run-loop pump helpers for the macOS browser surface (WI-1.2). Split from
+//! Run-loop pump helpers for the macOS browser surface. Split from
 //! surface_macos.rs to keep it under the file-size limit; a `#[path]` submodule
 //! of the `imp` module, so these are `pub(super)` for the surface to call.
 //!
@@ -108,7 +108,7 @@ pub(super) fn drive_load(webview: &WKWebView, run_loop: &NSRunLoop) {
     let start = Instant::now();
     loop {
         pump(run_loop, 0.1);
-        let loading = unsafe { webview.isLoading() };
+        let loading = super::webkit_calls::is_loading(webview);
         if progress.observe(start.elapsed(), loading) {
             return;
         }

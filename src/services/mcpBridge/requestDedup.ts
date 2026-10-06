@@ -1,5 +1,5 @@
 /**
- * MCP Bridge — duplicate request delivery guard (audit 20260612 H20).
+ * MCP Bridge — duplicate request delivery guard.
  *
  * Purpose: Ensure each MCP request id EXECUTES at most once while keeping
  *   the bridge's wake-and-retry recovery working. The Rust bridge re-emits

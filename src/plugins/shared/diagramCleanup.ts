@@ -17,6 +17,8 @@
  *
  * Then periodically (e.g. in the decoration rebuild):
  *   sweepDetached();
+ *
+ * @module plugins/shared/diagramCleanup
  */
 
 const registry = new Map<Element, Set<() => void>>();

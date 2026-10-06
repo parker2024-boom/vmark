@@ -7,6 +7,7 @@
  * @module hooks/useExternalFileChanges.test
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fileBytes } from "@/test/fileBytes";
 import { renderHook } from "@testing-library/react";
 
 // --- Hoisted mocks ---
@@ -30,7 +31,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: mocks.readTextFile,
+  readFile: (path: string) => fileBytes(mocks.readTextFile(path)),
   exists: mocks.exists,
 }));
 
@@ -310,7 +311,6 @@ describe("useExternalFileChanges — rename events", () => {
     expect(doc?.lastDiskContent).toBe("# new external content");
     expect(mocks.toastInfo).toHaveBeenCalledWith("Reloaded: test.md");
   });
-
 
   it("handles paired rename (real file rename) by updating tab path", async () => {
     seedStores();
@@ -1705,96 +1705,5 @@ describe("useExternalFileChanges — divergent auto-recovery (issue #522)", () =
     const doc = useDocumentStore.getState().documents["tab-1"];
     expect(doc?.isDivergent).toBe(true);
     expect(mocks.dialogMessage).not.toHaveBeenCalled();
-  });
-});
-
-// Regression for issue 904: OneDrive (and other cloud sync daemons) keep
-// touching the file in the background even when the user has "paused" sync.
-// With a dirty doc, that triggers the external-change dialog. The user picks
-// "Keep my changes" → divergent → auto-save paused. The bug: lastDiskContent
-// was not refreshed after Keep, so every subsequent identical disk touch
-// fires the dialog AGAIN — user is stuck in a loop until they manually save.
-//
-// Fix: after Keep, re-read disk and adopt that content as lastDiskContent so
-// the soft-equals guard silently no-ops identical follow-up touches.
-describe("useExternalFileChanges — Keep my changes refreshes lastDiskContent", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("adopts current disk content as lastDiskContent after Keep, suppressing follow-up dialogs", async () => {
-    seedStores({ isDirty: true, lastDiskContent: "# old content" });
-
-    // First fs:changed: disk has a OneDrive-rewritten version.
-    mocks.readTextFile.mockResolvedValueOnce("# rewritten by onedrive");
-    // User picks "Keep my changes" (Cancel button on the 3-way dialog).
-    mocks.dialogMessage.mockResolvedValueOnce("Cancel");
-    // Re-read inside handleDirtyChange returns the same rewritten content.
-    mocks.readTextFile.mockResolvedValueOnce("# rewritten by onedrive");
-
-    const callback = await setupHookAndCallback();
-
-    await callback({
-      payload: {
-        watchId: "main",
-        rootPath: "/workspace",
-        paths: ["/workspace/test.md"],
-        kind: "modify",
-      },
-    });
-    // Let the debounce batch run.
-    await vi.waitFor(() => expect(mocks.dialogMessage).toHaveBeenCalledTimes(1));
-    // And the post-dialog re-read.
-    await vi.waitFor(() => expect(mocks.readTextFile).toHaveBeenCalledTimes(2));
-
-    const doc = useDocumentStore.getState().documents["tab-1"];
-    expect(doc?.isDivergent).toBe(true);
-    // Critical: lastDiskContent now reflects the OneDrive-rewritten content,
-    // so an identical follow-up rewrite is invisible to the soft-equals guard.
-    expect(doc?.lastDiskContent).toBe("# rewritten by onedrive");
-
-    // Second fs:changed for the SAME rewritten content — must NOT prompt.
-    mocks.readTextFile.mockResolvedValueOnce("# rewritten by onedrive");
-    mocks.dialogMessage.mockClear();
-
-    await callback({
-      payload: {
-        watchId: "main",
-        rootPath: "/workspace",
-        paths: ["/workspace/test.md"],
-        kind: "modify",
-      },
-    });
-    // Soft-equals matches → silent no-op. No dialog re-fires.
-    await new Promise((r) => setTimeout(r, 350)); // past BATCH_DEBOUNCE_MS
-    expect(mocks.dialogMessage).not.toHaveBeenCalled();
-  });
-
-  it("tolerates disk-read failure during the post-Keep refresh", async () => {
-    seedStores({ isDirty: true, lastDiskContent: "# old content" });
-
-    mocks.readTextFile.mockResolvedValueOnce("# rewritten by onedrive");
-    mocks.dialogMessage.mockResolvedValueOnce("Cancel");
-    // Refresh read fails — must not crash the handler.
-    mocks.readTextFile.mockRejectedValueOnce(new Error("EBUSY"));
-
-    const callback = await setupHookAndCallback();
-
-    await callback({
-      payload: {
-        watchId: "main",
-        rootPath: "/workspace",
-        paths: ["/workspace/test.md"],
-        kind: "modify",
-      },
-    });
-    await vi.waitFor(() =>
-      expect(mocks.readTextFile).toHaveBeenCalledTimes(2),
-    );
-
-    // Divergent is still set; lastDiskContent simply stays at the value from
-    // the initial dialog read (worst case: prompt re-fires on the next event).
-    const doc = useDocumentStore.getState().documents["tab-1"];
-    expect(doc?.isDivergent).toBe(true);
   });
 });

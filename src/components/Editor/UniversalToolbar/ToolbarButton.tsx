@@ -55,8 +55,7 @@ export function ToolbarButton({
 }: ToolbarButtonProps) {
   const { t } = useTranslation("editor");
   // Resolve the translated label (hardcoded English is the fallback) —
-  // the toolbar.* keys existed in every locale but were never consumed
-  // (audit 20260612 H17).
+  // the toolbar.* keys existed in every locale but were never consumed.
   const label = toolbarGroupLabel(t, button);
   // Show "Not available yet" tooltip for unimplemented buttons
   let title = label;

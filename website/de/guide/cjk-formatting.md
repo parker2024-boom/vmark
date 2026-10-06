@@ -2,13 +2,17 @@
 
 VMark enthält einen umfassenden Satz von Formatierungsregeln für chinesischen, japanischen und koreanischen Text. Diese Tools helfen dabei, eine konsistente Typografie beim Mischen von CJK- und lateinischen Zeichen beizubehalten.
 
+::: info Koreanisch wird bewusst nicht angetastet
+Koreanisch verwendet native Wortabstände, und Partikeln hängen direkt am vorangehenden Wort — `VMark에는`, niemals `VMark 에는`. Dort ein Leerzeichen einzufügen ist ein Grammatikfehler, keine typografische Vorliebe, daher ist **Hangul von jeder Abstandsregel** und von der Umwandlung in vollbreite Interpunktion **ausgenommen**. Koreanischer Text bleibt unverändert; nur Han-Zeichen darin werden formatiert.
+:::
+
 ## Schnellstart
 
 Verwenden Sie **Format → CJK → Gesamte Datei formatieren** oder drücken Sie `Alt + Mod + Umschalt + F`, um das gesamte Dokument zu formatieren.
 
 **Format → CJK → Auswahl formatieren** (`Mod + Umschalt + F`) formatiert **die Blöcke, die Ihre Auswahl umfasst** — den gesamten Absatz, die Liste oder die Tabelle, die der Cursor oder die Auswahl berührt, nicht die exakt ausgewählten Zeichen. CJK-Abstand ist eine Eigenschaft der Grenze *zwischen* zwei benachbarten Zeichen, und eine Auswahl mitten im Wort enthält keine solche Grenze. Der Befehl benennt daher einen zu korrigierenden Bereich statt eines neu zu schreibenden Textes. Ohne Auswahl formatiert er den Block an der Cursorposition.
 
-Beide Befehle schützen genau dasselbe (siehe „Geschützte Inhalte“), ein Alles-Markieren vor `Mod + Umschalt + F` ist also unbedenklich.
+Beide Befehle schützen genau dasselbe (siehe [Geschützter Inhalt](#geschutzter-inhalt)), ein Alles-Markieren vor `Mod + Umschalt + F` ist also unbedenklich.
 
 ---
 
@@ -16,13 +20,50 @@ Beide Befehle schützen genau dasselbe (siehe „Geschützte Inhalte“), ein Al
 
 ### 1. CJK-Lateinischer Abstand
 
-Fügt automatisch Leerzeichen zwischen CJK- und lateinischen Zeichen/Zahlen hinzu.
+Fügt automatisch Leerzeichen zwischen CJK- und lateinischen Zeichen/Zahlen hinzu,
+einschließlich Zahlen mit Vorzeichen (negativ, positiv, plus-minus) und Zahlen mit
+vorangestelltem Währungszeichen.
 
 | Vorher | Nachher |
 |--------|---------|
 | 学习Python编程 | 学习 Python 编程 |
 | 共100个 | 共 100 个 |
 | 使用macOS系统 | 使用 macOS 系统 |
+| 我有-1个 | 我有 -1 个 |
+| 我有+1个 | 我有 +1 个 |
+| 误差±5%范围 | 误差 ±5% 范围 |
+| 中文-$100元 | 中文 -$100 元 |
+| 范围-100到-200 | 范围 -100 到 -200 |
+
+Als Vorzeichen erkannt werden ASCII `-` `+`, vollbreites `－` `＋`, das Unicode-Minus
+`−` und Plus-Minus `±`. Ein Vorzeichen wird nur dann der Zahl zugeordnet, wenn eine
+Ziffer folgt (oder ein Währungszeichen, gefolgt von einer Ziffer), sodass CJK-lateinische
+Bindestrich-Bezeichner (z. B. `中文-Web`) und CJK-CJK-Bindestrich-Wendungen
+(z. B. `中文-我`) erhalten bleiben und Bereiche wie `5-10` unverändert bleiben.
+
+**Was als CJK und was als lateinisch gilt.** Ein CJK-Zeichen ist nach Unicode-Schrift
+ein Han-, Hiragana-, Katakana- oder Bopomofo-Zeichen. Dazu gehören die selteneren
+Han-Blöcke (Erweiterung A, die Erweiterungen der Zusatzebenen und die
+Kompatibilitätsideogramme), das Wiederholungszeichen `々`, die ideografische Null `〇`,
+halbbreite Katakana und das Dehnungszeichen `ー`. Ein lateinisches Zeichen ist jeder
+Buchstabe der lateinischen Schrift, Buchstaben mit Akzent eingeschlossen, sodass beide
+Seiten eines Wortes Abstand erhalten:
+
+| Vorher | Nachher |
+|--------|---------|
+| 中文café中文 | 中文 café 中文 |
+| 中文𠀀abc | 中文𠀀 abc |
+| ｶﾀｶﾅabc | ｶﾀｶﾅ abc |
+| 日本・東京 | 日本・東京 |
+
+Vollbreite lateinische Buchstaben (`Ａ`) bringen ihren eigenen Abstand mit und erhalten nie
+zusätzlichen Abstand. Der Katakana-Mittelpunkt `・` ist ein Satzzeichen, kein Buchstabe,
+daher wird daneben kein Leerzeichen eingefügt.
+
+**Links.** Die schließende Klammer eines Links erhält nur dann Abstand zu nachfolgendem
+CJK-Text, wenn der sichtbare Text des Links auf einen lateinischen Buchstaben oder eine
+Ziffer endet — das ist die Lücke, die ein Leser sieht. `参见[link](https://x.com)中文` wird zu
+`参见[link](https://x.com) 中文`; `参见[中文](https://x.com)中文` bleibt unverändert.
 
 ### 2. Vollbreite Interpunktion
 
@@ -45,7 +86,7 @@ Konvertiert vollbreite Buchstaben und Zahlen zu halbbreiter.
 
 ### 4. Klammernkonvertierung
 
-Konvertiert halbbreite Klammern zu vollbreiten, wenn sie CJK-Inhalt umschließen.
+Konvertiert halbbreite Klammern zu vollbreiten, wenn sie CJK-Inhalt umschließen. Beide Klammern müssen im selben Absatz stehen: über eine Leerzeile hinweg bleiben sie, wie sie getippt wurden.
 
 | Vorher | Nachher |
 |--------|---------|
@@ -78,6 +119,8 @@ VMark verwendet einen **stapelbasierten Anführungszeichen-Paarungsalgorithmus**
 | "don't worry" | “don't worry” |
 | 5'10" tall | 5'10" tall |
 
+Zwischen einem CJK-Zeichen und einem Anführungszeichen wird kein Leerzeichen eingefügt. `“ ”`, `‘ ’`, `「 」` und `『 』` sind im CJK-Kontext vollbreit — GB/T 15834 und JLREQ geben ihnen beide einen eigenen Seitenabstand —, daher bleibt `他说“你好”然后走了` genau wie geschrieben. Lateinischer Text erhält weiterhin ein Leerzeichen: `word“text”` wird zu `word “text”`.
+
 Mit aktivierter Eckklammern-Option:
 
 | Vorher | Nachher |
@@ -87,7 +130,7 @@ Mit aktivierter Eckklammern-Option:
 
 ### 7. Auslassungszeichen-Normalisierung
 
-Standardisiert die Formatierung von Auslassungszeichen.
+Standardisiert die Formatierung von Auslassungszeichen in der Form, die die umgebende Schrift verwendet. Es gibt keine einzige richtige Antwort: Chinesisch (GB/T 15834) und Japanisch (JIS X 4051) verwenden die sechspunktige Auslassung `……` und setzen danach **kein** Leerzeichen, Koreanisch verwendet `…`, und nur lateinischer Text verwendet `...` gefolgt von einem Leerzeichen.
 
 | Vorher | Nachher |
 |--------|---------|
@@ -96,6 +139,8 @@ Standardisiert die Formatierung von Auslassungszeichen.
 | そして...続く | そして……続く |
 | 그리고...계속 | 그리고…계속 |
 | wait...ok | wait... ok |
+
+Die Schrift wird anhand der Zeichen unmittelbar neben den Punkten bestimmt, nicht anhand des Dokuments, sodass `...` innerhalb eines englischen Zitats in einer chinesischen Datei seine lateinische Form behält.
 
 ### 8. Wiederholte Interpunktion
 
@@ -111,7 +156,7 @@ Begrenzt aufeinanderfolgende Satzzeichen (konfigurierbares Limit).
 - Mehrere Leerzeichen werden komprimiert: `多个   空格` → `多个 空格`
 - Nachgestellte Leerzeichen werden entfernt
 - Schrägstrich-Abstände: `A / B` → `A/B`
-- Währungsabstände: `$ 100` → `$100`
+- Bindung von Währung und Einheit: `$ 100` → `$100`, `100 %` → `100%`. Entfernt werden nur Leerzeichen und Tabulatoren: Eine Zahl am Ende einer Zeile oder eines Absatzes wird nie mit einer Einheit oder Währung in der nächsten verbunden, und ein von Ihnen zwischen Zahl und Einheit getipptes geschütztes Leerzeichen bleibt erhalten
 
 ---
 
@@ -132,11 +177,11 @@ Der folgende Inhalt wird **nicht** durch Formatierung beeinflusst:
 - Fußnotenmarkierungen — Verweise wie `[^1]` und das `[^1]:`-Label einer Definition (der Text der Definition selbst wird formatiert)
 - HTML-Zeichenreferenzen (`&amp;`, `&#x5176;`)
 - Thematische Umbrüche (`---`, `***`)
-- Backslash-maskierte Interpunktion (z.B. `\,` bleibt als `,`)
+- Backslash-maskierte Interpunktion (z. B. `\,` bleibt als `,`)
 
 ### Technische Konstrukte
 
-VMark's **Latin Span Scanner** erkennt und schützt automatisch technische Konstrukte vor der Interpunktionskonvertierung:
+Der **Latin Span Scanner** von VMark erkennt und schützt technische Konstrukte vor der Interpunktionskonvertierung:
 
 | Typ | Beispiele | Schutz |
 |-----|----------|--------|
@@ -189,7 +234,7 @@ CJK-Formatierungsoptionen können in Einstellungen → Sprache konfiguriert werd
 
 ### Kontextuelle Anführungszeichen
 
-Wenn **Kontextuelle Anführungszeichen** aktiviert ist (Standard):
+Wenn **Kontextbezogene Anführungszeichen** aktiviert ist (Standard):
 
 - Anführungszeichen um CJK-Inhalt → geschwungene Anführungszeichen `""`
 - Anführungszeichen um reinen lateinischen Inhalt → gerade Anführungszeichen `""`
@@ -198,11 +243,11 @@ Dies bewahrt das natürliche Erscheinungsbild englischer Texte, während CJK-Inh
 
 ### CJK-Eckklammern *(standardmäßig aus)*
 
-Wenn **CJK-Eckanführungszeichen** aktiviert sind, werden geschwungene Anführungszeichen um CJK-Inhalte in Eckklammern konvertiert (`「」` für primär, `『』` für verschachtelt) — die typografisch traditionelle Anführungsform für vertikalen CJK-Satz. Lateinische Inhalte behalten unabhängig von dieser Einstellung standardmäßige geschwungene Anführungszeichen.
+Wenn **CJK-Winkelanführungszeichen** aktiviert ist, werden geschwungene Anführungszeichen um CJK-Inhalte in Eckklammern konvertiert (`「」` für primär, `『』` für verschachtelt) — die typografisch traditionelle Anführungsform für vertikalen CJK-Satz. Lateinische Inhalte behalten unabhängig von dieser Einstellung standardmäßige geschwungene Anführungszeichen.
 
 ### Referenzabschnitte überspringen
 
-Der CJK-Formatierer erkennt Überschriften wie „References", „参考文献", „参考资料" oder „Bibliography" und überspringt die Neuformatierung in diesen Abschnitten — zitatformatierter Text stützt sich häufig auf bestimmte Interpunktion, die die CJK-Regeln sonst normalisieren würden.
+Ist **Referenzabschnitte überspringen** unter Einstellungen → Sprache → Abschnittsbehandlung aktiviert (standardmäßig aus), erkennt der CJK-Formatierer Überschriften wie „References“ / „Further Reading“ / „参考文献“ / „参考资料“ / „Bibliography“ und überspringt die Neuformatierung in diesen Abschnitten — zitatformatierter Text stützt sich häufig auf bestimmte Interpunktion, die die CJK-Regeln sonst normalisieren würden. Schalten Sie es für wissenschaftliche Dokumente ein; lassen Sie es aus, um die ganze Datei zu formatieren.
 
 ### Integritätsprüfung
 
@@ -218,7 +263,7 @@ VMark enthält eine spezielle Buchstabenabstandsfunktion für CJK-Text, die die 
 
 ### Einstellungen
 
-Konfigurieren Sie in **Einstellungen → Editor → Typografie → CJK-Buchstabenabstand**:
+Konfigurieren Sie in **Einstellungen → Editor → Typografie → CJK-Zeichenabstand**:
 
 | Option | Wert | Beschreibung |
 |--------|------|-------------|
@@ -227,6 +272,8 @@ Konfigurieren Sie in **Einstellungen → Editor → Typografie → CJK-Buchstabe
 | Leicht | 0,03em | Leichter Abstand |
 | Normal | 0,05em | Empfohlen für die meisten Anwendungsfälle |
 | Weit | 0,08em | Ausgeprägter Abstand |
+| Weiter | 0,10em | Noch weiter, für große Anzeigegrößen |
+| Extra | 0,12em | Die weiteste Einstellung |
 
 ### Funktionsweise
 
@@ -264,11 +311,11 @@ VMark kann gerade Anführungszeichen automatisch in typografisch korrekte Anfüh
 VMark verwendet einen ausgeklügelten stapelbasierten Algorithmus zur Anführungszeichen-Paarung:
 
 1. **Tokenisierung**: Identifiziert alle Anführungszeichen im Text
-2. **Klassifizierung**: Bestimmt, ob jedes Anführungszeichen öffnend oder schließend ist
+2. **Klassifizierung**: Bestimmt anhand des Kontexts, ob jedes Anführungszeichen öffnend oder schließend ist
 3. **Apostroph-Erkennung**: Erkennt Kontraktionen (don't, it's) und bewahrt sie
 4. **Primzeichen-Erkennung**: Erkennt Maße (5'10") und bewahrt sie
 5. **CJK-Kontexterkennung**: Prüft, ob der zitierte Inhalt CJK-Zeichen enthält
-6. **Waisen-Bereinigung**: Behandelt ungematchte Anführungszeichen korrekt
+6. **Waisen-Bereinigung**: Behandelt ungematchte Anführungszeichen korrekt; ein am Absatzende noch offenes Anführungszeichen bleibt ungepaart, sodass Anführungszeichen nie über eine Leerzeile hinweg gepaart werden
 
 ### Beispiele
 
@@ -309,7 +356,7 @@ Sie können den Anführungszeichenstil vorhandener Anführungszeichen schnell um
 **Intelligente Erkennung**: Apostrophe (`don't`), Primzeichen (`5'10"`) und Jahrzehntsabkürzungen (`'90s`) werden nie als Anführungszeichenpaare behandelt.
 
 ::: tip
-Wechseln Sie zwischen einfachem und vollständigem Zyklusmodus in Einstellungen → Sprache → CJK-Formatierung → Anführungszeichen-Umschaltmodus.
+Wechseln Sie zwischen einfachem und vollständigem Zyklusmodus in Einstellungen → Sprache → CJK-Formatierung → Verhalten beim Umschalten von Anführungszeichen.
 :::
 
 ### Konfiguration
@@ -320,11 +367,12 @@ Aktivieren Sie die typografische Anführungszeichenkonvertierung in Einstellunge
 
 ## CJK-Eckklammernkonvertierung
 
-Wenn **CJK-Eckklammern** aktiviert ist, werden geschwungene Anführungszeichen um CJK-Inhalt automatisch in Eckklammern konvertiert.
+Wenn **CJK-Winkelanführungszeichen** aktiviert ist, werden geschwungene Anführungszeichen um CJK-Inhalt automatisch in Eckklammern konvertiert.
 
 ### Unterstützte Zeichen
 
-Die Eckklammernkonvertierung wird ausgelöst, wenn der zitierte Inhalt **chinesische Zeichen** enthält (CJK-Unified Ideographs U+4E00–U+9FFF):
+Die Eckklammernkonvertierung wird ausgelöst, wenn der zitierte Inhalt — oder der Text
+unmittelbar daneben — aus Han, Hiragana, Katakana oder Bopomofo besteht:
 
 | Inhaltstyp | Beispiel | Konvertiert? |
 |------------|---------|-------------|
@@ -335,7 +383,8 @@ Die Eckklammernkonvertierung wird ausgelöst, wenn der zitierte Inhalt **chinesi
 | Koreanisch | `"한글"` | ✗ bleibt als `"한글"` |
 | Englisch | `"hello"` | ✗ bleibt als `"hello"` |
 
-**Tipp:** Für japanischen Text mit nur Kana verwenden Sie manuell Eckklammern `「」` oder fügen Sie mindestens ein Kanji-Zeichen hinzu.
+Koreanisch ist aus demselben Grund ausgenommen wie bei den Abstandsregeln: Koreanisch verwendet `“ ”`,
+nicht Eckklammern.
 
 ---
 
@@ -375,7 +424,7 @@ Nach der Formatierung sieht der Text folgendermaßen aus:
 
 学习过程中遇到的最大挑战是 —— 状态管理。Redux 的概念……说实话有点难理解。后来换成了 Zustand，简单多了！
 
-老师说 "don't give up" 然后继续讲 "写代码要注重可读性"，我觉得很有道理。
+老师说“don't give up”然后继续讲“写代码要注重可读性”，我觉得很有道理。
 
 访问 https://example.com/docs 获取 v2.0.0 版本文档，价格 $99.99，时间 12:30 开始。
 
@@ -393,7 +442,13 @@ Nach der Formatierung sieht der Text folgendermaßen aus:
 - CJK-Lateinischer Abstand hinzugefügt (学习 TypeScript)
 - Vollbreite Interpunktion konvertiert (，。！)
 - Vollbreite Zahlen normalisiert (３→3, １０００→1000, ２００→200)
-- Doppelte Bindestriche in Gedankenstriche konvertiert (-- → ——)
-- Auslassungszeichen normalisiert (. . . → ...)
-- Typografische Anführungszeichen angewendet, Apostroph beibehalten (don't)
+- Doppelte Bindestriche in Gedankenstriche konvertiert (是--状态 → 是 —— 状态)
+- Auslassungszeichen in die chinesische Form normalisiert, ohne Leerzeichen danach (. . . → ……)
+- Typografische Anführungszeichen ohne Leerzeichen neben dem CJK-Text angewendet, Apostroph beibehalten (don't)
 - Technische Konstrukte geschützt (https://example.com/docs, v2.0.0, $99.99, 12:30)
+
+**Und was sich _nicht_ ändert:** Das `--` in `**Frontend**--React` bleibt ein doppelter
+Bindestrich. Die Gedankenstrichkonvertierung braucht ein CJK-Zeichen oder ein alphanumerisches Zeichen
+unmittelbar neben den Bindestrichen, und `*` ist keins von beiden. Würde sie stattdessen bei Hervorhebungsmarkern
+greifen, würde sie `--` in jedem rein englischen Listenpunkt eines chinesischen Dokuments umwandeln, was
+schlimmer ist, als diese drei in Ruhe zu lassen.

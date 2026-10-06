@@ -17,10 +17,6 @@ import {
 } from "./headingSlug";
 import { Schema } from "@tiptap/pm/model";
 
-vi.mock("@/utils/debug", () => ({
-  linkPopupError: vi.fn(),
-}));
-
 // ---- generateSlug ----
 
 describe("generateSlug", () => {
@@ -556,15 +552,18 @@ describe("navigateToHeadingById", () => {
     expect(tr.setMeta).toHaveBeenCalledWith("addToHistory", false);
   });
 
-  it("catches errors from doc.resolve and returns false (does not throw)", async () => {
+  it("catches errors from doc.resolve and returns false (does not throw)", () => {
+    // The real link-popup logger writes to the console, the boundary watched here.
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const { view, state, dispatch } = buildView("Boom");
     state._resolveShouldThrow = true;
     expect(navigateToHeadingById(view, "boom")).toBe(false);
     expect(dispatch).not.toHaveBeenCalled();
-    const { linkPopupError } = await import("@/utils/debug");
-    expect(linkPopupError).toHaveBeenCalledWith(
+    expect(consoleError).toHaveBeenCalledWith(
+      "[LinkPopup]",
       "Fragment navigation error:",
       expect.any(Error),
     );
+    consoleError.mockRestore();
   });
 });

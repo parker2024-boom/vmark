@@ -26,7 +26,7 @@
  * @coordinates-with terminalMessages.ts — localized exit lines
  * @module components/Terminal/terminalShellExit
  */
-import { useUIStore } from "@/stores/uiStore";
+import { useTerminalStore } from "@/stores/terminalStore";
 import { terminalWarn } from "@/utils/debug";
 import { removeTerminalSessionWithPanelPolicy } from "@/services/terminal/closeTerminalSession";
 import { processExitedLine, pressAnyKeyToRestartLine } from "./terminalMessages";
@@ -64,7 +64,7 @@ function promptRestartOnErrorExit(
   term.write(processExitedLine(exitCode) + pressAnyKeyToRestartLine(), () => {
     if (!entry.disposed && entry.spawnGen === gen && !entry.pty) entry.shellExited = true;
   });
-  useUIStore.getState().terminalMarkSessionDead(sessionId);
+  useTerminalStore.getState().terminalMarkSessionDead(sessionId);
 }
 
 /** Handle the exit of the session's CURRENT shell (the caller filters stale ones). */

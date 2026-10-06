@@ -31,12 +31,13 @@ export function releaseListener(ref: ListenerRef): void {
 
 /**
  * Surface an invocation failure in both the picker and the status stores,
- * scoped to the request it belongs to (audit #974/#999). A rejection from an
- * old, cancelled request used to fail whatever was running NOW.
+ * scoped to the request it belongs to. A rejection from an
+ * old, cancelled request used to fail whatever was running NOW. `retry`, when
+ * given, re-runs this request and is what the status bar's Retry calls.
  */
-export function failInvocation(message: string, requestId?: string): void {
+export function failInvocation(message: string, requestId?: string, retry?: () => void): void {
   useGeniePickerStore.getState().setPickerError(message);
-  useAiInvocationStore.getState().setError(message, requestId);
+  useAiInvocationStore.getState().setError(message, requestId, retry);
 }
 
 export interface RunContext {
@@ -46,10 +47,12 @@ export interface RunContext {
   extraction: ExtractionResult;
   action: GenieAction;
   listenerRef: ListenerRef;
+  /** Re-runs this request from scratch; handed to the store with a failure. */
+  retry?: (() => void) | undefined;
   /**
    * The originating document's ProseMirror node when the run started, or null
    * when no bound editor could be found. ProseMirror replaces the doc node on
-   * every change, so identity IS the revision (audit #965).
+   * every change, so identity IS the revision.
    */
   docAtStart: ProseMirrorNode | null;
 }

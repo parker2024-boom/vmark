@@ -3,34 +3,10 @@
 //! sessions are touched.
 
 use super::*;
-use crate::pty::session::create_session;
-
-/// True while the OS still knows the pid (running OR zombie — a zombie is
-/// exactly what an unreaped kill leaves behind).
-fn pid_alive(pid: u32) -> bool {
-    unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
-}
+use crate::pty::test_support::{pid_gone, shell_pid, spawn_sh};
 
 fn sleeping_session_owned_by(owner: &str) -> Session {
-    create_session(
-        owner.into(),
-        "/bin/sleep".into(),
-        vec!["30".into()],
-        80,
-        24,
-        None,
-        BTreeMap::new(),
-    )
-    .expect("create session")
-}
-
-fn child_pid(session: &Session) -> u32 {
-    session
-        .child
-        .blocking_lock()
-        .as_ref()
-        .and_then(|c| c.process_id())
-        .expect("child pid")
+    spawn_sh(owner, "sleep 600")
 }
 
 fn state_with(sessions: Vec<Session>) -> PtyState {
@@ -42,6 +18,10 @@ fn state_with(sessions: Vec<Session>) -> PtyState {
         }
     }
     state
+}
+
+fn all_sessions(state: &PtyState) -> Vec<Arc<Session>> {
+    state.sessions.blocking_read().values().cloned().collect()
 }
 
 #[test]
@@ -60,12 +40,9 @@ fn take_window_sessions_removes_only_the_destroyed_windows_sessions() {
     let remaining: Vec<u32> = state.sessions.blocking_read().keys().copied().collect();
     assert_eq!(remaining, vec![2], "another window's session must survive");
 
-    for (_, session) in taken {
-        terminate(&session);
-    }
-    for session in state.sessions.blocking_read().values() {
-        terminate(session);
-    }
+    let taken: Vec<Arc<Session>> = taken.into_iter().map(|(_, session)| session).collect();
+    terminate(&taken);
+    terminate(&all_sessions(&state));
 }
 
 #[test]
@@ -73,41 +50,28 @@ fn take_window_sessions_is_a_noop_for_a_window_without_terminals() {
     let state = state_with(vec![sleeping_session_owned_by("doc-1")]);
     assert!(take_window_sessions(&state, "settings").is_empty());
     assert_eq!(state.sessions.blocking_read().len(), 1);
-    for session in state.sessions.blocking_read().values() {
-        terminate(session);
-    }
+    terminate(&all_sessions(&state));
 }
 
 #[test]
-fn terminate_kills_and_reaps_a_never_started_session() {
-    let session = sleeping_session_owned_by("doc-1");
-    let pid = child_pid(&session);
+fn a_destroyed_windows_shells_are_killed_and_another_windows_left_running() {
+    let state = state_with(vec![
+        sleeping_session_owned_by("doc-1"),
+        sleeping_session_owned_by("doc-2"),
+    ]);
+    let pids: Vec<u32> = all_sessions(&state)
+        .iter()
+        .map(|session| shell_pid(session))
+        .collect();
 
-    terminate(&session);
+    let taken: Vec<Arc<Session>> = take_window_sessions(&state, "doc-1")
+        .into_iter()
+        .map(|(_, session)| session)
+        .collect();
+    terminate(&taken);
 
-    assert!(session.shutdown.load(Ordering::Acquire));
-    assert!(!pid_alive(pid), "child {pid} must be killed AND reaped");
-}
-
-#[test]
-fn terminate_kills_a_started_session_so_its_reader_can_reap_it() {
-    let session = sleeping_session_owned_by("doc-1");
-    // Simulate pty_start: the reader thread owns the child from here on.
-    let mut child = session.child.blocking_lock().take().expect("child");
-
-    terminate(&session);
-
-    // Standing in for the reader thread: the child must now exit on its own
-    // (it would sleep 30 s otherwise), so its wait() returns promptly.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    loop {
-        if child.try_wait().expect("try_wait").is_some() {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "terminate() must signal a started child"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(20));
-    }
+    assert!(pid_gone(pids[0]), "the destroyed window's shell is reaped");
+    assert!(!pid_gone(pids[1]), "the other window's shell keeps running");
+    terminate(&all_sessions(&state));
+    assert!(pid_gone(pids[1]));
 }

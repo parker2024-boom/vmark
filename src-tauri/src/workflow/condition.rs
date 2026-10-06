@@ -13,12 +13,11 @@
 //! |---|---|
 //! | `true` / `false` (case-insensitive) | boolean literal |
 //! | `1` / `0` | truthy / falsy literal |
-//! | `success()` | `!any_failed` |
-//! | `failure()` | `any_failed` |
-//! | `always()` | `true` |
+//! | `success()`, `failure()`, `always()` | status functions over the run so far (see `condition_status.rs`) |
+//! | no status function named | `success()` is implied: `if: X` means `success() && (X)` |
 //! | `'str'` / `"str"` | string literal operand |
 //! | number | numeric operand |
-//! | `${{ ... }}`, `steps.X.outputs.Y`, `env.NAME` | reference operands (via `expressions::resolve`) |
+//! | `${{ ... }}`, `steps.X.outputs.Y`, `env.NAME` | reference operands (one reference each, via `expressions::resolve_reference`) |
 //! | `==`, `!=` | equality (numeric if both parse as f64, else string) |
 //! | `>`, `<`, `>=`, `<=` | numeric comparison |
 //! | `&&`, `\|\|`, `!`, `( )` | boolean composition (`&&`/`\|\|` short-circuit: a dead RHS is parsed but never resolved) |
@@ -28,55 +27,50 @@
 
 use std::collections::HashMap;
 
-use super::condition_lexer::{tokenize, Token};
+use super::condition_lexer::{strip_outer_wrapper, tokenize, Token};
 use super::expressions::{self, WorkflowOutputs};
 
-/// Evaluate a step's `if:` condition to a boolean.
+/// The run status a condition is judged under, split out at the size limit.
+#[path = "condition_status.rs"]
+mod condition_status;
+pub use condition_status::RunStatus;
+use condition_status::StatusFn;
+
+/// Evaluate a step's `if:` condition to a boolean: does the step run?
 ///
-/// `any_failed` carries the workflow's cumulative failure state so that
-/// `success()` / `failure()` resolve correctly. On any malformed or
-/// unsupported input this returns `Err` — callers must surface it as a
-/// step failure rather than defaulting to "run the step".
+/// `status` is the run so far, which `success()` / `failure()` read. A
+/// condition that names no status function carries an implied `success()`, so
+/// once the run cannot succeed it is a dead branch: parsed, so a syntax error
+/// still surfaces, but never evaluated. On any malformed or unsupported input
+/// this returns `Err` — callers must surface it as a step failure rather than
+/// defaulting to "run the step".
 pub fn evaluate_condition(
     condition: &str,
     outputs: &WorkflowOutputs,
     env: &HashMap<String, String>,
-    any_failed: bool,
+    status: RunStatus,
 ) -> Result<bool, String> {
     let stripped = strip_outer_wrapper(condition.trim());
     let tokens = tokenize(stripped)?;
+    let names_status_fn = tokens.iter().any(
+        |token| matches!(token, Token::Operand { text, is_ref: true } if StatusFn::parse(text).is_some()),
+    );
+    let dead = !names_status_fn && !status.succeeded();
     let mut parser = Parser {
         tokens,
         pos: 0,
         outputs,
         env,
-        any_failed,
+        status,
     };
-    let value = parser.parse_expr(0, 0, false)?;
+    let value = parser.parse_expr(0, 0, dead)?;
     if parser.pos != parser.tokens.len() {
         return Err(format!(
             "Unexpected trailing tokens in condition: {}",
             condition
         ));
     }
-    Ok(value.truthy())
-}
-
-/// Strip exactly one outer `${{ ... }}` wrapper if the entire (trimmed)
-/// condition is a single such expression. Inner `${{ ... }}` refs are left
-/// for the operand resolver.
-fn strip_outer_wrapper(s: &str) -> &str {
-    if let Some(inner) = s.strip_prefix("${{") {
-        if let Some(inner) = inner.strip_suffix("}}") {
-            // Only strip if there's no nested `}}` that would close earlier,
-            // i.e. the wrapper spans the whole string. `find("}}")` on the
-            // inner body must be None for this to be a single outer wrapper.
-            if !inner.contains("}}") {
-                return inner.trim();
-            }
-        }
-    }
-    s
+    Ok(!dead && value.truthy())
 }
 
 // === Values ===
@@ -137,7 +131,7 @@ struct Parser<'a> {
     pos: usize,
     outputs: &'a WorkflowOutputs,
     env: &'a HashMap<String, String>,
-    any_failed: bool,
+    status: RunStatus,
 }
 
 impl Parser<'_> {
@@ -274,12 +268,8 @@ impl Parser<'_> {
             return Ok(Value::Bool(false));
         }
 
-        // Status functions.
-        match t {
-            "success()" => return Ok(Value::Bool(!self.any_failed)),
-            "failure()" => return Ok(Value::Bool(self.any_failed)),
-            "always()" => return Ok(Value::Bool(true)),
-            _ => {}
+        if let Some(status_fn) = StatusFn::parse(t) {
+            return Ok(Value::Bool(status_fn.evaluate(self.status)));
         }
 
         // Plain number operand.
@@ -287,17 +277,17 @@ impl Parser<'_> {
             return Ok(Value::Str(t.to_string()));
         }
 
-        // Reference: `${{ ... }}`, `steps.X...`, or `env.NAME`. Reuse the
-        // expression resolver; wrap bare refs in `${{ }}` so it accepts them.
-        let to_resolve = if t.starts_with("${{") {
-            t.to_string()
-        } else if t.starts_with("steps.") || t.starts_with("env.") {
-            format!("${{{{ {} }}}}", t)
-        } else {
-            return Err(format!("Unsupported operand in condition: '{}'", t));
+        // Reference: `${{ ... }}`, `steps.X...`, or `env.NAME` — ONE reference,
+        // resolved as one. An operand is not a template: what it resolves to
+        // is a value, and is never scanned for further references.
+        let body = match t.strip_prefix("${{").map(|rest| rest.strip_suffix("}}")) {
+            Some(Some(inner)) => inner,
+            Some(None) => return Err(format!("Unterminated `${{{{` reference: '{}'", t)),
+            None if t.starts_with("steps.") || t.starts_with("env.") => t,
+            None => return Err(format!("Unsupported operand in condition: '{}'", t)),
         };
 
-        expressions::resolve(&to_resolve, self.outputs, self.env)
+        expressions::resolve_reference(body, self.outputs, self.env)
             .map(Value::Str)
             .map_err(|e| format!("Condition reference failed: {}", e))
     }

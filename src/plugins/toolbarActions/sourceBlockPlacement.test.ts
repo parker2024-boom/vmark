@@ -16,7 +16,7 @@ import { EditorView } from "@codemirror/view";
 import { insertBlockText, prependLineMarker, replaceLinesWithBlock } from "./sourceBlockPlacement";
 import { insertTable } from "./sourceInsertActions";
 
-vi.mock("@/plugins/sourcePopup/sourcePopupUtils", () => ({
+vi.mock("@/plugins/shared/sourcePopupUtils", () => ({
   getAnchorRectFromRange: vi.fn(() => ({ top: 0, bottom: 20, left: 0, right: 100 })),
   getEditorBounds: vi.fn(() => ({ horizontal: { left: 0, right: 800 }, vertical: { top: 0, bottom: 600 } })),
   toHostCoordsForDom: vi.fn((_: unknown, pos: unknown) => pos),

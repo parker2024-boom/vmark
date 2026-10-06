@@ -2,7 +2,7 @@
  * Wresting an export lock from a holder that is gone.
  *
  * Purpose: the one genuinely concurrent thing this feature does, on its own so
- * it can be read as one argument (round 5, #662). Its rules — and the reasons
+ * it can be read as one argument. Its rules — and the reasons
  * each of them exists — are in `exportLock.ts`'s header, which is where a
  * reader arrives from.
  *
@@ -46,7 +46,7 @@ export async function takeOverIfStale(lock: string, owner: string): Promise<bool
   if (dead === null) return false;
 
   // Atomic: `rename` needs its source to exist, so of every window that judged
-  // this lock stale exactly one moves it and the rest see ENOENT (#332).
+  // this lock stale exactly one moves it and the rest see ENOENT.
   const aside = `${lock}.stale-${nonce()}`;
   try {
     await rename(lock, aside);
@@ -54,8 +54,8 @@ export async function takeOverIfStale(lock: string, owner: string): Promise<bool
     // Only a LOST RACE may be swallowed: another window moved this same lock
     // first, so the source is gone. Anything else — a denial, a read-only
     // volume — is this destination's real failure, and swallowing it spent the
-    // whole wait before blaming contention that never happened (audit R2,
-    // #663), against the header's own rule. Asked of the filesystem, never
+    // whole wait before blaming contention that never happened, against the
+    // header's own rule. Asked of the filesystem, never
     // matched on a message the OS words differently per platform.
     if (await stillThere(lock)) throw error;
     return false;

@@ -3,9 +3,12 @@
  *
  * Type definitions, constants, and pure utility functions for document history.
  * Async operations are in services/history/historyOperations and services/history/historyRecovery.
+ *
+ * @module utils/historyTypes
  */
 
 import { getFileName } from "./pathUtils";
+import { truncateToLength } from "./truncateText";
 
 // Types
 
@@ -13,7 +16,11 @@ import { getFileName } from "./pathUtils";
 export interface Snapshot {
   id: string; // Timestamp + random suffix (e.g. "1700000000000-a1b2c3")
   timestamp: number;
-  type: "manual" | "auto" | "revert";
+  /**
+   * Who made it: a manual save, an autosave, a revert, or an AI client saving
+   * through the MCP bridge. Only `auto` snapshots are merged or size-skipped.
+   */
+  type: "manual" | "auto" | "revert" | "mcp";
   size: number;
   preview: string;
 }
@@ -68,17 +75,41 @@ export function parseHistoryIndex(raw: unknown): HistoryIndex | null {
 // Pure helper functions
 
 /**
- * Generate a preview from content (first N characters)
+ * Generate a preview from content: its first PREVIEW_LENGTH code units, cut on
+ * a character boundary so the stored preview is never a lone surrogate.
  */
 export function generatePreview(content: string): string {
-  return content.slice(0, PREVIEW_LENGTH).replace(/\n/g, " ").trim();
+  return truncateToLength(content, PREVIEW_LENGTH).replace(/\n/g, " ").trim();
 }
 
 /**
- * Get the document name from a path
+ * The document name stored in a history index: the path's file name, or
+ * `untitledName` when the path has none. The caller supplies the translated
+ * "Untitled" — this module is leaf-pure and cannot reach i18n.
  */
-export function getDocumentName(documentPath: string): string {
-  return getFileName(documentPath) || "Untitled";
+export function getDocumentName(documentPath: string, untitledName: string): string {
+  return getFileName(documentPath) || untitledName;
+}
+
+/**
+ * A new, empty, active history index for `documentPath`. `untitledName` is the
+ * caller's translated "Untitled", stored when the path has no file name.
+ */
+export function createHistoryIndex(
+  documentPath: string,
+  pathHash: string,
+  settings: HistorySettings,
+  untitledName: string
+): HistoryIndex {
+  return {
+    documentPath,
+    documentName: getDocumentName(documentPath, untitledName),
+    pathHash,
+    status: "active",
+    deletedAt: null,
+    snapshots: [],
+    settings,
+  };
 }
 
 /**

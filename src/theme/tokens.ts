@@ -47,11 +47,11 @@ type ThemeTokensBase = {
     text: { primary: string; secondary: string; tertiary: string };
     accent: { primary: string; bg: string };
     /** Text painted ON accent-coloured fills (primary buttons, badges).
-     *  WI-UI1.1: per theme — `white` was tuned for the saturated light
+     *  Per theme — `white` was tuned for the saturated light
      *  accents and measured 2.53:1 on night's pastel #58a6ff. */
     contrastText: string;
     border: string;
-    /** D8 (WI-UI1.2) — the boundary that makes a CONTROL findable: ≥ 3:1 on
+    /** D8 — the boundary that makes a CONTROL findable: ≥ 3:1 on
      *  bg.primary and bg.secondary per theme. `border` stays a hairline
      *  divider (1.0–1.5:1 by design) — one token could not serve both roles,
      *  which is how every button boundary ended up invisible. */
@@ -59,11 +59,11 @@ type ThemeTokensBase = {
     selection: string;
     /** The quiet surface tier (list rows, code-adjacent chrome). Black tints
      *  on light themes, white tints on dark — a black tint over a dark bg
-     *  measured 1.01:1, i.e. invisible (WI-UI1.1). */
+     *  measured 1.01:1, i.e. invisible. */
     subtle: { bg: string; bgHover: string };
     /** Hover feedback tints — mode-structural like `subtle`. */
     hover: { bg: string; strong: string };
-    /** Blockquote body ink (WI-UI1.3). Defaults to `text.secondary` — the
+    /** Blockquote body ink. Defaults to `text.secondary` — the
      *  quote is READABLE PROSE, not syntax decoration; it used to ride
      *  `--md-char-color` and rendered 3.83:1 grey on paper and syntax GREEN
      *  on night. A theme may state its own value. */
@@ -78,8 +78,8 @@ type ThemeTokensBase = {
       errorHover: string;
       warning: string;
       warningBg: string;
-      /** Border tint for warning surfaces — per theme since WI-UI1.1 so dark
-       *  themes stop inheriting the light rgba. */
+      /** Border tint for warning surfaces — per theme so dark themes stop
+       *  inheriting the light rgba. */
       warningBorder: string;
       success: string;
       successHover: string;
@@ -133,9 +133,9 @@ type ThemeTokensBase = {
     /** xterm's `drawBoldTextInBrightColors` (default true). Set FALSE when a
      *  bright slot doubles as a text tier — canonical Solarized maps bright
      *  8–15 to its base tones, so repainting bold in "bright" rendered `ls`
-     *  output as body grey (WI-UI1.4/D10). */
+     *  output as body grey (D10). */
     boldTextInBrightColors?: boolean;
-    // `selectionBackground` and `scrollbar` were DELETED in WI-UI1.4: both are
+    // `selectionBackground` and `scrollbar` were DELETED: both are
     // DERIVED in buildXtermTheme (selection = color.selection at canvas alpha
     // .25; scrollbar = text.primary at .2/.4/.5, xterm's own rule) so the
     // terminal and the app cannot disagree about either.
@@ -148,7 +148,7 @@ type ThemeTokensBase = {
 };
 
 /**
- * The theme contract — a DISCRIMINATED UNION on `isDark` (WI-UI4.10): a dark
+ * The theme contract — a DISCRIMINATED UNION on `isDark`: a dark
  * theme MUST author its `color.legacy` overrides, because the fallbacks it
  * would otherwise inherit are night's values, and a third dark theme falling
  * through to another theme's ink is exactly the silent-misclassification bug
@@ -180,7 +180,7 @@ export const sharedPrimitives = {
   } satisfies ThemeTokens["space"],
   radius: { sm: "3px", md: "5px", lg: "8px", pill: "100px" } satisfies ThemeTokens["radius"],
   font: {
-    // R3 (WI-UI2.1): sans/mono mirror buildFontStack's system output — the old
+    // R3: sans/mono mirror buildFontStack's system output — the old
     // "SauceCodePro NF" stack was one the runtime never produced. `ui` is the
     // chrome face, untouched by settings.
     sans: 'system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
@@ -198,16 +198,15 @@ export const lightShadows: ThemeTokens["shadow"] = {
 
 export const darkShadows: ThemeTokens["shadow"] = {
   ...lightShadows,
-  // A 10%-black shadow is invisible on a dark page (WI-UI3.6); applyTheme
+  // A 10%-black shadow is invisible on a dark page; applyTheme
   // writes these INLINE, which outranks any .dark-theme class rule — so the
-  // dark value must live HERE, not only in index.css (Codex #9, WI-UI3.7
-  // review).
+  // dark value must live HERE, not only in index.css.
   sm: "0 1px 3px rgba(0, 0, 0, 0.4)",
   popup: "0 4px 12px rgba(0, 0, 0, 0.4)",
 };
 
-// The shared `semanticLight`/`alertLight`/`mediaLight` fragments are GONE
-// (WI-UI1.2): they were shared by IDENTITY, not by verified contrast — one
+// The shared `semanticLight`/`alertLight`/`mediaLight` fragments are GONE:
+// they were shared by IDENTITY, not by verified contrast — one
 // GitHub-derived palette tuned for #ffffff served four papers spanning
 // L 0.74–1.0 and failed AA on three of them. Each light theme now authors its
 // own blocks, with scripts/check-theme-contrast.ts as the arbiter — the same
@@ -215,10 +214,10 @@ export const darkShadows: ThemeTokens["shadow"] = {
 
 /** Subtle-surface tints — black over light papers, white over dark ones.
  *  Shared per MODE (an alpha tint composites correctly over any bg of its
- *  mode), unlike the colour fragments WI-UI1.2 unshares. */
+ *  mode), unlike the per-theme colour fragments. */
 export const subtleLight: ThemeTokens["color"]["subtle"] = {
   // 3%/4% — a 2% wash on paper's grey card measured ~1.02:1, below
-  // perception (audit 20260901, WI-UA5). index.css statics mirror these.
+  // perception. index.css statics mirror these.
   bg: "rgba(0, 0, 0, 0.03)",
   bgHover: "rgba(0, 0, 0, 0.04)",
 };
@@ -230,7 +229,7 @@ export const subtleDark: ThemeTokens["color"]["subtle"] = {
 
 /** Hover feedback tints — same mode-structural sharing as `subtle`. */
 export const hoverLight: ThemeTokens["color"]["hover"] = {
-  // 6% base — 4% was below perception on grey surfaces (WI-UA5, as above).
+  // 6% base — 4% was below perception on grey surfaces (as above).
   bg: "rgba(0, 0, 0, 0.06)",
   strong: "rgba(0, 0, 0, 0.08)",
 };

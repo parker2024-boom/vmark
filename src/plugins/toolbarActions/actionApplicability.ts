@@ -1,6 +1,6 @@
 /**
  * Action applicability — the ONE declaration of where each adapter action
- * applies (structural-merge follow-up to the 2026-07 audits).
+ * applies (structural-merge follow-up to earlier audits).
  *
  * Two consumers, one table:
  *   - the toolbar/menu (`toolbarGroups.ts`) reads `enabledInFor` for its

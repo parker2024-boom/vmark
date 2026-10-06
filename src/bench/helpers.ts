@@ -81,7 +81,7 @@ export function generateMarkdownWithCodeBlocks(
 /**
  * Generate a realistic terminal-output byte stream of ~`targetBytes` UTF-8
  * bytes for the PTY transport benchmark (WI-0.1, plan
- * dev-docs/plans/20260531-terminal-industrial-best.md).
+ * .claude/adr/plans/20260531-terminal-industrial-best.md).
  *
  * The mix mirrors what a PTY actually emits: SGR color escapes, cursor moves,
  * ASCII prose, and occasional multibyte runs (CJK + emoji). This mattered

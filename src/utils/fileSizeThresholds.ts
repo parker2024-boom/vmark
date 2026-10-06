@@ -5,8 +5,8 @@
  * file at open time. Byte count is a coarse proxy for the real bottleneck
  * (ProseMirror view construction, which scales with block count), but it is
  * free to compute via `fs::metadata` while block count requires parsing.
- * The tiers below are calibrated against the 1.4 MB / 2,250-block corpus
- * from `dev-docs/plans/20260422-large-file-open-ux.md`.
+ * The tiers below are calibrated against a 1.4 MB / 2,250-block
+ * corpus.
  *
  * Tier semantics:
  *   - "small"   → default WYSIWYG open, no indicator.

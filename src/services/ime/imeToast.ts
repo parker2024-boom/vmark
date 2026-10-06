@@ -208,7 +208,7 @@ export const imeToast = {
     return toast.warning(...piped);
   },
   /**
-   * WI-UI4.4 — the two-line error: a human MESSAGE on the first line and the
+   * The two-line error: a human MESSAGE on the first line and the
    * technical DETAIL (an error string, a path, `%{detail}` from a
    * CommandError) as sonner's description on the second. Replaces the
    * "Failed to X: {{error}}" interpolation pattern, which buried the message

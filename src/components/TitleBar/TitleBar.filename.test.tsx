@@ -14,7 +14,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   filePath: "/tmp/notes.md" as string | null,
-  isRenaming: false,
   hasActiveTab: true,
 }));
 
@@ -26,10 +25,17 @@ vi.mock("@/hooks/useDocumentState", () => ({
   useHasActiveTab: () => mocks.hasActiveTab,
 }));
 
-const mockRenameFile = vi.fn().mockResolvedValue(true);
-vi.mock("./useTitleBarRename", () => ({
-  useTitleBarRename: () => ({ renameFile: mockRenameFile, isRenaming: mocks.isRenaming }),
-}));
+// The disk rename is the boundary (it wraps Tauri's fs plugin); the title
+// bar's own rename hook runs for real on top of it.
+const mockRenameFile = vi.hoisted(() => vi.fn());
+vi.mock("@/services/persistence/renameFile", () => ({ renameFile: mockRenameFile }));
+
+/** What the title bar asked the disk to do, in the hook's own call shape. */
+const renamedTo = (newName: string, preserveExtension: boolean) => [
+  "/tmp/notes.md",
+  newName,
+  { isFolder: false, preserveExtension },
+];
 
 import { TitleBar } from "./TitleBar";
 import { useSettingsStore } from "@/stores/settingsStore";
@@ -63,9 +69,8 @@ beforeEach(() => {
   // TEST and pass vacuously — which is how the first draft of this suite
   // "confirmed" a bug it never exercised.
   vi.clearAllMocks();
-  mockRenameFile.mockResolvedValue(true);
+  mockRenameFile.mockResolvedValue({ status: "renamed" });
   mocks.filePath = "/tmp/notes.md";
-  mocks.isRenaming = false;
   mocks.hasActiveTab = true;
   setShowExtensions(true);
   useTabStore.setState({ tabs: { main: [untitledTab] }, activeTabId: { main: "tab-1" } });
@@ -122,9 +127,7 @@ describe("TitleBar — rename honours the extension policy it opened with", () =
     await user.clear(input);
     await user.type(input, "notes{Enter}");
 
-    expect(mockRenameFile).toHaveBeenCalledWith("/tmp/notes.md", "notes", {
-      preserveExtension: false,
-    });
+    expect(mockRenameFile).toHaveBeenCalledWith(...renamedTo("notes", false));
   });
 
   it("re-attaches when the editor hid the extension", async () => {
@@ -134,9 +137,7 @@ describe("TitleBar — rename honours the extension policy it opened with", () =
     await user.clear(input);
     await user.type(input, "renamed{Enter}");
 
-    expect(mockRenameFile).toHaveBeenCalledWith("/tmp/notes.md", "renamed", {
-      preserveExtension: true,
-    });
+    expect(mockRenameFile).toHaveBeenCalledWith(...renamedTo("renamed", true));
   });
 
   it("does not rename a file whose name only has surrounding whitespace", async () => {
@@ -172,15 +173,22 @@ describe("TitleBar — rename honours the extension policy it opened with", () =
     // The input is DISABLED during the rename, and disabling a focused element
     // blurs it. With blur closing unconditionally, a failed rename lost the
     // editor — contradicting the documented "keep editing on failure".
+    // A disk rename that has not answered yet keeps the rename in flight.
+    let finish: (outcome: { status: string }) => void = () => {};
+    mockRenameFile.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
     const user = userEvent.setup();
-    const { rerender } = render(<TitleBar />);
+    render(<TitleBar />);
     await user.dblClick(screen.getByText(/notes/));
+    await user.clear(screen.getByRole("textbox"));
+    await user.type(screen.getByRole("textbox"), "renamed{Enter}");
 
-    mocks.isRenaming = true;
-    rerender(<TitleBar />);
+    expect(screen.getByRole("textbox")).toBeDisabled();
     fireEvent.blur(screen.getByRole("textbox"));
 
     expect(screen.getByRole("textbox")).toBeInTheDocument();
+    // A failed rename keeps the editor open for another try.
+    await act(async () => finish({ status: "exists", name: "renamed.md" } as never));
+    expect(screen.getByRole("textbox")).toBeEnabled();
   });
 
   it("keeps the opening policy when the setting flips mid-rename", async () => {
@@ -195,9 +203,7 @@ describe("TitleBar — rename honours the extension policy it opened with", () =
 
     // Read live, `displayName` would now be "notes" — equal to what was typed —
     // and the rename would silently cancel instead of dropping the extension.
-    expect(mockRenameFile).toHaveBeenCalledWith("/tmp/notes.md", "notes", {
-      preserveExtension: false,
-    });
+    expect(mockRenameFile).toHaveBeenCalledWith(...renamedTo("notes", false));
   });
 });
 

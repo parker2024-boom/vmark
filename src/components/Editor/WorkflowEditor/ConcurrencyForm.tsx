@@ -1,5 +1,5 @@
 /**
- * Purpose: WI-C.3 — workflow-level concurrency editor.
+ * Purpose: the form that edits a GitHub Actions workflow's top-level `concurrency:` setting.
  *
  * @coordinates-with src/lib/ghaWorkflow/save/mutators.ts — workflow.concurrency.set patch
  * @module components/Editor/WorkflowEditor/ConcurrencyForm
@@ -25,7 +25,7 @@ export function ConcurrencyForm({
   // string (e.g., `${{ github.event_name == 'pull_request' }}`). The
   // form models the literal boolean only; when an expression is
   // present we DISABLE the checkbox so the user can't accidentally
-  // overwrite it. Codex audit HIGH-4 fix.
+  // overwrite it.
   const isExpressionCancel = typeof concurrency?.cancelInProgress === "string";
   const [cancelInProgress, setCancelInProgress] = useState<boolean>(
     concurrency?.cancelInProgress === true,

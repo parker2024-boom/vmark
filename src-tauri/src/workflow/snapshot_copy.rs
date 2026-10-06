@@ -1,4 +1,4 @@
-//! Bounded, cancellable file copy for workflow snapshots (#267).
+//! Bounded, cancellable file copy for workflow snapshots.
 //!
 //! `create_snapshot` used to `tokio::fs::copy` each file it was asked to
 //! preserve: one call, unbounded by size, and blind to a cancel that arrived
@@ -7,7 +7,7 @@
 //! `should_stop` before every one, and stops the moment the copied bytes
 //! pass the limit. The limit is on bytes COPIED, not on a size read first:
 //! a source that grows during the copy is still refused (the lesson of
-//! #254). A refused or cancelled copy removes what it wrote.
+//! bounded workflow reads). A refused or cancelled copy removes what it wrote.
 //!
 //! @coordinates-with snapshots.rs — the only caller
 //! @module workflow::snapshot_copy

@@ -117,7 +117,7 @@ export function useStatusBarTabDrag({ tabs, windowLabel, tabBarRef, onActivateTa
 
   const handleReorder = useCallback(
     (tabId: string, dropIdx: number) => {
-      const rawTabs = useTabStore.getState().tabs[windowLabel] ?? []; // WI-12.4
+      const rawTabs = useTabStore.getState().tabs[windowLabel] ?? []; // flat store order, hidden instances included
       const { plan, tab, fromFlat, toFlat } =
         planVisibleReorderToFlat(rawTabs, visibleWindowTabs(windowLabel), tabId, dropIdx);
       if (!tab) return;
@@ -193,7 +193,6 @@ export function useStatusBarTabDrag({ tabs, windowLabel, tabBarRef, onActivateTa
         if (!currentPoint) return;
 
         void invoke<string | null>("find_drop_target_window", {
-          sourceWindowLabel: windowLabel,
           screenX: currentPoint.screenX,
           screenY: currentPoint.screenY,
         }).then((targetWindowLabel) => {
@@ -221,14 +220,14 @@ export function useStatusBarTabDrag({ tabs, windowLabel, tabBarRef, onActivateTa
   const isDragOutBlocked = dragMode === "dragout" && windowLabel === "main" && tabs.length <= 1;
   const isDropInvalid = isReorderBlocked || isDragOutBlocked;
   const dragHint = isDragOutBlocked
-    ? "Cannot move the last tab in main window"
+    ? i18n.t("statusbar:tabDrag.lastTab")
     : dragTargetWindowLabel
-      ? `Drop to move to ${dragTargetWindowLabel}`
+      ? i18n.t("statusbar:tabDrag.moveToWindow", { window: dragTargetWindowLabel })
       : dragMode === "dragout"
-        ? "Drop to create a new window"
+        ? i18n.t("statusbar:tabDrag.newWindow")
         : isReorderBlocked
-          ? "Pinned zone is locked"
-          : "Reorder tab";
+          ? i18n.t("statusbar:tabDrag.pinnedZone")
+          : i18n.t("statusbar:tabDrag.reorder");
 
   useEffect(() => {
     let cancelled = false;

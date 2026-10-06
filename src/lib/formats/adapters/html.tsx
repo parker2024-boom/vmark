@@ -1,25 +1,29 @@
-// WI-3.3 — Standalone HTML (.html / .htm) adapter.
-//
-// Per ADR-4 the preview renders inside <iframe sandbox="" srcdoc={...}>
-// with an EMPTY sandbox allow-list (no allow-scripts, no
-// allow-same-origin, no allow-forms, no allow-popups). The HTML
-// content also gets an injected
-//   <meta http-equiv="Content-Security-Policy"
-//         content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:">
-// which governs *resource loading inside the iframe*. The sandbox
-// is enforced by the iframe attribute alone; CSP via <meta> is not
-// honored as a sandbox per MDN.
-//
-// Defense-in-depth: DOMPurify sanitizes the content first, removing
-// script tags + javascript: URLs + event handlers before the iframe
-// renders anything. WI-3.4 (security review) is the gating sign-off
-// before this adapter is considered production-ready; until then the
-// adapter ships in code but is marked UNVERIFIED in the file header.
-//
-// Issue #1273 adds an OPT-IN second mode on top of this one, reached only by
-// an explicit per-file confirmation. The default above is unchanged; see
-// HtmlPreview.tsx for the two-mode renderer and src-tauri/src/trusted_html/
-// for the isolated origin the trusted mode runs in.
+/**
+ * Standalone HTML (.html / .htm) adapter — registers the format and its sandboxed preview.
+ *
+ * Per ADR-4 the preview renders inside <iframe sandbox="" srcdoc={...}>
+ * with an EMPTY sandbox allow-list (no allow-scripts, no
+ * allow-same-origin, no allow-forms, no allow-popups). The HTML
+ * content also gets an injected
+ *   <meta http-equiv="Content-Security-Policy"
+ *         content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:">
+ * which governs *resource loading inside the iframe*. The sandbox
+ * is enforced by the iframe attribute alone; CSP via <meta> is not
+ * honored as a sandbox per MDN.
+ *
+ * Defense-in-depth: DOMPurify sanitizes the content first, removing
+ * script tags + javascript: URLs + event handlers before the iframe
+ * renders anything. A security review is the gating sign-off
+ * before this adapter is considered production-ready; until then the
+ * adapter ships in code but is marked UNVERIFIED in the file header.
+ *
+ * An OPT-IN second mode sits on top of this one, reached only by
+ * an explicit per-file confirmation. The default above is unchanged; see
+ * HtmlPreview.tsx for the two-mode renderer and src-tauri/src/trusted_html/
+ * for the isolated origin the trusted mode runs in.
+ *
+ * @module lib/formats/adapters/html
+ */
 
 import type { Extension } from "@codemirror/state";
 import { registerFormat } from "../registry";

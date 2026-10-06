@@ -16,14 +16,12 @@ const {
   mockIsTermFocused,
   mockIsCtrlR,
   mockGetWarning,
-  mockGetAllDirty,
 } = vi.hoisted(() => ({
   mockShouldBlock: vi.fn(),
   mockIsReload: vi.fn(),
   mockIsTermFocused: vi.fn(),
   mockIsCtrlR: vi.fn(),
   mockGetWarning: vi.fn(),
-  mockGetAllDirty: vi.fn(),
 }));
 
 vi.mock("@/utils/reloadGuard", () => ({
@@ -34,13 +32,9 @@ vi.mock("@/utils/reloadGuard", () => ({
   getReloadWarningMessage: (...args: unknown[]) => mockGetWarning(...args),
 }));
 
-vi.mock("@/stores/documentStore", () => ({
-  useDocumentStore: {
-    getState: () => ({ getAllDirtyDocuments: mockGetAllDirty }),
-  },
-}));
-
 import { useReloadGuard } from "./useReloadGuard";
+import { useDocumentStore } from "@/stores/documentStore";
+import { useTabStore } from "@/stores/tabStore";
 
 /** Capture an event listener installed on `window`. */
 function captureListener(
@@ -88,7 +82,8 @@ beforeEach(() => {
   mockIsTermFocused.mockReset();
   mockIsCtrlR.mockReset();
   mockGetWarning.mockReset();
-  mockGetAllDirty.mockReset();
+  useTabStore.setState({ tabs: {}, activeTabId: {}, untitledCounter: 0 });
+  useDocumentStore.setState({ documents: {} });
 });
 
 afterEach(() => {
@@ -224,7 +219,6 @@ describe("useReloadGuard — dev path (DEV=true)", () => {
 
   it("blocks reload + returns warning when dirty docs exist", () => {
     const beforeListener = captureListener("beforeunload");
-    mockGetAllDirty.mockReturnValue(["tab-1", "tab-2"]);
     mockShouldBlock.mockReturnValue({ shouldBlock: true, count: 2 });
     mockGetWarning.mockReturnValue("2 unsaved");
     renderHook(() => useReloadGuard());
@@ -243,7 +237,6 @@ describe("useReloadGuard — dev path (DEV=true)", () => {
 
   it("returns undefined and does NOT preventDefault when no dirty docs", () => {
     const beforeListener = captureListener("beforeunload");
-    mockGetAllDirty.mockReturnValue([]);
     mockShouldBlock.mockReturnValue({ shouldBlock: false, count: 0 });
     renderHook(() => useReloadGuard());
 
@@ -265,5 +258,34 @@ describe("useReloadGuard — dev path (DEV=true)", () => {
 
     const types = removeSpy.mock.calls.map((c) => c[0]);
     expect(types).toContain("beforeunload");
+  });
+
+  // WI-RA1C.4 — the guard asks about OPEN documents: the tabs with unsaved
+  // changes, not every entry the document store happens to hold.
+  it("asks the guard about the open tabs that have unsaved changes", () => {
+    const beforeListener = captureListener("beforeunload");
+    mockShouldBlock.mockReturnValue({ shouldBlock: false });
+    const dirtyTab = useTabStore.getState().createTab("main", "/w/a.md");
+    useDocumentStore.getState().initDocument(dirtyTab, "saved", "/w/a.md");
+    useDocumentStore.getState().setEditorContent(dirtyTab, "未保存的修改");
+    const cleanTab = useTabStore.getState().createTab("main", "/w/b.md");
+    useDocumentStore.getState().initDocument(cleanTab, "saved", "/w/b.md");
+    renderHook(() => useReloadGuard());
+
+    beforeListener.handler(makeBeforeUnloadEvent());
+
+    expect(mockShouldBlock).toHaveBeenCalledWith({ dirtyTabIds: [dirtyTab] });
+  });
+
+  it("does not count a dirty document that has no tab", () => {
+    const beforeListener = captureListener("beforeunload");
+    mockShouldBlock.mockReturnValue({ shouldBlock: false });
+    useDocumentStore.getState().initDocument("ghost", "saved", "/w/ghost.md");
+    useDocumentStore.getState().setEditorContent("ghost", "edited, then discarded");
+    renderHook(() => useReloadGuard());
+
+    beforeListener.handler(makeBeforeUnloadEvent());
+
+    expect(mockShouldBlock).toHaveBeenCalledWith({ dirtyTabIds: [] });
   });
 });

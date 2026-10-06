@@ -2,14 +2,15 @@
  * Rename handling for filesystem-change events.
  *
  * Purpose: re-point an open tab when its file is renamed, and fall back to a
- *   probe when the event is not a usable pair.
+ *   probe when the event is not a usable pair. The probe (`probeOpenFile`) is
+ *   also what a watcher `rescan` runs for every open file under its root.
  *
  * Split from `fsChangeHandlers.ts`, which was at the 300-line limit. The seam
  * is the one the code already had: a rename is the only kind that MUTATES the
  * path map the rest of the batch reads, which is why it is dispatched first,
  * one at a time, against a freshly-built map each time.
  *
- * @coordinates-with fsChangeHandlers.ts — dispatches the batch
+ * @coordinates-with fsChangeHandlers.ts — dispatches the batch, and probes on a rescan
  * @coordinates-with services/windowClose/fsChangeContext.ts — the injected collaborator contract
  * @module services/windowClose/fsRenameHandlers
  */
@@ -90,7 +91,7 @@ export async function handleRenameEvent(
   // Per PAIR, not per batch. `handled` used to be a single flag for the whole
   // array: one recognised rename returned early and every other path in the
   // same batch was dropped, so an atomic replacement arriving alongside a real
-  // rename was silently lost (audit finding #21). Each pair is an independent
+  // rename was silently lost. Each pair is an independent
   // filesystem event and gets an independent verdict.
   const unmatched: string[] = [];
   let i = 0;
@@ -106,34 +107,52 @@ export async function handleRenameEvent(
     const normalizedPath = ctx.normalizePath(changedPath);
     const tabId = openPaths.get(normalizedPath);
     if (!tabId) continue;
-
-    // Skip our own atomic writes (rename is part of temp→target)
-    if (ctx.hasPendingSave(normalizedPath)) continue;
-
-    // Media tabs stream from asset:// and hold no text — never read the binary
-    // to probe existence (it could be a multi-GB video). Existence-probe only;
-    // an ambiguous probe error is treated conservatively (do NOT mark missing,
-    // and do NOT announce a change for a file we cannot confirm is there).
-    //
-    // A file that IS still present got here because a rename replaced it —
-    // which is how an atomic write lands, and therefore how most tools rewrite
-    // a picture. It is new bytes under an unchanged path, so it needs the same
-    // announcement the modify branch makes; without it the viewer keeps
-    // rendering what it decoded at open time (issue #1328, audit finding #1).
-    if (ctx.isMedia(changedPath)) {
-      try {
-        if (await ctx.fileExists(changedPath)) ctx.markBinaryFileChanged(tabId);
-        else ctx.handleDeletion(tabId);
-      } catch {
-        /* ambiguous probe error — leave the tab as-is, don't flag missing */
-      }
-      continue;
-    }
-
-    // Verify file is actually gone before marking as deleted.
-    // Atomic writes trigger rename events but the target still exists.
-    await readAndRouteOrMarkMissing(ctx, tabId, changedPath);
+    await probeOpenFile(ctx, tabId, changedPath, normalizedPath);
   }
+}
+
+/**
+ * Find out what happened to an open file when the event did not say: an
+ * unpaired rename, or a watcher that lost track of the tree (`rescan`).
+ * Readable → the modify policy; gone → missing; media → existence only.
+ */
+export async function probeOpenFile(
+  ctx: FsChangeContext,
+  tabId: string,
+  changedPath: string,
+  normalizedPath: string,
+): Promise<void> {
+  // Skip our own atomic writes (rename is part of temp→target)
+  if (ctx.hasPendingSave(normalizedPath)) return;
+
+  // Media tabs stream from asset:// and hold no text — never read the binary
+  // to probe existence (it could be a multi-GB video). Existence-probe only;
+  // an ambiguous probe error is treated conservatively (do NOT mark missing,
+  // and do NOT announce a change for a file we cannot confirm is there).
+  //
+  // A file that IS still present got here because a rename replaced it —
+  // which is how an atomic write lands, and therefore how most tools rewrite
+  // a picture. It is new bytes under an unchanged path, so it needs the same
+  // announcement the modify branch makes; without it the viewer keeps
+  // rendering what it decoded at open time (issue #1328).
+  if (ctx.isMedia(changedPath)) {
+    try {
+      if (await ctx.fileExists(changedPath)) {
+        // A file that is back is back, whichever event reported it.
+        if (ctx.isMissing(tabId)) ctx.clearMissing(tabId);
+        ctx.markBinaryFileChanged(tabId);
+      } else {
+        ctx.handleDeletion(tabId);
+      }
+    } catch {
+      /* ambiguous probe error — leave the tab as-is, don't flag missing */
+    }
+    return;
+  }
+
+  // Verify file is actually gone before marking as deleted.
+  // Atomic writes trigger rename events but the target still exists.
+  await readAndRouteOrMarkMissing(ctx, tabId, changedPath);
 }
 
 /**
@@ -155,7 +174,7 @@ export async function handleRenameEvent(
  * snapshot for the whole group broke a chained `a -> b -> c` rename arriving in
  * one batch: the second hop looked the tab up under a name the snapshot still
  * held, found nothing, and left the tab pointing at `b` while the file was at
- * `c` (audit finding #24). Re-reading is cheap — it is a map build over the
+ * `c`. Re-reading is cheap — it is a map build over the
  * window's open tabs — and correctness here is not optional.
  *
  * Paired renames go first, then unpaired ones (atomic-write targets / lone

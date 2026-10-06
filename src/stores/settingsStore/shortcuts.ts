@@ -51,6 +51,21 @@ function resolveDefaultKey(def: ShortcutDefinition): string {
   return def.defaultKey;
 }
 
+/**
+ * One problem in an imported shortcut file. Codes with parameters, not
+ * sentences: a store cannot translate, so the settings page does.
+ */
+export type ShortcutImportError =
+  | { code: "invalidFormat" }
+  | { code: "invalidKey"; id: string }
+  | { code: "unknownShortcut"; id: string }
+  | { code: "parse"; detail: string };
+
+/** All-or-nothing: on failure nothing was applied and `errors` lists every problem. */
+type ShortcutImportResult =
+  | { success: true; errors?: undefined }
+  | { success: false; errors: ShortcutImportError[] };
+
 interface ShortcutsState {
   customBindings: Record<string, string>;
   /** Version for tracking config format changes */
@@ -73,7 +88,7 @@ interface ShortcutsActions {
   /** Export config as JSON string */
   exportConfig: () => string;
   /** Import config from JSON string */
-  importConfig: (json: string) => { success: boolean; errors?: string[] };
+  importConfig: (json: string) => ShortcutImportResult;
   /** Check if shortcut has been customized */
   isCustomized: (id: string) => boolean;
   /** Get shortcut definition by ID */
@@ -159,10 +174,10 @@ export const useShortcutsStore = create<ShortcutsState & ShortcutsActions>()(
         try {
           const data = JSON.parse(json);
           if (typeof data !== "object" || !data.customBindings) {
-            return { success: false, errors: ["Invalid config format"] };
+            return { success: false, errors: [{ code: "invalidFormat" }] };
           }
 
-          const errors: string[] = [];
+          const errors: ShortcutImportError[] = [];
           const bindings: Record<string, string> = {};
 
           // VALIDATE the whole document first, then apply — never entry by
@@ -174,11 +189,11 @@ export const useShortcutsStore = create<ShortcutsState & ShortcutsActions>()(
           // means the user sees the whole file's faults in one pass.
           for (const [id, key] of Object.entries(data.customBindings)) {
             if (typeof key !== "string") {
-              errors.push(`Invalid key for ${id}`);
+              errors.push({ code: "invalidKey", id });
               continue;
             }
             if (!shortcutMap.has(id)) {
-              errors.push(`Unknown shortcut: ${id}`);
+              errors.push({ code: "unknownShortcut", id });
               continue;
             }
             bindings[id] = key;
@@ -195,7 +210,7 @@ export const useShortcutsStore = create<ShortcutsState & ShortcutsActions>()(
           /* v8 ignore start -- JSON.parse always throws Error instances; String(e) fallback is defensive */
           // command-error-ok: `e` here is a JSON.parse failure on imported
           // shortcut JSON, not a rejection from update_menu_accelerators.
-          return { success: false, errors: [`Parse error: ${errorMessage(e)}`] };
+          return { success: false, errors: [{ code: "parse", detail: errorMessage(e) }] };
           /* v8 ignore stop */
         }
       },

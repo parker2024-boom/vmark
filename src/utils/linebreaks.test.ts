@@ -51,6 +51,11 @@ describe("linebreaks helpers", () => {
     expect(normalizeHardBreaks(input, "backslash")).toBe("a\\\nb\n");
   });
 
+  // In each fence case the line after the fence is followed by more text, so
+  // it holds a real hard break: the test shows the break outside converted
+  // and the look-alike lines inside the fence untouched. Trailing spaces on a
+  // paragraph's LAST line are not a break and are left alone
+  // (linebreaks.hardBreaks.test.ts).
   it("does not touch fenced code blocks", () => {
     const input = [
       "```",
@@ -58,32 +63,30 @@ describe("linebreaks helpers", () => {
       "code\\",
       "```",
       "text  ",
+      "more",
     ].join("\n");
 
     expect(normalizeHardBreaks(input, "backslash")).toBe(
-      ["```", "code  ", "code\\", "```", "text\\"].join("\n")
+      ["```", "code  ", "code\\", "```", "text\\", "more"].join("\n")
     );
   });
 
-  it("skips non-fence lines inside a fenced block when normalizing (inFence=true path)", () => {
-    // Lines inside fence reach `if (inFence) continue` with inFence=true
-    const input = ["```", "inside content", "```", "outside  "].join("\n");
+  it("converts a break after a fenced block and leaves the block's lines alone", () => {
+    const input = ["```", "inside content", "```", "outside  ", "more"].join("\n");
     expect(normalizeHardBreaks(input, "backslash")).toBe(
-      ["```", "inside content", "```", "outside\\"].join("\n")
+      ["```", "inside content", "```", "outside\\", "more"].join("\n")
     );
   });
 
-  it("ignores mismatched fence type inside a fenced block when normalizing", () => {
-    // Opening ``` but encountering ~~~ inside — fenceChar mismatch → else-if false branch
-    // The ~~~ does NOT close the ``` block; trailing spaces inside block are NOT converted
-    const input = ["```", "~~~", "inside  ", "```", "outside  "].join("\n");
+  it("does not let a different fence character close a fenced block", () => {
+    // The ~~~ does NOT close the ``` block, so `inside  ` is still code.
+    const input = ["```", "~~~", "inside  ", "```", "outside  ", "more"].join("\n");
     expect(normalizeHardBreaks(input, "backslash")).toBe(
-      ["```", "~~~", "inside  ", "```", "outside\\"].join("\n")
+      ["```", "~~~", "inside  ", "```", "outside\\", "more"].join("\n")
     );
   });
 
   it("does not convert whitespace-only lines with trailing spaces to backslash", () => {
-    // "    \n" line: trailing spaces but before.trim() === "" → false branch of trim check
     const input = "    \nnext";
     expect(normalizeHardBreaks(input, "backslash")).toBe("    \nnext");
   });

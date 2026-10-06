@@ -71,6 +71,23 @@ describe("act smoke (via browserAct.ts directly)", () => {
   });
 });
 
+// WI-RA18.7 — the prompt's one-line summary of typed text is cut without
+// splitting a character: a lone surrogate would show as a raw escape.
+describe("the typed-text summary in the approval prompt", () => {
+  it.each([
+    ["an emoji straddling the cut", `${"a".repeat(119)}😀tail`, `${"a".repeat(119)}…`],
+    ["a family emoji straddling the cut", `${"a".repeat(116)}👨‍👩‍👧tail`, `${"a".repeat(116)}…`],
+    ["CJK text over the cut", "中".repeat(130), `${"中".repeat(120)}…`],
+    ["text within the cut", "短い 😀", "短い 😀"],
+  ])("%s", async (_label, text, clipped) => {
+    const id = seed();
+    await handleBrowserAct("type-1", { tabId: id, operation: "type", role: "textbox", name: "Title", text });
+    const summary = useBrowserApprovalStore.getState().pending[0]?.payloadSummary;
+    expect(summary).toBe(`Text: ${JSON.stringify(clipped)}`);
+    expect(summary?.isWellFormed()).toBe(true);
+  });
+});
+
 // WI-NB1.3 — act responses carry page state, and failures name the next tool.
 describe("act truthfulness in responses (WI-NB1.3)", () => {
   it("a successful act reports the tab's current url and generation", async () => {

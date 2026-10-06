@@ -7,7 +7,7 @@
  * parsing and feeds the result through `workflowPort` (the workflow store) so
  * the WorkflowSidePanel shows a live React Flow graph.
  *
- * Key decisions (WI-LX2.4, audit 20260928 #129):
+ * Key decisions (WI-LX2.4):
  *   - Writes ITS tab's preview. The assembly passes the editor's `tabId`, and
  *     every write names it: one unkeyed slot let two split-pane editors
  *     overwrite each other on every re-parse, and either one's teardown

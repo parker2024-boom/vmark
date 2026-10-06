@@ -8,37 +8,12 @@
  *   - handleClickOutside / handleKeydown
  *   - destroy(): listener cleanup
  *   - Fit-to-width toggle visibility based on global setting
+ *   - Every menu item, clicked, performs its REAL table action on a real
+ *     3×3 table (the view is a plain object over a real EditorState)
  */
 
 import { bindHostSettings } from "@/plugins/shared/hostSettings";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-
-// Mock table actions
-const mockAddRowAbove = vi.fn();
-const mockAddRowBelow = vi.fn();
-const mockAddColLeft = vi.fn();
-const mockAddColRight = vi.fn();
-const mockDeleteCurrentRow = vi.fn();
-const mockDeleteCurrentColumn = vi.fn();
-const mockDeleteCurrentTable = vi.fn();
-const mockAlignColumn = vi.fn();
-const mockFormatTable = vi.fn();
-const mockIsCurrentTableFitToWidth = vi.fn(() => false);
-const mockToggleFitToWidth = vi.fn();
-
-vi.mock("./tableActions.tiptap", () => ({
-  addRowAbove: (...args: unknown[]) => mockAddRowAbove(...args),
-  addRowBelow: (...args: unknown[]) => mockAddRowBelow(...args),
-  addColLeft: (...args: unknown[]) => mockAddColLeft(...args),
-  addColRight: (...args: unknown[]) => mockAddColRight(...args),
-  deleteCurrentRow: (...args: unknown[]) => mockDeleteCurrentRow(...args),
-  deleteCurrentColumn: (...args: unknown[]) => mockDeleteCurrentColumn(...args),
-  deleteCurrentTable: (...args: unknown[]) => mockDeleteCurrentTable(...args),
-  alignColumn: (...args: unknown[]) => mockAlignColumn(...args),
-  formatTable: (...args: unknown[]) => mockFormatTable(...args),
-  isCurrentTableFitToWidth: (...args: unknown[]) => mockIsCurrentTableFitToWidth(...args),
-  toggleFitToWidth: (...args: unknown[]) => mockToggleFitToWidth(...args),
-}));
 
 vi.mock("@/utils/icons", () => ({
   icons: new Proxy({}, { get: () => "<svg></svg>" }),
@@ -56,17 +31,108 @@ let mockTableFitToWidth = false;
 bindHostSettings({ tableFitToWidth: () => mockTableFitToWidth });
 
 import { getPopupHostForDom, toHostCoordsForDom } from "@/plugins/shared/popupHostDom";
+import { isWrapperFitToWidth, setWrapperFitToWidth } from "@/plugins/shared/tableFitToWidth";
+import i18n from "@/i18n";
+import { Schema, type Node as PmNode } from "@tiptap/pm/model";
+import { EditorState, TextSelection, type Transaction } from "@tiptap/pm/state";
+import { tableNodes } from "@tiptap/pm/tables";
 import { TiptapTableContextMenu } from "./TiptapTableContextMenu";
 
-function createMockView() {
+const tables = tableNodes({
+  tableGroup: "block",
+  cellContent: "block+",
+  cellAttributes: { alignment: { default: null } },
+});
+const schema = new Schema({
+  nodes: {
+    doc: { content: "block+" },
+    paragraph: { group: "block", content: "inline*" },
+    text: { group: "inline" },
+    ...tables,
+  },
+});
+
+/** 3×3 table, cells "r{row}c{col}"; r2c2 holds two paragraphs (for Format Table). */
+function tableDoc(): PmNode {
+  const para = (t: string) => schema.nodes.paragraph.create(null, [schema.text(t)]);
+  const rows = [0, 1, 2].map((r) =>
+    schema.nodes.table_row.create(
+      null,
+      [0, 1, 2].map((c) =>
+        schema.nodes.table_cell.create(null, r === 2 && c === 2 ? [para("r2c2"), para("more")] : [para(`r${r}c${c}`)]),
+      ),
+    ),
+  );
+  return schema.nodes.doc.create(null, [schema.nodes.table.create(null, rows), para("after")]);
+}
+
+/**
+ * The editor view the menu acts on: a plain object over a real EditorState
+ * with the caret in the MIDDLE cell (r1c1). `nodeDOM` answers the table's
+ * scroll wrapper, which is where per-table fit-to-width lives.
+ */
+function createMockView(dom: unknown = { isConnected: true, closest: vi.fn(() => null) }) {
+  const doc = tableDoc();
+  let caret = -1;
+  doc.descendants((node, pos) => {
+    if (caret < 0 && node.isText && node.text === "r1c1") caret = pos + 1;
+  });
+  let state = EditorState.create({ doc, schema });
+  state = state.apply(state.tr.setSelection(TextSelection.create(state.doc, caret)));
+  const wrapper = document.createElement("div");
+  wrapper.className = "table-scroll-wrapper";
   return {
-    dom: {
-      isConnected: true,
-      closest: vi.fn(() => null),
+    dom,
+    get state() {
+      return state;
+    },
+    dispatch(tr: Transaction) {
+      state = state.apply(tr);
     },
     focus: vi.fn(),
-  } as unknown;
+    nodeDOM: (pos: number) => (pos === 0 ? wrapper : null),
+    wrapper,
+  };
 }
+
+/** Cell texts of the first table, row by row; null when the doc has no table. */
+function grid(view: ReturnType<typeof createMockView>): string[][] | null {
+  const table = view.state.doc.firstChild;
+  if (table?.type.name !== "table") return null;
+  const rows: string[][] = [];
+  table.forEach((row) => {
+    const cells: string[] = [];
+    row.forEach((cell) => cells.push(cell.textContent));
+    rows.push(cells);
+  });
+  return rows;
+}
+
+function alignments(view: ReturnType<typeof createMockView>): (string | null)[][] {
+  const rows: (string | null)[][] = [];
+  view.state.doc.firstChild!.forEach((row) => {
+    const cells: (string | null)[] = [];
+    row.forEach((cell) => cells.push(cell.attrs.alignment as string | null));
+    rows.push(cells);
+  });
+  return rows;
+}
+
+function clickItem(menu: TiptapTableContextMenu, labelKey: string): void {
+  const container = (menu as unknown as { container: HTMLElement }).container;
+  const label = i18n.t(`editor:tableMenu.${labelKey}`);
+  const button = [...container.querySelectorAll("button")].find(
+    (b) => b.querySelector(".table-context-menu-label")?.textContent === label,
+  );
+  expect(button, `menu item ${label}`).toBeDefined();
+  button!.click();
+}
+
+const ORIGINAL = [
+  ["r0c0", "r0c1", "r0c2"],
+  ["r1c0", "r1c1", "r1c2"],
+  ["r2c0", "r2c1", "r2c2more"],
+];
 
 describe("TiptapTableContextMenu", () => {
   let menu: TiptapTableContextMenu;
@@ -154,74 +220,55 @@ describe("TiptapTableContextMenu", () => {
     removeSpy.mockRestore();
   });
 
-  it("clicking a menu item calls the action and hides", () => {
+  it("clicking a menu item performs the action on the table and hides", () => {
     menu.show(100, 200);
-    // Find the first button (Insert Row Above) and click it
+    clickItem(menu, "insertRowAbove");
+    expect(grid(view)).toEqual([ORIGINAL[0], ["", "", ""], ORIGINAL[1], ORIGINAL[2]]);
     const container = (menu as unknown as { container: HTMLElement }).container;
-    const firstButton = container.querySelector("button");
-    expect(firstButton).not.toBeNull();
-    firstButton!.click();
-    expect(mockAddRowAbove).toHaveBeenCalled();
+    expect(container.style.display).toBe("none");
   });
 
-  it("clicking each action button triggers the correct handler", () => {
-    mockTableFitToWidth = false;
-    mockIsCurrentTableFitToWidth.mockReturnValue(false);
+  const COL = (rows: string[][], fn: (row: string[]) => string[]) => rows.map(fn);
+  it.each([
+    ["insertRowBelow", [ORIGINAL[0], ORIGINAL[1], ["", "", ""], ORIGINAL[2]]],
+    ["insertColLeft", COL(ORIGINAL, (r) => [r[0], "", r[1], r[2]])],
+    ["insertColRight", COL(ORIGINAL, (r) => [r[0], r[1], "", r[2]])],
+    ["deleteRow", [ORIGINAL[0], ORIGINAL[2]]],
+    ["deleteCol", COL(ORIGINAL, (r) => [r[0], r[2]])],
+    ["deleteTable", null],
+  ] as const)("%s changes the table structure", (labelKey, expected) => {
     menu.show(100, 200);
-    const container = (menu as unknown as { container: HTMLElement }).container;
-    const buttons = container.querySelectorAll("button");
+    clickItem(menu, labelKey);
+    expect(grid(view as ReturnType<typeof createMockView>)).toEqual(expected);
+  });
 
-    // Expected order from buildMenu:
-    // 0: Insert Row Above, 1: Insert Row Below, 2: Insert Col Left, 3: Insert Col Right
-    // 4: Delete Row, 5: Delete Column, 6: Delete Table
-    // 7: Align Column Left, 8: Align Column Center, 9: Align Column Right
-    // 10: Align All Left, 11: Align All Center, 12: Align All Right
-    // 13: Format Table, 14: Fit to Width
-    buttons[1].click();
-    expect(mockAddRowBelow).toHaveBeenCalled();
+  it.each([
+    ["alignColLeft", "left", false],
+    ["alignColCenter", "center", false],
+    ["alignColRight", "right", false],
+    ["alignAllLeft", "left", true],
+    ["alignAllCenter", "center", true],
+    ["alignAllRight", "right", true],
+  ] as const)("%s aligns the caret column or the whole table", (labelKey, alignment, all) => {
+    menu.show(100, 200);
+    clickItem(menu, labelKey);
+    const expected = [0, 1, 2].map(() => [0, 1, 2].map((c) => (all || c === 1 ? alignment : null)));
+    expect(alignments(view as ReturnType<typeof createMockView>)).toEqual(expected);
+  });
 
-    buttons[2].click();
-    expect(mockAddColLeft).toHaveBeenCalled();
+  it("formatTable flattens multi-paragraph cells into one paragraph", () => {
+    menu.show(100, 200);
+    clickItem(menu, "formatTable");
+    const v = view as ReturnType<typeof createMockView>;
+    expect(grid(v)![2][2]).toBe("r2c2 more");
+    v.state.doc.firstChild!.forEach((row) => row.forEach((cell) => expect(cell.childCount).toBe(1)));
+  });
 
-    buttons[3].click();
-    expect(mockAddColRight).toHaveBeenCalled();
-
-    buttons[4].click();
-    expect(mockDeleteCurrentRow).toHaveBeenCalled();
-
-    buttons[5].click();
-    expect(mockDeleteCurrentColumn).toHaveBeenCalled();
-
-    buttons[6].click();
-    expect(mockDeleteCurrentTable).toHaveBeenCalled();
-
-    // Alignment buttons (column)
-    buttons[7].click();
-    expect(mockAlignColumn).toHaveBeenCalledWith(expect.anything(), "left", false);
-
-    buttons[8].click();
-    expect(mockAlignColumn).toHaveBeenCalledWith(expect.anything(), "center", false);
-
-    buttons[9].click();
-    expect(mockAlignColumn).toHaveBeenCalledWith(expect.anything(), "right", false);
-
-    // Alignment buttons (all columns)
-    buttons[10].click();
-    expect(mockAlignColumn).toHaveBeenCalledWith(expect.anything(), "left", true);
-
-    buttons[11].click();
-    expect(mockAlignColumn).toHaveBeenCalledWith(expect.anything(), "center", true);
-
-    buttons[12].click();
-    expect(mockAlignColumn).toHaveBeenCalledWith(expect.anything(), "right", true);
-
-    // Format table
-    buttons[13].click();
-    expect(mockFormatTable).toHaveBeenCalled();
-
-    // Fit to width
-    buttons[14].click();
-    expect(mockToggleFitToWidth).toHaveBeenCalled();
+  it("fitToWidth toggles fit-to-width on the table's scroll wrapper", () => {
+    mockTableFitToWidth = false;
+    menu.show(100, 200);
+    clickItem(menu, "fitToWidth");
+    expect(isWrapperFitToWidth((view as ReturnType<typeof createMockView>).wrapper)).toBe(true);
   });
 
   it("does not hide on mousedown inside the menu container", () => {
@@ -306,10 +353,7 @@ describe("TiptapTableContextMenu — popup host mounting", () => {
 
 describe("TiptapTableContextMenu — Escape when editor disconnected", () => {
   it("does not focus editor when dom is not connected", () => {
-    const view = {
-      dom: { isConnected: false, closest: vi.fn(() => null) },
-      focus: vi.fn(),
-    } as unknown;
+    const view = createMockView({ isConnected: false, closest: vi.fn(() => null) });
     const menu = new TiptapTableContextMenu(view as never);
     menu.show(10, 10);
 
@@ -322,8 +366,8 @@ describe("TiptapTableContextMenu — Escape when editor disconnected", () => {
 describe("TiptapTableContextMenu — fit-to-width label variants", () => {
   it("shows 'Natural Width' when current table is already fit-to-width", () => {
     mockTableFitToWidth = false;
-    mockIsCurrentTableFitToWidth.mockReturnValue(true);
     const view = createMockView();
+    setWrapperFitToWidth(view.wrapper, true);
     const menu = new TiptapTableContextMenu(view as never);
     menu.show(100, 100);
     const container = (menu as unknown as { container: HTMLElement }).container;
@@ -335,7 +379,6 @@ describe("TiptapTableContextMenu — fit-to-width label variants", () => {
 
   it("shows 'Fit to Width' when current table is not fit-to-width", () => {
     mockTableFitToWidth = false;
-    mockIsCurrentTableFitToWidth.mockReturnValue(false);
     const view = createMockView();
     const menu = new TiptapTableContextMenu(view as never);
     menu.show(100, 100);
@@ -392,13 +435,36 @@ describe("TiptapTableContextMenu — rAF position adjustment", () => {
     menu2.show(750, 100);
 
     // Run the rAF callback manually
-    if (rafCallback) {
-      rafCallback(0);
-    }
+    expect(rafCallback).not.toBeNull();
+    (rafCallback as unknown as FrameRequestCallback)(0);
 
     // The container left should have been adjusted (newLeft = 800 - 70 - 10 = 720)
     // host === document.body in this test (getPopupHostForDom returns null → document.body)
     expect(container.style.left).toBe("720px");
+  });
+
+  // WI-RA9B.4 — a window smaller than the menu must not park it off screen.
+  it("never positions the menu at a negative coordinate on a tiny window", () => {
+    const container = (menu2 as unknown as { container: HTMLElement }).container;
+    vi.spyOn(container, "getBoundingClientRect").mockReturnValue({
+      top: 50, bottom: 250, left: 50, right: 200,
+      width: 150, height: 200,
+      x: 50, y: 50, toJSON: () => {},
+    } as DOMRect);
+    Object.defineProperty(window, "innerWidth", { value: 100, writable: true });
+    Object.defineProperty(window, "innerHeight", { value: 100, writable: true });
+
+    let rafCallback: FrameRequestCallback | null = null;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+      rafCallback = cb;
+      return 1;
+    });
+
+    menu2.show(50, 50);
+    (rafCallback as FrameRequestCallback | null)?.(0);
+
+    expect(container.style.left).toBe("10px");
+    expect(container.style.top).toBe("10px");
   });
 
   it("adjusts top position when container extends beyond viewport bottom edge (line 176)", () => {
@@ -422,9 +488,8 @@ describe("TiptapTableContextMenu — rAF position adjustment", () => {
 
     menu2.show(100, 500);
 
-    if (rafCallback) {
-      rafCallback(0);
-    }
+    expect(rafCallback).not.toBeNull();
+    (rafCallback as unknown as FrameRequestCallback)(0);
 
     // maxBottom = viewportHeight - 10 = 590, newTop = 590 - 140 = 450
     expect(container.style.top).toBe("450px");
@@ -449,9 +514,8 @@ describe("TiptapTableContextMenu — rAF position adjustment", () => {
 
     menu2.show(100, 100);
 
-    if (rafCallback) {
-      rafCallback(0);
-    }
+    expect(rafCallback).not.toBeNull();
+    (rafCallback as unknown as FrameRequestCallback)(0);
 
     // No adjustment needed — position stays as-is (100, 100)
     expect(container.style.left).toBe("100px");
@@ -480,10 +544,14 @@ describe("TiptapTableContextMenu — rAF position adjustment", () => {
     });
 
     menu2.show(750, 100);
-    if (rafCallback) rafCallback(0);
+    expect(rafCallback).not.toBeNull();
+    (rafCallback as unknown as FrameRequestCallback)(0);
 
-    // toHostCoordsForDom should have been called for right-edge adjustment
-    expect(toHostCoordsForDom).toHaveBeenCalledWith(hostEl, { top: 0, left: 720 });
+    // The clamped viewport point is converted to host coordinates as a whole,
+    // and only the axis that moved is written.
+    expect(toHostCoordsForDom).toHaveBeenCalledWith(hostEl, { top: 100, left: 720 });
+    expect(container.style.left).toBe("720px");
+    expect(container.style.top).toBe("100px");
   });
 
   it("adjusts top via toHostCoordsForDom when host is not document.body and overflows bottom", () => {
@@ -508,21 +576,21 @@ describe("TiptapTableContextMenu — rAF position adjustment", () => {
     });
 
     menu2.show(100, 500);
-    if (rafCallback) rafCallback(0);
+    expect(rafCallback).not.toBeNull();
+    (rafCallback as unknown as FrameRequestCallback)(0);
 
     // maxBottom = 590, newTop = 590 - 140 = 450
-    expect(toHostCoordsForDom).toHaveBeenCalledWith(hostEl, { top: 450, left: 0 });
+    expect(toHostCoordsForDom).toHaveBeenCalledWith(hostEl, { top: 450, left: 100 });
+    expect(container.style.top).toBe("450px");
+    expect(container.style.left).toBe("100px");
   });
 
   it("uses editorContainer bottom as maxBottom when available", () => {
     const editorContainer = document.createElement("div");
-    const mockView = {
-      dom: {
-        isConnected: true,
-        closest: vi.fn((selector: string) => selector === ".editor-container" ? editorContainer : null),
-      },
-      focus: vi.fn(),
-    } as unknown;
+    const mockView = createMockView({
+      isConnected: true,
+      closest: vi.fn((selector: string) => selector === ".editor-container" ? editorContainer : null),
+    });
 
     const localMenu = new TiptapTableContextMenu(mockView as never);
     const container = (localMenu as unknown as { container: HTMLElement }).container;
@@ -551,7 +619,8 @@ describe("TiptapTableContextMenu — rAF position adjustment", () => {
     });
 
     localMenu.show(100, 350);
-    if (rafCallback) rafCallback(0);
+    expect(rafCallback).not.toBeNull();
+    (rafCallback as unknown as FrameRequestCallback)(0);
 
     // maxBottom = editorRect.bottom - 16 = 384, newTop = 384 - 150 = 234
     expect(container.style.top).toBe("234px");

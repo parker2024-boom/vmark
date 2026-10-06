@@ -114,7 +114,7 @@ fn latest_check<'a>(
 fn waiver_active(r: &EdgeResolution, now: &str) -> bool {
     match (&r.expires, parse_time(now)) {
         // A malformed expiry deactivates the waiver (fail-visible: the
-        // edge reopens rather than staying silently waived — audit R16).
+        // edge reopens rather than staying silently waived).
         (Some(exp), Some(now_t)) => parse_time(exp).is_some_and(|e| e > now_t),
         (Some(_), None) => false,
         (None, _) => true,
@@ -138,7 +138,7 @@ pub fn project_edge(
     // Liveness (spec §9.2, strict): projected iff the downstream revision
     // EQUALS resolve(C, D). A multi-head downstream has no defined
     // selection, so its edges are suppressed — the divergence surfaces
-    // wherever that object is an UPSTREAM (audit A23; the spec letter won
+    // wherever that object is an UPSTREAM (the spec letter won
     // over the any-head reading in review round 2).
     match resolve(ctx, dag, &edge.downstream) {
         Resolved::Single(r) if r == edge.downstream_rev => {}

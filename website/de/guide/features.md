@@ -1,6 +1,6 @@
 # Funktionen
 
-VMark ist ein funktionsreicher Markdown-Editor für moderne Schreib-Workflows. Hier ist, was enthalten ist.
+VMark ist der Klartext-Arbeitsbereich, in dem Menschen und KI zusammenarbeiten. Markdown steht im Mittelpunkt (mit WYSIWYG-, Quellvorschau- und Quellmodus), doch der Arbeitsbereich öffnet auch YAML, JSON, TOML, Mermaid, SVG, HTML und 9 Code-Betrachter-Formate — die vollständige Liste finden Sie unter [Unterstützte Formate](/de/guide/formats).
 
 [[toc]]
 
@@ -8,7 +8,7 @@ VMark ist ein funktionsreicher Markdown-Editor für moderne Schreib-Workflows. H
 
 ### Rich-Text-Modus (WYSIWYG)
 
-Der Standard-Bearbeitungsmodus bietet ein echtes „Was Sie sehen, ist was Sie bekommen"-Erlebnis:
+Der Standard-Bearbeitungsmodus bietet ein echtes „Was Sie sehen, ist was Sie bekommen“-Erlebnis:
 
 - Live-Formatierungsvorschau beim Tippen
 - Inline-Syntaxanzeige beim Cursor-Hover
@@ -28,6 +28,49 @@ Wechseln Sie zur rohen Markdown-Bearbeitung mit vollständiger Syntaxhervorhebun
 - Perfekt für fortgeschrittene Benutzer
 
 Wechseln Sie mit `F6` zwischen den Modi.
+
+### Geteilte Ansicht (Quelle + Vorschau)
+
+Bearbeiten Sie links die rohe Markdown-Quelle, während rechts eine **live aktualisierte,
+schreibgeschützte WYSIWYG-Vorschau** mitläuft — die Vorschau *ist* der WYSIWYG-Renderer,
+weicht also nie von dem ab, was Sie im Rich-Text-Modus sehen würden. Formatierungsbefehle
+und die Symbolleiste wirken auf den Quellbereich; ziehen Sie den Teiler (oder verwenden Sie
+die Pfeiltasten darauf), um die Größe zu ändern.
+
+- Pro Sitzung umschalten mit `Umschalt + F6`, **Ansicht → Markdown-Splitansicht** oder der
+  Befehlspalette („Markdown-Splitansicht umschalten“)
+- Als Standard für Markdown-Dateien festlegen unter **Einstellungen → Markdown → Layout →
+  Quelle/Vorschau standardmäßig teilen**
+
+WYSIWYG bleibt der Standard; die Teilung ist optional. Die drei Ansichten schließen sich
+gegenseitig aus — `F6` schaltet den Quellmodus und `Umschalt + F6` die Splitansicht um,
+jeweils zurück zu WYSIWYG —, sodass der Wechsel zwischen ihnen immer ein einziger Tastendruck ist.
+
+Das Menü **Ansicht** zeigt die drei Modi — **WYSIWYG-Modus**, **Quellcode-Modus**,
+**Markdown-Splitansicht** — als Gruppe mit Häkchen, sodass der aktive Modus immer sichtbar
+und der gegenseitige Ausschluss ausdrücklich ist. **Zeilenumbruch** und **Zeilennummern**
+gelten nur für den Quelltext-Editor und sind daher im WYSIWYG-Modus ausgegraut.
+
+### Leseposition
+
+Ihre Stelle in einem Dokument bleibt erhalten, wenn Sie es verlassen. Der Wechsel zu einem
+anderen Tab und zurück, das Umschalten des Quellmodus oder der Splitansicht oder das Neuladen
+der Datei vom Datenträger bringen Sie dorthin zurück, wo Sie gelesen haben — nicht an den Anfang.
+
+Jede Oberfläche merkt sich ihre eigene Position, sodass Rich Text und Quelle in derselben
+Datei getrennte Stellen behalten. Haben Sie einen Cursor in das Dokument gesetzt, hat der
+Cursor weiterhin Vorrang: Bei der Rückkehr landen Sie an der Einfügemarke, was auch dafür
+sorgt, dass beim Wechsel zwischen Rich Text und Quelle derselbe Absatz sichtbar bleibt.
+
+Positionen gelten pro Dokument und pro Sitzung — das Schließen eines Tabs vergisst sie.
+
+### Rückgängig über Modi hinweg
+
+Rückgängig und Wiederholen überschreiten die Grenze zwischen WYSIWYG ⇄ Quelle. Jeder Moduswechsel zeichnet einen Prüfpunkt auf, und sobald der eigene Verlauf des aktuellen Editors erschöpft ist, geht `Mod + Z` durch diese Prüfpunkte weiter — es stellt den früheren Inhalt wieder her, ohne die Ansicht zu wechseln, in der Sie sind. Wiederholen durchläuft dieselbe Kette vorwärts; ein Wiederholen, dessen Zweig Sie durch eine neue Bearbeitung verlassen haben, wird abgelehnt, statt über Ihre Arbeit angewendet zu werden. Die Kette wird pro Tab geführt und beim Schließen des Tabs gelöscht.
+
+### Große Dateien
+
+VMark öffnet Dateien über 1 MB automatisch im Quellmodus, damit sie in unter einer Sekunde geöffnet sind, warnt vor dem Öffnen von Dateien über 5 MB und lehnt Dateien über 50 MB ab. Schwellenwerte und Einstellungen finden Sie im Leitfaden [Große Dateien](./large-files.md).
 
 ### Quellvorschau
 
@@ -127,6 +170,8 @@ Textumwandlung schnell über Format → Transformieren:
 - Codeblöcke mit Syntaxhervorhebung
 - Geordnete, ungeordnete und Aufgabenlisten
 - Listentyp wechseln: einen Absatz nacheinander in Aufzählung, nummerierte oder Aufgabenliste umwandeln
+- Liste ausschalten: Ein erneuter Klick auf den aktiven Listentyp entfernt die Listenformatierung
+- In Code umwandeln: Die Aktion Codeblock verwandelt die ganze Liste am Cursor — oder jede Auswahl über mehrere Blöcke (Absätze, Überschriften, Listen) — in einen einzigen Codeblock, eine Zeile pro Block oder Listenelement
 - Horizontale Linien
 - Tabellen mit vollständiger Bearbeitungsunterstützung
 
@@ -160,7 +205,8 @@ Vollständige Tabellenbearbeitung:
 - Tabellen über Menü oder Tastenkürzel einfügen
 - Zeilen und Spalten hinzufügen/löschen
 - Zellenausrichtung (links, mitte, rechts)
-- Spalten durch Ziehen in der Größe ändern
+- Spalten passen sich automatisch an den Inhalt an; breite Tabellen scrollen horizontal
+- An Breite anpassen — eine Tabelle mit inhaltsproportionalen Spalten an die Editorbreite binden (Einstellungen → Markdown oder pro Tabelle per Rechtsklick)
 - Kontext-Symbolleiste für schnelle Aktionen
 - Tastaturnavigation — `Tab` / `Umschalt + Tab` wechseln zwischen Zellen, die Pfeiltasten verlassen die Tabelle an ihren Rändern, und `Mod + Eingabe` / `Mod + Umschalt + Eingabe` fügen eine Zeile darunter / darüber ein
 
@@ -172,8 +218,8 @@ Umfassende Bildunterstützung:
 - Drag & Drop aus dem Dateisystem
 - Aus Zwischenablage einfügen
 - Automatisch in den Projektasset-Ordner kopieren
-- Größe über Kontextmenü ändern
-- Doppelklick zum Bearbeiten des Quellpfads, Alt-Texts und der Abmessungen
+- Doppelklick zum Bearbeiten des Quellpfads und Alt-Texts — die Abmessungen des Bildes werden schreibgeschützt angezeigt
+- Rechtsklick für Bild ändern, Bild löschen, Pfad kopieren und Im Finder anzeigen (Im Explorer anzeigen unter Windows, Im Dateimanager anzeigen unter Linux)
 - Zwischen Inline- und Block-Anzeige wechseln
 
 ## Video & Audio
@@ -193,7 +239,7 @@ Vollständige Medienunterstützung mit HTML5-Tags:
 
 Bearbeiten Sie YAML-Frontmatter direkt im WYSIWYG-Modus, ohne in den Quellmodus wechseln zu müssen.
 
-- **Standardmäßig eingeklappt** — ein kleines „Frontmatter"-Label erscheint oben im Dokument, wenn Frontmatter vorhanden ist
+- **Standardmäßig eingeklappt** — ein kleines „Frontmatter“-Label erscheint oben im Dokument, wenn Frontmatter vorhanden ist
 - **Klicken zum Aufklappen** — öffnet einen Klartext-Editor für den YAML-Inhalt
 - **`Mod + Eingabe`** — Änderungen speichern und das Panel einklappen
 - **`Escape`** — zum zuletzt gespeicherten Wert zurückkehren und einklappen
@@ -223,6 +269,13 @@ KaTeX-gestützte LaTeX-Darstellung:
 
 - Inline-Mathematik: `$E = mc^2$`
 - Anzeigemathematik: `$$...$$`-Blöcke
+- Trennzeichen im ChatGPT-Stil werden beim Öffnen/Einfügen erkannt und in die
+  `$`-Form normalisiert: `\( ... \)` wird zu Inline-Mathematik, und ein alleinstehendes
+  `\[ ... \]` wird zu einem Anzeigeblock
+- Ein `$$`-Block muss vor einer Leerzeile geschlossen werden (die Regel von pandoc) — ein nicht
+  geschlossenes `$$` wird als wörtlicher Text dargestellt, statt die nachfolgenden Absätze zu
+  verschlucken. Leerzeilen direkt vor dem schließenden Zeichen sind in Ordnung (ein leerer
+  `$$` … `$$`-Block bleibt ein Mathematikblock)
 - Vollständige LaTeX-Syntaxunterstützung
 - Hilfreiche Fehlermeldungen mit Syntaxhinweisen
 
@@ -291,7 +344,7 @@ Integrierte KI-Schreibassistenz, unterstützt von Ihrem bevorzugten Anbieter:
 
 **Ersetzen:**
 
-Das Ersetzen-Feld steht neben dem Suchfeld — beide sind immer sichtbar, und `Tab` wechselt vom einen zum anderen. Geben Sie den Ersatztext ein, dann verwenden Sie **Ersetzen** (einzelne Übereinstimmung) oder **Alle ersetzen** (alle Übereinstimmungen auf einmal). Der Übereinstimmungszähler zeigt die aktuelle Position und Gesamtzahl an (z. B. „3 von 12").
+Das Ersetzen-Feld steht neben dem Suchfeld — beide sind immer sichtbar, und `Tab` wechselt vom einen zum anderen. Geben Sie den Ersatztext ein, dann verwenden Sie **Ersetzen** (einzelne Übereinstimmung) oder **Alle ersetzen** (alle Übereinstimmungen auf einmal). Der Übereinstimmungszähler zeigt die aktuelle Position und Gesamtzahl an (z. B. „3 von 12“), sodass Sie immer wissen, wo Sie sind.
 
 ## Markdown-Lint
 
@@ -328,11 +381,27 @@ Lint-Ergebnisse werden beim Tippen nicht aktualisiert. Im Quellmodus löscht ein
 
 Eine Formatierungs-Symbolleiste am unteren Rand des Editors, die in beiden Modi (WYSIWYG und Quellmodus) schnellen Zugriff auf alle Formatierungsaktionen bietet.
 
-- **Umschalten:** `Mod + Umschalt + P` öffnet die Symbolleiste und gibt ihr den Fokus. Erneutes Drücken gibt den Fokus an den Editor zurück, während die Symbolleiste sichtbar bleibt.
+- **Umschalten:** `Mod + Umschalt + B` öffnet die Symbolleiste und gibt ihr den Fokus. Erneutes Drücken gibt den Fokus an den Editor zurück, während die Symbolleiste sichtbar bleibt.
 - **Tastaturnavigation:** `Links`/`Rechts`-Pfeiltasten zum Wechseln zwischen Gruppen. `Enter` oder `Leertaste` öffnet ein Dropdown-Menü. Pfeiltasten navigieren innerhalb von Menüs.
 - **Zweistufiges Escape:** Wenn ein Dropdown-Menü geöffnet ist, schließt `Escape` zuerst das Menü. Nochmaliges Drücken schließt die gesamte Symbolleiste.
-- **Sitzungsspeicher:** Die Symbolleiste merkt sich, welcher Button zuletzt fokussiert war — beim erneuten Öffnen wird dort fortgesetzt.
+- **Sitzungsspeicher:** Die Symbolleiste merkt sich, welcher Button während der aktuellen Sitzung zuletzt fokussiert war — beim erneuten Fokussieren wird dort fortgesetzt.
 - **KI-Genies-Schnellzugriff:** Die Symbolleiste enthält einen KI-Genies-Button, der den Genie-Picker öffnet (`Mod + Y`).
+
+## Editor-Kontextmenü
+
+Klicken Sie mit der rechten Maustaste an einer beliebigen Stelle im Editor (WYSIWYG- oder Quellmodus), um ein Kontextmenü mit gängigen Aktionen zu öffnen.
+
+- **Zwischenablage:** Ausschneiden, Kopieren, Einfügen und Alles auswählen. Unter macOS verwenden diese die native Zwischenablage-Pipeline, sodass beim Einfügen von Rich Content (z. B. aus einem Browser kopiertes HTML) die Formatierung erhalten bleibt — genau wie bei `Mod + V`.
+- **Inline-Formatierung:** Fett, Kursiv, Durchgestrichen und Inline-Code, mit Häkchen für die am Cursor aktiven Auszeichnungen.
+- **Block-Operationen:** Untermenüs für Überschriftenebene und Listentyp, Blockzitat und Codeblock — Häkchen zeigen den aktuellen Block.
+- **Links:** Link einfügen bei normalem Text; bei einem vorhandenen Link wechselt der Abschnitt zu Link bearbeiten, Link kopieren und Link entfernen.
+- **Kontextabhängig:** In Tabellen erscheint stattdessen das eigene Tabellenmenü; ein Rechtsklick auf ein Bild öffnet das Bildmenü; in Codeblöcken werden nur Zwischenablage-Aktionen angeboten. Nicht-Markdown-Dateien (JSON, YAML, …) erhalten ein reduziertes Menü nur mit Zwischenablage-Aktionen.
+- **Umgang mit der Auswahl:** Ein Rechtsklick innerhalb einer Auswahl behält sie bei; ein Rechtsklick anderswo setzt zuerst den Cursor dorthin (macOS-Konvention).
+- **Tastatur:** Pfeiltasten navigieren (deaktivierte Einträge werden übersprungen), `Rechts`/`Links` öffnen und verlassen Untermenüs, `Escape` schließt zuerst das Untermenü und dann das Menü. Die Tastenkürzel-Hinweise berücksichtigen Ihre eigenen Tastenbelegungen.
+
+## Befehlspalette
+
+Drücken Sie `Mod + Umschalt + P`, um die Befehlspalette zu öffnen. Bei leerer Eingabe listet sie jeden verfügbaren Befehl nach Kategorie gruppiert auf — Datei, Arbeitsbereich, Ansicht, Export, Formatierung, Überschriften, Listen, Tabellen, Zeilen, Auswahl, Transformieren, CJK, Lint, Verlauf, KI und mehr; tippen Sie zum Filtern und Sortieren nach Übereinstimmung. `↑`/`↓` bewegen, `Eingabe` führt den Befehl aus, `Escape` (oder ein Klick auf den Hintergrund) schließt. Es werden nur Befehle angezeigt, die gerade anwendbar sind — ein Editor-Befehl verschwindet, wenn kein Dokument geöffnet ist, ein Arbeitsbereichsbefehl, wenn kein Arbeitsbereich geöffnet ist —, und der Befehl läuft in dem Fenster, aus dem Sie die Palette geöffnet haben. Die Seiten dieses Leitfadens nennen ihre Palettenbefehle in Anführungszeichen („Markdown-Splitansicht umschalten“, „Kohärenz-Aufschlüsselung“, „Fensterstatus“). Die Palette hat keinen Menüeintrag; ihr Tastenkürzel lässt sich unter **Einstellungen → Tastenkürzel** anpassen.
 
 ## Exportoptionen
 
@@ -340,10 +409,7 @@ VMark bietet flexible Exportoptionen zum Teilen Ihrer Dokumente.
 
 ### HTML-Export
 
-Export in eigenständiges HTML mit zwei Verpackungsmodi:
-
-- **Ordnermodus** (Standard): Erstellt `Dokument/index.html` mit Assets in einem Unterordner
-- **Einzeldatei-Modus**: Erstellt eine eigenständige `.html`-Datei mit eingebetteten Bildern
+**Datei → Exportieren → HTML** schreibt einen Ordner, der sowohl `index.html` (mit einem verknüpften `assets/`-Ordner) als auch `standalone.html` (alles eingebettet) enthält — es gibt keinen Modus zu wählen; verwenden Sie die Datei, die passt.
 
 Exportiertes HTML enthält den [**VMark Reader**](/de/guide/export#vmark-reader) — interaktive Steuerungen für Einstellungen, Inhaltsverzeichnis, Bild-Lightbox und mehr.
 
@@ -351,7 +417,7 @@ Exportiertes HTML enthält den [**VMark Reader**](/de/guide/export#vmark-reader)
 
 ### PDF-Export
 
-Mit nativem Systemdialog (`Cmd/Strg + P`) als PDF drucken.
+**Datei → Exportieren → PDF** öffnet VMarks eigenen Exportdialog — Seitengröße (A4, Letter, A3, Legal) und Ausrichtung, Randvorgaben oder ein ziehbarer benutzerdefinierter Randrahmen, Schriftgröße, Zeilenhöhe, lateinische und CJK-Schriftarten, Stilvorgaben und Seitenzahlen — und schreibt dann das PDF unter macOS, Windows und Linux, mit einer anklickbaren Überschriftengliederung in der Seitenleiste des Betrachters. **Drucken** (`Cmd/Strg + P`) ist der separate Weg über den Druckdialog des Systems. [Mehr erfahren →](/de/guide/export#drucken-als-pdf-exportieren)
 
 ### Als HTML kopieren
 
@@ -405,19 +471,46 @@ Wenn VMark neu startet, um ein Update zu installieren, oder unerwartet beendet w
 - Beim Neustart werden Tabs genau so wiederhergestellt, wie Sie sie verlassen haben, wobei geänderte (ungespeicherte) Dokumente entsprechend markiert sind
 - Ungespeicherte Änderungen werden außerdem alle 10 Sekunden in Wiederherstellungsschnappschüsse geschrieben. Nach einem unerwarteten Beenden stellt VMark sie beim nächsten Start als ungespeicherte Tabs wieder her
 - Wiederherstellungsschnappschüsse älter als 7 Tage werden automatisch bereinigt
-- Ein gewöhnliches Beenden erfasst die Sitzung nicht: VMark fordert Sie zuvor auf, ungespeicherte Dokumente zu speichern. Die offenen Tabs eines Arbeitsbereichs kehren dennoch zurück, wenn Sie ihn das nächste Mal öffnen (siehe [Sitzungswiederherstellung](/de/guide/workspace-management#sitzungswiederherstellung))
+- Ein gewöhnliches Beenden erfasst die Sitzung nicht: VMark fordert Sie zuvor auf, ungespeicherte Dokumente zu speichern (siehe [Tabs und Fenster schließen](/de/guide/tab-navigation#tabs-und-fenster-schließen)). Die offenen Tabs eines Arbeitsbereichs kehren dennoch zurück, wenn Sie ihn das nächste Mal öffnen (siehe [Sitzungswiederherstellung](/de/guide/workspace-management#sitzungswiederherstellung))
 
 Keine Konfiguration erforderlich. Sitzungswiederherstellung ist immer aktiv.
+
+## Statusleiste
+
+Die Statusleiste verläuft am unteren Rand des Fensters (`F7` blendet sie aus). Die linke Seite enthält die Tab-Leiste — siehe [Zwischen geöffneten Tabs wechseln](/de/guide/tab-navigation#zwischen-geoffneten-tabs-wechseln) — und kurze Hinweise wie *„Im Quelltextmodus geöffnet (große Datei).“* Die rechte Seite, von links nach rechts:
+
+| Anzeige | Was sie zeigt | Klick |
+|---|---|---|
+| Automatisches Speichern | Ein Speichersymbol und wie lange das automatische Speichern des Dokuments her ist; verblasst nach einigen Sekunden | — |
+| Zählungen | Wörter und Zeichen (Leerzeichen nicht mitgezählt); bei einer Auswahl *ausgewählt / gesamt* | Öffnet ein Popover **Wortzähler**: Wörter, Zeichen, Zeichen ohne Leerzeichen, CJK-Zeichen, Zeichen ohne Satzzeichen |
+| Lint | ⊗ Fehler oder ⚠ Warnungen aus dem letzten [Lint](#markdown-lint)-Durchlauf; ausgeblendet, wenn es keine gibt | Springt zum nächsten Problem |
+| KI | Während ein Genie läuft, *Denkt nach...* mit den verstrichenen Sekunden und einem × zum Abbrechen; danach *Fertig* oder der Fehler mit **Erneut versuchen**, das die fehlgeschlagene Anfrage erneut ausführt, und **Schließen**; Erneut versuchen fehlt, wenn es nichts zu wiederholen gibt, etwa ohne Anbieter | — |
+| MCP | Ein Satellitensymbol, eingefärbt, wenn ein KI-Client verbunden ist; das Wort *aus*, *…* oder *Fehler*, wenn er nicht normal läuft. Der Tooltip nennt die verbundenen Clients | Öffnet **Einstellungen → Integrationen** |
+| MCP-Verlauf | Die KI-Schreibvorgänge in diesem Tab, neueste zuerst, jeweils mit **Auf den Stand vor diesem Schreibvorgang zurücksetzen**; eine Papierkorb-Schaltfläche löscht den Verlauf des Tabs ohne Rückfrage | Öffnet die Liste |
+| Terminal | — | Zeigt das Terminal an oder blendet es aus |
+| Modus | Der aktuelle Modus — Quelle oder WYSIWYG (bei GitHub-Actions-Workflow-Dateien ausgeblendet) | Wechselt den Modus |
+| Sperre | Ob das Dokument schreibgeschützt ist | Schaltet den Schreibschutz um |
+
+Die rechte Seite ist ausgeblendet, solange ein Browser-Tab aktiv ist. Eine ausgeblendete Statusleiste erscheint von selbst wieder, solange ein KI-Genie Fortschritt meldet oder ein Browser-Tab aktiv ist.
+
+## Bearbeitungsdetails
+
+Einige Verhaltensweisen, die ohne jede Einstellung funktionieren:
+
+- **Die Auswahl bleibt sichtbar, wenn der Editor den Fokus verliert.** Klicken Sie ins Terminal, in die Seitenleiste oder in ein Popup, und der ausgewählte Text behält eine schwächere Hervorhebung, sodass Sie sehen, worauf ein Befehl oder ein KI-Tool wirken wird. Der Quellmodus zeigt jeden Bereich einer Mehrcursor-Auswahl.
+- **Tippen am linken Rand von Inline-Code landet darin.** Steht der Cursor im WYSIWYG-Modus direkt vor einem Inline-Code-Abschnitt — egal, wie Sie dorthin gelangt sind —, wird das nächste Zeichen Teil des Codes, statt außerhalb zu landen.
+- **Eingabemethoden (IME) sind sicher.** Während Sie mit einer chinesischen, japanischen oder koreanischen Eingabemethode komponieren, und für 50 ms nach dem Ende der Komposition, lösen Editor-Tastenkürzel und automatische Umwandlungen nicht aus, sodass das Drücken der Eingabetaste zum Übernehmen eines Kandidaten nicht zugleich den Absatz teilt. Rückgängig und Wiederholen funktionieren weiterhin. Eine mit der Eingabetaste bestätigte koreanische Silbe beginnt zugleich die neue Zeile. Übrig gebliebene Romanisierung vor übernommenem Text wird entfernt, und ein in eine leere Tabellenzelle übernommenes Zeichen bleibt so, wie es eingegeben wurde. Informations-Toasts warten, bis die Komposition endet; Fehler und Warnungen erscheinen sofort. Eine Bearbeitung eines KI-Clients über MCP wird abgelehnt (der Client versucht es erneut) oder bis zum Ende der Komposition zurückgehalten, und eine Änderung der Datei auf dem Datenträger wartet ebenfalls — so überschreibt keine von beiden Text, den Sie noch komponieren.
+- **Reduzierte Bewegung wird beachtet.** Ist die Bedienungshilfen-Einstellung *Bewegung reduzieren* Ihres Betriebssystems eingeschaltet, schaltet VMark seine Animationen und Übergänge aus und scrollt sofort statt weich (auch im Schreibmaschinenmodus). Eine eigene Einstellung in VMark gibt es nicht. Die Systemeinstellung *Transparenz reduzieren* schaltet ebenso die Hintergrundunschärfe aus.
 
 ## Ansicht & Fokus
 
 ### Fokusmodus (`F8`)
 
-Der Fokusmodus verdunkelt alle Blöcke außer dem, den Sie gerade bearbeiten, und reduziert visuelle Ablenkungen, damit Sie sich auf einen einzelnen Absatz konzentrieren können. Der aktive Block ist bei voller Deckkraft hervorgehoben, während der umgebende Inhalt verblasst. Mit `F8` umschalten — funktioniert in WYSIWYG- und Quellmodus.
+Der Fokusmodus verdunkelt alle Blöcke außer dem, den Sie gerade bearbeiten, und reduziert visuelle Ablenkungen, damit Sie sich auf einen einzelnen Absatz konzentrieren können. Der aktive Block ist bei voller Deckkraft hervorgehoben, während der umgebende Inhalt verblasst. Mit `F8` umschalten — funktioniert in WYSIWYG- und Quellmodus und bleibt aktiv, bis Sie ihn wieder ausschalten.
 
 ### Schreibmaschinenmodus (`F9`)
 
-Der Schreibmaschinenmodus hält die aktive Zeile vertikal in der Mitte des Ansichtsfensters, sodass Ihre Augen in einer festen Position bleiben, während das Dokument darunter scrollt — genau wie bei einer physischen Schreibmaschine. Mit `F9` umschalten. Funktioniert in beiden Bearbeitungsmodi.
+Der Schreibmaschinenmodus hält die aktive Zeile vertikal in der Mitte des Ansichtsfensters, sodass Ihre Augen in einer festen Position bleiben, während das Dokument darunter scrollt — genau wie bei einer physischen Schreibmaschine. Mit `F9` umschalten. Funktioniert in beiden Bearbeitungsmodi und verwendet weiches Scrollen mit einem kleinen Schwellenwert, um ruckartige Anpassungen bei kleinen Cursorbewegungen zu vermeiden.
 
 ### Fokus + Schreibmaschine kombinieren
 
@@ -439,6 +532,8 @@ Der Gliederungsbereich zeigt die Überschriftenstruktur Ihres Dokuments als zusa
 - Klappen Sie Überschriftengruppen ein und aus, um sich auf bestimmte Teile Ihres Dokuments zu konzentrieren
 - Die aktuell aktive Überschrift wird beim Scrollen oder Tippen hervorgehoben
 - Wird in Echtzeit aktualisiert, wenn Sie Überschriften hinzufügen, entfernen oder umbenennen
+- Lange Titel werden auf zwei Zeilen umbrochen und beim Darüberfahren vollständig angezeigt
+- Ein Filterfeld oben im Bereich grenzt den Baum auf Überschriften ein, deren Text Ihrer Eingabe entspricht (ohne Beachtung der Groß-/Kleinschreibung; übergeordnete Überschriften bleiben erhalten, damit der Pfad sichtbar bleibt). Drücken Sie `Esc`, um ihn zu leeren.
 
 ### Zoom
 
@@ -488,6 +583,7 @@ VMark sucht automatisch nach Updates und kann diese in der App herunterladen und
 - Schneller Dateiwechsel
 - Verfolgen zuletzt verwendeter Dateien
 - Fenstergröße und -position sitzungsübergreifend gespeichert
+- Fensterstatus-Panel — sehen Sie den Live-Status von Claude Code / KI in jedem geöffneten Fenster und springen Sie direkt zu dem, das Sie braucht; heften Sie es in diesem Fenster oder in allen Fenstern an (auch in später geöffneten), damit es geöffnet bleibt, während Sie zwischen Fenstern wechseln
 
 [Mehr erfahren →](/de/guide/workspace-management)
 
@@ -500,13 +596,14 @@ VMark sucht automatisch nach Updates und kann diese in der App herunterladen und
 
 ### Designs
 
-Fünf integrierte Farbdesigns:
+Sechs integrierte Farbdesigns:
 
 - Weiß (sauber, minimal)
 - Papier (warmes Cremeweiß)
 - Mint (sanfter Grünton)
 - Sepia (Vintage-Look)
 - Nacht (Dunkelmodus)
+- Solarized (dunkel, Solarized-Palette)
 
 ### Schriftarten
 
@@ -517,6 +614,8 @@ Separate Schriftarten konfigurieren für:
 - Monospace (Code)
 
 Jede Auswahl bietet eine kurze Liste empfohlener Schriftarten, die auf Ihrem Computer installierten Schriftarten und einen Eintrag **Benutzerdefiniert…**, in den Sie einen beliebigen Schriftfamiliennamen eingeben. [Details →](/de/guide/settings#typografie)
+
+Die Monospace-Schriftart wird geprüft, bevor sie im Quellmodus, in Code und im Terminal verwendet wird: Ist die gewählte Schriftart nicht installiert oder stellt sich heraus, dass sie nicht dicktengleich ist, weicht VMark entlang der Schriftliste auf die nächste aus, die es ist. Das ist vor allem unter Linux mit einer CJK-Sprachumgebung wichtig, wo ein fehlender Schriftname sonst zu einer proportionalen CJK-Schriftart aufgelöst werden und das Raster des Terminals zerstören kann.
 
 ### Layout
 

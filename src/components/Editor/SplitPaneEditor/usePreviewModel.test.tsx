@@ -8,8 +8,8 @@
 // schema's renderer with the previous document, annotated with diagnostics
 // from a third revision.
 
-import { renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FormatConfig, ValidationDiagnostic } from "@/lib/formats/types";
 import { usePreviewModel } from "./usePreviewModel";
 
@@ -215,5 +215,38 @@ describe("validator robustness", () => {
       activeSchemaId: null,
     });
     expect(validator).toHaveBeenCalledWith("{}", undefined);
+  });
+});
+
+// WI-RA10B.4 — a large document is validated and drawn once typing settles.
+describe("large documents", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const large = (tail: string) => `{"padding":"${"x".repeat(30_000)}","v":${tail}}`;
+
+  it("validates once after typing pauses, while actions keep the live content", () => {
+    const validator = vi.fn((_content: string): ValidationDiagnostic[] => []);
+    const formatConfig = config({ genericPreview: GenericPreview, validator });
+    const args = (content: string) => ({ formatConfig, content, filePath: "/a.json", activeSchemaId: null });
+    const { result, rerender } = model(args(large("1")));
+    validator.mockClear();
+
+    for (const tail of ["2", "3", "4"]) {
+      rerender(args(large(tail)));
+      act(() => void vi.advanceTimersByTime(100));
+    }
+    expect(validator).not.toHaveBeenCalled();
+    expect(result.current.content).toBe(large("1"));
+    expect(result.current.liveContent).toBe(large("4"));
+
+    act(() => void vi.advanceTimersByTime(300));
+    expect(validator.mock.calls.map(([content]) => content)).toEqual([large("4")]);
+    expect(result.current.content).toBe(large("4"));
   });
 });

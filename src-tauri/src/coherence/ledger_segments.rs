@@ -16,7 +16,7 @@ impl Ledger {
     /// The segment the next append lands in: the HIGHEST existing suffix
     /// (never an earlier gap — a branch merge can leave holes, and
     /// reusing one would interleave old and new history in odd file
-    /// order; audit R18), advancing once the size threshold is crossed.
+    /// order), advancing once the size threshold is crossed.
     pub(super) fn active_segment(&self) -> PathBuf {
         let stem = writer_file_stem(&self.writer);
         // True max-suffix discovery by LISTING (audit A-M8): gaps of any

@@ -6,7 +6,7 @@
 //! by Tauri (`managed.rs`), never by a static.
 //!
 //! The port discovery file and its permission contract live in
-//! `token_file.rs`; this module has not owned them since WI-9.
+//! `token_file.rs`; this module no longer owns them.
 
 use super::principal::BridgePrincipal;
 use super::types::{ClientIdentity, McpResponse};
@@ -27,7 +27,7 @@ const _: () = assert!(CLIENT_TX_CAPACITY > 0 && CLIENT_TX_CAPACITY <= 65_536);
 
 /// How long ONE attempt at a routed request waits for its window.
 ///
-/// The number lived in three places (#380): `server.rs`'s first wait,
+/// The number lived in three places: `server.rs`'s first wait,
 /// `wake_retry.rs`'s second, and — as a DERIVED literal — the "20s total" the
 /// retry's give-up line printed. Changing the policy therefore changed
 /// behaviour in one place and the diagnosis in another, and a log that
@@ -50,8 +50,8 @@ pub(crate) struct ClientConnection {
     /// Display only — the Integrations panel's connected-clients list and the
     /// connect/disconnect log lines. It reaches no authorization decision and
     /// must not start to: it is caller-supplied and re-sendable, which is
-    /// exactly the defect fixed by binding `principal` to a credential instead
-    /// (audit 20260728 §2.1). See `principal.rs`.
+    /// exactly the defect fixed by binding `principal` to a credential instead.
+    /// See `principal.rs`.
     pub identity: Option<ClientIdentity>,
     /// Who the client PROVED it is, fixed at authentication time from the
     /// per-client credential it presented. Immutable for the life of the
@@ -69,7 +69,7 @@ pub(crate) struct BridgeState {
     pub pending: HashMap<String, PendingRequest>,
     /// Counter for generating unique client IDs.
     pub next_client_id: u64,
-    /// F5 (WI-3.5): window label → canonical open-workspace root. The
+    /// F5: window label → canonical open-workspace root. The
     /// frontend registers this on workspace open/close so the router can
     /// send workspace-scoped requests to the owning window, not just the
     /// focused one.
@@ -118,7 +118,7 @@ pub(crate) fn cleanup_stale_pending(state: &mut BridgeState) {
 }
 
 /// Register a pending request on behalf of a client that is STILL CONNECTED
-/// (#379) — the only form the bridge's request path may use.
+/// — the only form the bridge's request path may use.
 ///
 /// `stop_bridge` drains `clients` and then `pending` under the same lock this
 /// runs beneath, while the caller reaches here many awaits after it last saw
@@ -223,7 +223,7 @@ pub(crate) fn generate_auth_token() -> String {
 /// frontend dispatcher only accepts `vmark.*` and rejects the rest as
 /// unknown, and the Rust-answered ops (`windows.list`, `windows.getFocused`)
 /// are answered in routing BEFORE this classifier runs, so legacy entries
-/// here were unreachable dead weight (audit 20260729 C4).
+/// here were unreachable dead weight.
 pub(crate) fn is_read_only_operation(request_type: &str) -> bool {
     matches!(
         request_type,
@@ -233,7 +233,7 @@ pub(crate) fn is_read_only_operation(request_type: &str) -> bool {
             | "vmark.document.read"
             | "vmark.selection.get"
             | "vmark.workflow.validate"
-            // Embedded-browser read-class ops (Codex audit 20260718). Wire
+            // Embedded-browser read-class ops. Wire
             // types in server/mcp/src/tools/browser.ts. These mutate
             // nothing; the bounded waits especially must not hold the global
             // write lock for up to their full 12s timeout. Write-class
@@ -241,11 +241,10 @@ pub(crate) fn is_read_only_operation(request_type: &str) -> bool {
             // session.save/load, console with its buffer drain) stay
             // serialized through WRITE_LOCK.
             //
-            // `vmark.browser.wait` joined the read-class set on 2026-09-03 (audit
-            // L-03): its handler used to activate the target window and create the
-            // native view — real mutations — and was therefore kept out (audit
-            // 20260729). It now only observes a navigation ticket, matching the
-            // `browser_read` tool that carries it.
+            // `vmark.browser.wait` joined the read-class set later: its handler
+            // used to activate the target window and create the native view —
+            // real mutations — and was therefore kept out. It now only observes a
+            // navigation ticket, matching the `browser_read` tool that carries it.
             | "vmark.browser.read"
             | "vmark.browser.wait"
             | "vmark.browser.wait_for"
@@ -256,7 +255,7 @@ pub(crate) fn is_read_only_operation(request_type: &str) -> bool {
                                               // `answer_rust_side` BEFORE this classifier runs, and
                                               // `routing::answer_coherence_async` applies its own lock policy
                                               // (edges/resolve take the write lock; status/claims/contexts do not).
-                                              // An entry here would be unreachable dead weight (WI-1 manifest
+                                              // An entry here would be unreachable dead weight (manifest
                                               // parity: src/hooks/mcpBridge/v2/operationManifest.ts).
     )
 }

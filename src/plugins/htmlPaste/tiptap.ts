@@ -14,7 +14,7 @@
  *   - Skips when cursor is inside a code block or with multi-cursor
  *
  * @coordinates-with utils/htmlToMarkdown.ts — HTML-to-Markdown conversion
- * @coordinates-with markdownPaste/tiptap.ts — creates the markdown insertion transaction
+ * @coordinates-with shared/markdownPasteSlice.ts — creates the markdown insertion transaction
  * @module plugins/htmlPaste/tiptap
  */
 
@@ -22,7 +22,7 @@ import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import { htmlToMarkdown, isSubstantialHtml } from "@/utils/htmlToMarkdown";
-import { createMarkdownPasteTransaction } from "@/plugins/markdownPaste/tiptap";
+import { createMarkdownPasteTransaction } from "@/plugins/shared/markdownPasteSlice";
 import {
   DEFAULT_PASTE_SETTINGS,
   type PasteMode,

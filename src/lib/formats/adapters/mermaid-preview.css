@@ -12,6 +12,8 @@
   height: 100%;
   padding: var(--space-3);
   overflow: auto;
+  /* Confines the diagram's markup — see svg-preview.css. */
+  contain: paint;
 }
 
 .mermaid-preview > svg {

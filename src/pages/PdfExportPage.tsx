@@ -49,7 +49,7 @@ export function PdfExportPage() {
 
   // Load HTML from temp file on mount. Legitimate setState-in-effect: reads URL
   // params and an async temp file — I/O on mount, not derivable during render (#1063).
-  /* eslint-disable react-hooks/set-state-in-effect */
+  /* eslint-disable react-hooks/set-state-in-effect -- loads the HTML from URL params and an async temp-file read on mount */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const htmlPath = params.get("htmlPath");
@@ -63,7 +63,13 @@ export function PdfExportPage() {
     }
 
     readTextFile(htmlPath)
-      .then((html) => setRenderedHtml(html))
+      .then((html) => {
+        // An empty file is a failed render, not a load still in progress: the
+        // empty string used to read as "not loaded yet" and the page sat on
+        // "Loading…" for good. The path is the only detail there is to give.
+        if (html.trim() === "") setError(t("dialog:pdfExport.loadFailed", { error: htmlPath }));
+        else setRenderedHtml(html);
+      })
       .catch((e) => {
         const msg = errorMessage(e);
         setError(t("dialog:pdfExport.loadFailed", { error: msg }));
@@ -71,6 +77,8 @@ export function PdfExportPage() {
   }, [t]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  // Rejections reach PdfExportContent, which re-arms the page when the window
+  // cannot close after an export.
   const handleClose = async () => {
     const currentWindow = getCurrentWebviewWindow();
     await currentWindow.close();
@@ -87,7 +95,7 @@ export function PdfExportPage() {
     );
   }
 
-  if (!renderedHtml) {
+  if (renderedHtml === null) {
     return (
       <div className="relative flex h-screen bg-[var(--bg-color)]">
         <div data-tauri-drag-region className="absolute top-0 left-0 right-0 h-12" />
@@ -103,7 +111,7 @@ export function PdfExportPage() {
       <PdfExportContent
         renderedHtml={renderedHtml}
         defaultName={defaultName}
-        onClose={() => void Promise.resolve(handleClose()).catch((e) => pdfError("Failed to close export window:", e))}
+        onClose={handleClose}
       />
 
       {/* Title centered across the full window */}

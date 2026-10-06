@@ -25,7 +25,7 @@ import { useWorkspaceInstanceUiStore } from "@/stores/workspaceInstanceUiStore";
 import { useWorkspacePaneLayoutsStore } from "@/stores/workspacePaneLayoutsStore";
 import { useClosedTabScopesStore } from "@/stores/tabStoreClosedScopes";
 import { createWorkspaceInstance, createWorkspaceRootIdentity } from "@/utils/workspaceIdentity";
-import { resetTerminalSessionStore, useUIStore } from "@/stores/uiStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import { resolveTerminalOwnerInstanceId } from "@/services/terminal/resolveTerminalOwnerInstanceId";
 import { resetContextGenerations } from "./workspaceContextGeneration";
 import { hydrateWorkspaceInstanceContext } from "./hydrateWorkspaceInstanceContext";
@@ -208,7 +208,7 @@ describe("workspaceSwitchInterplay (WI-7R)", () => {
 /** Every stamped owner must exist and never be a placeholder (invariant 3). */
 function assertTerminalOwnersExist(): void {
   const instances = useWorkspaceInstancesStore.getState().instances;
-  for (const s of useUIStore.getState().terminal.sessions) {
+  for (const s of useTerminalStore.getState().sessions) {
     if (!s.workspaceInstanceId) continue;
     const owner = instances[s.workspaceInstanceId];
     expect(
@@ -223,7 +223,7 @@ describe("terminal owner-exists invariant (WI-TS2.2/WI-TS2.3, invariant 3)", () 
   /** Create a session the way production creators do: owner via the resolver. */
   const createTermHere = () => {
     const owner = resolveTerminalOwnerInstanceId(W);
-    return useUIStore
+    return useTerminalStore
       .getState()
       .terminalCreateSession(owner ? { ownerInstanceId: owner } : undefined);
   };
@@ -242,11 +242,11 @@ describe("terminal owner-exists invariant (WI-TS2.2/WI-TS2.3, invariant 3)", () 
     expect(useWorkspaceInstancesStore.getState().instances["wsi-ph"]).toBeUndefined();
     assertTerminalOwnersExist();
     await hydrateWorkspaceInstanceContext(W);
-    const adopted = useUIStore
+    const adopted = useTerminalStore
       .getState()
-      .terminal.sessions.find((s) => s.id === s0?.id);
+      .sessions.find((s) => s.id === s0?.id);
     expect(adopted?.workspaceInstanceId).toBe("wsi-a");
-    expect(useUIStore.getState().terminal.activeSessionId).toBe(s0?.id);
+    expect(useTerminalStore.getState().activeSessionId).toBe(s0?.id);
     assertTerminalOwnersExist();
 
     // Second workspace + switch + scoped creation.
@@ -264,7 +264,7 @@ describe("terminal owner-exists invariant (WI-TS2.2/WI-TS2.3, invariant 3)", () 
     useWorkspaceInstancesStore.getState().ensureLooseInstance(W, "wsi-loose-renamed");
     assertTerminalOwnersExist();
     expect(
-      useUIStore.getState().terminal.sessions.find((s) => s.id === s2?.id)
+      useTerminalStore.getState().sessions.find((s) => s.id === s2?.id)
         ?.workspaceInstanceId,
     ).toBe("wsi-loose-renamed");
 
@@ -272,10 +272,10 @@ describe("terminal owner-exists invariant (WI-TS2.2/WI-TS2.3, invariant 3)", () 
     await closeWorkspaceInstance(W, "wsi-b", { closeTabs: async () => true });
     assertTerminalOwnersExist();
     expect(
-      useUIStore.getState().terminal.sessions.find((s) => s.id === s1?.id),
+      useTerminalStore.getState().sessions.find((s) => s.id === s1?.id),
     ).toBeUndefined();
     expect(
-      useUIStore.getState().terminal.sessions.map((s) => s.id).sort(),
+      useTerminalStore.getState().sessions.map((s) => s.id).sort(),
     ).toEqual([s0?.id, s2?.id].sort());
   });
 
@@ -290,8 +290,8 @@ describe("terminal owner-exists invariant (WI-TS2.2/WI-TS2.3, invariant 3)", () 
     expect(
       useWorkspaceInstancesStore.getState().windows[W].activeWorkspaceInstanceId,
     ).toBe("wsi-b");
-    expect(useUIStore.getState().terminal.activeSessionId).toBe(sb?.id);
-    expect(useUIStore.getState().terminal.sessions.map((s) => s.id)).toEqual([
+    expect(useTerminalStore.getState().activeSessionId).toBe(sb?.id);
+    expect(useTerminalStore.getState().sessions.map((s) => s.id)).toEqual([
       sb?.id,
     ]);
     expect(sa?.id).toBeDefined(); // sa existed and died with its instance

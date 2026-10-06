@@ -103,8 +103,8 @@ export function applyFullDocumentTransform(
 
     const { state, dispatch } = view;
 
-    // Where the user was, before the document is replaced under them
-    // (WI-CJKF6.3). ProseMirror maps a selection through a replacement of the
+    // Where the user was, before the document is replaced under them.
+    // ProseMirror maps a selection through a replacement of the
     // ENTIRE document by collapsing it to the end, so "Format CJK File" threw
     // the caret to the bottom of a long document — and took the scroll
     // position with it — for a command whose point is that nothing visible

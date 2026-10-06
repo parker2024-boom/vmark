@@ -4,7 +4,11 @@
  * Purpose: Pure(ish) helpers for the genie invocation pipeline — pull the
  *   scoped content out of the active editor (document/selection/block),
  *   attach surrounding context, and fill the genie prompt template.
- *   Extracted verbatim from useGenieInvocation.ts (module split).
+ *   Extracted from useGenieInvocation.ts (module split).
+ *
+ * Key decisions:
+ *   - The template is filled in one pass and the text put into it is opaque:
+ *     see `fillTemplate`.
  *
  * @coordinates-with hooks/useGenieInvocation.ts — sole consumer
  * @coordinates-with services/editor/sourcePeek.ts — block/selection range expansion
@@ -113,12 +117,21 @@ export function formatContext(before: string, after: string): string {
   return parts.join("\n\n");
 }
 
+/** The two slots a genie template may carry, with optional inner whitespace. */
+const TEMPLATE_SLOT = /\{\{\s*(content|context)\s*\}\}/g;
+
+/**
+ * Fill a genie prompt template: `{{content}}` with the scoped text,
+ * `{{context}}` with the surrounding context (removed when there is none, so
+ * the model never sees a raw placeholder). Any other `{{…}}` is left as it is.
+ *
+ * One pass over the TEMPLATE, with a function replacer. The substituted text
+ * is the user's document: it is never scanned for slots (a `{{context}}`
+ * written in the selection stays as written) and never read as a replacement
+ * pattern (`$$`, `$&` and the like stay as written — display math is `$$`).
+ */
 export function fillTemplate(template: string, content: string, context?: string): string {
-  let result = template.replace(/\{\{\s*content\s*\}\}/g, content);
-  if (context !== undefined) {
-    result = result.replace(/\{\{\s*context\s*\}\}/g, context);
-  }
-  // Safety net: strip any {{context}} missed above (e.g., context undefined)
-  result = result.replace(/\{\{\s*context\s*\}\}/g, "");
-  return result;
+  return template.replace(TEMPLATE_SLOT, (_slot, name: string) =>
+    name === "content" ? content : (context ?? ""),
+  );
 }

@@ -1,5 +1,5 @@
 /**
- * Extension resolver — ADR-015 D1, WI-1.2.
+ * Extension resolver — ADR-015 D1.
  *
  * Purpose: turn an authoring-time tree of extension groups into the single
  * ordered composition the app runs. This is the ONLY path to composition; if a

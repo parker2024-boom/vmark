@@ -1,4 +1,4 @@
-//! Workspace-aware window routing (WI-3.5 F5; design-3.md D4.1). Pure
+//! Workspace-aware window routing (F5; design-3.md D4.1). Pure
 //! decision: given the request's scoping path and a snapshot of every
 //! window's open workspace, pick the target window with fail-loud
 //! precedence — canonical workspace containment (deepest wins; a tie
@@ -6,7 +6,7 @@
 //! workspace-less requests. Workspace scope overrides focus; a workspace
 //! request never silently lands on an unrelated window.
 //!
-//! There is deliberately NO explicit-window pin here (WI-15). One existed:
+//! There is deliberately NO explicit-window pin here. One existed:
 //! `resolve_target_window` read `args.windowId` and this module honored it
 //! ahead of everything else. No shipped tool has ever sent that field — the
 //! wire contract (`server/mcp/src/bridge/operationSchemas.ts`) declares no

@@ -6,7 +6,7 @@
  * PTY, or null for "nothing". (Plain non-composition `input` events are
  * classified inline by the gate's onInput, NOT here: outside a composition
  * there is no textarea diff to weigh, and the question there is "did anyone
- * else already write this?", which this helper cannot see. WI-8d.)
+ * else already write this?", which this helper cannot see.)
  *
  * This replaced the five sequential, side-effecting early-returns the now-deleted
  * legacy IME path used (each committing on partial evidence at a different point,

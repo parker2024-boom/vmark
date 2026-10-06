@@ -1,5 +1,5 @@
 /**
- * Incremental workspace watcher (Phase 2, WI-2.5).
+ * Incremental workspace watcher (Phase 2).
  *
  * Watches the workspace for markdown changes and rebuilds the index
  * (debounced), then invokes a callback so the server can swap the live index
@@ -59,7 +59,7 @@ export function watchWorkspace(
 
   const schedule = (changedPath: string) => {
     // Rebuild on markdown changes AND on `.gitignore` changes — a new/edited
-    // ignore file changes which notes are served (WI-2.1; Codex audit).
+    // ignore file changes which notes are served (Codex audit).
     if (closed || !(MARKDOWN_RE.test(changedPath) || changedPath.endsWith(".gitignore"))) return;
     lastChanged = changedPath;
     if (timer) clearTimeout(timer);

@@ -41,7 +41,7 @@ import { handleRequest } from "@/services/mcpBridge/handleRequest";
 import { classifyDelivery } from "@/services/mcpBridge/requestDedup";
 import { hydrateCheckpoints } from "@/stores/mcpCheckpointPersistence";
 
-/** Runtime shape guard for the externally-driven MCP request payload (WI-4.1).
+/** Runtime shape guard for the externally-driven MCP request payload.
  *  Exported for testing. */
 export function isValidMcpRequestRaw(raw: unknown): raw is McpRequestEventRaw {
   return (
@@ -78,7 +78,7 @@ export function useMcpBridge(): void {
     }, 5000);
 
     listen<McpRequestEventRaw>("mcp-bridge:request", (event) => {
-      // Zero-trust at the externally-driven MCP request boundary (WI-4.1, T2):
+      // Zero-trust at the externally-driven MCP request boundary:
       // the payload is read off an IPC event whose shape is only typed at
       // compile time. Validate `id`/`type` are strings before use so a
       // malformed payload is dropped loudly rather than propagating
@@ -94,8 +94,7 @@ export function useMcpBridge(): void {
       // The Rust bridge's App Nap wake-and-retry re-emits the SAME request
       // id; on wake both deliveries fire. Execute only the first; re-send
       // the cached response for duplicates of completed requests so the
-      // bridge's retry channel always gets an answer (audit H20 +
-      // cross-model review).
+      // bridge's retry channel always gets an answer.
       const delivery = classifyDelivery(raw.id);
       if (delivery === "drop") {
         mcpBridgeLog("Dropping duplicate in-flight MCP delivery:", raw.type, raw.id);

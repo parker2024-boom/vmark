@@ -8,11 +8,7 @@ vi.mock("@/utils/imeGuard", () => ({
 }));
 
 import { ContextMenu, type ContextMenuType } from "./ContextMenu";
-import {
-  useUIStore,
-  resetTerminalSessionStore,
-  MAX_TERMINAL_SESSIONS,
-} from "@/stores/uiStore";
+import { MAX_TERMINAL_SESSIONS, resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -224,7 +220,7 @@ describe("ContextMenu ARIA and keyboard", () => {
 
     it("is disabled at the session cap, and clicking it does nothing", () => {
       for (let i = 0; i < MAX_TERMINAL_SESSIONS; i++) {
-        useUIStore.getState().terminalCreateSession();
+        useTerminalStore.getState().terminalCreateSession();
       }
       const { onAction } = renderMenu("folder");
       const item = screen.getByRole("menuitem", { name: /max 5 sessions/i });
@@ -352,6 +348,31 @@ describe("ContextMenu ARIA and keyboard", () => {
 
     Element.prototype.getBoundingClientRect = originalGetBCR;
     Object.defineProperty(window, "innerWidth", { value: 1024, writable: true, configurable: true });
+  });
+
+  // WI-RA9B.4 — a window smaller than the menu must not park it off screen.
+  it("never positions the menu at a negative coordinate on a tiny window", () => {
+    Object.defineProperty(window, "innerWidth", { value: 120, writable: true, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: 90, writable: true, configurable: true });
+    const originalGetBCR = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function () {
+      if (this.getAttribute("role") === "menu") {
+        return { x: 60, y: 40, width: 180, height: 160, top: 40, left: 60, right: 240, bottom: 200 } as DOMRect;
+      }
+      return originalGetBCR.call(this);
+    };
+    try {
+      render(
+        <ContextMenu type="file" position={{ x: 60, y: 40 }} onAction={vi.fn()} onClose={vi.fn()} />
+      );
+      const menu = screen.getByRole("menu");
+      expect(menu.style.left).toBe("10px");
+      expect(menu.style.top).toBe("10px");
+    } finally {
+      Element.prototype.getBoundingClientRect = originalGetBCR;
+      Object.defineProperty(window, "innerWidth", { value: 1024, writable: true, configurable: true });
+      Object.defineProperty(window, "innerHeight", { value: 768, writable: true, configurable: true });
+    }
   });
 
   it("adjusts vertical position when menu overflows viewport", () => {

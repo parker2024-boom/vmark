@@ -58,7 +58,7 @@ export function onTabActivated(listener: TabActivatedListener): () => void {
  * Fire all listeners for an activation (called by tabStore after its write).
  *
  * EVERY store write that changes `activeTabId` must reach this function.
- * `createBrowserTab` and `createBrowserPage` did not until WI-TNAV0.1, and the
+ * `createBrowserTab` and `createBrowserPage` used to skip it, and the
  * cost was invisible in both directions: no MRU could see a browser
  * activation, and `paneStore`'s split convergence silently skipped them too.
  * `tabActivationBus.test.ts` classifies every tabStore action so a new one

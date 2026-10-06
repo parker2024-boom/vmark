@@ -19,21 +19,28 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const {
   mockInvoke,
+  mockReadFile,
+  mockAsk,
   mockSetActiveTab,
   mockOpenWorkspaceWithConfig,
-  mockReplaceTabWithFile,
   mockToastWarning,
   mockToastError,
 } = vi.hoisted(() => ({
   mockInvoke: vi.fn(),
+  mockReadFile: vi.fn(),
+  mockAsk: vi.fn(),
   mockSetActiveTab: vi.fn(),
   mockOpenWorkspaceWithConfig: vi.fn(),
-  mockReplaceTabWithFile: vi.fn(),
   mockToastWarning: vi.fn(),
   mockToastError: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...a: unknown[]) => mockInvoke(...a) }));
+vi.mock("@tauri-apps/plugin-fs", () => ({ readFile: (...a: unknown[]) => mockReadFile(...a) }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  ask: (...a: unknown[]) => mockAsk(...a),
+  message: vi.fn(() => Promise.resolve()),
+}));
 vi.mock("@/services/ime/imeToast", () => ({
   imeToast: { warning: mockToastWarning, error: mockToastError, errorDetail: mockToastError, info: vi.fn() },
 }));
@@ -44,22 +51,25 @@ vi.mock("@/services/workspaces/activateTabWithWorkspaceContext", () => ({
 vi.mock("@/services/workspaces/openWorkspaceWithConfig", () => ({
   openWorkspaceWithConfig: (...a: unknown[]) => mockOpenWorkspaceWithConfig(...a),
 }));
-vi.mock("@/services/navigation/replaceTabWithFile", () => ({
-  replaceTabWithFile: (...a: unknown[]) => mockReplaceTabWithFile(...a),
+vi.mock("@/utils/debug", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/utils/debug")>()),
+  fileOpsError: vi.fn(),
 }));
-vi.mock("@/utils/debug", () => ({ fileOpsError: vi.fn() }));
 vi.mock("@/utils/perfLog", () => ({ perfMark: vi.fn() }));
 
 import { executeOpenDecision } from "./executeOpenDecision";
+import { useSettingsStore } from "@/stores/settingsStore";
 
 const openFileInNewTab = vi.fn(async () => {});
 const PATH = "/other/doc.md";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useSettingsStore.getState().resetSettings();
   mockOpenWorkspaceWithConfig.mockResolvedValue(undefined);
-  mockReplaceTabWithFile.mockResolvedValue({ ok: true });
   mockInvoke.mockResolvedValue(undefined);
+  mockReadFile.mockResolvedValue(new TextEncoder().encode("# doc"));
+  mockAsk.mockResolvedValue(false);
 });
 
 describe("create_tab with an external workspace", () => {
@@ -129,7 +139,8 @@ describe("the other branches still behave", () => {
   });
 
   it("replace_tab surfaces a genuine failure", async () => {
-    mockReplaceTabWithFile.mockResolvedValue({ ok: false, cancelled: false, error: new Error("nope") });
+    const readError = new Error("nope");
+    mockReadFile.mockRejectedValue(readError);
 
     await executeOpenDecision(
       "main",
@@ -138,11 +149,17 @@ describe("the other branches still behave", () => {
       openFileInNewTab,
     );
 
-    expect(mockToastError).toHaveBeenCalled();
+    expect(mockReadFile).toHaveBeenCalledWith(PATH);
+    // An error VMark did not diagnose is the toast's detail line, unchanged.
+    expect(mockToastError).toHaveBeenCalledWith("dialog:toast.fileOpenFailed", readError);
   });
 
   it("replace_tab stays quiet when the user cancelled", async () => {
-    mockReplaceTabWithFile.mockResolvedValue({ ok: false, cancelled: true });
+    // 6 MB is the "huge" tier: the open asks first, the user declines, and the
+    // replace is cancelled before anything is read.
+    mockInvoke.mockImplementation(async (cmd: string) =>
+      cmd === "get_file_size_bytes" ? 6 * 1024 * 1024 : undefined,
+    );
 
     await executeOpenDecision(
       "main",
@@ -151,6 +168,8 @@ describe("the other branches still behave", () => {
       openFileInNewTab,
     );
 
+    expect(mockAsk).toHaveBeenCalledTimes(1);
+    expect(mockReadFile).not.toHaveBeenCalled();
     expect(mockToastError).not.toHaveBeenCalled();
   });
 

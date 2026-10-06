@@ -1,12 +1,11 @@
-//! Semantic-check service (WI-2b.4; design-2a.md D5). Service tier
+//! Semantic-check service (design-2a.md D5). Service tier
 //! (ADR-C4): loads the edge's texts from the CAS, feeds the default
 //! context's claims (D4), calls the AI provider through the same atom
 //! genie steps use, and appends a D5.6-complete `check-result`. Pull
 //! only (D5.1) — nothing here runs without an explicit human ask.
 
-use super::command_errors::{
-    classify_write, kernel_poisoned, ledger_unavailable, rejected_argument, workspace_unavailable,
-};
+use super::blocking::with_kernel;
+use super::command_errors::{classify_write, ledger_unavailable, rejected_argument};
 use crate::command_error::CommandError;
 use serde::Serialize;
 use serde_json::json;
@@ -22,7 +21,7 @@ use super::types::{Envelope, RevisionId};
 
 /// D5.3: τ default per spike S4 — tunable policy, recorded per result.
 ///
-/// Dogfooding (2026-07-20) showed why it must be TUNABLE, not just "tunable in
+/// Dogfooding showed why it must be TUNABLE, not just "tunable in
 /// principle": on 21 real checks the confidences split perfectly at this value —
 /// determinate 0.90–0.99, unknown 0.82–0.86, nothing between. All 5 `unknown`
 /// results were τ downgrades of answers the model had actually reached. A τ the
@@ -188,7 +187,7 @@ fn record_check_locked(
         "confidence": parsed.confidence,
         "context": prepared.context.to_string(),
         "claims_fingerprint": prepared.claims_fingerprint,
-        // Preserve a τ-downgraded determinate verdict (dogfood 2026-07-20). Without
+        // Preserve a τ-downgraded determinate verdict (found by dogfooding). Without
         // this the ledger records `unknown` and throws away a verdict already paid
         // for, so retuning τ later cannot recover it — you must re-run and re-pay.
         // Recording it keeps the τ decision auditable AND retunable offline.
@@ -212,8 +211,8 @@ fn record_check_locked(
 }
 
 #[tauri::command]
-pub async fn coherence_check(
-    state: tauri::State<'_, super::commands::CoherenceState>,
+pub async fn coherence_check<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     workspace_root: String,
     txf: Uuid,
     input: u32,
@@ -222,19 +221,19 @@ pub async fn coherence_check(
     tau: Option<f64>,
 ) -> Result<CheckReceipt, CommandError> {
     let tau = resolve_tau(tau);
-    let root = std::path::PathBuf::from(&workspace_root);
-    let kernel_arc = state
-        .registry
-        .kernel_for(&root, state.writer)
-        .map_err(workspace_unavailable)?;
-    let prepared = {
-        let mut kernel = kernel_arc.lock().map_err(|_| kernel_poisoned())?;
-        // `txf`/`input` name an edge the caller chose; it may not exist, and no
-        // retry of the same pair can fix that.
-        prepare_check(&mut kernel, &txf, input).map_err(rejected_argument)?
-    };
+    let prepared = with_kernel(
+        app.clone(),
+        workspace_root.clone(),
+        move |_state, kernel| {
+            // `txf`/`input` name an edge the caller chose; it may not exist, and no
+            // retry of the same pair can fix that.
+            prepare_check(kernel, &txf, input).map_err(rejected_argument)
+        },
+    )
+    .await?;
     // Provider call OUTSIDE the kernel lock — a slow model must never
-    // block captures or breakdown pulls.
+    // block captures or breakdown pulls. The lock was taken and released
+    // inside the blocking task above, so nothing is held across this await.
     let cancel = tokio_util::sync::CancellationToken::new();
     let response = tokio::time::timeout(
         std::time::Duration::from_secs(CHECK_TIMEOUT_SECS),
@@ -260,13 +259,15 @@ pub async fn coherence_check(
             downgrade: None,
         },
     };
-    let model_name = model.as_deref().unwrap_or(provider.provider.as_str());
-    let mut kernel = kernel_arc.lock().map_err(|_| kernel_poisoned())?;
-    // The verdict being recorded was produced here, not supplied by the caller,
-    // so a failure to record it is plumbing — but still route through
-    // classify_write so a short-read refusal reports `unsupported`.
-    record_check(&mut kernel, &prepared, &parsed, model_name)
-        .map_err(|e| classify_write(&kernel, ledger_unavailable, e))
+    let model_name = model.unwrap_or_else(|| provider.provider.clone());
+    with_kernel(app, workspace_root, move |_state, kernel| {
+        // The verdict being recorded was produced here, not supplied by the
+        // caller, so a failure to record it is plumbing — but still route
+        // through classify_write so a short-read refusal reports `unsupported`.
+        record_check(kernel, &prepared, &parsed, &model_name)
+            .map_err(|e| classify_write(kernel, ledger_unavailable, e))
+    })
+    .await
 }
 
 #[cfg(test)]

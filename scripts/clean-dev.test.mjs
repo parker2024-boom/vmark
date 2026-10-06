@@ -14,47 +14,49 @@
  * @coordinates-with scripts/clean-dev.sh
  * @module scripts/clean-dev.test
  */
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, rmdirSync, rmSync, existsSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SCRIPT = path.join(REPO, "scripts/clean-dev.sh");
-const BUNDLE = path.join(REPO, "src-tauri/target/release/bundle");
+
+// WI-RA13B.7 — every run happens in a scratch root holding a copy of the
+// script (it `cd`s to its own parent directory). Fixtures used to be created
+// in the REAL repository — `dev-docs/grills/…` and `src-tauri/target/…` — and
+// a sibling gate test scanning the tree under the same parallel pool saw
+// `dev-docs/` appear and vanish mid-walk (ENOENT on scandir). A scratch root
+// also makes the "no bundle" and "no grills" cases unconditional.
+let ROOT;
+beforeEach(() => {
+  ROOT = mkdtempSync(path.join(tmpdir(), "clean-dev-"));
+  mkdirSync(path.join(ROOT, "scripts"));
+  copyFileSync(path.join(REPO, "scripts/clean-dev.sh"), path.join(ROOT, "scripts/clean-dev.sh"));
+});
 
 function run(args) {
-  const r = spawnSync("bash", [SCRIPT, ...args], { cwd: REPO, encoding: "utf8", timeout: 60_000 });
+  const r = spawnSync("bash", [path.join(ROOT, "scripts/clean-dev.sh"), ...args], {
+    cwd: ROOT,
+    encoding: "utf8",
+    timeout: 60_000,
+  });
   // A timeout lands in `error` and may leave `status` as bash's own exit code;
   // unchecked, a hang would pass every status assertion below, only late.
   if (r.error) throw r.error;
   return r;
 }
 
-/**
- * Create the bundle dir, remembering the TOPMOST path that did not exist so
- * cleanup removes exactly the chain this test made — `mkdir -p` can create
- * `target/` and `target/release/` too, and leaving those behind is litter.
- */
-let createdRoot = null;
 function withBundle() {
-  if (!existsSync(BUNDLE)) {
-    let candidate = BUNDLE;
-    while (!existsSync(path.dirname(candidate)) && path.dirname(candidate) !== REPO) {
-      candidate = path.dirname(candidate);
-    }
-    createdRoot = candidate;
-  }
-  mkdirSync(BUNDLE, { recursive: true });
+  mkdirSync(path.join(ROOT, "src-tauri/target/release/bundle"), { recursive: true });
 }
 
-afterEach(() => {
-  // Only remove what this test made. Never touch a real bundle.
-  if (createdRoot && existsSync(createdRoot)) {
-    rmSync(createdRoot, { recursive: true, force: true });
-  }
-  createdRoot = null;
+describe("fixture isolation", () => {
+  it("runs against a scratch root, never the repository", () => {
+    expect(path.relative(REPO, ROOT).startsWith("..")).toBe(true);
+    expect(run(["--help"]).status).toBe(0);
+  });
 });
 
 describe("bundle guard", () => {
@@ -87,7 +89,6 @@ describe("bundle guard", () => {
   });
 
   it("proceeds when no bundle exists", () => {
-    if (existsSync(BUNDLE)) return; // a real bundle is present; the case above covers it
     const r = run(["--dry-run"]);
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("DRY-RUN: cargo clean");
@@ -120,37 +121,15 @@ describe("spike probe artifacts", () => {
   // Cargo never GCs. Three had accumulated 818 MB whose probe sources no longer
   // existed. The sweep must take the artifact dirs and NOTHING else: the spike
   // reports are the evidence §7 requires.
-  //
-  // dev-docs/ is maintainer-local and gitignored, so on CI it does not exist
-  // at all. Cleanup removes the fixture only, then prunes empty ancestors
-  // non-recursively — see the afterEach below.
-  const FIXTURE = path.join(REPO, "dev-docs/grills/__clean-dev-fixture__");
+  const FIXTURE = "dev-docs/grills/__clean-dev-fixture__";
 
   function withFixture() {
-    mkdirSync(path.join(FIXTURE, "probe/target/debug"), { recursive: true });
-    mkdirSync(path.join(FIXTURE, "probe/node_modules/left-pad"), { recursive: true });
-    mkdirSync(path.join(FIXTURE, "probe/src"), { recursive: true });
-    writeFileSync(path.join(FIXTURE, "spike-report.md"), "# findings\n");
+    const at = (rel) => path.join(ROOT, FIXTURE, rel);
+    mkdirSync(at("probe/target/debug"), { recursive: true });
+    mkdirSync(at("probe/node_modules/left-pad"), { recursive: true });
+    mkdirSync(at("probe/src"), { recursive: true });
+    writeFileSync(at("spike-report.md"), "# findings\n");
   }
-
-  afterEach(() => {
-    // Remove only what is certainly ours (the fixture itself), then prune
-    // now-empty ancestors with a NON-recursive rmdir: it refuses any
-    // directory that still has content — a maintainer's real dev-docs, or a
-    // sibling gate test's live fixture (check-ui-phase.test.mjs probes this
-    // same tree) — which is exactly the safe outcome. The previous cleanup
-    // recursively removed the topmost dir it had created (up to dev-docs/
-    // itself on a tree where it was absent), deleting sibling fixtures
-    // mid-test under the parallel pool.
-    rmSync(FIXTURE, { recursive: true, force: true });
-    for (const dir of [path.dirname(FIXTURE), path.join(REPO, "dev-docs")]) {
-      try {
-        rmdirSync(dir);
-      } catch {
-        break; // non-empty or already gone — leave it alone
-      }
-    }
-  });
 
   const actions = (args) =>
     run(args)
@@ -180,7 +159,6 @@ describe("spike probe artifacts", () => {
   });
 
   it("is a no-op when dev-docs/grills is absent", () => {
-    if (existsSync(path.join(REPO, "dev-docs/grills"))) return;
     const r = run(["1", "--dry-run"]);
     expect(r.status).toBe(0);
     expect(r.stdout).not.toContain("dev-docs/grills");

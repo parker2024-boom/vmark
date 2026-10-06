@@ -10,7 +10,7 @@
 //! The property: 32 bytes of CSPRNG entropy, hex-encoded. `Uuid::new_v4` draws
 //! from `getrandom`; `RandomState`/`SipHash` — the obvious other source of
 //! "random-looking" bytes in std — is NOT a cryptographic RNG and must never
-//! back a secret (audit 20260612).
+//! back a secret.
 
 /// Mint a 64-character hex secret backed by 32 bytes of CSPRNG entropy.
 pub(crate) fn generate_secret_token() -> String {

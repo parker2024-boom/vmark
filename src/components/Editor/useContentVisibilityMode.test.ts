@@ -106,6 +106,9 @@ describe("useContentVisibilityMode", () => {
     rerender({ chars: SMALL });
     expect(cvIdleTimeoutRef.current).toBe(pending);
     vi.advanceTimersByTime(500);
+    // The re-add waits for a rendered frame after the window.
+    vi.advanceTimersToNextFrame();
+    vi.advanceTimersToNextFrame();
     expect(cvState(container)).toEqual({ enabled: true, idle: true });
   });
 
@@ -129,6 +132,9 @@ describe("useContentVisibilityMode", () => {
     vi.advanceTimersByTime(499);
     expect(cvState(container)).toEqual({ enabled: true, idle: false });
     vi.advanceTimersByTime(1);
+    // The re-add waits for a rendered frame after the window.
+    vi.advanceTimersToNextFrame();
+    vi.advanceTimersToNextFrame();
     expect(cvState(container)).toEqual({ enabled: true, idle: true });
   });
 
@@ -168,6 +174,9 @@ describe("followContentReplacement", () => {
     followContentReplacement(containerRef, replacement(LARGE), cvIdleTimeoutRef);
     expect(cvState(container)).toEqual({ enabled: true, idle: false });
     vi.advanceTimersByTime(500);
+    // The re-add waits for a rendered frame after the window.
+    vi.advanceTimersToNextFrame();
+    vi.advanceTimersToNextFrame();
     expect(cvState(container)).toEqual({ enabled: true, idle: true });
   });
 
@@ -214,6 +223,9 @@ describe("followContentReplacement", () => {
     vi.advanceTimersByTime(499);
     expect(cvState(container)).toEqual({ enabled: true, idle: false });
     vi.advanceTimersByTime(1);
+    // The re-add waits for a rendered frame after the window.
+    vi.advanceTimersToNextFrame();
+    vi.advanceTimersToNextFrame();
     expect(cvState(container)).toEqual({ enabled: true, idle: true });
   });
 

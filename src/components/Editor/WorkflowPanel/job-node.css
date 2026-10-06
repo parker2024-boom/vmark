@@ -1,4 +1,4 @@
-/* WI-2.3 — JobNode visual styles. Uses VMark design tokens; never hardcode. */
+/* JobNode visual styles. Uses VMark design tokens; never hardcode. */
 
 /* xyflow Handle dots — kept for structural edge routing but hidden
    visually. Without Handles xyflow can't render edges between jobs;

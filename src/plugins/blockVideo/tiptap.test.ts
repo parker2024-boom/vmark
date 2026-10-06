@@ -7,15 +7,6 @@
 import { describe, it, expect, vi } from "vitest";
 
 vi.mock("./block-video.css", () => ({}));
-vi.mock("./BlockVideoNodeView", () => ({
-  BlockVideoNodeView: vi.fn(),
-}));
-vi.mock("../shared/sourceLineAttr", () => ({
-  sourceLineAttr: {},
-}));
-vi.mock("../shared/mediaNodeViewHelpers", () => ({
-  mediaBlockKeyboardShortcuts: vi.fn(() => ({})),
-}));
 
 import { blockVideoExtension } from "./tiptap";
 

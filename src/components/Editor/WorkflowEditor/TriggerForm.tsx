@@ -8,8 +8,8 @@
  *   easy to get wrong via single-line inputs and is better expressed
  *   in source.
  *
- * Origin: GitHub Actions workflow viewer plan (2026-05-04, retired) §6
- *   Phase 7 / WI-7.1 + Phase 9 finish.
+ * Origin: GitHub Actions workflow viewer plan (retired) §6
+ *   Phase 7 + Phase 9 finish.
  *
  * Edit mechanics: each editable list is a comma-separated input with
  * a blur-to-commit handler. Empty input = clear the filter.
@@ -228,7 +228,7 @@ export function TriggerForm({ triggers }: TriggerFormProps): ReactElement {
  */
 /**
  * Render the time-part of a cron expression as a localized string.
- * Codex audit MED-5 fix — readable.ts now exposes structured parts
+ * readable.ts exposes structured parts
  * so the form can call t() with the appropriate locale string.
  */
 function renderCronTime(
@@ -318,7 +318,7 @@ function renderCronTime(
 function CronCell({ cron }: { cron: string }): ReactElement {
   const { t } = useTranslation("workflowEditor");
   const readable = safeCronReadable(cron);
-  // Codex audit MED-5 fix: throttle warning previously surfaced via
+  // The throttle warning previously surfaced via
   // `title=` only — invisible to many screen readers. Now uses
   // role="img" + aria-label so AT users hear the warning.
   const throttleLabel = t("form.trigger.cronThrottled", {

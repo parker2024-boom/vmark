@@ -1,8 +1,8 @@
 /**
  * resolveBufferLine
  *
- * Purpose: Map a mouse event's viewport position onto an xterm BUFFER line
- * (WI-4.4). "Copy Command Output" needs to know which command the user
+ * Purpose: Map a mouse event's viewport position onto an xterm BUFFER line.
+ * "Copy Command Output" needs to know which command the user
  * right-clicked, and xterm exposes no public hit-test — only the geometry
  * needed to compute one.
  *

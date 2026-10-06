@@ -1,5 +1,5 @@
 //! Window-point and responder → tab-id resolution for the native user-input
-//! monitor (WI-NB5.2). Split from `surface_macos.rs` for the file-size gate.
+//! monitor. Split from `surface_macos.rs` for the file-size gate.
 //! Reads the parent module's `WEBVIEWS` map, so it is a `#[path]` include of
 //! that module rather than a free-standing `mod` — `super::` here is
 //! `surface_macos`.
@@ -8,7 +8,7 @@ use objc2::rc::Retained;
 use objc2::Message as _;
 
 /// Which live, visible browser webview in `window` contains `point` (window
-/// base coordinates)? Main thread only (WI-NB5.2). A hidden view never matches:
+/// base coordinates)? Main thread only. A hidden view never matches:
 /// the occlusion policy hides browser views under overlays, which is what keeps
 /// an approval-dialog click from reading as a page takeover.
 pub(super) fn tab_id_at_window_point(
@@ -46,7 +46,7 @@ pub(super) fn tab_id_at_window_point(
 /// Which live browser webview owns `responder` (a first responder during a key
 /// event)? Walks the superview chain: WKWebView's real key view is an internal
 /// content view, so identity is found by ancestry, not equality with the
-/// responder itself. Main thread only (WI-NB5.2).
+/// responder itself. Main thread only.
 pub(super) fn tab_id_for_responder(responder: &objc2_app_kit::NSResponder) -> Option<String> {
     let view = responder.downcast_ref::<objc2_app_kit::NSView>()?;
     super::WEBVIEWS.with(|cell| {
@@ -62,6 +62,9 @@ pub(super) fn tab_id_for_responder(responder: &objc2_app_kit::NSResponder) -> Op
                     return Some(tab_id.clone());
                 }
             }
+            // SAFETY: `v` is a retained, live view and `NSView` is a
+            // main-thread-only type, so this is the main thread; `superview`
+            // only reads the hierarchy and returns nil at the top.
             current = unsafe { v.superview() };
         }
         None

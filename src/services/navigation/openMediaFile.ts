@@ -1,13 +1,17 @@
-// Path-only open for binary media (image/audio/video) tabs.
-//
-// Split out of useFileOpen.ts: media never goes through the text-read
-// pipeline. No readTextFile, no size gate, no linebreak detection — the bytes
-// never enter the JS heap. The document is initialized with EMPTY content so
-// hot-exit never serializes binary; the media surface (MediaView) resolves the
-// tab's filePath to an asset:// URL, granting asset access itself before it
-// streams the file. Synchronous — no close-during-read race.
-//
-// See dev-docs/plans/20260703-media-viewer.md.
+/**
+ * Path-only open for binary media (image/audio/video) tabs.
+ *
+ * Split out of useFileOpen.ts: media never goes through the text-read
+ * pipeline. No text read, no size gate, no linebreak detection — the bytes
+ * never enter the JS heap. The document is initialized with EMPTY content so
+ * hot-exit never serializes binary; the media surface (MediaView) resolves the
+ * tab's filePath to an asset:// URL, granting asset access itself before it
+ * streams the file. Synchronous — no close-during-read race.
+ *
+ * See .claude/adr/plans/20260703-media-viewer.md.
+ *
+ * @module services/navigation/openMediaFile
+ */
 
 import { useDocumentStore } from "@/stores/documentStore";
 import { useTabStore } from "@/stores/tabStore";
@@ -51,7 +55,7 @@ export function tryOpenMediaFile(
  * Replace an EXISTING clean tab's content with a media file (path-only).
  * Mirrors openMediaFileInNewTab but reuses the caller's tabId instead of
  * creating a new tab — the Cmd+O / Open-Recent replace path routes media here
- * so a binary file selected into a clean tab never hits readTextFile.
+ * so a binary file selected into a clean tab is never read as text.
  * updateTabPath re-derives the tab's formatId (→ media); loadContent writes
  * EMPTY content so no binary bytes enter the document store. Synchronous — no
  * close-during-read race.
@@ -63,6 +67,17 @@ export function replaceTabWithMediaFile(tabId: string, path: string): void {
   useRecentFilesStore.getState().addFile(path);
 }
 
+/**
+ * Open `path` as a new path-only media tab, or activate the tab `createTab`
+ * deduplicates onto.
+ *
+ * Rollback: when a step after `createTab` throws (the caller's `onTabCreated`,
+ * document init, the ownership claim, the recent-files record), the tab this
+ * call created is removed with `detachTab` and the error is rethrown, so no
+ * half-initialised media tab is left behind. `detachTab`, not `closeTab`: the
+ * user never had the tab, so it must not enter the reopen history. A tab
+ * `createTab` deduplicated onto belongs to another opener and is never removed.
+ */
 export function openMediaFileInNewTab(
   windowLabel: string,
   path: string,
@@ -73,12 +88,17 @@ export function openMediaFileInNewTab(
   const isExistingTab =
     useTabStore.getState().getTabsByWindow(windowLabel).length === tabCountBefore;
 
-  options?.onTabCreated?.(tabId, isExistingTab);
+  try {
+    options?.onTabCreated?.(tabId, isExistingTab);
 
-  // createTab deduped to an existing tab — just activate, don't re-init.
-  if (isExistingTab) return;
+    // createTab deduped to an existing tab — just activate, don't re-init.
+    if (isExistingTab) return;
 
-  useDocumentStore.getState().initDocument(tabId, "", path);
-  applyFileOwnershipAfterOpen(tabId, path);
-  useRecentFilesStore.getState().addFile(path);
+    useDocumentStore.getState().initDocument(tabId, "", path);
+    applyFileOwnershipAfterOpen(tabId, path);
+    useRecentFilesStore.getState().addFile(path);
+  } catch (error) {
+    if (!isExistingTab) useTabStore.getState().detachTab(windowLabel, tabId);
+    throw error;
+  }
 }

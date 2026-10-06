@@ -11,7 +11,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
-import { Slice } from "@tiptap/pm/model";
+import { Slice, Schema } from "@tiptap/pm/model";
 
 // Mock pasteUtils
 vi.mock("@/utils/pasteUtils", () => ({
@@ -20,6 +20,7 @@ vi.mock("@/utils/pasteUtils", () => ({
 
 import { smartPasteExtension } from "./tiptap";
 import { isSelectionInCode as mockIsSelectionInCode } from "@/utils/pasteUtils";
+import { EditorState, TextSelection } from "@tiptap/pm/state";
 
 function createEditor(content: string) {
   return new Editor({
@@ -265,17 +266,8 @@ describe("smartPaste", () => {
     it("does not handle paste when schema has no link mark", () => {
       // Create an editor with a schema that doesn't have link marks
       // Using a custom extension set without link support
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { Extension: _Extension } = require("@tiptap/core");
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { Schema: PmSchema } = require("@tiptap/pm/model");
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { EditorState: PmState } = require("@tiptap/pm/state");
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { Plugin: _Plugin, PluginKey: _PluginKey } = require("@tiptap/pm/state");
-
       // Build a schema without link marks
-      const schema = new PmSchema({
+      const schema = new Schema({
         nodes: {
           doc: { content: "paragraph+" },
           paragraph: { group: "block", content: "text*" },
@@ -293,11 +285,9 @@ describe("smartPaste", () => {
         name: "smartPaste", options: {}, storage: {}, editor: {},
       } as never);
 
-      const state = PmState.create({ doc, schema, plugins });
+      const state = EditorState.create({ doc, schema, plugins });
 
       // Create a selection (non-empty)
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { TextSelection } = require("@tiptap/pm/state");
       const stateWithSel = state.apply(
         state.tr.setSelection(TextSelection.create(state.doc, 1, 6))
       );

@@ -19,8 +19,12 @@
  *   - Doc-change rebuilds are debounced by SEARCH_DOC_CHANGE_DEBOUNCE_MS (200ms) to
  *     avoid rescanning the entire document on every keystroke; query/option changes
  *     still trigger immediate rebuilds for responsive search-box feedback
+ *   - Only a query/option change starts at the first match. A doc-change rebuild
+ *     keeps the current match's place; a Replace rescans at once and resumes after
+ *     the inserted text (matchSelection.ts), so it never re-matches its own output
  *
  * @coordinates-with findMatches.ts — regex construction and match scanning (exact positions)
+ * @coordinates-with matchSelection.ts — which match is current after a rescan
  * @coordinates-with replaceActions.ts — Replace Current / Replace All handlers
  * @coordinates-with stores/uiStore/searchSlice.ts — query, options, match navigation state
  * @coordinates-with FindBar.tsx — UI for find/replace controls
@@ -31,11 +35,12 @@
 import { hostSearch } from "@/plugins/shared/hostSearch";
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
-import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { DecorationSet } from "@tiptap/pm/view";
 import { runOrQueueProseMirrorAction } from "@/utils/imeGuard";
 import { findMatchesInDoc, type Match } from "./findMatches";
 import { createQueryDebounce } from "./queryDebounce";
 import { createReplaceHandlers } from "./replaceActions";
+import { indexAtOrAfter, matchDecorations, SEARCH_RESUME_AFTER_META } from "./matchSelection";
 import "./search.css";
 import { scrollToSettled } from "@/utils/settledScroll";
 
@@ -73,8 +78,7 @@ export const searchExtension = Extension.create({
     // Debounce state: pending timeout ID and a weak reference to the view
     // used to dispatch the deferred rebuild transaction.
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    // eslint-disable-next-line prefer-const
-    let viewRef: { current: import("@tiptap/pm/view").EditorView | null } = { current: null };
+    const viewRef: { current: import("@tiptap/pm/view").EditorView | null } = { current: null };
 
     return [
       new Plugin({
@@ -96,9 +100,11 @@ export const searchExtension = Extension.create({
             // would not restore them).
             const isOpenChanged = state.isOpen !== lastIsOpen;
             lastIsOpen = state.isOpen;
+            const active = state.isOpen || Boolean(state.query);
+            const visible = state.isOpen && Boolean(state.query);
 
-            // Helper: build and return a new state after a full match re-scan.
-            const fullRebuild = () => {
+            // Full re-scan; `pick` chooses the current match (matchSelection.ts).
+            const fullRebuild = (pick: (found: Match[]) => number) => {
               lastQuery = state.query;
               lastCaseSensitive = state.caseSensitive;
               lastWholeWord = state.wholeWord;
@@ -113,50 +119,47 @@ export const searchExtension = Extension.create({
               );
 
               const matchCount = matches.length;
-              const initialIndex = matchCount > 0 ? 0 : -1;
+              const currentIndex = pick(matches);
               // Defer store update out of ProseMirror's apply() to avoid side-effects during state computation
               queueMicrotask(() => {
-                hostSearch.reportMatches(matchCount, initialIndex);
+                hostSearch.reportMatches(matchCount, currentIndex);
               });
-
-              const currentIndex = hostSearch.current().currentIndex;
-              let decorationSet = DecorationSet.empty;
-              if (state.isOpen && state.query && matches.length > 0) {
-                const decorations = matches.map((match: Match, i: number) =>
-                  Decoration.inline(match.from, match.to, {
-                    class: i === currentIndex ? "search-match search-match-active" : "search-match",
-                  })
-                );
-                decorationSet = DecorationSet.create(tr.doc, decorations);
-              }
+              const decorationSet = matchDecorations(tr.doc, matches, currentIndex, visible);
               return { matches, currentIndex, decorationSet };
             };
-
-            // Path 1 — Debounce timer fired: do the full rebuild now.
-            if (tr.getMeta(SEARCH_DEBOUNCED_REBUILD_META) && (state.isOpen || state.query)) {
+            const cancelDebounce = () => {
+              if (debounceTimer !== null) clearTimeout(debounceTimer);
               debounceTimer = null;
-              return fullRebuild();
+            };
+
+            // Path 0 — a Replace: rescan now and resume after the inserted text.
+            const resumeAt: unknown = tr.getMeta(SEARCH_RESUME_AFTER_META);
+            if (typeof resumeAt === "number" && active) {
+              cancelDebounce();
+              return fullRebuild((found) => indexAtOrAfter(found, resumeAt));
+            }
+
+            // Path 1 — Debounce timer fired: rescan, keeping the current match's place.
+            if (tr.getMeta(SEARCH_DEBOUNCED_REBUILD_META) && active) {
+              debounceTimer = null;
+              const anchor = matches[state.currentIndex]?.from ?? null;
+              return fullRebuild((found) => indexAtOrAfter(found, anchor));
             }
 
             // Path 2 — Query/options changed or the FindBar opened/closed:
-            // immediate rebuild (close clears highlights, reopen restores them).
-            if ((queryChanged || isOpenChanged) && (state.isOpen || state.query)) {
-              // Cancel any pending debounced rebuild since we're doing a full one now
-              if (debounceTimer !== null) {
-                clearTimeout(debounceTimer);
-                debounceTimer = null;
-              }
-              return fullRebuild();
+            // immediate rebuild from the first match (close clears highlights,
+            // reopen restores them).
+            if ((queryChanged || isOpenChanged) && active) {
+              cancelDebounce();
+              return fullRebuild((found) => (found.length > 0 ? 0 : -1));
             }
 
             // Path 3 — Document changed while search is open (but query unchanged): debounce.
             // Map existing decorations through the change to keep them roughly positioned,
             // then schedule a full re-scan after SEARCH_DOC_CHANGE_DEBOUNCE_MS.
-            if (tr.docChanged && (state.isOpen || state.query)) {
+            if (tr.docChanged && active) {
               // Coalesce rapid edits: reset timer on each doc change
-              if (debounceTimer !== null) {
-                clearTimeout(debounceTimer);
-              }
+              cancelDebounce();
               debounceTimer = setTimeout(() => {
                 debounceTimer = null;
                 const view = viewRef.current;
@@ -169,36 +172,29 @@ export const searchExtension = Extension.create({
               // Return mapped decorations and matches until the debounce fires.
               // Map match positions so navigate/replace targets correct text.
               const mappedDecorationSet = value.decorationSet.map(tr.mapping, tr.doc);
+              // The current match's place, mapped through the edit: if mapping
+              // collapses matches away, the index follows the place, not the slot.
+              const previous = matches[state.currentIndex];
+              const anchor = previous ? tr.mapping.map(previous.from) : null;
               // Update the module-level matches cache so Path 4 reads correct positions
               matches = matches
                 .map((m: Match) => ({ from: tr.mapping.map(m.from), to: tr.mapping.map(m.to) }))
                 .filter((m: Match) => m.from < m.to);
-              const currentIndex = hostSearch.current().currentIndex;
-              // Adjust index if matches were lost due to mapping collapse
-              const adjustedIndex = matches.length === 0
-                ? -1
-                : currentIndex >= matches.length
-                  ? 0
-                  : currentIndex;
+              const adjustedIndex = previous
+                ? indexAtOrAfter(matches, anchor)
+                : state.currentIndex >= 0 && matches.length > 0 ? 0 : -1;
+              const mappedCount = matches.length;
               queueMicrotask(() => {
-                hostSearch.reportMatches(matches.length, adjustedIndex);
+                hostSearch.reportMatches(mappedCount, adjustedIndex);
               });
               return { matches, currentIndex: adjustedIndex, decorationSet: mappedDecorationSet };
             }
 
-            const currentIndex = hostSearch.current().currentIndex;
+            const currentIndex = state.currentIndex;
 
             // Path 4 — No structural change; only update decorations if active index changed.
             if (currentIndex !== value.currentIndex) {
-              let decorationSet = DecorationSet.empty;
-              if (state.isOpen && state.query && matches.length > 0) {
-                const decorations = matches.map((match: Match, i: number) =>
-                  Decoration.inline(match.from, match.to, {
-                    class: i === currentIndex ? "search-match search-match-active" : "search-match",
-                  })
-                );
-                decorationSet = DecorationSet.create(tr.doc, decorations);
-              }
+              const decorationSet = matchDecorations(tr.doc, matches, currentIndex, visible);
               return { matches, currentIndex, decorationSet };
             }
 
@@ -245,10 +241,7 @@ export const searchExtension = Extension.create({
           // Transactions are built INSIDE the IME-guard callback and targets
           // are re-validated at execution time — see replaceActions.ts.
           const { replaceCurrent: handleReplaceCurrent, replaceAll: handleReplaceAll } =
-            createReplaceHandlers(
-              editorView,
-              () => searchPluginKey.getState(editorView.state)?.matches,
-            );
+            createReplaceHandlers(editorView, () => searchPluginKey.getState(editorView.state));
 
           let prevState = {
             query: hostSearch.current().query,

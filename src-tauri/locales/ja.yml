@@ -307,7 +307,7 @@ errors:
   workflow.restoreWhileRunning: "ワークフローが実行中です。ファイルを復元する前に、完了を待つかキャンセルしてください。"
   workflow.restoreSuperseded: "このスナップショットの後に別のワークフローが実行されたため、復元するとその変更が取り消される可能性があります。何も復元されていません。"
 
-  # === 保存パス（file_write.rs、WI-14 CommandError）===
+  # === 保存パス（files/write.rs、WI-14 CommandError）===
   save.parentMissing: "このファイルのフォルダはもう存在しません: %{dir}"
   save.noParentDirectory: "ファイルパスに親フォルダがありません"
   save.symlinkLoop: "このファイルのエイリアスが循環しているため、実際のファイルが見つかりませんでした"
@@ -357,7 +357,13 @@ errors:
 
   # === CLI install ===
   cli.noFile: "インストールは成功したように見えますが、ファイルが作成されませんでした。"
-  cli.mismatch: "インストールは完了しましたが、ファイル内容が想定したスクリプトと一致しません。"
+  cli.mismatch: "インストールされたコマンドが想定したスクリプトと一致しなかったため、削除しました。"
+  cli.mismatchNotRemoved: "「%{path}」のファイルは想定したスクリプトと一致せず、削除もできませんでした。手動で削除してください。"
+
+  # === External editor ===
+  externalEditor.unknownName: "「%{name}」は VMark が名前で認識できるエディタではありません。エディタのフルパスを入力してください"
+  externalEditor.notAnEditor: "「%{name}」は渡されたファイルを開かずに実行するため、外部エディタとして使用できません"
+  externalEditor.notPlainPath: "外部エディタには、エディタ名またはフルパスを指定してください。パスに「..」を含めることや、末尾にスラッシュを付けることはできません"
 
   # === Genies ===
   genie.pathBlocked: "Genie のパスが許可されたディレクトリの外にあります"
@@ -412,7 +418,7 @@ errors:
   # === Secure store (secure_store.rs) ===
   secureStore.keychainDenied: "キーチェーンへのアクセスが拒否されました。キーチェーンのダイアログで VMark を許可するか、「キーチェーンアクセス」でアクセス権を付与してから、もう一度お試しください。"
 
-  # === ワークスペースのアクセス許可 (workspace_grants/commands.rs, WI-LX1.1) ===
+  # === ワークスペースのアクセス許可 (workspace/grants/commands.rs, WI-LX1.1) ===
   workspaceAccess.notGranted: "VMark には「%{path}」へのアクセスが許可されていません。ファイル → ワークスペースを開く... でフォルダを選択して許可してください。"
   workspaceAccess.pickerBusy: "フォルダ選択ダイアログはすでに開いています"
   workspaceAccess.checkBusy: "VMark はまだそのフォルダへのアクセスを確認しています。少し待ってからもう一度お試しください"

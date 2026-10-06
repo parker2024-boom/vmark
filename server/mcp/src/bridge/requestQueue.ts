@@ -81,8 +81,7 @@ export class OutboundRequestQueue {
         // used to detach the entire queue before sending anything, so every
         // entry lost its deadline the instant the flush began even though only
         // the first was actually in flight — a follower could then sit behind
-        // many request timeouts with no deadline of its own (audit 20260906,
-        // MCP-M01).
+        // many request timeouts with no deadline of its own.
         if (entry.dispatched) return;
         const idx = this.queue.indexOf(entry);
         if (idx !== -1) this.queue.splice(idx, 1);
@@ -103,7 +102,7 @@ export class OutboundRequestQueue {
    * moment it is handed to `send` — the sends are serial, so only the first
    * entry is actually in flight while the rest are still waiting, and
    * releasing all of their deadlines at once left the followers able to wait
-   * indefinitely (audit 20260906, MCP-M01).
+   * indefinitely.
    */
   async flush(send: (request: BridgeRequest) => Promise<BridgeResponse>): Promise<void> {
     if (this.queue.length === 0) {

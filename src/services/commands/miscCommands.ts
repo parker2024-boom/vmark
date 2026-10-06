@@ -4,12 +4,12 @@
  * Five unrelated domains share this registrar because they share a menu, not a
  * subject: app surfaces (preferences, palette, quick open), history clearing,
  * orphan-image cleanup, help links, and the Genies folder. Each has its OWN
- * spec builder below (audit #917) — the batch is their concatenation, so the
+ * spec builder below — the batch is their concatenation, so the
  * domains stay legible and independently readable, and they are still
  * registered as one atomic owner batch.
  *
  * Every contained failure here goes through `commandFailure.reportCommandFailure`:
- * a log line the user never sees is not a report (#921, #922).
+ * a log line the user never sees is not a report.
  *
  * @coordinates-with services/commands/commandFailure.ts — the log-and-show policy
  * @module services/commands/miscCommands
@@ -37,7 +37,7 @@ import { confirmAction } from "@/services/dialogs/confirmAction";
 import { reportCommandFailure } from "./commandFailure";
 
 /**
- * Open an external help link, REPORTING a refusal (audit #921).
+ * Open an external help link, REPORTING a refusal.
  *
  * A throw out of a command body is caught by the menu dispatcher and written
  * to the log — a surface nobody reads mid-session — and the palette route
@@ -223,8 +223,8 @@ function genieCommandSpecs(): CommandDefinition[] {
           await mkdir(dir, { recursive: true });
           await revealItemInDir(dir);
         } catch (error) {
-          // REPORTED, not just logged (audit #922) — the same defect #921 fixed
-          // one command over. A capability refusal or a missing file manager
+          // REPORTED, not just logged — the same defect the help-link opener
+          // fixed. A capability refusal or a missing file manager
           // left this menu item visibly doing nothing at all.
           reportCommandFailure(error, { label: "Failed to open genies folder:" });
         }
@@ -245,12 +245,12 @@ function buildMiscCommandSpecs(): CommandDefinition[] {
 }
 
 /**
- * Register the misc command set as ONE owner batch (audit #918).
+ * Register the misc command set as ONE owner batch.
  *
  * `hasCommand("app.preferences")` suppressed every other registration whenever
  * that single id was already taken — by a foreign registrar, or by a batch of
  * this module's own that had thrown after the first command. `registerCommands`
- * preflights the whole set and replaces its own previous batch (#459).
+ * preflights the whole set and replaces its own previous batch.
  */
 export function registerMiscCommands(): void {
   registerCommands(MISC_COMMANDS_OWNER, buildMiscCommandSpecs());

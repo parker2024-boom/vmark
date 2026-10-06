@@ -1,5 +1,5 @@
 /**
- * MCP v2 browser workflow handlers (WI-NB6.3) — the async run surface.
+ * MCP v2 browser workflow handlers — the async run surface.
  *
  * `workflow_run` (act-class) validates and STARTS a run, returning a `runId`
  * immediately: a run outlives the bridge's ~20s request bound, so it executes
@@ -24,6 +24,7 @@ import { respond } from "@/services/mcpBridge/utils";
 import { wrapHandler } from "./wrapHandler";
 import { resolveBrowserTarget } from "./browserAccess";
 import { resolveBrowserTab } from "./browserHelpers";
+import { readOperationArgs, readOperationArgsChecked } from "./readOperationArgs";
 import { urlForAgent } from "@/lib/browser/url";
 import { useTabStore } from "@/stores/tabStore";
 
@@ -36,9 +37,9 @@ const workflowService = () => import("@/services/workflow/workflowRunService");
 /** Own-property record of string inputs, or null when malformed. Built on a
  *  null prototype so a `__proto__` / `constructor` key is an ordinary input name
  *  (refused downstream as undeclared) rather than a prototype write. */
-function readInputs(raw: unknown): Record<string, string> | null {
+function readInputs(raw: object | undefined, malformed: boolean): Record<string, string> | null {
+  if (malformed) return null;
   if (raw === undefined) return {};
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
   const out: Record<string, string> = Object.create(null) as Record<string, string>;
   for (const key of Object.keys(raw)) {
     const value = (raw as Record<string, unknown>)[key];
@@ -54,13 +55,15 @@ export async function handleBrowserWorkflowRun(id: string, args: Record<string, 
     // The same gate as every other browser handler: UNSUPPORTED_PLATFORM before
     // BROWSER_DISABLED, so an off-macOS client learns why instead of receiving a
     // runId for a run that fails in the background.
-    const tab = await resolveBrowserTarget(id, args);
+    const { wire, malformed } = readOperationArgsChecked("vmark.browser.workflow_run", args);
+    const tab = await resolveBrowserTarget(id, { wire, malformed });
     if (!tab) return;
-    if (typeof args.source !== "string" || args.source.trim() === "") {
+    const source = wire.source;
+    if (source === undefined || source.trim() === "") {
       await respond({ id, success: false, error: "workflow_run requires a non-empty `source`" });
       return;
     }
-    const inputs = readInputs(args.inputs);
+    const inputs = readInputs(wire.inputs, malformed.has("inputs"));
     if (inputs === null) {
       await respond({ id, success: false, error: "`inputs` must be an object of string values" });
       return;
@@ -70,7 +73,7 @@ export async function handleBrowserWorkflowRun(id: string, args: Record<string, 
       return;
     }
     const { startWorkflowRun } = await workflowService();
-    const result = startWorkflowRun(args.source, {
+    const result = startWorkflowRun(source, {
       tabId: tab.tabId,
       resolveTab: () => {
         const t = resolveBrowserTab(tab.tabId);
@@ -80,8 +83,8 @@ export async function handleBrowserWorkflowRun(id: string, args: Record<string, 
       // The store ignores an older generation, so this never regresses a tab the
       // surface's own navigation mirror already advanced.
       onNavigated: ({ url, generation }) => useTabStore.getState().updateBrowserTab(tab.tabId, { url, generation }),
-      ...(args.allowRepeat === true ? { allowRepeat: true } : {}),
-      ...(typeof args.resumeRunId === "string" && args.resumeRunId !== "" ? { resumeRunId: args.resumeRunId } : {}),
+      ...(wire.allowRepeat === true ? { allowRepeat: true } : {}),
+      ...(wire.resumeRunId !== undefined && wire.resumeRunId !== "" ? { resumeRunId: wire.resumeRunId } : {}),
     });
     if (!result.ok) {
       await respond({ id, success: false, error: result.error });
@@ -101,12 +104,13 @@ export async function handleBrowserWorkflowStatus(id: string, args: Record<strin
     // Deliberately NOT gated on the browser setting: observing a run is never the
     // thing a feature gate should refuse, and a run that outlived a disable must
     // stay inspectable (the same rule 60-ai-governance §12 states for stopping).
-    if (typeof args.runId !== "string" || args.runId === "") {
+    const { runId } = readOperationArgs("vmark.browser.workflow_status", args);
+    if (runId === undefined || runId === "") {
       await respond({ id, success: false, error: "workflow_status requires a `runId`" });
       return;
     }
     const { workflowRunStatus } = await workflowService();
-    const state = workflowRunStatus(args.runId);
+    const state = workflowRunStatus(runId);
     if (state === null) {
       await respond({ id, success: false, error: "RUN_NOT_FOUND" });
       return;
@@ -139,12 +143,13 @@ export async function handleBrowserWorkflowCancel(id: string, args: Record<strin
     // Never gated: "stop" must always be allowed. Refusing it while the setting is
     // off made a detached run unmanageable after policy teardown — the exact
     // failure §12 of 60-ai-governance records for the Rust gate.
-    if (typeof args.runId !== "string" || args.runId === "") {
+    const { runId } = readOperationArgs("vmark.browser.workflow_cancel", args);
+    if (runId === undefined || runId === "") {
       await respond({ id, success: false, error: "workflow_cancel requires a `runId`" });
       return;
     }
     const { cancelWorkflowRun } = await workflowService();
-    const result = cancelWorkflowRun(args.runId);
+    const result = cancelWorkflowRun(runId);
     if (result.outcome === "not-found") {
       await respond({ id, success: false, error: "RUN_NOT_FOUND" });
       return;
@@ -153,7 +158,7 @@ export async function handleBrowserWorkflowCancel(id: string, args: Record<strin
       id,
       success: true,
       data: {
-        runId: args.runId,
+        runId,
         status: result.outcome === "cancelled" ? "cancelled" : result.status,
         result: result.outcome,
       },

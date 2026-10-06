@@ -168,12 +168,12 @@ fn valid_shell_path_rejects_directory() {
     assert!(!shell_path_is_valid(dir.path().to_str().unwrap()));
 }
 
-// -- get_default_shell / list_available_shells (integration, real system) ----
+// -- default_shell / available_shells (integration, real system) -----------
 
 #[cfg(unix)]
 #[test]
 fn default_shell_is_an_existing_executable() {
-    let shell = get_default_shell();
+    let shell = default_shell();
     assert!(
         shell_path_is_valid(&shell),
         "default shell '{shell}' must exist and be executable"
@@ -184,10 +184,27 @@ fn default_shell_is_an_existing_executable() {
 fn listed_shells_are_all_valid_executables() {
     // The contract the audit fix locks in: every entry returned to the
     // terminal's shell picker resolves to a real executable.
-    for shell in list_available_shells() {
+    for shell in available_shells() {
         assert!(
             shell_path_is_valid(&shell),
             "listed shell '{shell}' must exist and be executable"
         );
     }
+}
+
+// WI-RA7C.4 — the commands answer exactly what the blocking lookups answer;
+// only where the work runs changed.
+#[tokio::test]
+async fn the_commands_answer_what_the_lookups_answer() {
+    assert_eq!(get_default_shell().await, default_shell());
+    assert_eq!(list_available_shells().await, available_shells());
+}
+
+#[test]
+fn the_last_resort_shell_is_an_absolute_path() {
+    let shell = last_resort_shell();
+    assert!(
+        std::path::Path::new(&shell).is_absolute(),
+        "{shell} must never be a bare name that PATH could resolve"
+    );
 }

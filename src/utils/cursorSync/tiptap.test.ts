@@ -1,105 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-
-// Mock tiptapAnchors before importing
-vi.mock("./tiptapAnchors", () => ({
-  getBlockAnchor: vi.fn(() => undefined),
-  restoreCursorInTable: vi.fn(() => false),
-  restoreCursorInCodeBlock: vi.fn(() => false),
-}));
+import { describe, it, expect, vi } from "vitest";
 
 import { getCursorInfoFromTiptap, restoreCursorInTiptap } from "./tiptap";
-import { getBlockAnchor, restoreCursorInTable, restoreCursorInCodeBlock } from "./tiptapAnchors";
 import { Schema } from "@tiptap/pm/model";
 import { EditorState, TextSelection } from "@tiptap/pm/state";
 import type { CursorInfo } from "@/types/cursorSync";
+import { schema, para, heading, codeBlock, table, createState, createMockView } from "./__tests__/tiptapFixtures";
 
-// Schema with sourceLine support
-const schema = new Schema({
-  nodes: {
-    doc: { content: "block+" },
-    paragraph: {
-      content: "text*",
-      group: "block",
-      attrs: { sourceLine: { default: null } },
-      parseDOM: [{ tag: "p" }],
-      toDOM() {
-        return ["p", 0];
-      },
-    },
-    heading: {
-      content: "text*",
-      group: "block",
-      attrs: { sourceLine: { default: null }, level: { default: 1 } },
-      parseDOM: [{ tag: "h1" }],
-      toDOM() {
-        return ["h1", 0];
-      },
-    },
-    codeBlock: {
-      content: "text*",
-      group: "block",
-      code: true,
-      attrs: { sourceLine: { default: null }, language: { default: null } },
-      parseDOM: [{ tag: "pre" }],
-      toDOM() {
-        return ["pre", 0];
-      },
-    },
-    blockquote: {
-      content: "block+",
-      group: "block",
-      attrs: { sourceLine: { default: null } },
-      parseDOM: [{ tag: "blockquote" }],
-      toDOM() {
-        return ["blockquote", 0];
-      },
-    },
-    text: { inline: true },
-  },
-});
-
-function para(text: string, sourceLine: number | null = null) {
-  const content = text ? [schema.text(text)] : [];
-  return schema.node("paragraph", { sourceLine }, content);
-}
-
-function heading(text: string, sourceLine: number | null = null) {
-  const content = text ? [schema.text(text)] : [];
-  return schema.node("heading", { sourceLine, level: 1 }, content);
-}
-
-function codeBlock(text: string, sourceLine: number | null = null) {
-  const content = text ? [schema.text(text)] : [];
-  return schema.node("codeBlock", { sourceLine }, content);
-}
-
-function createState(doc: ReturnType<typeof schema.node>, pos?: number) {
-  const state = EditorState.create({ doc, schema });
-  if (pos !== undefined) {
-    const clampedPos = Math.min(pos, doc.content.size);
-    return state.apply(
-      state.tr.setSelection(TextSelection.create(state.doc, clampedPos))
-    );
-  }
-  return state;
-}
-
-function createMockView(state: EditorState) {
-  const dispatchedTrs: unknown[] = [];
-  return {
-    state,
-    dispatch: vi.fn((tr: unknown) => {
-      dispatchedTrs.push(tr);
-    }),
-    _dispatched: dispatchedTrs,
-  };
-}
-
-beforeEach(() => {
-  vi.mocked(getBlockAnchor).mockReturnValue(undefined);
-  vi.mocked(restoreCursorInTable).mockReturnValue(false);
-  vi.mocked(restoreCursorInCodeBlock).mockReturnValue(false);
-});
 
 describe("getCursorInfoFromTiptap", () => {
   it("extracts basic cursor info from paragraph", () => {
@@ -171,14 +77,10 @@ describe("getCursorInfoFromTiptap", () => {
     expect(info.percentInLine).toBe(0);
   });
 
-  it("includes block anchor from getBlockAnchor", () => {
-    vi.mocked(getBlockAnchor).mockReturnValue({
-      kind: "code",
-      lineInBlock: 2,
-      columnInLine: 5,
-    });
+  it("includes a code block anchor with line and column in the block", () => {
     const doc = schema.node("doc", null, [codeBlock("line0\nline1\nline2 text", 1)]);
-    const state = createState(doc, 3);
+    // Content starts at 1; "line0\nline1\n" is 12 chars, then 5 more.
+    const state = createState(doc, 1 + 12 + 5);
     const view = createMockView(state);
 
     const info = getCursorInfoFromTiptap(view as never);
@@ -187,6 +89,34 @@ describe("getCursorInfoFromTiptap", () => {
       lineInBlock: 2,
       columnInLine: 5,
     });
+  });
+
+  it("includes a table anchor with row, column and offset in the cell", () => {
+    const doc = schema.node("doc", null, [table([["h1", "h2"], ["a1", "b2x"]], 1)]);
+    // Find the position inside "b2x" after "b2".
+    let target = -1;
+    doc.descendants((node, pos) => {
+      if (node.isText && node.text === "b2x") target = pos + 2;
+    });
+    const view = createMockView(createState(doc, target));
+
+    const info = getCursorInfoFromTiptap(view as never);
+    expect(info.blockAnchor).toMatchObject({ kind: "table", row: 1, col: 1 });
+  });
+
+  it("round-trips a table cursor: the restored cursor lands in the same cell", () => {
+    const doc = schema.node("doc", null, [table([["h1", "h2"], ["a1", "b2x"], ["c1", "d2"]], 1)]);
+    let target = -1;
+    doc.descendants((node, pos) => {
+      if (node.isText && node.text === "a1") target = pos + 1;
+    });
+    const info = getCursorInfoFromTiptap(createMockView(createState(doc, target)) as never);
+
+    const view = createMockView(createState(doc));
+    restoreCursorInTiptap(view as never, info);
+    const $head = view.dispatch.mock.calls[0][0].selection.$head;
+    expect($head.parent.textContent).toBe("a1");
+    expect($head.pos).toBe(target);
   });
 });
 
@@ -214,53 +144,53 @@ describe("restoreCursorInTiptap", () => {
     expect(view.dispatch).toHaveBeenCalled();
   });
 
-  it("tries table restoration first when blockAnchor is table", () => {
-    vi.mocked(restoreCursorInTable).mockReturnValue(true);
-    const doc = schema.node("doc", null, [para("text", 1)]);
-    const state = createState(doc);
-    const view = createMockView(state);
+  it("restores into the anchored table cell when blockAnchor is table", () => {
+    const doc = schema.node("doc", null, [para("before", 1), table([["h1", "h2"], ["a1", "b2x"]], 3)]);
+    const view = createMockView(createState(doc));
 
     const info: CursorInfo = {
-      sourceLine: 1,
+      sourceLine: 3,
       wordAtCursor: "",
       offsetInWord: 0,
       nodeType: "table_cell",
       percentInLine: 0,
       contextBefore: "",
       contextAfter: "",
-      blockAnchor: { kind: "table", row: 0, col: 0, offsetInCell: 0 },
+      blockAnchor: { kind: "table", row: 1, col: 1, offsetInCell: 1 },
     };
 
     restoreCursorInTiptap(view as never, info);
-    expect(restoreCursorInTable).toHaveBeenCalled();
-    // Should not dispatch again since table restore returned true
-    expect(view.dispatch).not.toHaveBeenCalled();
+    expect(view.dispatch).toHaveBeenCalledTimes(1);
+    const tr = view.dispatch.mock.calls[0][0];
+    const $head = tr.selection.$head;
+    expect($head.parent.textContent).toBe("b2x");
+    expect(tr.getMeta("addToHistory")).toBe(false);
   });
 
-  it("tries code block restoration when blockAnchor is code", () => {
-    vi.mocked(restoreCursorInCodeBlock).mockReturnValue(true);
-    const doc = schema.node("doc", null, [codeBlock("code", 1)]);
-    const state = createState(doc);
-    const view = createMockView(state);
+  it("restores into the anchored code block line and column when blockAnchor is code", () => {
+    const doc = schema.node("doc", null, [para("intro", 1), codeBlock("abc\ndefgh", 2)]);
+    const view = createMockView(createState(doc));
 
     const info: CursorInfo = {
-      sourceLine: 1,
+      sourceLine: 2,
       wordAtCursor: "",
       offsetInWord: 0,
       nodeType: "code_block",
       percentInLine: 0,
       contextBefore: "",
       contextAfter: "",
-      blockAnchor: { kind: "code", lineInBlock: 0, columnInLine: 2 },
+      blockAnchor: { kind: "code", lineInBlock: 1, columnInLine: 2 },
     };
 
     restoreCursorInTiptap(view as never, info);
-    expect(restoreCursorInCodeBlock).toHaveBeenCalled();
-    expect(view.dispatch).not.toHaveBeenCalled();
+    expect(view.dispatch).toHaveBeenCalledTimes(1);
+    const tr = view.dispatch.mock.calls[0][0];
+    // Code block content starts after "intro" paragraph (7) + 1; "abc\n" + "de".
+    expect(tr.selection.$head.parent.type.name).toBe("codeBlock");
+    expect(tr.selection.$head.parentOffset).toBe(4 + 2);
   });
 
-  it("falls back to generic restore when block anchor restore fails", () => {
-    vi.mocked(restoreCursorInCodeBlock).mockReturnValue(false);
+  it("falls back to generic restore when no code block matches the anchor", () => {
     const doc = schema.node("doc", null, [para("fallback text", 1)]);
     const state = createState(doc);
     const view = createMockView(state);
@@ -277,7 +207,8 @@ describe("restoreCursorInTiptap", () => {
     };
 
     restoreCursorInTiptap(view as never, info);
-    expect(view.dispatch).toHaveBeenCalled();
+    expect(view.dispatch).toHaveBeenCalledTimes(1);
+    expect(view.dispatch.mock.calls[0][0].selection.$head.parent.textContent).toBe("fallback text");
   });
 
   it("falls back to closest sourceLine when exact match not found", () => {
@@ -381,8 +312,7 @@ describe("restoreCursorInTiptap", () => {
     expect(tr.getMeta("addToHistory")).toBe(false);
   });
 
-  it("falls back to table restore when code block anchor fails", () => {
-    vi.mocked(restoreCursorInTable).mockReturnValue(false);
+  it("falls back to generic restore when no table matches the anchor", () => {
     const doc = schema.node("doc", null, [para("text", 1)]);
     const state = createState(doc);
     const view = createMockView(state);
@@ -399,9 +329,28 @@ describe("restoreCursorInTiptap", () => {
     };
 
     restoreCursorInTiptap(view as never, info);
-    expect(restoreCursorInTable).toHaveBeenCalled();
-    // Table restore failed, so falls through to generic restore
-    expect(view.dispatch).toHaveBeenCalled();
+    // No table in the document, so the generic restore lands in the paragraph.
+    expect(view.dispatch).toHaveBeenCalledTimes(1);
+    expect(view.dispatch.mock.calls[0][0].selection.$head.parent.textContent).toBe("text");
+  });
+
+  it("falls back to generic restore when the anchored table cell does not exist", () => {
+    const doc = schema.node("doc", null, [table([["h1"], ["a1"]], 1)]);
+    const view = createMockView(createState(doc));
+
+    const info: CursorInfo = {
+      sourceLine: 1,
+      wordAtCursor: "a1",
+      offsetInWord: 0,
+      nodeType: "table_cell",
+      percentInLine: 0,
+      contextBefore: "",
+      contextAfter: "a1",
+      blockAnchor: { kind: "table", row: 5, col: 0, offsetInCell: 0 },
+    };
+
+    restoreCursorInTiptap(view as never, info);
+    expect(view.dispatch).toHaveBeenCalledTimes(1);
   });
 
   it("handles blockAnchor with undefined kind gracefully", () => {

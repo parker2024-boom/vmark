@@ -1,174 +1,163 @@
 /**
  * Pre/post processors for VMark's custom escape markers.
  *
- * Users can write `\==`, `\++`, `\^`, `\~` to produce literal characters.
- * Because remark strips backslash escapes before our plugins run, we
- * swap those sequences for Unicode Private Use Area placeholders before
- * parsing, then convert the placeholders back to literal characters
- * after parsing.
+ * Purpose: users write `\==`, `\++`, `\^`, `\~` to produce literal characters.
+ * remark resolves backslash escapes before VMark's inline-mark plugin runs, so
+ * by then `\==` and `==` are the same text. The sequences are therefore
+ * swapped for Unicode Private Use Area placeholders before parsing — inert to
+ * every tokenizer — and swapped back once the marks have been read.
  *
+ * Key decisions:
+ *   - Every sequence is replaced, wherever it stands; WHERE an escape applies
+ *     is decided afterwards, from the node the placeholder ended up in. The
+ *     parser already knows what is code, math, HTML, a link destination or a
+ *     paragraph. A scanner run over the source beforehand has to guess, and
+ *     guessed wrong: one stray backtick was taken for the start of a code span
+ *     that never closed, switching escapes off for the rest of the document,
+ *     while indented code, math, HTML, frontmatter and link destinations were
+ *     not recognised at all and kept the placeholder — a private-use character
+ *     written into the user's file.
+ *   - Where the parser reads no escapes — code, math, HTML, frontmatter, an
+ *     autolink's address, a reference's identifier — the placeholder goes back
+ *     to the sequence as written (`\==`). Everywhere else it becomes the
+ *     literal marker (`==`), which is what the escape means.
+ *   - Two passes, because transforms run between them. Raw nodes are restored
+ *     straight after parsing: a later transform may turn one into text (math
+ *     that fails validation), and that text must already hold the source.
+ *     HTML waits for the second pass: a `<details>` block is HTML that is
+ *     parsed again as markdown, and its text needs the placeholders until the
+ *     inline marks inside it have been read.
+ *   - The source scan honours backslash pairing: in `\\==` the backslashes
+ *     escape each other and the marker is real.
+ *
+ * @coordinates-with ../parser.ts — runs the three steps around the parse
+ * @coordinates-with ../inlineParser.ts — the same steps for a details summary
+ * @coordinates-with ../plugins/customInline.ts — the marks the placeholders hide from
  * @module utils/markdownPipeline/parser/escapeMarkers
  */
 
-import type { Root, Parent, Text } from "mdast";
+import type { Root } from "mdast";
 
 /**
  * Escape placeholders for custom inline markers.
  * Uses Unicode Private Use Area to avoid conflicts with normal text.
  */
-const ESCAPE_PATTERNS: Array<{ sequence: string; placeholder: string; restore: string }> = [
-  { sequence: "\\==", placeholder: "\uE001\uE001", restore: "==" },
-  { sequence: "\\++", placeholder: "\uE002\uE002", restore: "++" },
-  { sequence: "\\^", placeholder: "\uE003", restore: "^" },
-  { sequence: "\\~", placeholder: "\uE004", restore: "~" },
+const ESCAPE_PATTERNS: ReadonlyArray<{ sequence: string; placeholder: string; restore: string }> = [
+  { sequence: "\\==", placeholder: "", restore: "==" },
+  { sequence: "\\++", placeholder: "", restore: "++" },
+  { sequence: "\\^", placeholder: "", restore: "^" },
+  { sequence: "\\~", placeholder: "", restore: "~" },
 ];
 
+const ANY_PLACEHOLDER = /[-]/;
+
+/** Node types whose `value` the parser copies from the source without reading escapes. */
+const RAW_VALUE_TYPES: ReadonlySet<string> = new Set(["code", "inlineCode", "math", "inlineMath", "yaml"]);
+
 /**
- * Pre-process markdown to handle escaped custom markers.
- * Replaces \== \++ \^ \~ with Unicode placeholders before remark parsing.
+ * Replace `\==`, `\++`, `\^` and `\~` with placeholders, everywhere.
  *
- * Important: Do NOT touch code spans or fenced code blocks. Backslash escapes
- * are literal inside code, and replacing them would corrupt code content.
+ * One pass over the backslashes. A backslash that does not start a sequence
+ * escapes the character after it, so both are skipped: that is what keeps the
+ * second backslash of `\\==` from being read as the start of `\==`.
  */
 export function preprocessEscapedMarkers(markdown: string): string {
   let out = "";
-
-  let inInlineCode = false;
-  let inlineFenceLen = 0;
-
-  let inFencedCodeBlock = false;
-  let fencedChar: "`" | "~" | "" = "";
-  let fencedLen = 0;
-
-  const getLineEnd = (from: number): number => {
-    const idx = markdown.indexOf("\n", from);
-    return idx === -1 ? markdown.length : idx;
-  };
-
-  const getLineForFenceDetection = (line: string): string => {
-    return line.endsWith("\r") ? line.slice(0, -1) : line;
-  };
-
-  for (let i = 0; i < markdown.length; ) {
-    const atLineStart = i === 0 || markdown[i - 1] === "\n";
-
-    // Fenced code blocks are line-based; handle by copying whole lines verbatim.
-    if (atLineStart && !inInlineCode) {
-      const lineEnd = getLineEnd(i);
-      const line = markdown.slice(i, lineEnd);
-      const lineForDetect = getLineForFenceDetection(line);
-
-      if (!inFencedCodeBlock) {
-        const openMatch = lineForDetect.match(/^ {0,3}(`{3,}|~{3,})/);
-        if (openMatch) {
-          inFencedCodeBlock = true;
-          fencedChar = openMatch[1][0] as "`" | "~";
-          fencedLen = openMatch[1].length;
-
-          out += line;
-          if (lineEnd < markdown.length) out += "\n";
-          i = lineEnd < markdown.length ? lineEnd + 1 : lineEnd;
-          continue;
-        }
-      } else {
-        // fencedChar is always truthy when inFencedCodeBlock=true (invariant: set at open)
-        const closeRe = new RegExp(
-          `^ {0,3}\\${fencedChar}{${fencedLen},}(?=\\s|$)`
-        );
-        if (closeRe.test(lineForDetect)) {
-          inFencedCodeBlock = false;
-          fencedChar = "";
-          fencedLen = 0;
-
-          out += line;
-          if (lineEnd < markdown.length) out += "\n";
-          i = lineEnd < markdown.length ? lineEnd + 1 : lineEnd;
-          continue;
-        }
-      }
-
-      if (inFencedCodeBlock) {
-        out += line;
-        if (lineEnd < markdown.length) out += "\n";
-        i = lineEnd < markdown.length ? lineEnd + 1 : lineEnd;
-        continue;
-      }
+  let copied = 0;
+  for (let at = markdown.indexOf("\\"); at !== -1; at = markdown.indexOf("\\", at)) {
+    const match = ESCAPE_PATTERNS.find(({ sequence }) => markdown.startsWith(sequence, at));
+    if (match) {
+      out += markdown.slice(copied, at) + match.placeholder;
+      at += match.sequence.length;
+      copied = at;
+    } else {
+      at += 2;
     }
-
-    // Dead path: the line-based fast path (above) always advances i to the next line start,
-    // so atLineStart is always true when inFencedCodeBlock=true outside inline code.
-    /* v8 ignore next 4 -- @preserve structurally unreachable: fenced block chars are always consumed by the line-based path at line-start; this char-by-char fallback cannot be reached in practice */
-    if (inFencedCodeBlock) {
-      out += markdown[i];
-      i += 1;
-      continue;
-    }
-
-    // Inline code spans (backticks). Copy verbatim while inside.
-    if (markdown[i] === "`") {
-      let runLen = 1;
-      while (i + runLen < markdown.length && markdown[i + runLen] === "`") {
-        runLen += 1;
-      }
-
-      if (!inInlineCode) {
-        inInlineCode = true;
-        inlineFenceLen = runLen;
-      } else if (runLen === inlineFenceLen) {
-        inInlineCode = false;
-        inlineFenceLen = 0;
-      }
-
-      out += markdown.slice(i, i + runLen);
-      i += runLen;
-      continue;
-    }
-
-    if (inInlineCode) {
-      out += markdown[i];
-      i += 1;
-      continue;
-    }
-
-    // Escaped markers outside code.
-    if (markdown[i] === "\\") {
-      const match = ESCAPE_PATTERNS.find(({ sequence }) =>
-        markdown.startsWith(sequence, i)
-      );
-      if (match) {
-        out += match.placeholder;
-        i += match.sequence.length;
-        continue;
-      }
-    }
-
-    out += markdown[i];
-    i += 1;
   }
+  return copied === 0 ? markdown : out + markdown.slice(copied);
+}
 
+/** `text` with each placeholder replaced by the escape sequence as written. */
+function toSequences(text: string): string {
+  if (!ANY_PLACEHOLDER.test(text)) return text;
+  let out = text;
+  for (const { placeholder, sequence } of ESCAPE_PATTERNS) out = out.split(placeholder).join(sequence);
   return out;
 }
 
-/** Restore placeholders back to literal marker characters in the parsed tree. */
-export function restoreEscapedMarkers(tree: Root): void {
-  visitAndRestoreText(tree);
+/** `text` with each placeholder replaced by the literal marker. */
+function toLiterals(text: string): string {
+  if (!ANY_PLACEHOLDER.test(text)) return text;
+  let out = text;
+  for (const { placeholder, restore } of ESCAPE_PATTERNS) out = out.split(placeholder).join(restore);
+  return out;
 }
 
-function visitAndRestoreText(node: Root | Parent): void {
-  /* v8 ignore next -- @preserve defensive guard: always called with Root or Parent nodes that have children; the guard protects against unexpected leaf nodes in future callers */
-  if (!("children" in node) || !Array.isArray(node.children)) return;
+type Fields = Record<string, unknown>;
 
-  for (const child of node.children) {
-    if (child.type === "text") {
-      const textNode = child as Text;
-      for (const { placeholder, restore } of ESCAPE_PATTERNS) {
-        if (textNode.value.includes(placeholder)) {
-          textNode.value = textNode.value.split(placeholder).join(restore);
-        }
-      }
-    }
-    if ("children" in child && Array.isArray((child as Parent).children)) {
-      visitAndRestoreText(child as Parent);
+/** Apply `restore` to every string under `holder[key]`, in place. */
+function restoreField(holder: Fields, key: string, restore: (text: string) => string): void {
+  const value = holder[key];
+  if (typeof value === "string") {
+    holder[key] = restore(value);
+  } else if (value && typeof value === "object") {
+    const nested = value as Fields;
+    for (const inner of Object.keys(nested)) restoreField(nested, inner, restore);
+  }
+}
+
+/** Every node of `tree`, without recursion: a hostile tree can be deep. */
+function eachNode(tree: Root, visit: (node: Fields) => void): void {
+  const pending: Fields[] = [tree as unknown as Fields];
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    visit(node);
+    // Pushed one by one: a spread of a very long child list overflows the
+    // argument limit.
+    if (Array.isArray(node.children)) {
+      for (const child of node.children as Fields[]) pending.push(child);
     }
   }
+}
+
+/** True when `node` is a link written as an address, not as `[text](address)`. */
+function isAutolink(node: Fields, source: string): boolean {
+  if (node.type !== "link") return false;
+  const start = (node.position as { start?: { offset?: number } } | undefined)?.start?.offset;
+  // A link made by a transform has no position; those are bare addresses too.
+  return typeof start !== "number" || source[start] !== "[";
+}
+
+/**
+ * First pass, on the tree as parsed and before any transform: put the source
+ * text back where the parser read no escapes. `source` is the text that was
+ * parsed, placeholders included.
+ */
+export function restoreRawEscapedMarkers(tree: Root, source: string): void {
+  eachNode(tree, (node) => {
+    if (RAW_VALUE_TYPES.has(String(node.type))) {
+      restoreField(node, "value", toSequences);
+      restoreField(node, "data", toSequences);
+    }
+    restoreField(node, "identifier", toSequences);
+    if (isAutolink(node, source)) {
+      restoreField(node, "url", toSequences);
+      for (const child of (node.children as Fields[] | undefined) ?? []) {
+        if (child.type === "text") restoreField(child, "value", toSequences);
+      }
+    }
+  });
+}
+
+/**
+ * Second pass, after the transforms: the source text back into what is still
+ * HTML, and the literal marker everywhere else.
+ */
+export function restoreEscapedMarkers(tree: Root): void {
+  eachNode(tree, (node) => {
+    for (const key of Object.keys(node)) {
+      if (key === "children" || key === "position" || key === "type") continue;
+      const raw = node.type === "html" || (node.type === "details" && key === "summary");
+      restoreField(node, key, raw ? toSequences : toLiterals);
+    }
+  });
 }

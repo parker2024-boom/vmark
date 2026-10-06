@@ -51,6 +51,7 @@ import {
   registerExportCommands,
   registerPandocFormatCommands,
 } from "./exportCommands";
+import i18n from "@/i18n";
 
 beforeEach(() => {
   _resetCommandBus();
@@ -284,5 +285,26 @@ describe("export.pandocHint", () => {
       executeCommand("export.pandocHint", undefined, { windowLabel: "main" }),
     ).resolves.toBe(true);
     expect(mockToastError).toHaveBeenCalledTimes(1);
+  });
+});
+
+// WI-RA24.4 — a document with no heading and no file is offered the app's
+// translated untitled name, not the English literal "Untitled". The app tier's
+// i18n is English-only, so `i18n.t` returns a marker for the key.
+describe("the default name of an untitled document with no heading", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each([
+    ["export.html", () => mockExportToHtml],
+    ["export.pandoc-docx", () => mockExportViaPandoc],
+  ])("%s offers the translated untitled name", async (id, exporter) => {
+    vi.spyOn(i18n, "t").mockImplementation(((key: string) =>
+      key === "common:untitled" ? "Sans titre" : key) as typeof i18n.t);
+    mockGetActiveDocument.mockReturnValue({ content: "no heading here", filePath: null });
+    if (id.startsWith("export.pandoc")) await registerPandocFormatCommands();
+
+    await executeCommand(id, undefined, { windowLabel: "main" });
+
+    expect(exporter()).toHaveBeenCalledWith(expect.objectContaining({ defaultName: "Sans titre" }));
   });
 });

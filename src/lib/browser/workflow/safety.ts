@@ -1,5 +1,5 @@
 /**
- * Workflow write-safety decision core (WI-4.2 / R8/R8a).
+ * Workflow write-safety decision core (R8/R8a).
  *
  * Purpose: the pure decision rules that keep an automated workflow from doing
  * something irreversible-and-wrong — above all, double-posting a write that may
@@ -17,13 +17,13 @@
  *     inconclusive → stop and ask. A write that *reports* success while its
  *     postcondition says it did not land contradicts itself → stop and ask.
  *   - (The tier-escalation ladder and the genie-loop bounds that used to live
- *     here were removed in the 2026-09-03 audit-fix round: neither had a
+ *     here were removed in an audit-fix round: neither had a
  *     production consumer.)
  *   - **Writes never auto-escalate** to a higher (more autonomous) tier — an
  *     escalation is a new, human-approved operation, not an automatic fallback.
  *   - Idempotency keys make a repeated write detectable. The collision-averse
- *     encoding behind them lives in `canonicalEncode.ts` (split out in audit r3
- *     #140): a key collision between two different writes IS the double-post.
+ *     encoding behind them lives in `canonicalEncode.ts`:
+ *     a key collision between two different writes IS the double-post.
  *
  * @coordinates-with services/browser/lease.ts — a lost lease also pauses a workflow
  * @coordinates-with lib/browser/workflow/parser.ts — steps come from the parsed IR

@@ -1,5 +1,5 @@
 /**
- * Injected extract script (WI-NB4.1) — capture the page's HTML for reader-mode
+ * Injected extract script — capture the page's HTML for reader-mode
  * extraction.
  *
  * Purpose: one isolated-world round trip returning `{html, truncated}` —

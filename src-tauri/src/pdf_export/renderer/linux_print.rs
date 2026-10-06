@@ -22,19 +22,19 @@
 //!     has. Do NOT unify this with Windows: there `ShowPrintUI` draws the
 //!     print UI INSIDE the webview window, so hiding it would hide the
 //!     dialog itself.
-//!   - **The outcome is reported (WI-FL6.3).** `run_dialog` returns
+//!   - **The outcome is reported.** `run_dialog` returns
 //!     `Cancel` or `Print`; Cancel settles `cancelled` on the spot, and a
 //!     confirmed job settles `completed` from `finished` (or its error from
 //!     `failed`). `shown()` is called just before `run_dialog`, which BLOCKS
 //!     in a nested GTK loop for as long as the user deliberates — that is
 //!     why the bounded wait in `wait.rs` ends there.
-//!   - **The claim is the last thing before the dialog (#227).** One
+//!   - **The claim is the last thing before the dialog.** One
 //!     compare-and-swap with the caller's timeout: a caller whose bounded
 //!     wait ended gets no dialog, and a caller that loses the race learns the
 //!     dialog is up and keeps waiting.
 //!   - **The window, the navigation and the load-failure tracking are
 //!     `linux_nav.rs`'s, and the operation's signal wiring is `linux.rs`'s
-//!     `settle_from_signals`** (#205, #206), both shared with export. This
+//!     `settle_from_signals`**, both shared with export. This
 //!     file keeps what is print's own: what `finished` means, and the dialog.
 //!
 //! @coordinates-with linux_nav.rs — builds, navigates and hands over the loaded webview
@@ -63,8 +63,8 @@ use super::RenderSink;
 /// from `failed` — because a confirmed job keeps spooling after the dialog
 /// closes (#1343).
 ///
-/// `_read_access_dir` is the PLATFORM CONTRACT, not dead code (audit 20260907
-/// #412): `mod.rs` dispatches to the macOS, Linux and Windows backends with
+/// `_read_access_dir` is the PLATFORM CONTRACT, not dead code (audit 20260907):
+/// `mod.rs` dispatches to the macOS, Linux and Windows backends with
 /// one argument list under `#[cfg]`, so every backend declares it. Only macOS
 /// reads it — `WKWebView::loadFileURL:allowingReadAccessToURL:` needs an
 /// explicit read-access scope for the directory the document loads resources
@@ -107,7 +107,7 @@ fn start_print(
             settle_from_signals(&op, app, label, &sink, PrintOutcome::completed);
 
             // Immediately before the dialog, and atomic with the caller's
-            // timeout (#227).
+            // timeout.
             if !sink.claim() {
                 sink.settle(Err(CommandError::cancelled(
                     "print abandoned before the dialog was shown",

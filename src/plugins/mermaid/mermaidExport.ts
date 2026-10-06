@@ -4,6 +4,8 @@
  * Adds a PNG export button to mermaid diagram containers.
  * Thin wrapper binding the mermaid export renderer to the shared
  * render → PNG → save flow in shared/diagramExportPng.ts.
+ *
+ * @module plugins/mermaid/mermaidExport
  */
 
 import { renderMermaidForExport } from "./index";

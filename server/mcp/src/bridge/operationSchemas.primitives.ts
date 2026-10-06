@@ -6,9 +6,9 @@
  * Purpose: give the two schema maps one declaration of each shared field
  * shape, without a module cycle. `operationSchemas.ts` spreads the browser map
  * into the full contract, so the browser module could not import these back
- * from it; the file-size split (WI-NB4.1) re-spelled `id` and `optionalTabId`
+ * from it; the file-size split re-spelled `id` and `optionalTabId`
  * locally instead — two declarations of one contract, which is the drift this
- * directory exists to end (audit row #170). This module depends on zod alone,
+ * directory exists to end. This module depends on zod alone,
  * so both maps import it and neither imports the other's helpers.
  *
  * Key decisions:

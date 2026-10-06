@@ -7,9 +7,11 @@
  * concerned; a fingerprint change is semantic corruption regardless of how
  * innocent the markdown diff looked.
  *
- * Positional bookkeeping is stripped: `sourceLine` and `blankLinesBefore` record
- * where a node came from, not what it means, and re-serializing legitimately
- * moves them. Everything else — node type, structural attributes, mark sets and
+ * Positional bookkeeping is stripped: `sourceLine`, `blankLinesBefore` and a
+ * list item's `tightBefore` record where a node came from and how the source
+ * spaced it, not what it means, and re-serializing legitimately moves them (a
+ * loose list is loose whichever of its gaps carry the blank line; `spread`
+ * says so). Everything else — node type, structural attributes, mark sets and
  * text — is significant.
  *
  * @coordinates-with roundtripFidelity.test.ts — the gate
@@ -18,12 +20,25 @@
 import type { Node as PMNode } from "@tiptap/pm/model";
 
 /** Attributes that record provenance rather than meaning. */
-const VOLATILE_ATTRS = new Set(["sourceLine", "blankLinesBefore"]);
+const VOLATILE_ATTRS = new Set(["sourceLine", "blankLinesBefore", "tightBefore"]);
 
-function attrsOf(node: PMNode): string {
+/** What a caller may leave out of a fingerprint on top of the volatile attributes. */
+export interface FingerprintOptions {
+  /**
+   * Attributes the comparison is not about. The round-trip gates use none: a
+   * list's looseness (`spread`) is meaning they must preserve. A gate that
+   * compares two producers whose difference in an attribute is decided
+   * downstream of what it judges may leave that attribute out.
+   */
+  ignoreAttrs?: ReadonlySet<string>;
+}
+
+function attrsOf(node: PMNode, ignore: ReadonlySet<string> | undefined): string {
   const attrs = node.attrs ?? {};
   const significant = Object.keys(attrs)
-    .filter((k) => !VOLATILE_ATTRS.has(k) && attrs[k] !== null && attrs[k] !== undefined)
+    .filter(
+      (k) => !VOLATILE_ATTRS.has(k) && !ignore?.has(k) && attrs[k] !== null && attrs[k] !== undefined,
+    )
     .sort()
     .map((k) => `${k}=${JSON.stringify(attrs[k])}`);
   return significant.length ? `{${significant.join(",")}}` : "";
@@ -49,7 +64,7 @@ function marksOf(node: PMNode): string {
  * Text nodes contribute their content, so a lost heading level, a dropped mark,
  * a changed URL or a deleted node all change the fingerprint.
  */
-export function docFingerprint(doc: PMNode): string {
+export function docFingerprint(doc: PMNode, options: FingerprintOptions = {}): string {
   const parts: string[] = [];
   const walk = (node: PMNode, depth: number): void => {
     const indent = "  ".repeat(depth);
@@ -57,7 +72,7 @@ export function docFingerprint(doc: PMNode): string {
       parts.push(`${indent}text${marksOf(node)}:${JSON.stringify(node.text ?? "")}`);
       return;
     }
-    parts.push(`${indent}${node.type.name}${attrsOf(node)}${marksOf(node)}`);
+    parts.push(`${indent}${node.type.name}${attrsOf(node, options.ignoreAttrs)}${marksOf(node)}`);
     node.forEach((child) => walk(child, depth + 1));
   };
   doc.forEach((child) => walk(child, 0));

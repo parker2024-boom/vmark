@@ -1,3 +1,9 @@
+/**
+ * The list of every registered markdown lint rule the linter runs over a document.
+ *
+ * @module lib/lintEngine/rules/allRules
+ */
+
 import type { LintRule } from "../types";
 import { noReversedLink } from "./noReversedLink";
 import { noMissingSpaceAtx } from "./noMissingSpaceAtx";

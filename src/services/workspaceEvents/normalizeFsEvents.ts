@@ -2,10 +2,11 @@
  * Raw `fs:changed` → canonical semantic events (pure).
  *
  * Purpose: The deterministic core of the workspace event layer. Turns one raw
- *   Rust `fs:changed` emission into a scoped, deduplicated list of
- *   {@link SemanticWorkspaceEvent}, flagging self-write echoes. Pure and
- *   collaborator-injected (mirrors services/windowClose/fsChangeHandlers) so it unit-tests
- *   without Tauri, React, or timers.
+ *   Rust `fs:changed` batch into a scoped list of {@link SemanticWorkspaceEvent}
+ *   — each change deduplicated by path, self-write echoes flagged, and the
+ *   watcher's "I lost track of the tree" flag carried as a `rescan` event. Pure
+ *   and collaborator-injected (mirrors services/windowClose/fsChangeHandlers) so
+ *   it unit-tests without Tauri, React, or timers.
  *
  * Boundary discipline: this layer emits the *event*; it never decides the
  *   event's meaning or its reaction. Scope-filter + self-write flag + kind
@@ -15,7 +16,12 @@
  * @module services/workspaceEvents/normalizeFsEvents
  */
 
-import type { RawFsChangeEvent, SemanticWorkspaceEvent, WorkspaceEventKind } from "./types";
+import type {
+  RawFsChangeBatch,
+  RawFsChangeEvent,
+  SemanticWorkspaceEvent,
+  WorkspaceEventKind,
+} from "./types";
 
 /** Injected collaborators — kept out of the pure core so tests pass fakes. */
 export interface NormalizeDeps {
@@ -93,9 +99,52 @@ function collectRenames(
 }
 
 /**
- * Normalize one raw `fs:changed` emission into scoped, deduplicated semantic
- * events. Returns `[]` for events from another window, outside the workspace,
- * or with no in-scope paths.
+ * Normalize one raw `fs:changed` batch: each change in the order the watcher
+ * reported it, then — when the watcher says it lost track of the tree — one
+ * `rescan` event for the root. Returns `[]` for a batch from another window or
+ * while nothing is watched.
+ *
+ * Changes are normalized ONE AT A TIME. Two single-path renames that merely
+ * share a batch must never be read as one [old, new] pair, and a
+ * `create → remove → create` of one path must reach consumers as three events.
+ */
+export function normalizeFsBatch(
+  batch: RawFsChangeBatch,
+  deps: NormalizeDeps,
+): SemanticWorkspaceEvent[] {
+  const { windowLabel, rootPath, normalizePath } = deps;
+
+  if (!rootPath) return [];
+  // Defensive: a malformed runtime payload must never throw inside the listener.
+  if (!batch || batch.watchId !== windowLabel) return [];
+
+  const events: SemanticWorkspaceEvent[] = [];
+  for (const change of Array.isArray(batch.changes) ? batch.changes : []) {
+    if (!change || typeof change !== "object") continue;
+    for (const event of normalizeFsEvents(
+      { watchId: batch.watchId, rootPath: batch.rootPath, kind: change.kind, paths: change.paths },
+      deps,
+    )) {
+      events.push(event);
+    }
+  }
+
+  if (batch.rescan === true && typeof batch.rootPath === "string") {
+    const root = normalizePath(rootPath);
+    // A rescan of a root this window has since left says nothing about the
+    // one it watches now.
+    if (normalizePath(batch.rootPath) === root) {
+      events.push({ kind: "rescan", path: root, rootPath: root, selfWrite: false });
+    }
+  }
+
+  return events;
+}
+
+/**
+ * Normalize ONE change into scoped, deduplicated semantic events. Returns `[]`
+ * for a change from another window, outside the workspace, or with no in-scope
+ * paths.
  */
 export function normalizeFsEvents(
   event: RawFsChangeEvent,

@@ -4,7 +4,7 @@
  *   (TypeScript convention); the YAML on disk uses kebab-case (GHA
  *   convention).
  *
- *   Codex audit HIGH-2 fix: PermissionsForm previously used kebab-case
+ *   PermissionsForm previously used kebab-case
  *   keys to read from a camelCase IR — `pull-requests`, `id-token`,
  *   `security-events` lookups returned undefined. The form rendered
  *   blank for those scopes and edits dropped. This module centralizes

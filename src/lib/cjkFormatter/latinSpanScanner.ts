@@ -6,46 +6,33 @@
  * constructs (URLs, versions, decimals, times) from being converted to fullwidth.
  *
  * Key decisions:
- *   - Pattern order matters: more specific patterns (URLs, emails) match before
- *     general ones (decimals) to prevent partial matches stealing substrings
- *   - Overlap detection: once a range is claimed by a technical subspan, later
- *     patterns cannot re-claim overlapping characters
+ *   - The technical constructs themselves are found by technicalSubspans.ts;
+ *     this module finds the spans and answers "what is at this position"
+ *   - Spans and subspans are sorted and disjoint, and looked up by binary
+ *     search: the punctuation rule asks once per punctuation mark
  *   - Surrogate pair awareness: supplementary-plane CJK (Extensions B-G) are
  *     handled by advancing 2 code units at a time
  *   - Whitespace-only spans are discarded to avoid false positives
- *   - Korean (Hangul) excluded from CJK_LETTER_REGEX since spacing rules differ
+ *   - A span character is a Latin LETTER by script, not by ASCII range, so an
+ *     accented word is one span rather than several
+ *   - Korean (Hangul) is not a CJK letter here, since its spacing rules differ
  *
  * Spec Reference: Rule 2, Section 2.1 of cjk-typography-rules-draft.md
  *
  * @coordinates-with rules.ts — normalizeFullwidthPunctuation uses isInTechnicalSubspan
  * @coordinates-with quotePairing.ts — isCJKLetter reused for CJK boundary detection
+ * @coordinates-with rules/shared.ts — the one definition of a CJK and of a Latin letter
+ * @coordinates-with technicalSubspans.ts — finds the constructs inside one span
  * @module lib/cjkFormatter/latinSpanScanner
  */
 
-// CJK letter detection (Han, Hiragana, Katakana, Bopomofo) — excluding Korean (Hangul).
-// Unicode property escapes correctly handle supplementary-plane Han characters.
-const CJK_LETTER_REGEX =
-  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Bopomofo}]/u;
+import { isCJKLetter, isLatinLetter } from "./rules/shared";
+import { findTechnicalSubspans, type TechnicalSubspan } from "./technicalSubspans";
 
-type TechnicalSubspanType =
-  | "urlLike"
-  | "emailLike"
-  | "domainLike"
-  | "versionLike"
-  | "decimalLike"
-  | "timeLike"
-  | "thousandsLike";
-
-export interface TechnicalSubspan {
-  /** Start position relative to the Latin span */
-  start: number;
-  /** End position relative to the Latin span */
-  end: number;
-  /** Type of technical construct */
-  type: TechnicalSubspanType;
-  /** The matched text */
-  text: string;
-}
+// Re-exported: this module is where callers outside the rules have always
+// found it. The definition itself lives in rules/shared.ts.
+export { isCJKLetter };
+export type { TechnicalSubspan };
 
 export interface LatinSpan {
   /** Start position in the original text */
@@ -59,60 +46,8 @@ export interface LatinSpan {
 }
 
 /**
- * Technical pattern definitions
- * Order matters: more specific patterns should come first to prevent partial matches
- */
-const TECHNICAL_PATTERNS: Array<{
-  type: TechnicalSubspanType;
-  pattern: RegExp;
-}> = [
-  // URL-like: starts with http:// or https://
-  {
-    type: "urlLike",
-    pattern: /https?:\/\/[^\s]+/g,
-  },
-  // Email-like: contains @ with domain
-  {
-    type: "emailLike",
-    pattern: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
-  },
-  // Version-like: v1.2.3 or 1.2.3.4 (requires v prefix OR at least 2 dots)
-  {
-    type: "versionLike",
-    pattern: /\b(?:v\d+(?:\.\d+)+|\d+(?:\.\d+){2,})\b/g,
-  },
-  // Time-like: 12:30 or 1:30
-  {
-    type: "timeLike",
-    pattern: /\b\d{1,2}:\d{2}(?::\d{2})?\b/g,
-  },
-  // Thousands-like: 1,000 or 1,000,000
-  {
-    type: "thousandsLike",
-    pattern: /\b\d{1,3}(?:,\d{3})+\b/g,
-  },
-  // Domain-like: example.com (must have dot, no spaces, not just numbers)
-  {
-    type: "domainLike",
-    pattern: /\b[a-zA-Z][a-zA-Z0-9-]*\.[a-zA-Z0-9.-]+[a-zA-Z]\b/g,
-  },
-  // Decimal-like: 3.14 (number.number)
-  {
-    type: "decimalLike",
-    pattern: /\b\d+\.\d+\b/g,
-  },
-];
-
-/**
- * Check if a character is a CJK letter (Han, Kana, Bopomofo)
- */
-export function isCJKLetter(char: string): boolean {
-  return CJK_LETTER_REGEX.test(char);
-}
-
-/**
  * Check if a character can be part of a Latin span
- * Allowed: A-Z, a-z, 0-9, whitespace, common ASCII punctuation
+ * Allowed: Latin letters, 0-9, whitespace, common ASCII punctuation
  */
 function isLatinSpanChar(char: string): boolean {
   const code = char.charCodeAt(0);
@@ -120,9 +55,8 @@ function isLatinSpanChar(char: string): boolean {
   // Newline breaks spans
   if (char === "\n") return false;
 
-  // Letters A-Z, a-z
-  if ((code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a))
-    return true;
+  // Latin letters, accented ones included
+  if (isLatinLetter(char)) return true;
 
   // Digits 0-9
   if (code >= 0x30 && code <= 0x39) return true;
@@ -135,48 +69,6 @@ function isLatinSpanChar(char: string): boolean {
   if (allowedPunctuation.includes(char)) return true;
 
   return false;
-}
-
-/**
- * Find technical subspans within a Latin span
- */
-function findTechnicalSubspans(spanText: string): TechnicalSubspan[] {
-  const subspans: TechnicalSubspan[] = [];
-  const usedRanges: Array<[number, number]> = [];
-
-  for (const { type, pattern } of TECHNICAL_PATTERNS) {
-    // Reset regex state
-    pattern.lastIndex = 0;
-
-    let match;
-    while ((match = pattern.exec(spanText)) !== null) {
-      const start = match.index;
-      const end = start + match[0].length;
-
-      // Check if this range overlaps with an existing subspan
-      const overlaps = usedRanges.some(
-        ([usedStart, usedEnd]) =>
-          (start >= usedStart && start < usedEnd) ||
-          (end > usedStart && end <= usedEnd) ||
-          (start <= usedStart && end >= usedEnd)
-      );
-
-      if (!overlaps) {
-        subspans.push({
-          start,
-          end,
-          type,
-          text: match[0],
-        });
-        usedRanges.push([start, end]);
-      }
-    }
-  }
-
-  // Sort by start position
-  subspans.sort((a, b) => a.start - b.start);
-
-  return subspans;
 }
 
 /**
@@ -250,10 +142,33 @@ export function scanLatinSpans(text: string): LatinSpan[] {
 }
 
 /**
+ * The index of the range containing `position`, or -1.
+ *
+ * A binary search, so `ranges` must be sorted by start and non-overlapping —
+ * which is how `scanLatinSpans` and `findTechnicalSubspans` return them. The
+ * punctuation rule asks once per punctuation mark; walking the list instead
+ * made a document of many short spans cost its length squared.
+ */
+function indexOfRangeAt(
+  position: number,
+  ranges: ReadonlyArray<{ start: number; end: number }>
+): number {
+  let low = 0;
+  let high = ranges.length - 1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (position < ranges[mid].start) high = mid - 1;
+    else if (position >= ranges[mid].end) low = mid + 1;
+    else return mid;
+  }
+  return -1;
+}
+
+/**
  * Check if a position is inside any Latin span
  */
 export function isInLatinSpan(position: number, spans: LatinSpan[]): boolean {
-  return spans.some((span) => position >= span.start && position < span.end);
+  return indexOfRangeAt(position, spans) !== -1;
 }
 
 /**
@@ -263,17 +178,9 @@ export function getTechnicalSubspanAt(
   position: number,
   spans: LatinSpan[]
 ): TechnicalSubspan | null {
-  for (const span of spans) {
-    if (position >= span.start && position < span.end) {
-      const relativePos = position - span.start;
-      for (const subspan of span.subspans) {
-        if (relativePos >= subspan.start && relativePos < subspan.end) {
-          return subspan;
-        }
-      }
-    }
-  }
-  return null;
+  const span = spans[indexOfRangeAt(position, spans)];
+  if (!span) return null;
+  return span.subspans[indexOfRangeAt(position - span.start, span.subspans)] ?? null;
 }
 
 /**

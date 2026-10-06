@@ -7,25 +7,13 @@
  * - Viewport clamping
  * - Click outside handling
  * - Mounting in editor container
+ *
+ * The menu's actions are the REAL table actions, run against a plain view
+ * object over a real EditorState holding a 3×3 table.
  */
 
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { bindHostSettings } from "@/plugins/shared/hostSettings";
-
-// Mock table actions
-vi.mock("../tableActions.tiptap", () => ({
-  addRowAbove: vi.fn(),
-  addRowBelow: vi.fn(),
-  addColLeft: vi.fn(),
-  addColRight: vi.fn(),
-  deleteCurrentRow: vi.fn(),
-  deleteCurrentColumn: vi.fn(),
-  deleteCurrentTable: vi.fn(),
-  alignColumn: vi.fn(),
-  formatTable: vi.fn(),
-  isCurrentTableFitToWidth: vi.fn(() => false),
-  toggleFitToWidth: vi.fn(),
-}));
 
 // Mock icons
 vi.mock("@/utils/icons", () => ({
@@ -61,18 +49,67 @@ beforeEach(() => {
 
 // Import after mocking
 import { TiptapTableContextMenu } from "../TiptapTableContextMenu";
-import {
-  addRowAbove,
-  addRowBelow,
-  addColLeft,
-  addColRight,
-  deleteCurrentRow,
-  deleteCurrentColumn,
-  deleteCurrentTable,
-  alignColumn,
-  formatTable,
-  toggleFitToWidth,
-} from "../tableActions.tiptap";
+import { isWrapperFitToWidth } from "@/plugins/shared/tableFitToWidth";
+import { Schema, type Node as PmNode } from "@tiptap/pm/model";
+import { EditorState, TextSelection, type Transaction } from "@tiptap/pm/state";
+import { tableNodes } from "@tiptap/pm/tables";
+
+const tables = tableNodes({
+  tableGroup: "block",
+  cellContent: "block+",
+  cellAttributes: { alignment: { default: null } },
+});
+const schema = new Schema({
+  nodes: {
+    doc: { content: "block+" },
+    paragraph: { group: "block", content: "inline*" },
+    text: { group: "inline" },
+    ...tables,
+  },
+});
+
+/** 3×3 table, cells "r{row}c{col}"; r2c2 holds two paragraphs (for Format Table). */
+function tableDoc(): PmNode {
+  const para = (t: string) => schema.nodes.paragraph.create(null, [schema.text(t)]);
+  const rows = [0, 1, 2].map((r) =>
+    schema.nodes.table_row.create(
+      null,
+      [0, 1, 2].map((c) =>
+        schema.nodes.table_cell.create(null, r === 2 && c === 2 ? [para("r2c2"), para("more")] : [para(`r${r}c${c}`)]),
+      ),
+    ),
+  );
+  return schema.nodes.doc.create(null, [schema.nodes.table.create(null, rows), para("after")]);
+}
+
+/** Cell texts of the leading table, row by row; null when the doc has none. */
+function grid(view: ReturnType<typeof createMockView>): string[][] | null {
+  const table = view.state.doc.firstChild;
+  if (table?.type.name !== "table") return null;
+  const rows: string[][] = [];
+  table.forEach((row) => {
+    const cells: string[] = [];
+    row.forEach((cell) => cells.push(cell.textContent));
+    rows.push(cells);
+  });
+  return rows;
+}
+
+function alignments(view: ReturnType<typeof createMockView>): (string | null)[][] {
+  const rows: (string | null)[][] = [];
+  view.state.doc.firstChild!.forEach((row) => {
+    const cells: (string | null)[] = [];
+    row.forEach((cell) => cells.push(cell.attrs.alignment as string | null));
+    rows.push(cells);
+  });
+  return rows;
+}
+
+const ORIGINAL = [
+  ["r0c0", "r0c1", "r0c2"],
+  ["r1c0", "r1c1", "r1c2"],
+  ["r2c0", "r2c1", "r2c2more"],
+];
 
 // Helper functions
 function createEditorContainer() {
@@ -106,12 +143,31 @@ function createEditorContainer() {
   };
 }
 
+/**
+ * A plain view object over a real EditorState: caret in the middle cell
+ * (r1c1); `nodeDOM` answers the table's scroll wrapper for fit-to-width.
+ */
 function createMockView(editorDom: HTMLElement) {
+  const doc = tableDoc();
+  let caret = -1;
+  doc.descendants((node, pos) => {
+    if (caret < 0 && node.isText && node.text === "r1c1") caret = pos + 1;
+  });
+  let state = EditorState.create({ doc, schema });
+  state = state.apply(state.tr.setSelection(TextSelection.create(state.doc, caret)));
+  const wrapper = document.createElement("div");
+  wrapper.className = "table-scroll-wrapper";
   return {
     dom: editorDom,
-    state: {},
-    dispatch: vi.fn(),
+    get state() {
+      return state;
+    },
+    dispatch(tr: Transaction) {
+      state = state.apply(tr);
+    },
     focus: vi.fn(),
+    nodeDOM: (pos: number) => (pos === 0 ? wrapper : null),
+    wrapper,
   };
 }
 
@@ -205,109 +261,45 @@ describe("TiptapTableContextMenu", () => {
       expect(dividers.length).toBeGreaterThan(0);
     });
 
-    it("Insert Row Above action calls addRowAbove", () => {
-      const items = document.querySelectorAll(".table-context-menu-item");
-      (items[0] as HTMLElement).click();
+    // Items in menu order; each click runs the real action on the caret cell (r1c1).
+    const click = (index: number) =>
+      (document.querySelectorAll(".table-context-menu-item")[index] as HTMLElement).click();
+    const COL = (fn: (row: string[]) => string[]) => ORIGINAL.map(fn);
 
-      expect(addRowAbove).toHaveBeenCalledWith(view);
+    it.each([
+      [0, "Insert Row Above", [ORIGINAL[0], ["", "", ""], ORIGINAL[1], ORIGINAL[2]]],
+      [1, "Insert Row Below", [ORIGINAL[0], ORIGINAL[1], ["", "", ""], ORIGINAL[2]]],
+      [2, "Insert Column Left", COL((r) => [r[0], "", r[1], r[2]])],
+      [3, "Insert Column Right", COL((r) => [r[0], r[1], "", r[2]])],
+      [4, "Delete Row", [ORIGINAL[0], ORIGINAL[2]]],
+      [5, "Delete Column", COL((r) => [r[0], r[2]])],
+      [6, "Delete Table", null],
+    ] as const)("item %i (%s) changes the table structure", (index, _name, expected) => {
+      click(index);
+      expect(grid(view)).toEqual(expected);
     });
 
-    it("Insert Row Below action calls addRowBelow", () => {
-      const items = document.querySelectorAll(".table-context-menu-item");
-      (items[1] as HTMLElement).click();
-
-      expect(addRowBelow).toHaveBeenCalledWith(view);
+    it.each([
+      [7, "left", false],
+      [8, "center", false],
+      [9, "right", false],
+      [10, "left", true],
+      [11, "center", true],
+      [12, "right", true],
+    ] as const)("item %i aligns %s (whole table: %s)", (index, alignment, all) => {
+      click(index);
+      const expected = [0, 1, 2].map(() => [0, 1, 2].map((c) => (all || c === 1 ? alignment : null)));
+      expect(alignments(view)).toEqual(expected);
     });
 
-    it("Insert Column Left action calls addColLeft", () => {
-      const items = document.querySelectorAll(".table-context-menu-item");
-      (items[2] as HTMLElement).click();
-
-      expect(addColLeft).toHaveBeenCalledWith(view);
+    it("Format Table flattens multi-paragraph cells", () => {
+      click(13);
+      expect(grid(view)![2][2]).toBe("r2c2 more");
     });
 
-    it("Insert Column Right action calls addColRight", () => {
-      const items = document.querySelectorAll(".table-context-menu-item");
-      (items[3] as HTMLElement).click();
-
-      expect(addColRight).toHaveBeenCalledWith(view);
-    });
-
-    it("Delete Row action calls deleteCurrentRow", () => {
-      const items = document.querySelectorAll(".table-context-menu-item");
-      (items[4] as HTMLElement).click();
-
-      expect(deleteCurrentRow).toHaveBeenCalledWith(view);
-    });
-
-    it("Delete Column action calls deleteCurrentColumn", () => {
-      const items = document.querySelectorAll(".table-context-menu-item");
-      (items[5] as HTMLElement).click();
-
-      expect(deleteCurrentColumn).toHaveBeenCalledWith(view);
-    });
-
-    it("Delete Table action calls deleteCurrentTable", () => {
-      const items = document.querySelectorAll(".table-context-menu-item");
-      (items[6] as HTMLElement).click();
-
-      expect(deleteCurrentTable).toHaveBeenCalledWith(view);
-    });
-
-    it("Align Column Left action calls alignColumn with left", () => {
-      const items = document.querySelectorAll(".table-context-menu-item");
-      (items[7] as HTMLElement).click();
-
-      expect(alignColumn).toHaveBeenCalledWith(view, "left", false);
-    });
-
-    it("Align Column Center action calls alignColumn with center", () => {
-      const items = document.querySelectorAll(".table-context-menu-item");
-      (items[8] as HTMLElement).click();
-
-      expect(alignColumn).toHaveBeenCalledWith(view, "center", false);
-    });
-
-    it("Align Column Right action calls alignColumn with right", () => {
-      const items = document.querySelectorAll(".table-context-menu-item");
-      (items[9] as HTMLElement).click();
-
-      expect(alignColumn).toHaveBeenCalledWith(view, "right", false);
-    });
-
-    it("Align All Left action calls alignColumn with applyToAll", () => {
-      const items = document.querySelectorAll(".table-context-menu-item");
-      (items[10] as HTMLElement).click();
-
-      expect(alignColumn).toHaveBeenCalledWith(view, "left", true);
-    });
-
-    it("Align All Center action calls alignColumn with applyToAll", () => {
-      const items = document.querySelectorAll(".table-context-menu-item");
-      (items[11] as HTMLElement).click();
-
-      expect(alignColumn).toHaveBeenCalledWith(view, "center", true);
-    });
-
-    it("Align All Right action calls alignColumn with applyToAll", () => {
-      const items = document.querySelectorAll(".table-context-menu-item");
-      (items[12] as HTMLElement).click();
-
-      expect(alignColumn).toHaveBeenCalledWith(view, "right", true);
-    });
-
-    it("Format Table action calls formatTable", () => {
-      const items = document.querySelectorAll(".table-context-menu-item");
-      (items[13] as HTMLElement).click();
-
-      expect(formatTable).toHaveBeenCalledWith(view);
-    });
-
-    it("Fit to Width action calls toggleFitToWidth", () => {
-      const items = document.querySelectorAll(".table-context-menu-item");
-      (items[14] as HTMLElement).click();
-
-      expect(toggleFitToWidth).toHaveBeenCalledWith(view);
+    it("Fit to Width toggles the table's scroll wrapper", () => {
+      click(14);
+      expect(isWrapperFitToWidth(view.wrapper)).toBe(true);
     });
 
     it("hides menu after action", () => {
@@ -421,7 +413,9 @@ describe("TiptapTableContextMenu", () => {
       const items = document.querySelectorAll(".table-context-menu-item");
       (items[0] as HTMLElement).click();
 
-      expect(addRowAbove).toHaveBeenCalledWith(newView);
+      // The row lands in the NEW view's document; the old one is untouched.
+      expect(grid(newView)).toHaveLength(4);
+      expect(grid(view)).toEqual(ORIGINAL);
     });
   });
 

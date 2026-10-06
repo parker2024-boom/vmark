@@ -2,7 +2,7 @@
  * Purpose: the row map for the settings-defaults doc join — one entry per
  *   documented Default row on website/guide/settings.md and
  *   website/guide/terminal.md, naming the defaults.ts key it restates and how
- *   that key's value is spelled on the page (WI-FL0.4).
+ *   that key's value is spelled on the page.
  *
  * Split from settingsDefaults.mjs so the join's mechanics stay readable; the
  * map is data. `settingsDefaults.mjs` re-exports it as `ROW_MAP`.

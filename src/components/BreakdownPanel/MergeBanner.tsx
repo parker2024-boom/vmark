@@ -1,5 +1,5 @@
 /**
- * MergeBanner (WI-3.7) — a dismissible, pull-only notice that a git merge
+ * MergeBanner — a dismissible, pull-only notice that a git merge
  * landed (design-3.md D3.3). Nothing runs on its own: the notice comes
  * from the scan's `merge-completed` diagnostic, surfaced only when the
  * breakdown pulls. Dismissal is keyed by the merge SHA in localStorage,

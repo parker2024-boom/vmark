@@ -9,7 +9,7 @@
  *   asks about the focused tab, while `isTargetDocReadOnly` asks about the
  *   tab an operation NAMES. MCP mutations carry a `tabId`, so gating them on
  *   the active tab let a write to a read-only background tab through and
- *   refused a write to a writable one (audit 20260728 §1.4).
+ *   refused a write to a writable one.
  *
  * @coordinates-with documentStore.ts — reads readOnly flag
  * @coordinates-with activeDocument.ts — resolves active tab ID

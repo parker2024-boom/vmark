@@ -12,7 +12,7 @@ VMark fornisce supporto di prima classe per SVG — Scalable Vector Graphics. Ci
 Usa la sintassi standard delle immagini Markdown per incorporare un file SVG:
 
 ```markdown
-![Diagramma architettura](./assets/architecture.svg)
+![Architecture diagram](./assets/architecture.svg)
 ```
 
 Funziona esattamente come le immagini PNG o JPEG — trascina e rilascia, incolla o inserisci tramite la barra degli strumenti. I file SVG vengono riconosciuti come immagini e renderizzati inline.
@@ -138,6 +138,12 @@ L'IA genera un grafico a barre SVG che viene renderizzato inline nel tuo documen
 ### Sicurezza
 
 VMark sanitizza il contenuto SVG prima del rendering. I tag script e gli attributi degli handler di eventi (`onclick`, `onerror`, ecc.) vengono rimossi. Questo protegge dagli attacchi XSS quando si incolla SVG da fonti non attendibili.
+
+Vengono rimossi anche i riferimenti esterni: `<use>` e `<image>` possono puntare a un frammento dello stesso documento (`href="#arrowhead"`) o a un payload `data:image/…` inline, ma un URL che punta fuori dalla macchina viene eliminato. Senza questo, la semplice apertura di un documento contenente un diagramma non attendibile scaricherebbe quell'URL — rivelando il tuo indirizzo IP e il momento in cui hai aperto il file. Gli strumenti per diagrammi come Mermaid fanno riferimento solo a frammenti, quindi i diagrammi normali non ne risentono.
+
+Il foglio di stile proprio di un SVG (`<style>`) è confinato a quell'SVG: ogni selettore viene riscritto in modo che possa corrispondere solo all'interno dell'SVG da cui proviene, così un diagramma non può modificare lo stile dell'editor o di un altro diagramma. Vengono mantenute solo le regole di stile, `@media` e `@keyframes` (i nomi delle animazioni vengono resi univoci per ogni SVG); `@import`, `@font-face` e le altre at-rule, i riferimenti `url()` esterni e `position: fixed` / `sticky` vengono eliminati. Gli elementi `<form>` vengono rimossi (il loro contenuto viene mantenuto).
+
+I link all'interno di un SVG renderizzato non fanno mai navigare VMark stesso. Facendo clic su un link web lo si apre nel browser di sistema; un link relativo a un file apre il file in una scheda di VMark; i link `javascript:`, `file:` e `data:` non vengono mai aperti.
 
 ### Dimensionamento
 

@@ -132,7 +132,7 @@ export function useMenuRovingFocus<T extends RovingMenuItem>({
     // eslint-disable-next-line react-hooks/set-state-in-effect -- open/close seed (#1063)
     setFocusedIndex(next);
     if (next >= 0) itemRefs.current[next]?.focus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seeds only on open/close or a reset-key change; items is read from the closure on purpose
   }, [enabled, resetKey]);
 
   // Move DOM focus to the roving target before paint (arrow navigation).

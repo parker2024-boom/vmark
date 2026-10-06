@@ -1,5 +1,5 @@
 /**
- * Purpose: the ONE destructive-confirmation dialog (WI-UI4.1).
+ * Purpose: the ONE destructive-confirmation dialog.
  *
  * Every "are you sure" in VMark goes through here, and the signature REQUIRES
  * the pieces that keep those dialogs consistent:

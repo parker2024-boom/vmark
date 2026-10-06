@@ -22,7 +22,9 @@ El terminal admite hasta 5 sesiones concurrentes, cada una con su propio proceso
 
 Cuando cierras la última sesión, el panel se oculta pero la sesión sigue activa — vuelve a abrirlo con `` Ctrl + ` `` y estarás donde lo dejaste. Cuando el shell termina limpiamente (`exit` o `Ctrl + D`), su pestaña se cierra automáticamente — y el panel se oculta si era la última. Si el shell termina con un error, la pestaña permanece abierta mostrando el código de salida; presiona cualquier tecla para reiniciarlo.
 
-**Notificaciones:** cuando un terminal hace sonar la campana (p. ej., Claude Code termina un turno) mientras esa ventana de VMark no está enfocada, VMark publica una notificación del sistema con el nombre del documento de la ventana — así puedes ejecutar Claude Code en varias ventanas y recibir un aviso de la que te necesita, sin vigilar cada una. Actívalo o desactívalo con **Configuración → Terminal → Notificar cuando no está enfocada** (activado por defecto; pide permiso de notificaciones la primera vez). La misma señal de campana sin foco también marca la ventana en el [panel Estado de ventanas](/es/guide/workspace-management#panel-de-estado-de-ventanas), para que veas qué ventana te necesita y vayas directamente a ella.
+Cerrar una sesión — con el icono de papelera, cerrando su ventana o saliendo de VMark — termina todo lo que se inició en ella, no solo el shell. VMark envía una señal de colgado (`SIGHUP`) a todo el grupo de procesos del shell, espera hasta un segundo a que termine y luego fuerza la terminación (`SIGKILL`) de lo que quede. Un trabajo que hayas separado deliberadamente en su propio grupo de procesos (por ejemplo con `nohup` o `setsid`) no se ve afectado. En Windows no hay paso de colgado: el shell se termina de inmediato.
+
+**Notificaciones:** cuando un terminal hace sonar la campana (p. ej., Claude Code termina un turno) mientras esa ventana de VMark no está enfocada, VMark publica una notificación del sistema con el nombre del documento de la ventana — así puedes ejecutar Claude Code en varias ventanas y recibir un aviso de la que te necesita, sin vigilar cada una. Actívalo o desactívalo con **Ajustes → Terminal → Notificar cuando no está enfocada** (activado por defecto; pide permiso de notificaciones la primera vez). La misma señal de campana sin foco también marca la ventana en el [panel Estado de ventanas](/es/guide/workspace-management#panel-de-estado-de-ventanas), para que veas qué ventana te necesita y vayas directamente a ella.
 
 Cada pestaña refleja el título del programa en ejecución (definido por herramientas que emiten un título de terminal, como `vim` o `ssh`), salvo que hayas renombrado la sesión manualmente — un cambio de nombre manual siempre tiene prioridad. Para renombrar, **haz doble clic en la pestaña**: `Enter` confirma, `Escape` descarta, y hacer clic fuera conserva lo que escribiste. Un nombre vacío se ignora.
 
@@ -64,6 +66,8 @@ Cuando el terminal está enfocado, `Mod + =` / `-` / `0` ajustan el zoom de la f
 
 La navegación entre prompts (`Mod + ↑` / `Mod + ↓`) requiere la integración con el shell — consulta [Integración con el shell](#integracion-con-el-shell) más abajo.
 
+**Linux:** `Ctrl` + una letra va al shell, así que las teclas de readline como `Ctrl + A`, `Ctrl + E`, `Ctrl + K`, `Ctrl + F`, `Ctrl + U` y `Ctrl + W` funcionan como en cualquier terminal de Linux. Los atajos de letra propios de la terminal pasan a `Ctrl + Shift`: `Ctrl + Shift + F` busca, `Ctrl + Shift + K` limpia, `Ctrl + Shift + A` selecciona todo, y `Ctrl + Shift + C` / `Ctrl + Shift + V` copian y pegan. `Ctrl + C` sigue copiando una selección (si no la hay, envía SIGINT) y `Ctrl + V` sigue pegando; `Ctrl + Insert` / `Shift + Insert` también copian y pegan.
+
 ::: tip
 `Mod + C` sin una selección de texto envía SIGINT al proceso en ejecución — igual que presionar Ctrl+C en un terminal normal.
 :::
@@ -81,7 +85,7 @@ Presiona `Mod + F` para abrir la barra de búsqueda. Escribe para buscar de form
 La barra informa de lo que encontró junto al campo de entrada:
 
 - **`3 / 17`** — estás en la tercera de diecisiete coincidencias.
-- **`5000 coincidencias`** — demasiadas coincidencias para que el terminal sepa
+- **`5000 matches`** — demasiadas coincidencias para que el terminal sepa
   cuál está activa, así que informa del total sin posición.
 - **Sin resultados** — la consulta no coincidió con nada; el texto del campo
   también se vuelve rojo.
@@ -139,7 +143,7 @@ El terminal detecta tres tipos de enlaces en la salida de comandos:
 
 - **URLs web** — haz clic para abrir en tu navegador predeterminado
 - **Hipervínculos OSC 8** — hipervínculos de terminal explícitos que emiten herramientas como `ls --hyperlink=auto`, `gh` y los compiladores modernos. El texto visible y la URL subyacente pueden diferir; al hacer clic se abre la URL.
-- **Rutas de archivo** — una ruta que contiene una `/` y termina en una extensión de archivo; haz clic para abrir el archivo en el editor (admite sufijos `:línea:columna`; una ruta relativa se resuelve respecto al directorio actual del shell cuando la [integración con el shell](#integracion-con-el-shell) lo informa, y si no, respecto a la raíz del espacio de trabajo)
+- **Rutas de archivo** — una ruta que contiene una `/` y termina en una extensión de archivo; haz clic para abrir el archivo en el editor (admite sufijos `:line:col`; una ruta relativa se resuelve respecto al directorio actual del shell cuando la [integración con el shell](#integracion-con-el-shell) lo informa, y si no, respecto a la raíz del espacio de trabajo)
 
 ## Entorno de Shell
 
@@ -149,6 +153,7 @@ VMark establece estas variables de entorno en cada sesión del terminal:
 |----------|-------|
 | `TERM` | `xterm-256color` |
 | `TERM_PROGRAM` | `WezTerm` |
+| `TERM_PROGRAM_VERSION` | `20240203-110809-5046fc22` |
 | `VMARK_WORKSPACE` | Ruta raíz del espacio de trabajo (cuando hay una carpeta abierta) |
 | `PATH` | PATH completo del shell de inicio de sesión (igual que en tu terminal del sistema) |
 | `COLORTERM` | `truecolor` |
@@ -183,7 +188,7 @@ que aún no existe.)
 
 El terminal integrado hereda el `PATH` de tu shell de inicio de sesión, por lo que las herramientas CLI como `node`, `claude` y otros binarios instalados por el usuario son detectables — igual que en una ventana de terminal normal.
 
-Salvo que elijas un shell en la configuración del terminal, VMark inicia tu shell de inicio de sesión. En macOS y Linux lee primero el shell de inicio de sesión de la entrada de tu cuenta de usuario, luego `$SHELL`, y recurre a `/bin/sh`. En Windows usa `%COMSPEC%` y, si no está definido, la ruta completa de `cmd.exe`. El directorio de trabajo comienza en la raíz del espacio de trabajo, o el directorio principal del archivo activo, o `$HOME`.
+Salvo que elijas un shell en la configuración del terminal, VMark inicia tu shell de inicio de sesión. El shell que elijas debe ser uno que VMark ofrezca — en macOS y Linux, un shell listado en `/etc/shells` (o tu shell de inicio de sesión) que exista y sea ejecutable; en Windows, PowerShell, `pwsh`, `cmd.exe` o `%COMSPEC%` — indicado como ruta absoluta. Una elección guardada que ya no está disponible aparece como *(no disponible)* en los ajustes, y VMark inicia en su lugar tu shell predeterminado. En macOS y Linux lee primero el shell de inicio de sesión de la entrada de tu cuenta de usuario, luego `$SHELL`, y recurre a `/bin/sh`. En Windows usa `%COMSPEC%` y, si no está definido, la ruta completa de `cmd.exe`. El directorio de trabajo comienza en la raíz del espacio de trabajo, o el directorio principal del archivo activo, o `$HOME`.
 
 Los atajos de shell estándar como `Ctrl+R` (búsqueda inversa del historial en zsh/bash) funcionan cuando el terminal está enfocado — el editor no los intercepta.
 
@@ -217,7 +222,7 @@ existieran:
 
 ## Configuración
 
-Abre **Configuración → Terminal** para configurar:
+Abre **Ajustes → Terminal** para configurar:
 
 | Configuración | Rango | Predeterminado | Plataformas |
 |---------------|-------|----------------|-------------|
@@ -249,10 +254,10 @@ Cada terminal sigue su sesión exacta en lugar de la transcripción modificada m
 | Campana de terminal | Desactivada / Visual / Audible | Visual |
 | Contraste mínimo | Desactivado / WCAG AA (4,5:1) / WCAG AAA (7:1) / Máximo | WCAG AA (4,5:1) |
 
-La mayoría de los cambios se aplican inmediatamente a todas las sesiones abiertas — tamaño y posición del panel, tamaño de fuente, altura de línea, cursor, Copiar al Seleccionar, Tecla Option de Mac como Meta, Historial de desplazamiento, Modo lector de pantalla, Campana de terminal y Contraste mínimo. El **Intérprete de comandos**, el **Renderizador WebGL**, el **Portapapeles remoto** y la **Integración con el shell** se fijan cuando se inicia una sesión, así que se aplican a las sesiones que se abran después. El **Tamaño del panel** llega hasta el 80 % del espacio disponible. El editor conserva un tamaño mínimo en píxeles, así que nunca desaparece del todo por grande que sea el terminal. Haz doble clic en el control de redimensionado para saltar directamente al máximo y volver sin cambiar el tamaño guardado. **Tecla Option de Mac como Meta** enruta la tecla Option de macOS como Meta en el terminal integrado para que emacs, tmux y herramientas similares vean los atajos con prefijo Alt (solo macOS); está activada por defecto, así que Option+Flecha mueve por palabras en lugar de insertar caracteres acentuados. La **Integración con el shell** está disponible en macOS y Linux (oculta en Windows). El **Portapapeles remoto** es solo de escritura (las lecturas se rechazan siempre) y se describe más abajo. El **Historial de desplazamiento** controla cuántas líneas de salida conserva cada sesión en su historial — los valores más altos usan más memoria. El **Modo lector de pantalla** expone la salida del terminal a tecnologías de asistencia como VoiceOver; está desactivado por defecto por rendimiento. La **Campana de terminal** elige cómo se señala una campana (BEL) — una marca visual de actividad en segundo plano en la pestaña de sesión, un pitido audible suave (que también marca la pestaña de una sesión en segundo plano para que la encuentres) o nada. El **Contraste mínimo** eleva el texto tenue del terminal a una relación de contraste legible respecto a su fondo; súbelo por accesibilidad o ponlo en Desactivado para anular el ajuste.
+La mayoría de los cambios se aplican inmediatamente a todas las sesiones abiertas — tamaño y posición del panel, tamaño de fuente, altura de línea, cursor, Copiar al Seleccionar, Tecla Option de Mac como Meta, Historial de desplazamiento, Modo lector de pantalla, Campana de terminal y Contraste mínimo. El **Intérprete de comandos**, el **Renderizador WebGL** (no disponible en Linux), el **Portapapeles remoto** y la **Integración con el shell** se fijan cuando se inicia una sesión, así que se aplican a las sesiones que se abran después. El **Tamaño del panel** llega hasta el 80 % del espacio disponible. El editor conserva un tamaño mínimo en píxeles, así que nunca desaparece del todo por grande que sea el terminal. Haz doble clic en el control de redimensionado para saltar directamente al máximo y volver sin cambiar el tamaño guardado. **Tecla Option de Mac como Meta** enruta la tecla Option de macOS como Meta en el terminal integrado para que emacs, tmux y herramientas similares vean los atajos con prefijo Alt (solo macOS); está activada por defecto, así que Option+Flecha mueve por palabras en lugar de insertar caracteres acentuados. La **Integración con el shell** está disponible en macOS y Linux (oculta en Windows). El **Portapapeles remoto** es solo de escritura (las lecturas se rechazan siempre) y se describe más abajo. El **Historial de desplazamiento** controla cuántas líneas de salida conserva cada sesión en su historial — los valores más altos usan más memoria. El **Modo lector de pantalla** expone la salida del terminal a tecnologías de asistencia como VoiceOver; está desactivado por defecto por rendimiento. La **Campana de terminal** elige cómo se señala una campana (BEL) — una marca visual de actividad en segundo plano en la pestaña de sesión, un pitido audible suave (que también marca la pestaña de una sesión en segundo plano para que la encuentres) o nada. El **Contraste mínimo** eleva el texto tenue del terminal a una relación de contraste legible respecto a su fondo; súbelo por accesibilidad o ponlo en Desactivado para anular el ajuste.
 
 ::: tip Familia de fuente del terminal
-El terminal usa la **Fuente mono** de **Configuración → Editor**, no una fuente
+El terminal usa la **Fuente mono** de **Ajustes → Editor**, no una fuente
 propia, así que cambiarla allí cambia a la vez el estilo de los bloques de
 código, el modo Fuente y el terminal. En Linux, la opción Predeterminado del
 sistema sigue la fuente monoespaciada de tu escritorio, que es la que usa tu
@@ -291,7 +296,7 @@ tecleado. iTerm2 y VS Code lo rechazan por el mismo motivo. El ajuste controla
 las escrituras; las lecturas se rechazan incondicionalmente.
 :::
 
-Desactiva **Configuración → Terminal → Portapapeles remoto** para cerrar el
+Desactiva **Ajustes → Terminal → Portapapeles remoto** para cerrar el
 canal por completo. El cambio se aplica a las sesiones creadas a partir de ese
 momento.
 

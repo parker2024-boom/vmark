@@ -3,6 +3,8 @@
  *
  * Adds drag handles between table columns for resizing.
  * Width is stored as CSS only (resets on reload).
+ *
+ * @module plugins/tableUI/columnResize
  */
 
 import type { EditorView } from "@tiptap/pm/view";

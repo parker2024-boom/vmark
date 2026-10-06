@@ -18,7 +18,8 @@ vi.mock("@/services/browser/grantSync", () => ({
 import { startWorkflowRun, workflowRunStatus, cancelWorkflowRun } from "./workflowRunService";
 import { __resetRunRegistry } from "./runRegistry";
 import { useBrowserApprovalStore } from "@/stores/browserApprovalStore";
-import { useBrowserLeaseStore } from "@/services/browser/lease";
+import { browserLease } from "@/services/browser/lease";
+import { useBrowserLeaseStore } from "@/stores/browserLeaseStore";
 
 const TAB = "tab-1";
 const URL = "https://blog.example.com/";
@@ -65,7 +66,7 @@ describe("startWorkflowRun", () => {
     if (!res.ok) return;
     expect(res.runId).toMatch(/^wfrun-/);
     expect(res.firstStep).toBe("step-1");
-    expect(useBrowserLeaseStore.getState().currentHolder(TAB)).toBe("ai");
+    expect(browserLease.currentHolder(TAB)).toBe("ai");
     expect(workflowRunStatus(res.runId)).toMatchObject({ status: "running", firstStep: "step-1", stepCount: 1 });
   });
 
@@ -74,7 +75,7 @@ describe("startWorkflowRun", () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.error).toMatch(/parse|site/i);
-    expect(useBrowserLeaseStore.getState().currentHolder(TAB)).toBeNull();
+    expect(browserLease.currentHolder(TAB)).toBeNull();
   });
 
   it("refuses a missing input and an undeclared extra input (W-09)", () => {
@@ -106,7 +107,7 @@ describe("startWorkflowRun", () => {
     expect(st.skippedSteps).toBe(0);
     expect(st.stepResults).toEqual([{ index: 1, status: "success", attempts: 1 }]);
     expect(st.pendingApproval).toBeUndefined();
-    expect(useBrowserLeaseStore.getState().currentHolder(TAB)).toBeNull();
+    expect(browserLease.currentHolder(TAB)).toBeNull();
   });
 
   it("pauses on a goal step and reports where — and RELEASES the lease (W-04/W-05)", async () => {
@@ -118,7 +119,7 @@ describe("startWorkflowRun", () => {
     expect(st?.status).toBe("paused");
     expect(st?.pausedAt).toBe("step-1");
     expect(st?.reasonCode).toBe("needs-human");
-    expect(useBrowserLeaseStore.getState().currentHolder(TAB)).toBeNull();
+    expect(browserLease.currentHolder(TAB)).toBeNull();
     // …so a new run may start on the tab (the documented resume path).
     expect(startWorkflowRun(src, baseCtx({ inputs: {} })).ok).toBe(true);
   });
@@ -155,7 +156,7 @@ describe("approval waits: cancel and takeover interrupt them (W-01)", () => {
     await tick();
     const prompt = runPrompt(res.runId)!;
     expect(prompt).toBeDefined();
-    useBrowserLeaseStore.getState().reclaimForHuman(TAB);
+    browserLease.reclaimForHuman(TAB);
     await tick();
     await flush();
     expect(runPrompt(res.runId)).toBeUndefined(); // withdrawn, not orphaned
@@ -167,7 +168,7 @@ describe("approval waits: cancel and takeover interrupt them (W-01)", () => {
     expect(actCalls()).toHaveLength(0);
     expect(mint).not.toHaveBeenCalled();
     // W-04: the human hold is released with the interrupted run — a new run may start.
-    expect(useBrowserLeaseStore.getState().currentHolder(TAB)).toBeNull();
+    expect(browserLease.currentHolder(TAB)).toBeNull();
     useBrowserApprovalStore.getState().grant(ORIGIN, ["click"]);
     expect(startWorkflowRun(SOURCE, baseCtx()).ok).toBe(true);
   });
@@ -179,7 +180,7 @@ describe("approval waits: cancel and takeover interrupt them (W-01)", () => {
     expect(cancelWorkflowRun(res.runId)).toEqual({ outcome: "cancelled" });
     expect(workflowRunStatus(res.runId)?.status).toBe("cancelled");
     expect(runPrompt(res.runId)).toBeUndefined();
-    expect(useBrowserLeaseStore.getState().currentHolder(TAB)).toBeNull();
+    expect(browserLease.currentHolder(TAB)).toBeNull();
     useBrowserApprovalStore.getState().grant(ORIGIN, ["click"]);
     await tick();
     await flush();
@@ -211,7 +212,7 @@ describe("deadline (W-06 / D1v2)", () => {
     await flush();
     expect(workflowRunStatus(res.runId)).toMatchObject({ status: "paused", reasonCode: "deadline", pausedAt: "step-2" });
     expect(actCalls()).toHaveLength(1);
-    expect(useBrowserLeaseStore.getState().currentHolder(TAB)).toBeNull();
+    expect(browserLease.currentHolder(TAB)).toBeNull();
   });
 
   it("a full prompt queue pauses the run as queue-full", async () => {
@@ -286,7 +287,7 @@ describe("resume (W-05)", () => {
     if (!first.ok) return;
     await flush();
     expect(workflowRunStatus(first.runId)).toMatchObject({ status: "paused", pausedAt: "step-2", reasonCode: "needs-human" });
-    expect(useBrowserLeaseStore.getState().currentHolder(TAB)).toBeNull();
+    expect(browserLease.currentHolder(TAB)).toBeNull();
     invoke.mockClear();
 
     const resumed = startWorkflowRun(WITH_CONFIRM, baseCtx({ resumeRunId: first.runId }));
@@ -337,7 +338,7 @@ describe("cancelWorkflowRun (W-08)", () => {
     expect(cancelWorkflowRun(res.runId)).toEqual({ outcome: "cancelled" });
     expect(workflowRunStatus(res.runId)?.status).toBe("cancelled");
     expect(runPrompt(res.runId)).toBeUndefined();
-    expect(useBrowserLeaseStore.getState().currentHolder(TAB)).toBeNull();
+    expect(browserLease.currentHolder(TAB)).toBeNull();
   });
 
   it("reports an unknown run as not-found", () => {
@@ -362,9 +363,9 @@ describe("cancelWorkflowRun (W-08)", () => {
     const live = startWorkflowRun(SOURCE, baseCtx());
     if (!live.ok) return;
     await tick();
-    expect(useBrowserLeaseStore.getState().currentHolder(TAB)).toBe("ai");
+    expect(browserLease.currentHolder(TAB)).toBe("ai");
     expect(cancelWorkflowRun(paused.runId)).toEqual({ outcome: "cancelled" });
-    expect(useBrowserLeaseStore.getState().currentHolder(TAB)).toBe("ai"); // untouched
+    expect(browserLease.currentHolder(TAB)).toBe("ai"); // untouched
     expect(workflowRunStatus(live.runId)?.status).toBe("running");
     expect(runPrompt(live.runId)).toBeDefined(); // the live run's prompt survives
     cancelWorkflowRun(live.runId);

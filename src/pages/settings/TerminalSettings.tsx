@@ -3,6 +3,8 @@
  *
  * Shell selection, panel position, panel size, font size, line height,
  * and other terminal options.
+ *
+ * @module pages/settings/TerminalSettings
  */
 
 import { useEffect, useState } from "react";
@@ -11,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { useSettingsStore, type TerminalPosition, type TerminalCursorStyle, type TerminalBellMode } from "@/stores/settingsStore";
 import { SettingRow, SettingsGroup, Select, Toggle } from "./components";
 import { terminalSettingsWarn } from "@/utils/debug";
-import { isMacPlatform, isWindowsPlatform } from "@/utils/platform";
+import { getRuntimePlatform, isMacPlatform, isWindowsPlatform } from "@/utils/platform";
 import {
   panelSizeOptions,
   scrollbackOptions,
@@ -95,8 +97,8 @@ export function TerminalSettings() {
     { value: "underline", label: t("terminal.cursorStyle.underline") },
   ];
 
-  // Values come from the helpers module so the published range stays checkable
-  // (WI-2.2); only the labels are translated here. Value and label key travel
+  // Values come from the helpers module so the published range stays checkable;
+  // only the labels are translated here. Value and label key travel
   // together, so neither can drift out of step with the other.
   const lineHeightOptions = lineHeightChoices.map(({ value, labelKey }) => ({
     value: value.toFixed(1),
@@ -142,7 +144,7 @@ export function TerminalSettings() {
             // `Mod +/-` zooms freely past the presets (13 → 15 → 17 …). A
             // native <select> renders its FIRST option for an unmatched value,
             // so an unlisted size used to display "10px" and write 10 on the
-            // next change. Inject the current value instead (WI-1.3), mirroring
+            // next change. Inject the current value instead, mirroring
             // the synthetic `shellOptions` entry above.
             options={fontSizeOptionsFor(terminal.fontSize)}
             onChange={(v) => updateTerminalSetting("fontSize", Number(v))}
@@ -185,12 +187,15 @@ export function TerminalSettings() {
           />
         </SettingRow>
 
-        <SettingRow label={t("terminal.webgl.label")} description={t("terminal.webgl.description")}>
-          <Toggle
-            checked={terminal.useWebGL}
-            onChange={(v) => updateTerminalSetting("useWebGL", v)}
-          />
-        </SettingRow>
+        {/* Linux never loads the WebGL renderer (see shouldUseWebglRenderer). */}
+        {getRuntimePlatform() !== "linux" && (
+          <SettingRow label={t("terminal.webgl.label")} description={t("terminal.webgl.description")}>
+            <Toggle
+              checked={terminal.useWebGL}
+              onChange={(v) => updateTerminalSetting("useWebGL", v)}
+            />
+          </SettingRow>
+        )}
 
         {isMac && (
           <SettingRow label={t("terminal.macOptionIsMeta.label")} description={t("terminal.macOptionIsMeta.description")}>

@@ -37,6 +37,10 @@ export interface SuppressDeps {
 async function keepEvent(event: SemanticWorkspaceEvent, deps: SuppressDeps): Promise<boolean> {
   const { cache, readText, hash, isMedia } = deps;
 
+  // A rescan is the watcher saying it lost track of the tree — not a content
+  // change of the root. It is never fingerprinted, so a later one can never be
+  // mistaken for a no-op.
+  if (event.kind === "rescan") return true;
   if (event.kind === "deleted") {
     cache.forget(event.path);
     return true;
@@ -69,7 +73,7 @@ async function keepEvent(event: SemanticWorkspaceEvent, deps: SuppressDeps): Pro
 /**
  * Filter a batch, dropping create/modify events whose content is byte-identical
  * to the last time we saw the path. Deletes and renames are always kept (and
- * keep the cache honest). Order is preserved.
+ * keep the cache honest), and so is a rescan. Order is preserved.
  */
 export async function suppressUnchanged(
   events: SemanticWorkspaceEvent[],

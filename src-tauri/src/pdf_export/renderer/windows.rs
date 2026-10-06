@@ -22,17 +22,17 @@
 //!     already applied orientation as a swap — the orientation *enum* was
 //!     measurably ignored while explicit width/height were set. Margins stay
 //!     in the CSS, which is where Windows actually reads them (ADR-PDF1a).
-//!   - **Progress is reported at the same three points as macOS (WI-FL6.2):**
+//!   - **Progress is reported at the same three points as macOS:**
 //!     `Loading` before the window is built, `Rendering` when navigation has
 //!     completed and the print starts, `Finishing` when `PrintToPdf` reports
 //!     success. Until then this backend emitted nothing, so the export
 //!     dialog sat on "Preparing…" until the file appeared.
-//!   - **The window, the handlers and the navigation are `windows_nav.rs`'s**
-//!     (#236): one copy for export and print, acting on the DOCUMENT's
+//!   - **The window, the handlers and the navigation are `windows_nav.rs`'s**:
+//!     one copy for export and print, acting on the DOCUMENT's
 //!     completion — matched by the navigation id its start reported —
-//!     exactly once (#233), claiming the sink inside that decision (#227),
-//!     closing the window on every failure through one path (#234, #237)
-//!     and on the caller's timeout (#224). This file keeps what is export's
+//!     exactly once, claiming the sink inside that decision,
+//!     closing the window on every failure through one path
+//!     and on the caller's timeout. This file keeps what is export's
 //!     own: the print.
 //!
 //! @coordinates-with mod.rs — dispatches here and awaits the sink
@@ -96,7 +96,7 @@ fn start(
         Box::new(move |core, app, label, sink| {
             sink.progress(PdfProgress::Rendering);
             if let Err(e) = print_to_pdf(core, &out, page, sink.clone(), app, label) {
-                // The window's ONE failure path (#454) — the same one
+                // The window's ONE failure path — the same one
                 // `RenderWindow::fail` takes, rather than a second copy of
                 // "settle, then close" that a later edit can leave half done.
                 fail_render(app, label, &sink, e);
@@ -107,8 +107,8 @@ fn start(
 
 /// Configure page size and start the asynchronous print.
 ///
-/// The three steps are separate, and each `unsafe` block is one COM call
-/// (#456). A single block over the whole body covered the safe half too — the
+/// The three steps are separate, and each `unsafe` block is one COM call.
+/// A single block over the whole body covered the safe half too — the
 /// completion closure, the progress reports, the teardown — so nothing in it
 /// carried a claim the compiler was asking for, and every SAFETY note applied
 /// to a region rather than to a call.
@@ -199,11 +199,11 @@ fn completion_handler(
 /// cancellation (ADR-PDF7): without it an abandoned render leaks a hidden
 /// window and its Edge process for the life of the app. Every settle path
 /// calls it, and so does the caller's timeout, through the close
-/// `windows_nav.rs` arms the sink with (#224, #227). Idempotent: a window
+/// `windows_nav.rs` arms the sink with. Idempotent: a window
 /// already gone is not found, and nothing is done.
 pub(super) fn close(app: &AppHandle, label: &str) {
     if let Some(w) = app.get_webview_window(label) {
-        // Reported, not discarded (#458). This close is the only thing standing
+        // Reported, not discarded. This close is the only thing standing
         // between an abandoned render and a hidden window plus its Edge process
         // living for the rest of the session; a refusal that says nothing turns
         // that leak into an unexplainable memory report. The label is printed
@@ -214,13 +214,13 @@ pub(super) fn close(app: &AppHandle, label: &str) {
     }
 }
 
-/// The ONE failure path for a render window: settle, then close (#454).
+/// The ONE failure path for a render window: settle, then close.
 ///
 /// [`RenderWindow::fail`] is this function; so is the `on_loaded` body's
 /// failure arm in `windows.rs`, which used to spell the same two statements
 /// out for itself. Two spellings of one lifecycle rule is how the close comes
 /// off one of them — and a hidden window plus its Edge process then outlive
-/// the export, which is exactly what #234/#237/#239 were about. Callers that
+/// the export, which is exactly the leak one path prevents. Callers that
 /// hold only the `(app, label)` pair `OnLoaded` gives them use this directly.
 pub(super) fn fail_render<T>(
     app: &AppHandle,

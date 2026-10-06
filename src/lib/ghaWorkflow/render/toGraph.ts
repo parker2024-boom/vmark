@@ -1,9 +1,13 @@
-// WI-2.1 — IR → @xyflow/react graph adapter.
-//
-// Plan §6 Phase 2. Pure function — no React, no DOM. The actual layout
-// step (assigning final x/y coordinates) lives in ./layout.ts and runs
-// AFTER toGraph(). toGraph() seeds initial positions to a simple grid
-// so a missing layout call still produces a non-overlapping render.
+/**
+ * IR → @xyflow/react graph adapter for the workflow canvas.
+ *
+ * Pure function — no React, no DOM. The actual layout
+ * step (assigning final x/y coordinates) lives in ./layout.ts and runs
+ * AFTER toGraph(). toGraph() seeds initial positions to a simple grid
+ * so a missing layout call still produces a non-overlapping render.
+ *
+ * @module lib/ghaWorkflow/render/toGraph
+ */
 
 import type { Edge, Node } from "@xyflow/react";
 import type { JobIR, WorkflowIR } from "../types";

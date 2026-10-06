@@ -1,3 +1,10 @@
+/**
+ * workspaceTransferAck — waits for the acknowledgement of one workspace
+ * transfer request, resolving null on timeout or when listening fails.
+ *
+ * @module services/workspaces/workspaceTransferAck
+ */
+
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { WorkspaceTransferAckPayload } from "@/types/workspaceTransfer";
 

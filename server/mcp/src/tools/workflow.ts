@@ -7,7 +7,8 @@
  * them. Exposed as one tool with two actions instead of seven separate
  * mutator tools.
  *
- * Origin: MCP pruning plan (2026-05-04, retired) ADR-5.
+ * Origin: the MCP pruning plan's ADR-5, recorded in
+ * `.claude/adr/plans/20260504-mcp-pruning.md`.
  */
 
 import { z } from 'zod';
@@ -77,7 +78,7 @@ export function registerWorkflowTool(server: VMarkMcpServer): void {
           return VMarkMcpServer.errorResult('patches (array) is required');
         }
         // Refuse a supplied-but-invalid revision instead of converting it to
-        // "write unconditionally" (audit R2 #237).
+        // "write unconditionally".
         const revision = readOptionalRevision(args.expected_revision);
         if (!revision.ok) return VMarkMcpServer.errorResult(revision.error);
         const expected_revision = revision.value;

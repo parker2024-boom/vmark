@@ -1,5 +1,5 @@
 /**
- * Resolve the `tab.lastUsed` target (WI-TNAV2.2).
+ * Resolve the `tab.lastUsed` target.
  *
  * D13: the target is **the first MRU key that is neither the active key nor
  * unresolvable** — NOT literally `MRU[1]`. The two spellings agree only while

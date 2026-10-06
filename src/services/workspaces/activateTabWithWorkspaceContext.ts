@@ -1,5 +1,5 @@
 /**
- * Ownership-aware tab activation (WI-13.1/12.2 / plan D6).
+ * Ownership-aware tab activation (plan D6).
  *
  * Purpose: every USER-facing "activate this tab" path (Quick Open selection,
  * recent files, content-search result clicks, file dialogs, drag/drop,
@@ -10,11 +10,10 @@
  *
  * Browser tabs are window-global (D1): they activate without any switch.
  * MCP/AI flows deliberately do NOT use this — they open background tabs and
- * only an explicit `workspace.switch_tab` yanks the visible context (D10,
- * WI-14).
+ * only an explicit `workspace.switch_tab` yanks the visible context (D10).
  *
  * @coordinates-with switchWorkspaceInstance.ts — the visible switch
- * @coordinates-with stores/tabActivationBus.ts — setActiveTab is pane-aware (WI-2)
+ * @coordinates-with stores/tabActivationBus.ts — setActiveTab is pane-aware
  * @module services/workspaces/activateTabWithWorkspaceContext
  */
 import { useTabStore } from "@/stores/tabStore";
@@ -64,13 +63,13 @@ export function activateTabWithWorkspaceContext(
   if (needsSwitch) {
     workspaceSwitched = switchWorkspaceInstance(windowLabel, owner).switched;
     if (!workspaceSwitched) {
-      // Audit R2-F6: the switch was declined (e.g. restore in flight) —
+      // The switch was declined (e.g. restore in flight) —
       // activating a hidden tab anyway would desync the alias from the
       // visible context. Report the refusal instead.
       return { activated: false, workspaceSwitched: false, workspaceInstanceId: activeId };
     }
   }
-  // WI-2: setActiveTab is pane-aware through the activation seam.
+  // setActiveTab is pane-aware through the activation seam.
   useTabStore.getState().setActiveTab(windowLabel, tabId);
 
   return {

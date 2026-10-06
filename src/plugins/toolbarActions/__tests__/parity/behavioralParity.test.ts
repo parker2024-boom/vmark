@@ -64,9 +64,20 @@ const schema = getProductionSchema();
  */
 type Meaning = { ok: true; fingerprint: string } | { ok: false; error: string };
 
+/**
+ * A list's looseness is not what this harness judges. The WYSIWYG serializer
+ * writes any list item holding two blocks loose (so `para` + `---` cannot be
+ * read back as a setext heading), whatever the toolbar action did; the Source
+ * adapter leaves the spacing the user typed. That difference is decided below
+ * the adapters, the same before and after lists recorded `spread`, so leaving
+ * it out keeps this harness comparing what the ACTIONS did — exactly what it
+ * compared before (WI-RA18.3). The round-trip gates keep `spread` significant.
+ */
+const LAYOUT_ATTRS: ReadonlySet<string> = new Set(["spread"]);
+
 function meaning(md: string): Meaning {
   try {
-    return { ok: true, fingerprint: docFingerprint(parseMarkdown(schema, md)) };
+    return { ok: true, fingerprint: docFingerprint(parseMarkdown(schema, md), { ignoreAttrs: LAYOUT_ATTRS }) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

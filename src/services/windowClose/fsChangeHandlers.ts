@@ -13,6 +13,9 @@
  *     `fsRenameHandlers` (fresh path map per rename, pairs before singletons)
  *     and a media create/modify goes through `handleMediaChangeEvent` (never
  *     reads the file — it could be a multi-GB video).
+ *   - A `rescan` names no file: the watcher lost track of the tree, so every
+ *     open document under that root is probed, with the same policy an
+ *     unpaired rename gets (`probeOpenFile`).
  *
  * @coordinates-with useExternalFileChanges.ts — sole caller; builds the context
  * @coordinates-with services/workspaceEvents — handleSemanticBatch consumes its SemanticWorkspaceEvent
@@ -25,7 +28,8 @@
 
 import type { SemanticWorkspaceEvent } from "@/services/workspaceEvents";
 import type { FsChangeContext } from "./fsChangeContext";
-import { dispatchRenames, readAndRouteOrMarkMissing } from "./fsRenameHandlers";
+import { isWithinRoot } from "@/utils/paths";
+import { dispatchRenames, probeOpenFile, readAndRouteOrMarkMissing } from "./fsRenameHandlers";
 
 export type { FsChangeContext };
 
@@ -110,6 +114,22 @@ function handleMediaChangeEvent(
   ctx.markBinaryFileChanged(tabId);
 }
 
+/**
+ * The watcher lost track of `rootPath` (an event-queue overflow, a watcher
+ * error): any file under it may have changed, been replaced or gone with no
+ * event of its own. Probe every open document there.
+ */
+async function recheckOpenFiles(
+  ctx: FsChangeContext,
+  rootPath: string,
+  openPaths: Map<string, string>,
+): Promise<void> {
+  for (const [normalizedPath, tabId] of openPaths) {
+    if (!isWithinRoot(rootPath, normalizedPath)) continue;
+    await probeOpenFile(ctx, tabId, normalizedPath, normalizedPath);
+  }
+}
+
 export async function handleSemanticBatch(
   ctx: FsChangeContext,
   events: SemanticWorkspaceEvent[],
@@ -122,7 +142,16 @@ export async function handleSemanticBatch(
   // Rebuild the map: a rename above may have re-pointed a tab (applyRename
   // mutates the store), so a pre-rename snapshot would misroute related events.
   const openPaths = getOpenPaths();
+  const rescanned = new Set<string>();
   for (const event of rest) {
+    if (event.kind === "rescan") {
+      // One pass per root, however many times the batch says it.
+      if (!rescanned.has(event.rootPath)) {
+        rescanned.add(event.rootPath);
+        await recheckOpenFiles(ctx, event.rootPath, openPaths);
+      }
+      continue;
+    }
     const normalizedPath = ctx.normalizePath(event.path);
     const tabId = openPaths.get(normalizedPath);
     if (!tabId) continue; // not an open file

@@ -5,7 +5,7 @@
  *
  * Composition goes through `resolveExtensions` (ADR-015 D1): each entry carries
  * an explicit id, and the resolver — not array position — produces the final
- * order. WI-3.4: order is pinned by explicit `after` constraints derived from
+ * order. Order is pinned by explicit `after` constraints derived from
  * `SOURCE_COMPOSITION_ORDER` (`compositionOrder.ts`), so the `parts` array is
  * sorted alphabetically before composition. The result is flattened one level so
  * entries that were `...spread` before keep their original shape. The keymap
@@ -20,7 +20,7 @@
  *   - Plugins are loaded via imports from codemirror/ directory (co-located)
  *
  * @coordinates-with SourceEditor.tsx — creates EditorView with these extensions
- * @coordinates-with sourceLanguageBinding.ts — the format's language pack (WI-13)
+ * @coordinates-with sourceLanguageBinding.ts — the format's language pack
  * @coordinates-with codemirror/theme.ts — visual theme for the source editor
  * @coordinates-with codemirror/, hostAdapters.ts — source plugins and their stores
  * @module services/assembly/sourceEditorExtensions
@@ -33,7 +33,7 @@ import { workflowWarn } from "@/utils/debug";
 import { markdownLanguage } from "@codemirror/lang-markdown";
 import { formatLanguageExtension } from "./sourceLanguageBinding";
 import { sourceWorkflowPreviewExtensions } from "@/plugins/codemirror/sourceWorkflowPreview";
-// WI-2.4 — sourceGhaWorkflowPreview retired. Standalone workflow YAML
+// sourceGhaWorkflowPreview retired. Standalone workflow YAML
 // routes through the yaml adapter: its schemaRenderer mounts the
 // workbench and its loadExtraExtensions supplies sourceGhaIrSync (the
 // gha-slice writer) + the completion/cursor-sync/goto extensions below.
@@ -123,7 +123,7 @@ export function createSourceEditorExtensions(config: ExtensionConfig): Extension
   const { initialWordWrap, initialShowBrTags, initialAutoPair, initialShowLineNumbers, initialShowInvisibles = false, updateListener, tabId, lintEnabled, filePath } = config;
   // YAML detection ignores the engine flag — every YAML file gets `lang-yaml`
   // highlighting and parse-error linting (MED-2). The workflow families are
-  // decided in one place (WI-19): `viewer` for the GitHub Actions authoring
+  // decided in one place: `viewer` for the GitHub Actions authoring
   // aids (completion, cursor sync, goto-def), unconditional for YAML since D6,
   // and `engine` for the preview parse that feeds the Run panel, still gated.
   const { yaml: isYaml, viewer: viewerFeatures, engine: engineFeatures } =
@@ -183,20 +183,20 @@ export function createSourceEditorExtensions(config: ExtensionConfig): Extension
     // Search extension (programmatic control only, no panel)
     { id: "source.search", ext: search() },
     // Language mode. The pack comes from the format registry, not a hard-coded
-    // branch, and since WI-13 it arrives through an import thunk — see
+    // branch, and it arrives through an import thunk — see
     // sourceLanguageBinding.ts for the compartment + fallback it composes.
     { id: "source.language", ext: formatLanguageExtension(filePath) },
-    // Workflow preview for YAML files, into ITS tab's preview (#129)
+    // Workflow preview for YAML files, into ITS tab's preview
     { id: "source.workflowPreview", ext: (engineFeatures && tabId ? sourceWorkflowPreviewExtensions(tabId) : []) },
     // YAML parse-error linter (every YAML file, regardless of workflow
     // flag). Surfaces duplicate keys, unterminated strings, indentation
     // breaks via the CodeMirror gutter.
     { id: "source.yamlLint", ext: (isYaml ? [yamlLintExtension()] : []) },
-    // Workflow expression autocomplete inside ${{ }} (WI-A.1).
+    // Workflow expression autocomplete inside ${{ }}.
     { id: "source.workflowCompletion", ext: (viewerFeatures && tabId ? [workflowCompletionExtension(tabId)] : []) },
-    // Source cursor → canvas job selection (WI-B.3).
+    // Source cursor → canvas job selection.
     { id: "source.workflowCursorSync", ext: (viewerFeatures && tabId ? [workflowCursorSyncExtension(tabId)] : []) },
-    // Cmd/Ctrl-Click on `uses:` opens local target (WI-B.2).
+    // Cmd/Ctrl-Click on `uses:` opens local target.
     {
       id: "source.gotoExtension",
       ext: (viewerFeatures && filePath
@@ -257,7 +257,7 @@ export function createSourceEditorExtensions(config: ExtensionConfig): Extension
     },
   ];
 
-  // WI-3.4: array position is no longer load-bearing. The order is declared once
+  // Array position is no longer load-bearing. The order is declared once
   // in SOURCE_COMPOSITION_ORDER and pinned via explicit `after` constraints, so
   // the array is sorted alphabetically before composition and the resolver still
   // reproduces the canonical order exactly. `assertCanonicalCoverage` fails loud

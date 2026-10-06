@@ -6,6 +6,8 @@
  *   - `useWorkspaceLifecycle()` + `useEditorLifecycle()` directly
  *   - `<DocumentWindowMount />` when isDocumentWindow
  *   - `<MainWindowRunners />` when windowLabel === "main"
+ *
+ * @module hooks/lifecycle
  */
 
 export { useWorkspaceLifecycle } from "./useWorkspaceLifecycle";

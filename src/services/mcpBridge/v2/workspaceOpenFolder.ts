@@ -1,6 +1,6 @@
 /**
  * open_workspace MCP handler — open a FOLDER as the active workspace, gated by a
- * one-shot approval (plan WI-1.5 / ADR-2/3/4).
+ * one-shot approval (ADR-2/3/4).
  *
  * Flow (fail-now → approve → AI-retry, since the transport can't hold a call for
  * human input — Codex F-04):
@@ -41,7 +41,9 @@
  * @coordinates-with stores/workspaceApprovalStore.ts — the one-shot store
  * @coordinates-with services/workspaces/openWorkspaceByPath.ts — the shared open sequence
  * @coordinates-with services/workspaces/workspaceAccess.ts — Rust access check + picker
- * @coordinates-with src-tauri/src/workspace_validation.rs — validate_workspace_dir command
+ * @coordinates-with src-tauri/src/workspace/validation.rs — validate_workspace_dir command
+ * @coordinates-with tabGuard.ts — structuredError
+ * @coordinates-with readOperationArgs.ts — the one payload parse
  * @module services/mcpBridge/v2/workspaceOpenFolder
  */
 import { invoke } from "@tauri-apps/api/core";
@@ -59,13 +61,11 @@ import { getCurrentWindowLabel } from "@/services/persistence/workspaceStorage";
 import { withReentryGuard } from "@/utils/reentryGuard";
 import { respond } from "@/services/mcpBridge/utils";
 import { wrapHandler } from "./wrapHandler";
+import { readOperationArgs } from "./readOperationArgs";
+import { structuredError } from "./tabGuard";
 import { v2ErrorString } from "./types";
 import type { V2Error } from "./types";
 import { commandErrorMessage } from "@/services/commands/commandError";
-
-function structuredError(id: string, err: V2Error): Promise<void> {
-  return respond({ id, success: false, error: v2ErrorString(err) });
-}
 
 /**
  * Client id the one-shot approval binds to.
@@ -73,7 +73,7 @@ function structuredError(id: string, err: V2Error): Promise<void> {
  * There is exactly one, deliberately. This used to read `args.clientId` and
  * fall back to a constant — but the bridge event carries no principal, and the
  * wire contract declares `clientId` on no operation, so the read could never
- * fire and the fallback was the only behaviour that ever ran (WI-15 RED, the
+ * fire and the fallback was the only behaviour that ever ran (the
  * `windowId` class again: code shaped like a feature that nothing can reach).
  *
  * The constant is honest: the one-shot binds per SESSION, not per client, so
@@ -194,8 +194,10 @@ export async function handleWorkspaceOpenWorkspace(
   args: Record<string, unknown>,
 ): Promise<void> {
   return wrapHandler(id, async () => {
-    const folderPath = args.folderPath;
-    if (typeof folderPath !== "string" || folderPath.length === 0) {
+    // The contract declares `folderPath` and nothing else: a `windowLabel` a
+    // client sends is not read, here or anywhere below.
+    const { folderPath } = readOperationArgs("vmark.workspace.open_workspace", args);
+    if (!folderPath) {
       await structuredError(id, {
         error: "INVALID_PATH",
         message: "folderPath must be a non-empty string",

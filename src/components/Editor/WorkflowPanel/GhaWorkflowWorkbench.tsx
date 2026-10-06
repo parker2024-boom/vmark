@@ -6,7 +6,7 @@
  *   it (no panel chrome, no resize handle — the split pane owns those).
  *
  *   Successor to GhaWorkflowSidePanel: when standalone YAML routing
- *   moved from the markdown editor to the split pane (WI-2.4), the side
+ *   moved from the markdown editor to the split pane, the side
  *   panel's mount became unreachable and the forms editor silently
  *   dropped out of the product. This component restores it in the
  *   surface where workflow files actually open.
@@ -21,7 +21,7 @@
  *     patch queue and save target to the OTHER pane's document under
  *     document split (#1081) — the cross-document patch-corruption
  *     class bindToDocument exists to prevent. The same tab is handed to
- *     the forms editor so actionlint lints THIS pane's text (WI-FL3.8).
+ *     the forms editor so actionlint lints THIS pane's text.
  *   - The edit store has ONE active binding and stashes each document's
  *     queue on rebind. Two mounted workbenches used to fight over it (the
  *     last mount won), so a workbench rebinds to ITS document whenever a
@@ -31,17 +31,17 @@
  *     document's surface: a second pane opening, or this pane re-parsing
  *     after an external change, must not redirect a pane they are typing in.
  *   - Save is `saveGhaWorkflowDocument` (services/workflow), which returns a
- *     typed outcome this component maps to toasts (#294): unchanged output
- *     from applyAndSerialize neither writes nor clears (#297); after the write
+ *     typed outcome this component maps to toasts: unchanged output
+ *     from applyAndSerialize neither writes nor clears; after the write
  *     only the patches that were written are cleared, and the editor is
- *     overwritten only if the user did not type meanwhile (#298).
- *   - The save lock is keyed by DOCUMENT and lives at module scope (audit R2,
- *     #590). A component ref guarded the BUTTON, so two workbenches bound to
+ *     overwritten only if the user did not type meanwhile.
+ *   - The save lock is keyed by DOCUMENT and lives at module scope.
+ *     A component ref guarded the BUTTON, so two workbenches bound to
  *     one document — the same file open in two tabs — could each be mid-write,
  *     and the later one would overwrite the earlier one's YAML.
  *   - The forms editor is told WHICH document it belongs to, because the edit
- *     store's active queue may be the other pane's (audit R2, #575).
- *   - The binding follows the document's filePath REACTIVELY (#292): a Save
+ *     store's active queue may be the other pane's.
+ *   - The binding follows the document's filePath REACTIVELY: a Save
  *     As of an untitled workflow rebinds without a remount, and CARRIES the
  *     queue — `renameDocument`, not `bindToDocument`, because binding stashes
  *     the old id's patches and restores the new id's, which for a rename
@@ -51,7 +51,7 @@
  *   - WorkflowEditorPanel is lazy so the yaml mutators + the save pipeline
  *     stay out of the eager App bundle. The chunk loads the first time a
  *     workflow file is on screen in a pane — with or without an edit — so a
- *     viewer pays for it once a workflow is open, not at app start (#300).
+ *     viewer pays for it once a workflow is open, not at app start.
  *
  * @coordinates-with src/lib/formats/adapters/yaml.tsx — sole mount (schemaRenderer)
  * @coordinates-with src/components/Editor/WorkflowPanel/WorkflowCanvas.tsx
@@ -114,7 +114,7 @@ interface GhaWorkflowWorkbenchProps {
  * per-component one only covered the button. Two workbenches bound to the same
  * document (the same file open in two tabs) could each be mid-`saveToPath`,
  * and the later write would overwrite the earlier one's YAML while both
- * commits cleared the same queue (audit R2, #590).
+ * commits cleared the same queue.
  */
 const savingDocuments = new Set<string>();
 
@@ -126,19 +126,19 @@ export function GhaWorkflowWorkbench({
   const rootRef = useRef<HTMLDivElement>(null);
   // The document id this pane last bound under, so a CHANGE of it is
   // distinguishable from a re-parse. Not derivable from the store: another
-  // pane may hold the binding when this pane's file is renamed (#292).
+  // pane may hold the binding when this pane's file is renamed.
   const ownDocumentId = useRef<string | null>(null);
   // The edit store's id for THIS pane's document — the queue the forms editor
   // must preview and the save must write. Not read from the store's active
-  // binding, which may belong to the other pane (#293).
+  // binding, which may belong to the other pane.
   //
-  // Computed by `workflowDocumentIdFor`, the SAME function the save path uses
-  // (audit R3 #591). The formula was written out again here — `filePath ??
+  // Computed by `workflowDocumentIdFor`, the SAME function the save path uses.
+  // The formula was written out again here — `filePath ??
   // untitled:<tab>` — so a workbench could come to preview one queue and save
   // another, which is precisely the cross-document corruption the binding
   // exists to prevent. It is read through a store SELECTOR rather than a bare
   // call so a Save As (a path change with no remount) re-renders this pane and
-  // the id follows it (#292); the selector returns a string, so an unrelated
+  // the id follows it; the selector returns a string, so an unrelated
   // document-store write does not re-render.
   const documentId = useDocumentStore(() => (tabId ? workflowDocumentIdFor(tabId) : null));
 
@@ -148,7 +148,7 @@ export function GhaWorkflowWorkbench({
   // document is bound and the user's keyboard focus is outside this
   // workbench: they are mid-edit in the other pane, and a mount or a
   // re-parse here must not redirect their next patch — the pointer/focus
-  // capture below binds this one when they come here (#293, round 2).
+  // capture below binds this one when they come here.
   useEffect(() => {
     if (!tabId || documentId === null) return;
     const docId = documentId;
@@ -159,7 +159,7 @@ export function GhaWorkflowWorkbench({
     // A Save As renamed THIS pane's document: its queued patches move with it,
     // whether or not this pane currently holds the binding. Before the early
     // return below, because the pane the user is typing in may be the other
-    // one — and edits stranded under `untitled:<tab>` are never saved (#292).
+    // one — and edits stranded under `untitled:<tab>` are never saved.
     const previousOwnId = ownDocumentId.current;
     ownDocumentId.current = docId;
     if (previousOwnId !== null && previousOwnId !== docId) {
@@ -191,7 +191,7 @@ export function GhaWorkflowWorkbench({
   const handleSave = useCallback(async (): Promise<void> => {
     // The lock is taken on the DOCUMENT the save will write, read fresh rather
     // than from `documentId`: a Save As may have landed since this callback
-    // was built (#590).
+    // was built.
     const savingId = tabId ? workflowDocumentIdFor(tabId) : null;
     if (!tabId || savingId === null || savingDocuments.has(savingId)) return;
     savingDocuments.add(savingId);

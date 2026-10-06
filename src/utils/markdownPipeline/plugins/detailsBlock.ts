@@ -15,7 +15,7 @@
  *     the document chain, so importing that chain's builder would close a
  *     cycle. The body dialect deliberately EXCLUDES this plugin — that is what
  *     stops a body parser needing a body parser; nested `<details>` are handled
- *     by the outer pass's depth tracking (WI-3.1)
+ *     by the outer pass's depth tracking
  *   - Summary text defaults to "Details" when no `<summary>` tag is present
  *   - Serialization escapes HTML in summary text to prevent injection
  *
@@ -29,7 +29,7 @@
  * @coordinates-with utils/markdownPipeline/plugins/detailsSummary.ts — the summary half
  * @coordinates-with utils/markdownPipeline/plugins/detailsTags.ts — the tag grammar
  * @coordinates-with mdastBlockConverters.ts — convertDetails creates PM nodes from Details MDAST
- * @coordinates-with pmBlockConverters.ts — convertDetailsBlock creates Details MDAST from PM
+ * @coordinates-with pmDetailsConverter.ts — convertDetailsBlock creates Details MDAST from PM
  * @coordinates-with inlineParser.ts — parses inline markdown within summary text
  * @module utils/markdownPipeline/plugins/detailsBlock
  */

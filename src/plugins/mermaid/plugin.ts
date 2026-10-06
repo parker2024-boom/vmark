@@ -4,6 +4,8 @@
  * Adds mermaid diagram support to the editor.
  * Renders ```mermaid code blocks as diagrams.
  * Lazy-loads mermaid library (~2MB) only when first diagram is rendered.
+ *
+ * @module plugins/mermaid/plugin
  */
 
 import "./mermaid.css";

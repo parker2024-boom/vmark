@@ -1,5 +1,5 @@
 /**
- * Claim commands (WI-2b.6) — the panel toggle and the ONE claim-creation
+ * Claim commands — the panel toggle and the ONE claim-creation
  * entry point: extract-from-selection (design-2a.md D2.2 — creation
  * always carries provenance, so it exists only where a source document
  * selection exists). Palette-invoked; no menu items yet.
@@ -30,7 +30,7 @@ interface ClaimSource {
 
 function activeWysiwygEditorForTab(windowLabel: string) {
   // The TAB-BOUND active editor, not the generic Tiptap registration
-  // (audit #887). `tiptap.editor` is whichever editor registered last — in a
+  // `tiptap.editor` is whichever editor registered last — in a
   // split pane, or with a Source pane focused, that is not necessarily the
   // editor showing the active document, so the selection read from it belongs
   // to a different tab than the provenance below. A claim must carry the
@@ -46,7 +46,7 @@ function activeWysiwygEditorForTab(windowLabel: string) {
  * Resolve the extraction's prerequisites: a tab-bound editor with a non-empty
  * selection, in a saved document inside the open workspace.
  *
- * Shared by the command's `when` and its `run` (audit #883/#885), so the
+ * Shared by the command's `when` and its `run`, so the
  * availability the palette shows and the work the command does cannot disagree.
  * The emptiness test here is the O(1) `selection.empty`; whether the selected
  * range is only whitespace is left to `run`, which has the text in hand anyway.
@@ -64,7 +64,7 @@ function resolveClaimSource(windowLabel: string): ClaimSource | null {
 /**
  * Hand the selected text — with its provenance — to the claims panel.
  *
- * A named handler rather than a body inlined in the registration (audit #883):
+ * A named handler rather than a body inlined in the registration:
  * this is the claim-extraction rule, and it is the thing worth reading and
  * testing on its own.
  */
@@ -92,7 +92,7 @@ function buildClaimCommandSpecs(): CommandDefinition[] {
       id: "claims.extractFromSelection",
       title: () => i18n.t("commands:claims.extractFromSelection"),
       category: "view",
-      // Its prerequisites are real and checkable (audit #885): without them the
+      // Its prerequisites are real and checkable: without them the
       // palette offered a row that reported a successful dispatch and did
       // nothing at all. `when` is honoured by both `searchCommands` and
       // `executeCommand`, so the row disappears AND the dispatch says no.
@@ -103,13 +103,13 @@ function buildClaimCommandSpecs(): CommandDefinition[] {
 }
 
 /**
- * Register the claim command set as ONE owner batch (audit #884).
+ * Register the claim command set as ONE owner batch.
  *
  * A `hasCommand("view.toggleClaims")` sentinel answered "is this id taken?",
  * which is not the question: a foreign registrar holding it reported the whole
  * set as installed, and a mid-batch failure left the second command missing
  * with every retry skipping it. `registerCommands` PREFLIGHTS both ids and
- * replaces its own previous batch — the same shape viewCommands uses (#459).
+ * replaces its own previous batch — the same shape viewCommands uses.
  */
 export function registerClaimCommands(): void {
   registerCommands(CLAIM_COMMANDS_OWNER, buildClaimCommandSpecs());

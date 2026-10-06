@@ -43,6 +43,8 @@ A browser tab opens in the editor area, alongside your documents — the sidebar
 | Address bar | An **omnibox**: type a URL to go there, or anything else to search |
 | ☆ / ★ | Bookmark this page |
 
+A new browser tab opens on DuckDuckGo (`https://duckduckgo.com`), and the omnibox searches with DuckDuckGo. Input starting with `http://` or `https://` is opened as typed; a bare host name with no spaces (`example.com`, `localhost:3000`, an IPv4 address) is opened as a web address — `http` for local addresses, `https` for everything else; anything else is searched. Neither the start page nor the search engine can be changed yet.
+
 The address bar tracks the page automatically: if a site redirects, or a link takes you elsewhere, the bar updates to show where you actually are.
 
 **A tab keeps its page when you switch away.** Looking at a document and coming back does not reload the page or lose what you had typed into it — the page is only hidden, and it is torn down when you close its tab. That is also what lets an AI keep working in a browser tab while you write (see *Co-driving* below).

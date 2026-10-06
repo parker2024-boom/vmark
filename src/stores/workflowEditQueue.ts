@@ -103,8 +103,8 @@ function indexBefore(shift: StepShift, index: number): number | null {
 
 /**
  * `queue` without every patch that writes `target`'s field — the ONE
- * target-removal rule `dedupQueue` and `cancelTarget` share (audit 20260928
- * #154). A step edit is matched by step IDENTITY (#153): walking back through
+ * target-removal rule `dedupQueue` and `cancelTarget` share.
+ * A step edit is matched by step IDENTITY: walking back through
  * the queue, the target's index is carried through each renumbering of its
  * job, so an insert below it (which moves nothing) or a move there and back
  * is crossed, while an edit to a different step that merely shares today's

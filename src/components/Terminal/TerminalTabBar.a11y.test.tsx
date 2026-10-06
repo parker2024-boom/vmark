@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import "@/test/axeMatchers";
 import { axe } from "vitest-axe";
 import { TerminalTabBar } from "./TerminalTabBar";
-import { useUIStore, resetTerminalSessionStore } from "@/stores/uiStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 
 const AXE_OPTS = {
   rules: {
@@ -24,16 +24,13 @@ beforeEach(() => {
 
 describe("TerminalTabBar a11y (WI-UI4.5)", () => {
   it("live + dead + background-activity states pass axe", async () => {
-    useUIStore.getState().terminalCreateSession();
-    useUIStore.getState().terminalCreateSession();
-    const st = useUIStore.getState();
-    useUIStore.setState({
-      terminal: {
-        ...st.terminal,
-        sessions: st.terminal.sessions.map((x, i) =>
-          i === 0 ? { ...x, isAlive: false } : { ...x, hasActivity: true },
-        ),
-      },
+    useTerminalStore.getState().terminalCreateSession();
+    useTerminalStore.getState().terminalCreateSession();
+    const st = useTerminalStore.getState();
+    useTerminalStore.setState({
+      sessions: st.sessions.map((x, i) =>
+        i === 0 ? { ...x, isAlive: false } : { ...x, hasActivity: true },
+      ),
     });
     const { container } = render(
       <TerminalTabBar onClose={vi.fn()} onRestart={vi.fn()} position="bottom" />,
@@ -42,15 +39,12 @@ describe("TerminalTabBar a11y (WI-UI4.5)", () => {
   });
 
   it("the background-activity state has a text channel, not just the dot", () => {
-    useUIStore.getState().terminalCreateSession();
-    useUIStore.getState().terminalCreateSession();
-    const st = useUIStore.getState();
-    useUIStore.setState({
-      terminal: {
-        ...st.terminal,
-        sessions: st.terminal.sessions.map((x, i) => (i === 1 ? { ...x, hasActivity: true } : x)),
-        activeSessionId: st.terminal.sessions[0].id,
-      },
+    useTerminalStore.getState().terminalCreateSession();
+    useTerminalStore.getState().terminalCreateSession();
+    const st = useTerminalStore.getState();
+    useTerminalStore.setState({
+      sessions: st.sessions.map((x, i) => (i === 1 ? { ...x, hasActivity: true } : x)),
+      activeSessionId: st.sessions[0].id,
     });
     const { container } = render(
       <TerminalTabBar onClose={vi.fn()} onRestart={vi.fn()} position="bottom" />,

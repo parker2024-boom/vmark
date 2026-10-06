@@ -1,8 +1,7 @@
 /**
  * How a command reports a failure it has decided to contain.
  *
- * Purpose: ONE definition of "log it AND tell the user" (audit #897, #900,
- * #921, #922, #953). A command body that catches its own failure and only logs
+ * Purpose: ONE definition of "log it AND tell the user". A command body that catches its own failure and only logs
  * it leaves the click doing nothing at all: `menuError` writes to the log file,
  * which nobody reads mid-session, and the palette route drops a rejection
  * entirely. Every one of those sites had been written by hand, and they had

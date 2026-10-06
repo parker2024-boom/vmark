@@ -1,9 +1,12 @@
 /**
  * Bundle size budget for VMark.
  *
- * Each entry pins the maximum byte size of a built chunk. Limits sit ~5%
- * above current sizes so day-to-day bumps pass while accidental regressions
- * (e.g. a vendor chunk that was lazy becoming eagerly imported) trip CI.
+ * Each entry pins the maximum byte size of a built chunk. Limits sit 5%
+ * above current sizes — rounded up to 0.1 kB under 10 kB, 0.5 kB under
+ * 100 kB, 1 kB above — so day-to-day bumps pass while accidental regressions
+ * (e.g. a vendor chunk that was lazy becoming eagerly imported) trip CI. A
+ * limit far above its chunk lets a regression of that size through
+ * unnoticed, so a chunk that shrinks takes its limit down with it.
  *
  * Two tiers:
  *   - "EAGER:"  preloaded on first paint via `<link rel="modulepreload">` or
@@ -31,6 +34,12 @@
  * can be budgeted without a rot-prone hash-pinned glob (audit 20260612 H9 —
  * the previous `index-BUAvxpLj*` glob silently stopped matching and the
  * entry chunk went unbudgeted).
+ *
+ * ONE positive glob per budget (negations are fine). size-limit fails when a
+ * budget's globs match no file at all, which is what makes a renamed chunk
+ * loud — but with two positive globs, one can go dead while the other keeps
+ * the budget passing. scripts/check-size-budgets.test.mjs enforces the rule
+ * and pins size-limit's no-match failure against the installed CLI.
  *
  * @module .size-limit.cjs
  */
@@ -60,9 +69,21 @@ module.exports = [
     // bumps), and `pnpm lint:eager` now enforces that closure's total
     // (MAX_EAGER_BYTES), which is the number launch cost actually follows.
     // Actual 189.6 kB.
+    //
+    // Ratcheted 200 → 145 kB; actual 137.6 kB. The startup work that followed
+    // took it to 146.2 kB without the limit following it down, and the JSON
+    // tree view (react-json-view-lite, 7.9 kB) then left for its own lazy
+    // chunk: the format adapters are registered in every window, but the tree
+    // is needed only once a preview pane shows one.
+    //
+    // smol-toml (11.1 kB) then left too: the TOML validator, schema detector
+    // and previews load the parser on first use (formats/adapters/
+    // tomlParser.ts) into its own chunk, budgeted below, and re-run once it
+    // arrives. 133.7 -> 123.3 kB.
     name: "EAGER: entry",
     path: "dist/assets/entry-*.js",
-    limit: "200 kB",
+    // Ratcheted 145 kB -> 130 kB (re-measured to its size plus 5%): actual 123.3 kB.
+    limit: "130 kB",
     brotli: false,
   },
 
@@ -79,7 +100,8 @@ module.exports = [
     // @tauri-apps/api + plugin-* shims. Should stay tiny.
     name: "EAGER: vendor-tauri",
     path: "dist/assets/vendor-tauri-*.js",
-    limit: "45 kB",
+    // Ratcheted 45 kB -> 34 kB (re-measured to its size plus 5%): actual 32.3 kB.
+    limit: "34 kB",
     brotli: false,
   },
   {
@@ -89,7 +111,8 @@ module.exports = [
     // (with a note) when adding a real new state library.
     name: "EAGER: vendor-state",
     path: "dist/assets/vendor-state-*.js",
-    limit: "10 kB",
+    // Ratcheted 10 kB -> 5.6 kB (re-measured to its size plus 5%): actual 5.3 kB.
+    limit: "5.6 kB",
     brotli: false,
   },
   {
@@ -98,7 +121,8 @@ module.exports = [
     // editor) added ~18 kB; actual ~488 kB.
     name: "EAGER: vendor-tiptap",
     path: "dist/assets/vendor-tiptap-*.js",
-    limit: "500 kB",
+    // Ratcheted 500 kB -> 491 kB (re-measured to its size plus 5%): actual 467.6 kB.
+    limit: "491 kB",
     brotli: false,
   },
   {
@@ -126,7 +150,8 @@ module.exports = [
     // registry size guards against accidental eager imports of language modules.
     name: "EAGER: vendor-codemirror-languages",
     path: "dist/assets/vendor-codemirror-languages-*.js",
-    limit: "30 kB",
+    // Ratcheted 30 kB -> 22 kB (re-measured to its size plus 5%): actual 20.6 kB.
+    limit: "22 kB",
     brotli: false,
   },
   {
@@ -163,7 +188,8 @@ module.exports = [
     // (v3.28); ~5% headroom.
     name: "LAZY: vendor-graphviz",
     path: "dist/assets/vendor-graphviz-*.js",
-    limit: "1430 kB",
+    // Ratcheted 1430 kB -> 1424 kB (re-measured to its size plus 5%): actual 1356.2 kB.
+    limit: "1424 kB",
     brotli: false,
   },
   {
@@ -171,7 +197,8 @@ module.exports = [
     // parsing happens on first open.
     name: "EAGER: vendor-markdown",
     path: "dist/assets/vendor-markdown-*.js",
-    limit: "410 kB",
+    // Ratcheted 410 kB -> 136 kB (re-measured to its size plus 5%): actual 128.8 kB.
+    limit: "136 kB",
     brotli: false,
   },
   {
@@ -208,7 +235,33 @@ module.exports = [
     // IN it — the same move that grew `entry`. The cold-start closure moved
     // 3.05 → 3.09 MiB, and `pnpm lint:eager` enforces that total now.
     // Actual 762.1 kB; smallest raise that fits, as above.
-    limit: "765 kB",
+    // Ratcheted 765 → 731 kB; actual 695.6 kB. Classic zod (88 kB) rode this
+    // chunk for the hot-exit session schemas and one non-empty-string check:
+    // its chainable API cannot be tree-shaken, so two small consumers brought
+    // the whole library to cold start. The schemas moved to `zod/mini` (24 kB
+    // with the English messages) and the string check became a type guard.
+    // The limit is the new size plus this file's usual 5%, which is what a
+    // budget needs in order to catch a regression of that kind — classic zod
+    // coming back is +64 kB — without tripping on the next ordinary feature.
+    limit: "731 kB",
+    brotli: false,
+  },
+  {
+    // The shared side chunk Rolldown names after src/utils/popupComponents:
+    // modules reached both from App-side code and from the lazy surfaces
+    // land here, and index.html modulepreloads it. It was unbudgeted, so
+    // weight could migrate into cold start without any per-chunk gate
+    // noticing. Budgeted when the markdown paste extension and turndown
+    // (htmlToMarkdown) left it: once the AI suggestion, genie and HTML paste
+    // paths imported the slice builder in plugins/shared/markdownPasteSlice
+    // instead of markdownPaste/tiptap, those modules were reachable only
+    // from markdownSurface. 287,385 -> 264,644 bytes. Limit = new size times
+    // the markdownSurface headroom ratio (285,000 / 267,339 = 1.0661), so the
+    // 22.7 kB that left cannot come back silently.
+    name: "EAGER: popupComponents (shared side chunk)",
+    path: "dist/assets/popupComponents-*.js",
+    // Ratcheted 283 kB -> 280 kB (re-measured to its size plus 5%): actual 265.8 kB.
+    limit: "280 kB",
     brotli: false,
   },
 
@@ -219,7 +272,8 @@ module.exports = [
     // so it only loads with WorkflowSidePanel.
     name: "LAZY: vendor-dagre (workflow only)",
     path: "dist/assets/vendor-dagre-*.js",
-    limit: "100 kB",
+    // Ratcheted 100 kB -> 49 kB (re-measured to its size plus 5%): actual 46.4 kB.
+    limit: "49 kB",
     brotli: false,
   },
   {
@@ -232,7 +286,8 @@ module.exports = [
     // WI moved ~1.4 kB in, not out — the old limit was simply stale).
     name: "LAZY: SourceEditor",
     path: "dist/assets/SourceEditor-*.js",
-    limit: "80 kB",
+    // Ratcheted 80 kB -> 66 kB (re-measured to its size plus 5%): actual 62.7 kB.
+    limit: "66 kB",
     brotli: false,
   },
   {
@@ -250,9 +305,20 @@ module.exports = [
     // loads (this chunk plus its static imports) went 2,876.6 → 2,894.4 kB,
     // 78 → 35 files: +0.6%, from the dependency bumps, not the move.
     // Actual 272.4 kB.
+    //
+    // 285 -> 309 kB: bytes moved IN, nothing new. The markdown paste
+    // extension, htmlToMarkdown and turndown left the cold-start
+    // popupComponents chunk (287,385 -> 264,644 bytes) when their App-side
+    // importers switched to plugins/shared/markdownPasteSlice, so they now
+    // live only here (267,339 -> 289,772 bytes). All chunks together shrank
+    // about 0.3 kB, and the cold-start closure fell 3,246,541 -> 3,223,808
+    // bytes (MAX_EAGER_BYTES lowered to match). Limit = new size times the
+    // old headroom ratio (285,000 / 267,339 = 1.0661), and popupComponents
+    // now has its own budget, so the move is a net tightening.
     name: "LAZY: markdownSurface",
     path: "dist/assets/markdownSurface-*.js",
-    limit: "285 kB",
+    // Ratcheted 309 kB -> 307 kB (re-measured to its size plus 5%): actual 291.9 kB.
+    limit: "307 kB",
     brotli: false,
   },
   {
@@ -263,7 +329,8 @@ module.exports = [
     // are their own chunks.
     name: "LAZY: yamlWorkflowRenderer",
     path: "dist/assets/yamlWorkflowRenderer-*.js",
-    limit: "15 kB",
+    // Ratcheted 15 kB -> 11.5 kB (re-measured to its size plus 5%): actual 10.9 kB.
+    limit: "11.5 kB",
     brotli: false,
   },
   {
@@ -284,7 +351,8 @@ module.exports = [
     // React Flow / @xyflow workflow panel. Lazy.
     name: "LAZY: WorkflowSidePanel",
     path: "dist/assets/WorkflowSidePanel-*.js",
-    limit: "135 kB",
+    // Ratcheted 135 kB -> 1.5 kB (re-measured to its size plus 5%): actual 1.4 kB.
+    limit: "1.5 kB",
     brotli: false,
   },
   {
@@ -323,16 +391,83 @@ module.exports = [
     // over the old 103 kB ceiling. The bytes buy error reports that previously
     // vanished, so this is a real feature paying a real cost, not drift; +2 kB
     // restores headroom on the same schedule as the two bumps above.
+    //
+    // Ratcheted 105 → 15 kB; actual 13.5 kB. This chunk is now the Settings
+    // SHELL — window chrome, navigation, search and the panel loader. Each
+    // section's panel is a chunk of its own, loaded when the section is first
+    // shown (pages/settings/panels.ts), and budgeted together below. Seven of
+    // the bumps above were a toggle or a string landing on a chunk with no
+    // room left; that pressure is gone from here, and a panel that is imported
+    // statically again brings its bytes back to this chunk and fails this
+    // limit.
     name: "LAZY: Settings page",
     path: "dist/assets/SettingsPage-*.js",
-    limit: "105 kB",
+    // Ratcheted 15 kB -> 14.5 kB (re-measured to its size plus 5%): actual 13.6 kB.
+    limit: "14.5 kB",
+    brotli: false,
+  },
+  // The eleven Settings panels, one chunk per section, 102.6 kB together at
+  // the split. A session loads the shell plus the sections it visits, and all
+  // of the searchable ones on the first search. One budget per chunk, not one
+  // glob over all of them: a panel chunk the bundler renamed would drop out of
+  // a sum without failing it. Each limit is its size plus 5%, rounded as the
+  // header says. The primitives the panels share have their own budget below.
+  ...[
+    ["AboutSettings", "11.5 kB"],
+    ["AdvancedSettings", "7.1 kB"],
+    ["AppearanceSettings", "3.6 kB"],
+    ["EditorSettings", "9.6 kB"],
+    ["FilesImagesSettings", "8.9 kB"],
+    ["FormatsSettings", "5.2 kB"],
+    ["IntegrationsSettings", "33.5 kB"],
+    ["LanguageSettings", "8.7 kB"],
+    ["MarkdownSettings", "5.1 kB"],
+    ["ShortcutsSettings", "8.7 kB"],
+    ["TerminalSettings", "7.4 kB"],
+  ].map(([chunk, limit]) => ({
+    name: `LAZY: Settings panel ${chunk}`,
+    path: `dist/assets/${chunk}-*.js`,
+    limit,
+    brotli: false,
+  })),
+  {
+    // The primitives every Settings panel shares (settings/buttons, inputs,
+    // layout, the search context, the tag input). Rolldown names the chunk
+    // after one of its modules (`components-*`), too generic for a glob, so
+    // vite.config.ts renames the emitted FILE by its content
+    // (scripts/manualChunks.ts chunkFileNames) — what the chunk holds is
+    // unchanged. 7.4 kB.
+    name: "LAZY: settingsPrimitives",
+    path: "dist/assets/settingsPrimitives-*.js",
+    limit: "7.8 kB",
+    brotli: false,
+  },
+  {
+    // smol-toml, the TOML parser, loaded the first time a TOML document is
+    // validated or previewed (formats/adapters/tomlParser.ts). It sat in the
+    // entry chunk of every window while the adapters imported it statically;
+    // check-eager-chunks.mjs requires it to stay off the cold-start path.
+    // 11.1 kB.
+    name: "LAZY: vendor-toml",
+    path: "dist/assets/vendor-toml-*.js",
+    limit: "12 kB",
+    brotli: false,
+  },
+  {
+    // react-json-view-lite plus VMark's styles for it: the tree the JSON, TOML
+    // and YAML previews draw, loaded on first use (formats/adapters/
+    // LazyJsonTree.tsx). 8.5 kB at the split.
+    name: "LAZY: jsonTreeView",
+    path: "dist/assets/jsonTreeView-*.js",
+    limit: "9 kB",
     brotli: false,
   },
   {
     // Export pipeline (DOC/PDF/HTML). Lazy.
     name: "LAZY: useExportOperations",
     path: "dist/assets/useExportOperations-*.js",
-    limit: "90 kB",
+    // Ratcheted 90 kB -> 83 kB (re-measured to its size plus 5%): actual 79.0 kB.
+    limit: "83 kB",
     brotli: false,
   },
   {

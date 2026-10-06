@@ -1,5 +1,5 @@
 //! macOS native browser surface — the objc2 WKWebView implementation of the
-//! WI-1.2 surface. Split from surface.rs (which keeps the cross-platform
+//! browser surface. Split from surface.rs (which keeps the cross-platform
 //! struct + command-facing re-exports) to stay under the file-size limit.
 //! Included via `#[path]` from surface.rs; `super::` refers to that module.
 
@@ -10,7 +10,7 @@ use crate::browser::surface::BrowserSurface;
 use objc2::rc::Retained;
 use objc2::MainThreadMarker;
 use objc2_foundation::{NSRunLoop, NSURLRequest};
-use objc2_web_kit::{WKContentWorld, WKWebView};
+use objc2_web_kit::WKWebView;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -23,6 +23,8 @@ use nav_delegate::NavDelegate;
 #[path = "driver_loop_macos.rs"]
 mod driver_loop;
 use driver_loop::{drive_load, pump_until};
+#[path = "webkit_calls_macos.rs"]
+mod webkit_calls;
 
 #[path = "dialogs_macos.rs"]
 mod dialogs;
@@ -65,8 +67,8 @@ mod user_input_resolve;
 use user_input_resolve::{tab_id_at_window_point, tab_id_for_responder};
 
 /// Run `f` on the main thread and return its result (20s cap). Every failure —
-/// the body's, the hop's, the scheduler's — is a typed `NativeSurfaceError`
-/// (round 4, #31); nothing on this path renders a `fail::` string.
+/// the body's, the hop's, the scheduler's — is a typed `NativeSurfaceError`;
+/// nothing on this path renders a `fail::` string.
 ///
 /// **Already on the main thread → run inline.** `run_on_main_thread` always
 /// ENQUEUES on the event loop, so a caller that is itself inside an event-loop
@@ -137,7 +139,7 @@ fn webview_for(tab_id: &str) -> Result<Retained<WKWebView>, NativeSurfaceError> 
         .ok_or_else(|| NativeSurfaceError::NoWebview(format!("no webview: {tab_id}")))
 }
 
-/// Load `url` in an existing webview. Typed end to end (round 4, #31): the
+/// Load `url` in an existing webview. Typed end to end: the
 /// caller's closure in `ai_transactions::navigate_native` takes this error as is.
 pub fn navigate(app: &AppHandle, tab_id: String, url: String) -> Result<(), NativeSurfaceError> {
     on_main(app, move |_mtm| {
@@ -146,7 +148,7 @@ pub fn navigate(app: &AppHandle, tab_id: String, url: String) -> Result<(), Nati
         let req = NSURLRequest::requestWithURL(&url_obj);
         // Drive the navigation + first paint (see create()), owned by the delegate.
         api_navigation(&tab_id, &webview, || {
-            unsafe { webview.loadRequest(&req) }.is_some()
+            webkit_calls::load_request(&webview, &req)
         });
         Ok(())
     })
@@ -161,13 +163,7 @@ pub fn go_history(
 ) -> Result<(), NativeSurfaceError> {
     on_main(app, move |_mtm| {
         let wv = webview_for(&tab_id)?;
-        api_navigation(&tab_id, &wv, || {
-            if forward {
-                unsafe { wv.goForward() }.is_some()
-            } else {
-                unsafe { wv.goBack() }.is_some()
-            }
-        });
+        api_navigation(&tab_id, &wv, || webkit_calls::go_history(&wv, forward));
         Ok(())
     })
 }
@@ -183,7 +179,7 @@ fn api_navigation(tab_id: &str, webview: &WKWebView, start: impl FnOnce() -> boo
     match delegate_for(tab_id) {
         Some(delegate) => delegate.api_navigation(webview, start, pump),
         None => {
-            log::error!("[browser] {tab_id}: webview with no delegate — navigating unowned");
+            log::error!("[browser] {tab_id:?}: webview with no delegate — navigating unowned");
             let created = start();
             if created {
                 pump(webview);
@@ -217,7 +213,7 @@ pub fn set_bounds(
     })
 }
 
-/// Resume a parked `confirm()` dialog with the user's answer (WI-1.7) — but only
+/// Resume a parked `confirm()` dialog with the user's answer — but only
 /// from the window that owns the dialog's tab (audit 20260903).
 ///
 /// A dialog id is a small integer that travels through the frontend; a guessed or
@@ -259,7 +255,7 @@ pub fn dialog_respond(
 }
 
 /// Hide (freeze) or show (thaw) the native view — the occlusion mechanism
-/// (R2/WI-1.4). Hiding lets a DOM overlay paint in the rect instead of the
+/// (R2). Hiding lets a DOM overlay paint in the rect instead of the
 /// live page that would otherwise sit above all DOM.
 pub fn set_hidden(app: &AppHandle, tab_id: String, hidden: bool) -> Result<(), NativeSurfaceError> {
     on_main(app, move |_mtm| {
@@ -277,7 +273,7 @@ pub fn assert_no_bridge(app: &AppHandle, tab_id: String) -> Result<String, EvalE
     let native = on_main(app, move |mtm| {
         let webview = webview_for(&tab_id)?;
         let run_loop = NSRunLoop::mainRunLoop();
-        let page_world = unsafe { WKContentWorld::pageWorld(mtm) };
+        let page_world = webkit_calls::page_world(mtm);
         Ok(eval_js(
             &webview,
             crate::browser::no_bridge::NO_BRIDGE_ASSERTION,
@@ -293,7 +289,7 @@ pub fn assert_no_bridge(app: &AppHandle, tab_id: String) -> Result<String, EvalE
 pub fn stop(app: &AppHandle, tab_id: String) -> Result<(), NativeSurfaceError> {
     on_main(app, move |_mtm| {
         let webview = webview_for(&tab_id)?;
-        unsafe { webview.stopLoading() };
+        webkit_calls::stop_loading(&webview);
         Ok(())
     })
 }

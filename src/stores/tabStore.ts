@@ -9,14 +9,14 @@
  *   - State is keyed by window label to support multi-window (each window
  *     has its own independent tab list).
  *   - Pinned tabs cannot be closed without explicit unpin (user safety).
- *   - Closing a tab records it in the SCOPED reopen history (WI-11.1):
+ *   - Closing a tab records it in the SCOPED reopen history:
  *     tabStoreClosedScopes, fed via the removal bus with the full tab payload.
  *   - Tab activation after close prefers the tab to the right, then left.
  *   - Tab IDs use timestamp + random suffix — unique but not globally sortable.
  *   - No persistence middleware: tab state is restored from workspace config
  *     on startup via workspaceStore.lastOpenTabs, not via localStorage.
  *   - Tab.formatId is computed via dispatchEditor() and recomputed in
- *     updateTabPath; kind changes fire a one-time toast (ADR-10 / WI-1A.12).
+ *     updateTabPath; kind changes fire a one-time toast (ADR-10).
  *
  * Known limitations:
  *   - Closed-tab history stores tab metadata, not document content — reopening
@@ -27,8 +27,8 @@
  * @coordinates-with documentStore.ts — each tab ID maps to a document entry
  * @coordinates-with workspaceStore.ts — lastOpenTabs for session restore
  * @coordinates-with lib/formats/registry.ts — dispatchEditor() drives formatId derivation
- * @coordinates-with tabRemovalBus.ts — closeTab/detachTab notify on tab removal (#1081)
- * @coordinates-with tabActivationBus.ts — every activation is announced so paneStore converges a split (WI-2, ADR-1)
+ * @coordinates-with tabRemovalBus.ts — closeTab/detachTab/removeWindow notify on tab removal (#1081)
+ * @coordinates-with tabActivationBus.ts — every activation is announced so paneStore converges a split (ADR-1)
  * @module stores/tabStore
  */
 
@@ -104,7 +104,7 @@ interface TabActions {
     tabId: string,
     patch: { url?: string; title?: string; scrollY?: number; generation?: number },
   ) => void;
-  closeTab(windowLabel: string, tabId: string): boolean; // false = nothing removed (pinned/unknown), WI-5
+  closeTab(windowLabel: string, tabId: string): boolean; // false = nothing removed (pinned/unknown)
 
   // Tab state
   setActiveTab: (windowLabel: string, tabId: string | null) => void;
@@ -121,7 +121,7 @@ interface TabActions {
 
   // Detach (drag-out) — removal reason "detach": NOT reopen history
   detachTab: (windowLabel: string, tabId: string) => void;
-  /** Re-insert a previously closed tab (WI-11.2 reopen). Appends WITHOUT
+  /** Re-insert a previously closed tab (reopen). Appends WITHOUT
    *  activating — the reopen service owns activation (pane-aware). */
   restoreTab: (windowLabel: string, tab: Tab) => void;
 
@@ -191,7 +191,7 @@ export const useTabStore = create<TabState & TabActions>((set, get) => ({
         untitledCounter: newCounter,
       };
     });
-    notifyTabActivated(windowLabel, returnId); // WI-2: converge an enabled split
+    notifyTabActivated(windowLabel, returnId); // converge an enabled split
     return returnId;
   },
 
@@ -228,7 +228,7 @@ export const useTabStore = create<TabState & TabActions>((set, get) => ({
         activeTabId: { ...state.activeTabId, [windowLabel]: fullTab.id },
       };
     });
-    notifyTabActivated(windowLabel, returnId); // WI-2: converge an enabled split
+    notifyTabActivated(windowLabel, returnId); // converge an enabled split
     return returnId;
   },
 
@@ -267,11 +267,11 @@ export const useTabStore = create<TabState & TabActions>((set, get) => ({
 
       return removeTabAt(state, windowLabel, tabIndex);
     });
-    // #1081: paneStore collapses a split whose pane held the tab. WI-11.1:
+    // #1081: paneStore collapses a split whose pane held the tab;
     // the payload feeds the scoped reopen history (reason "close").
     if (removed && removedTab) {
       notifyTabRemoved(windowLabel, tabId, { tab: removedTab, reason: "close" });
-      // WI-2: announce the neighbor pick AFTER the split reconciled the removal.
+      // Announce the neighbor pick AFTER the split reconciled the removal.
       notifyTabActivated(windowLabel, get().activeTabId[windowLabel] ?? null);
     }
     return removed;
@@ -291,7 +291,7 @@ export const useTabStore = create<TabState & TabActions>((set, get) => ({
     // #1081: detaching removes the tab here too — collapse a split that held it.
     if (removed && removedTab) {
       notifyTabRemoved(windowLabel, tabId, { tab: removedTab, reason: "detach" });
-      // WI-2: announce the neighbor pick AFTER the split reconciled the removal.
+      // Announce the neighbor pick AFTER the split reconciled the removal.
       notifyTabActivated(windowLabel, get().activeTabId[windowLabel] ?? null);
     }
   },
@@ -313,16 +313,16 @@ export const useTabStore = create<TabState & TabActions>((set, get) => ({
       }
       return next;
     });
-    // WI-2: announce only a write the guard accepted (unknown ids stay a no-op).
+    // Announce only a write the guard accepted (unknown ids stay a no-op).
     if (get().activeTabId[windowLabel] === tabId) notifyTabActivated(windowLabel, tabId);
   },
 
-  /** WI-4.3 — promote a tab to read-write or revert to read-only. */
+  /** Promote a tab to read-write or revert to read-only. */
   setTabEditingEnabled: (tabId: string, enabled: boolean) => {
     set((state) => updateTabById(state, tabId, { editingEnabled: enabled }));
   },
 
-  /** WI-1A.13 — set the active schemaRenderer id (e.g. yaml-gha-workflow).
+  /** Set the active schemaRenderer id (e.g. yaml-gha-workflow).
    *  Pass `null` to clear the override and let schemaDetector decide. */
   setTabActiveSchemaId: (tabId: string, schemaId: string | null) => {
     set((state) => updateTabById(state, tabId, { activeSchemaId: schemaId }));
@@ -333,7 +333,7 @@ export const useTabStore = create<TabState & TabActions>((set, get) => ({
     set((state) => updateTabById(state, tabId, { viewMode: mode }));
   },
 
-  /** WI-1A.13 — overwrite a tab's `formatId`. Used by hot-exit restore for
+  /** Overwrite a tab's `formatId`. Used by hot-exit restore for
    *  untitled tabs where path-based derivation can't recover non-markdown. */
   setTabFormatId: (tabId: string, formatId: string) => {
     set((state) => updateTabById(state, tabId, { formatId }));
@@ -445,13 +445,13 @@ export const useTabStore = create<TabState & TabActions>((set, get) => ({
   },
 
   removeWindow: (windowLabel) => {
+    const removedTabs = get().tabs[windowLabel] ?? [];
     set((state) => {
       const { [windowLabel]: _tabs, ...restTabs } = state.tabs;
       const { [windowLabel]: _activeId, ...restActiveId } = state.activeTabId;
-      return {
-        tabs: restTabs,
-        activeTabId: restActiveId,
-      };
+      return { tabs: restTabs, activeTabId: restActiveId };
     });
+    // Every tab the window held has left it: announce each one, as close and detach do.
+    for (const tab of removedTabs) notifyTabRemoved(windowLabel, tab.id, { tab, reason: "window" });
   },
 }));

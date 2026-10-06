@@ -12,7 +12,7 @@ paths:
 
 Reference for CSS custom properties. Always use tokens over hardcoded values.
 
-**Source of truth (post-ADR-014):**
+**Source of truth (post-ADR-014, `.claude/adr/ADR-014-theme-tokens-as-typed-data.md`):**
 - Typed theme catalog: `src/theme/themes/<id>.ts` (paper, white, mint, sepia, night, solarized) implementing `ThemeTokens` from `src/theme/tokens.ts`.
 - Runtime CSS-var writer: `src/theme/applyTheme.ts` (emits `--color-*`, `--space-*`, etc. for the typed pathway).
 - Legacy CSS-var values (the `--bg-color` / `--accent-bg` / `--alert-note` names the app's CSS actually consumes) also flow from the typed catalog: the per-theme dark overrides live on `ThemeTokens.color.legacy` (night, solarized), and the shared light-mode statics live in `legacyLight` (`src/theme/tokens.ts`). `useTheme.ts` reads both from the catalog — it no longer carries its own `darkModeColors`/`lightModeColors` literals.

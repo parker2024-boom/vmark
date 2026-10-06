@@ -3,7 +3,7 @@
  *
  * Purpose: Shared helper for all MCP bridge handlers — send a response back to
  *   the Rust bridge. The v1 text-match / editor / window helpers that used to
- *   live here were superseded by `mcpBridge/v2/` and removed (WI-0.7/WI-1.4);
+ *   live here were superseded by `mcpBridge/v2/` and removed;
  *   `respond` is the only still-live export (used by handleRequest.ts and the
  *   v2 handlers).
  *
@@ -23,7 +23,7 @@ import { recordResponse } from "./requestDedup";
  */
 export async function respond(response: McpResponse): Promise<void> {
   mcpBridgeLog("Sending response:", response.id, response.success);
-  // Cache for duplicate-delivery re-send (wake-and-retry; audit 20260612).
+  // Cache for duplicate-delivery re-send (wake-and-retry).
   recordResponse(response);
   try {
     await invoke("mcp_bridge_respond", { payload: response });

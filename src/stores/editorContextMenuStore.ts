@@ -3,7 +3,7 @@
  * surfaces (opened by the per-surface triggers with a position + state
  * snapshot).
  *
- * Standalone Zustand store (T09 revert, WI-9 plan-20260803-161713): this
+ * Standalone Zustand store: this
  * state was born inside the merged popup store (no legacy shim); it is
  * re-inlined here with the same open/close semantics under the
  * `openMenu`/`closeMenu` names the sibling context-menu store uses.

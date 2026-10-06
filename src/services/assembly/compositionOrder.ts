@@ -1,5 +1,5 @@
 /**
- * Canonical composition order for the two editor roots (WI-3.4, ADR-015 D1).
+ * Canonical composition order for the two editor roots (ADR-015 D1).
  *
  * Each list is the SINGLE place its root's extension order is declared. The
  * roots derive explicit `after` constraints from these lists
@@ -87,7 +87,7 @@ export const WYSIWYG_COMPOSITION_ORDER: readonly string[] = [
   "listContinuation",
   // Enter on a cross-block selection. After listContinuation so list handling
   // keeps first refusal; before StarterKit's splitBlock, which throws on that
-  // selection shape (audit 20260906, F5).
+  // selection shape.
   "safeBlockSplit",
   "listBackspace",
   "listClickFix",

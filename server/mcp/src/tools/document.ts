@@ -6,7 +6,8 @@
  * deterministic CJK rewriter, preserved because the rules are too
  * nuanced for AI prose to reproduce reliably.
  *
- * Origin: MCP pruning plan (2026-05-04, retired) ADR-1, ADR-2, ADR-4.
+ * Origin: the MCP pruning plan's ADR-1, ADR-2 and ADR-4, recorded in
+ * `.claude/adr/plans/20260504-mcp-pruning.md`.
  */
 
 import { z } from 'zod';
@@ -81,7 +82,7 @@ export function registerDocumentTool(server: VMarkMcpServer): void {
           ),
       },
       // ONE schema serves read / write / transform, and every field stays
-      // optional. The 2026-07-28 round-2 audit asked for action-specific
+      // optional. An earlier audit asked for action-specific
       // envelopes instead; that was assessed and REJECTED, for three reasons
       // that compound:
       //
@@ -144,8 +145,7 @@ export function registerDocumentTool(server: VMarkMcpServer): void {
       const tabId = tab.value;
       // A SUPPLIED but invalid revision is refused, never normalised to
       // `undefined` — that conversion turned a guarded write into an
-      // unconditional one for exactly the callers who got it wrong
-      // (audit R2 #226).
+      // unconditional one for exactly the callers who got it wrong.
       const revision = readOptionalRevision(args.expected_revision);
       if (!revision.ok) return VMarkMcpServer.errorResult(revision.error);
       const expected_revision = revision.value;
@@ -165,7 +165,7 @@ export function registerDocumentTool(server: VMarkMcpServer): void {
           }
           // Default save: true — only forward an explicit false. A SUPPLIED
           // non-boolean is refused: `=== false` read the string "false" as
-          // "use the default" and wrote to disk (audit R2 #227).
+          // "use the default" and wrote to disk.
           const saveArg = readOptionalBoolean(args.save, 'save');
           if (!saveArg.ok) return VMarkMcpServer.errorResult(saveArg.error);
           const save = saveArg.value === false ? false : undefined;
@@ -196,7 +196,7 @@ export function registerDocumentTool(server: VMarkMcpServer): void {
       // Generated from DOCUMENT_ACTIONS, the exported source of truth the
       // schema enum also reads. The hardcoded prose went stale the moment an
       // action was added or renamed, and it is the only thing a caller who got
-      // the action wrong has to go on (audit R3 #228).
+      // the action wrong has to go on.
       return VMarkMcpServer.errorResult(
         `Invalid action: ${String(action)}. Expected: ${DOCUMENT_ACTIONS.join(', ')}`,
       );

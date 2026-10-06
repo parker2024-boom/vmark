@@ -22,7 +22,7 @@
  * @module plugins/latex/inlineMathRenderCache
  */
 
-import type { KatexModule } from "./katexLoader";
+import type { KatexModule } from "@/plugins/shared/katexLoader";
 
 /** Distinct formulas kept. A rendered inline formula is a few KB of DOM. */
 export const INLINE_MATH_CACHE_LIMIT = 2000;

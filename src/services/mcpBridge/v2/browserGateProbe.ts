@@ -1,5 +1,5 @@
 /**
- * Gate probe (WI-NB2.2) — one best-effort signals eval after a loaded
+ * Gate probe — one best-effort signals eval after a loaded
  * navigation, classified into an advisory `gate` verdict for the result.
  *
  * Purpose: the navigation handlers attach `data.gate {kind, hint}` when the

@@ -4,7 +4,7 @@
  * Purpose: mount a `React.lazy` chunk so that a FAILED load is recoverable in
  *   place — a local error surface with a retry that actually retries.
  *
- * Why this exists (audit 20260804-F3/F4): `React.lazy` memoizes the REJECTED
+ * Why this exists: `React.lazy` memoizes the REJECTED
  * promise for the lifetime of the lazy object. A module-level
  * `const X = lazy(() => import(...))` therefore turns one transient chunk
  * failure into a permanent one: every remount replays the cached rejection,

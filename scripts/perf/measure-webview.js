@@ -9,7 +9,7 @@
  * Why this exists:
  *   `pnpm bench:editor` measures plugin/transaction cost in jsdom — it does
  *   NOT exercise WebKit layout/paint. The "80 KB doc freezes for 144 s"
- *   issue documented in dev-docs/archive/large-file-performance-investigation.md
+ *   issue found by a large-file performance investigation
  *   is purely a WebKit cost. This payload measures it.
  *
  * What it measures:
@@ -55,7 +55,7 @@
 //   timestamp: string;
 // }
 
-/* eslint-disable */
+/* eslint-disable -- a self-contained payload pasted verbatim into the WebView, not a module of this codebase */
 
 (function defineMeasurePayload() {
   /**

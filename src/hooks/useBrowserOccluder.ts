@@ -1,11 +1,11 @@
 /**
- * useBrowserOccluder — freeze the browser while an overlay covers it (WI-SOC.1).
+ * useBrowserOccluder — freeze the browser while an overlay covers it.
  *
  * The native `WKWebView` is added ABOVE the Tauri webview, so it paints over all React
  * DOM inside its rect; z-index cannot reach it. Any overlay that can land in that rect
  * calls this hook, which hides the native view for as long as it is up. The vacated
  * rect is not left blank — `BrowserSurface` paints an opaque placeholder there
- * (WI-SOC.1b) — so even a translucent backdrop composites over a real surface.
+ * — so even a translucent backdrop composites over a real surface.
  *
  * Which overlays must call this, and why the ones that don't are safe, is declared in
  * `services/browser/__tests__/overlayPolicies.ts`, and a test fails the build if an overlay in

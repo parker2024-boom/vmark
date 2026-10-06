@@ -4,7 +4,7 @@
 //! throwaway render window makes — including the `about:blank` it opens on,
 //! whose completion can arrive after the handler was registered and the real
 //! navigation started. Acting on it printed a blank page and reported
-//! success (#233, #238). And nothing stopped the handler running twice.
+//! success. And nothing stopped the handler running twice.
 //!
 //! The gate knows the DOCUMENT it is waiting for and answers three questions
 //! in one place, so the callback that drives it is a plain `match`:
@@ -27,13 +27,13 @@
 //!   - **Has it been handled?** Once, ever: a reload, a redirect, a second
 //!     delivery is `Ignore`.
 //!   - **Is the caller still waiting?** The sink's claim is made HERE, as
-//!     part of the decision (#227): a document that loaded for a caller that
+//!     part of the decision: a document that loaded for a caller that
 //!     has given up is `Abandoned`, and the callback tears down instead of
 //!     printing or presenting.
 //!
 //! The decision is pure and lives here, compiled on every platform, so the
 //! cases can be pinned by `cargo test` on the machine the project develops
-//! on, where the COM wiring itself only cross-compiles (#235, #240).
+//! on, where the COM wiring itself only cross-compiles.
 //!
 //! @coordinates-with windows_nav.rs — the only production caller
 //! @coordinates-with sink.rs — the claim this makes on `Loaded`
@@ -49,7 +49,7 @@ pub(super) enum NavigationStep {
     Ignore,
     /// The document loaded and the caller is waiting; act exactly once.
     Loaded,
-    /// The document loaded but the caller had stopped waiting (#227): settle
+    /// The document loaded but the caller had stopped waiting: settle
     /// as cancelled and tear the window down, exactly once.
     Abandoned,
     /// The document failed to load; settle the failure exactly once.

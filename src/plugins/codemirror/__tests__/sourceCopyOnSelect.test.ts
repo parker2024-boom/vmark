@@ -114,25 +114,27 @@ describe("sourceCopyOnSelect", () => {
     view.destroy();
   });
 
-  it("trims trailing whitespace from copied text", async () => {
+  // WI-RA18.4 — the selection is markdown: trailing spaces on a line are a
+  // hard break and blank lines may be code, so only the end is trimmed.
+  it("keeps a line's trailing spaces and trims only the whitespace after the selection", async () => {
     const content = "hello   \nworld  ";
     const view = createView(content, 0, content.length);
 
     view.dom.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
-    expect(clipboardSpy).toHaveBeenCalledWith("hello\nworld");
+    expect(clipboardSpy).toHaveBeenCalledWith("hello   \nworld");
     view.destroy();
   });
 
-  it("collapses multiple blank lines in copied text", async () => {
+  it("keeps runs of blank lines inside the selection", async () => {
     const content = "a\n\n\n\nb";
     const view = createView(content, 0, content.length);
 
     view.dom.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
-    expect(clipboardSpy).toHaveBeenCalledWith("a\n\nb");
+    expect(clipboardSpy).toHaveBeenCalledWith("a\n\n\n\nb");
     view.destroy();
   });
 

@@ -40,7 +40,7 @@ import i18n from "@/i18n";
  * moved in is wrong: parent first leaves the child's old path gone and the
  * second move fails with an error dialog, child first lifts the child OUT of
  * the folder the user dragged as one thing. Only the top-level paths are real
- * move operations (audit R2, #645).
+ * move operations.
  */
 export function topLevelPaths(ids: readonly string[]): string[] {
   return ids.filter((id) => !ids.some((other) => other !== id && isWithinRoot(other, id)));
@@ -53,12 +53,12 @@ export function topLevelPaths(ids: readonly string[]): string[] {
  * `string | string[] | null` — the array is what `multiple: true` returns — and
  * the `as Promise<string | null>` this replaces silenced that union rather than
  * handling it, so a future option (or a plugin change) that produced an array
- * would have been passed on as a path and used to build one (audit R3 #640).
+ * would have been passed on as a path and used to build one.
  *
  * `defaultPath` is OMITTED, not undefined: `getParentDir` answers "" for a path
  * at the filesystem root, and the `?? undefined` that preceded it was dead code
  * — the helper returns `string`, never nullish — so the panel was handed an
- * empty defaultPath (audit R2, #639). `exactOptionalPropertyTypes` is why the
+ * empty defaultPath. `exactOptionalPropertyTypes` is why the
  * key is spread away rather than set to undefined.
  */
 async function pickFolder(title: string, near: string): Promise<string | null> {
@@ -169,8 +169,8 @@ export function useExplorerActionWiring({
   //
   // react-arborist does not await this, so the promise ends here: the
   // system-app branch of `openFileByType` has no try/catch of its own, and a
-  // refused `openWithDefaultApp` surfaced as an unhandled rejection (audit R2,
-  // #641). Same boundary treatment as the context-menu route above.
+  // refused `openWithDefaultApp` surfaced as an unhandled rejection.
+  // Same boundary treatment as the context-menu route above.
   const handleActivate = useCallback(
     (node: { data: FileNodeType }) => {
       if (!node.data.isFolder) {
@@ -193,14 +193,13 @@ export function useExplorerActionWiring({
   // at the first `false`: that is either the user cancelling or a failure that
   // has already shown its own error. Running on regardless asked again for
   // every remaining selection and deleted the ones that were confirmed after
-  // the user had already said no — a partial batch nobody asked for (audit R2,
-  // #642).
+  // the user had already said no — a partial batch nobody asked for.
   //
   // The handler's own `nodes` are the selection SNAPSHOT react-arborist took
   // when the user pressed Delete. Re-resolving each id from the live tree
   // instead meant every await in the loop — a confirm dialog, a filesystem
   // call, a refresh — could drop the rows still to come, and a node the tree
-  // no longer held was skipped in silence (audit R2, #643).
+  // no longer held was skipped in silence.
   const handleDelete = useCallback(
     async ({ nodes }: { nodes: readonly { data: FileNodeType }[] }) => {
       for (const { data } of nodes) {
@@ -216,11 +215,10 @@ export function useExplorerActionWiring({
   // serializes two quick drops or catches a rejection from one — an unhandled
   // rejection, and two overlapping filesystem moves reconciling open tabs
   // against each other's snapshots. The guard refuses re-entry while a move is
-  // running and the boundary keeps a failure inside the handler (audit R2,
-  // #644). Descendants of a dragged folder are dropped first: they travel WITH
+  // running and the boundary keeps a failure inside the handler.
+  // Descendants of a dragged folder are dropped first: they travel WITH
   // their parent, so moving them separately either relocates a child out of
-  // the folder it is inside or fails on a source path that no longer exists
-  // (audit R2, #645).
+  // the folder it is inside or fails on a source path that no longer exists.
   const movingRef = useRef(false);
   const handleMove = useCallback(
     async ({ dragIds, parentId }: { dragIds: string[]; parentId: string | null }) => {
@@ -242,7 +240,7 @@ export function useExplorerActionWiring({
 
   // `openFileByType` is deliberately NOT returned: it is this hook's own policy,
   // reached through `handleActivate` and the context menu's Open, and no
-  // consumer read it (audit R3 #646). A public surface with no caller is one
+  // consumer read it. A public surface with no caller is one
   // more thing a future change has to keep working.
   return {
     handleNewFile,

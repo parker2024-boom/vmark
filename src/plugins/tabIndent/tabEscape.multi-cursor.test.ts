@@ -10,7 +10,7 @@ import { describe, it, expect } from "vitest";
 import { Schema, Node } from "@tiptap/pm/model";
 import { EditorState, SelectionRange } from "@tiptap/pm/state";
 import { canTabEscape } from "./tabEscape";
-import { MultiSelection } from "@/plugins/multiCursor/MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 
 // Minimal schema for testing
 const testSchema = new Schema({

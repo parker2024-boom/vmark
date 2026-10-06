@@ -1,5 +1,5 @@
 /**
- * navIntent — how the user set off (WI-S2.2).
+ * navIntent — how the user set off.
  *
  * The nav delegate reports that a navigation *committed*. It cannot report *why*: from
  * WebKit's side, a url the user typed, a link the page followed, and a reload all look

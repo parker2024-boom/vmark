@@ -1,13 +1,17 @@
-// WI-4.2 — Read-only banner above the source pane for kind="viewer"
-// formats. The caller MOUNTS it conditionally on the tab's effective
-// read-only state; it has no self-hiding prop. It used to carry a `hidden`
-// prop as a second way to do the same job, which no caller ever passed
-// (audit 20260815-163607 #25).
-//
-// "Enable editing" promotes the tab to read-write via the caller's
-// onEnableEditing handler (WI-4.3). "Open in external editor"
-// dispatches to the Tauri command (WI-4.4); the button is hidden if
-// the caller doesn't supply onOpenExternal.
+/**
+ * Read-only banner above the source pane for kind="viewer"
+ * formats. The caller MOUNTS it conditionally on the tab's effective
+ * read-only state; it has no self-hiding prop. It used to carry a `hidden`
+ * prop as a second way to do the same job, which no caller ever passed
+ * (audit 20260815-163607 #25).
+ *
+ * "Enable editing" promotes the tab to read-write via the caller's
+ * onEnableEditing handler. "Open in external editor"
+ * dispatches to the Tauri command; the button is hidden if
+ * the caller doesn't supply onOpenExternal.
+ *
+ * @module components/Editor/SplitPaneEditor/ReadOnlyBanner
+ */
 
 import { useTranslation } from "react-i18next";
 import "./read-only-banner.css";

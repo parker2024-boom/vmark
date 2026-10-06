@@ -2,6 +2,8 @@
  * Position Utilities for Source Mode Format Popup
  *
  * Helper functions for getting bounding rects of selections and cursors.
+ *
+ * @module plugins/sourceContextDetection/positionUtils
  */
 
 import type { EditorView } from "@codemirror/view";

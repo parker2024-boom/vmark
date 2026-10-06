@@ -9,20 +9,45 @@
  * Key decisions:
  *   - Fast-path check for text without markdown chars avoids remark overhead
  *   - Falls back to plain text node on parse failure for resilience
- *   - Creates a fresh unified processor each call (stateless, no caching needed
- *     since this is only used for short summary text)
+ *   - One processor, built on first use: the dialect's plugin set is fixed
  *
  * @coordinates-with plugins/detailsBlock.ts — parses <summary> text with inline formatting
+ * @coordinates-with parser/escapeMarkers.ts — escaped custom markers, as in the document parse
  * @coordinates-with mdastToProseMirror.ts — consumers convert resulting MDAST to PM nodes
- * The processor comes from the shared `inline-summary` dialect (WI-3.1), so
+ * The processor comes from the shared `inline-summary` dialect, so
  * this parser cannot drift from the others on what `~x~` or `==x==` mean.
  *
  * @module utils/markdownPipeline/inlineParser
  */
 
-import type { Content, Paragraph } from "mdast";
+import type { Content, Paragraph, Root } from "mdast";
 import { buildProcessorForMode } from "./dialect";
+import {
+  preprocessEscapedMarkers,
+  restoreEscapedMarkers,
+  restoreRawEscapedMarkers,
+} from "./parser/escapeMarkers";
 import { mdPipelineWarn } from "@/utils/debug";
+
+/**
+ * Characters that can make inline text mean something other than itself:
+ * mark delimiters (`=`, `+`, `^` are the custom ==highlight==, ++underline++
+ * and ^sup^ marks), brackets, a backslash escape, a character reference, a
+ * tag, and what an autolink is made of.
+ *
+ * `&`, `\` and `<` belong here as much as the delimiters do. Without them a
+ * summary written `a &lt; b` was taken as that literal text, and escaped once
+ * more on every save.
+ */
+const NEEDS_PARSING = /[*_`~[\]=+^&\\<:@.]/;
+
+/**
+ * The `inline-summary` dialect — the smallest that still has inline marks.
+ * Built from the shared descriptors so it cannot drift from the others on
+ * what `~x~` or `==x==` mean. The plugin set is fixed, so it is
+ * built once.
+ */
+let summaryProcessor: ReturnType<typeof buildProcessorForMode> | undefined;
 
 /**
  * Parse inline markdown text to MDAST inline content.
@@ -37,21 +62,22 @@ export function parseInlineMarkdown(text: string): Content[] {
     return [];
   }
 
-  // Check if text contains any markdown characters that need parsing
-  // (=, +, ^ cover the custom ==highlight==, ++underline++, ^sup^ marks)
-  if (!/[*_`~[\]=+^]/.test(text)) {
-    // No markdown characters - return as plain text
+  // Text with none of these is read as itself, and skips the parse.
+  if (!NEEDS_PARSING.test(text)) {
     return [{ type: "text", value: text } as Content];
   }
 
   try {
-    // The `inline-summary` dialect — the smallest that still has inline marks.
-    // Built from the shared descriptors so it cannot drift from the others on
-    // what `~x~` or `==x==` mean (WI-3.1).
-    const processor = buildProcessorForMode("inline-summary");
+    summaryProcessor ??= buildProcessorForMode("inline-summary");
+    const processor = summaryProcessor;
 
-    const tree = processor.parse(text);
-    const transformed = processor.runSync(tree);
+    // Escaped custom markers (`\==`) are hidden from the inline-mark plugin
+    // exactly as the document parse hides them (parser/escapeMarkers.ts).
+    const source = preprocessEscapedMarkers(text);
+    const tree = processor.parse(source) as Root;
+    if (source !== text) restoreRawEscapedMarkers(tree, source);
+    const transformed = processor.runSync(tree) as Root;
+    if (source !== text) restoreEscapedMarkers(transformed);
 
     // The parser creates a root with children
     // For inline text, this should result in a single paragraph

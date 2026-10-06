@@ -6,21 +6,26 @@
  * @coordinates-with e2e/lib/rail.mjs — the subject
  * @module e2e/lib/rail.test
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const evalJs = vi.fn();
-vi.mock("./bridge.mjs", () => ({ evalJs: (...args) => evalJs(...args) }));
-
-const { getRailInstances, shippedRailModeDefault } = await import("./rail.mjs");
+import { getRailInstances, shippedRailModeDefault } from "./rail.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-beforeEach(() => {
-  evalJs.mockReset();
-});
+/**
+ * A bridge client whose `execute_js` replies with `data` — the WebSocket
+ * client is the boundary; the real `evalJs` runs on top of it.
+ */
+function clientReturning(data) {
+  const send = vi.fn(async (command) => {
+    expect(command).toBe("execute_js");
+    return { id: "t-1", success: true, data };
+  });
+  return { send };
+}
 
 // audit R3 #3 — `withRailMode` pushes a value through the storage event to
 // reset the LIVE store (deleting the persisted key alone cannot: the reconciler
@@ -54,13 +59,13 @@ describe("shippedRailModeDefault", () => {
 // bare TypeError from a one-line arrow several calls away from the cause.
 describe("getRailInstances", () => {
   it("returns the snapshot when every entry carries its id", async () => {
-    evalJs.mockResolvedValue(
+    const client = clientReturning(
       JSON.stringify([
         { instanceId: "wsi-1", name: "Notes", active: true },
         { instanceId: "wsi-placeholder-abc", name: "Empty", active: false },
       ]),
     );
-    await expect(getRailInstances({})).resolves.toEqual([
+    await expect(getRailInstances(client)).resolves.toEqual([
       { instanceId: "wsi-1", name: "Notes", active: true },
       { instanceId: "wsi-placeholder-abc", name: "Empty", active: false },
     ]);
@@ -71,8 +76,8 @@ describe("getRailInstances", () => {
     ["an empty attribute", ""],
     ["a non-string", 7],
   ])("refuses %s with a contract failure naming the entry", async (_label, instanceId) => {
-    evalJs.mockResolvedValue(JSON.stringify([{ instanceId: "wsi-1" }, { instanceId, name: "Broken" }]));
-    await expect(getRailInstances({})).rejects.toThrow(
+    const client = clientReturning(JSON.stringify([{ instanceId: "wsi-1" }, { instanceId, name: "Broken" }]));
+    await expect(getRailInstances(client)).rejects.toThrow(
       /rail entry 1 \(title "Broken"\) carries no data-instance-id/,
     );
   });

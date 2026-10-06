@@ -163,5 +163,5 @@ placeholders.)
 
 - A media path may not carry a URI scheme (`javascript:`, `file:`, or a custom one); such sources are refused rather than loaded
 - A path that names a directory rather than a file is refused
-- Video embed iframes are restricted to allowed domains: `youtube.com`, `youtube-nocookie.com`, `player.vimeo.com`, and `player.bilibili.com`
+- Video embeds load from three hosts only: `www.youtube-nocookie.com` (YouTube's privacy-enhanced player), `player.vimeo.com`, and `player.bilibili.com`. A YouTube link, or an iframe written with `youtube.com`, is embedded through the privacy-enhanced host. VMark's content security policy lets a frame load from these hosts and from no other site
 - Other iframe sources are stripped by the sanitizer

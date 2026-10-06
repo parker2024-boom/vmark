@@ -339,6 +339,8 @@ describe("wiring (case 13) — real package.json and real baseline", () => {
     expect(registered.checks).toEqual([
       { mode: "identity", at: "entries", shape: "objects", key: ["file", "api", "target"], onAdd: "fail" },
     ]);
+    // Sibling mocks are not baselined at all: zero are allowed.
+    expect(Object.keys(baseline)).not.toContain("siblingEntries");
     expect(JSON.stringify(baseline["//"])).not.toContain("MANIFEST-PENDING");
     for (const e of baseline.entries) {
       expect(typeof e.file).toBe("string");

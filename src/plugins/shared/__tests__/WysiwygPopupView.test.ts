@@ -31,18 +31,13 @@ vi.mock("@/utils/popupComponents", () => ({
   handlePopupTabNavigation: vi.fn(),
 }));
 
-vi.mock("@/plugins/shared/popupHostDom", () => ({
-  getPopupHostForDom: vi.fn(() => null),
-  toHostCoordsForDom: vi.fn((_host: HTMLElement, pos: { top: number; left: number }) => pos),
-}));
-
 vi.mock("@/utils/imeGuard", () => ({
   isImeKeyEvent: vi.fn(() => false),
 }));
 
 import { WysiwygPopupView } from "../WysiwygPopupView";
 import type { PopupStoreBase, StoreApi, EditorViewLike } from "../types";
-import { getPopupHostForDom } from "@/plugins/shared/popupHostDom";
+import type { AnchorRect } from "@/utils/popupPosition";
 import { isImeKeyEvent } from "@/utils/imeGuard";
 
 /* ------------------------------------------------------------------ */
@@ -89,18 +84,10 @@ class TestPopupView extends WysiwygPopupView<TestState> {
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function createEditorView(): EditorViewLike {
-  const editorContainer = document.createElement("div");
-  editorContainer.className = "editor-container";
+/** An editor DOM mounted in `parent` (a real `.editor-container` by default). */
+function createEditorView(parent: HTMLElement | null = createEditorContainer()): EditorViewLike {
   const dom = document.createElement("div");
-  editorContainer.appendChild(dom);
-  document.body.appendChild(editorContainer);
-
-  // Make closest work
-  dom.closest = vi.fn((selector: string) => {
-    if (selector === ".editor-container") return editorContainer;
-    return null;
-  });
+  parent?.appendChild(dom);
 
   return {
     dom,
@@ -109,6 +96,15 @@ function createEditorView(): EditorViewLike {
     focus: vi.fn(),
   };
 }
+
+function createEditorContainer(): HTMLElement {
+  const editorContainer = document.createElement("div");
+  editorContainer.className = "editor-container";
+  document.body.appendChild(editorContainer);
+  return editorContainer;
+}
+
+const ANCHOR: AnchorRect = { top: 50, left: 100, bottom: 70, right: 110 };
 
 function createStore(initial: TestState): StoreApi<TestState> & { listeners: Set<(s: TestState) => void>; setState: (s: TestState) => void } {
   let state = initial;
@@ -141,7 +137,6 @@ describe("WysiwygPopupView", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getPopupHostForDom).mockReturnValue(null);
 
     editorView = createEditorView();
     store = createStore({
@@ -166,7 +161,7 @@ describe("WysiwygPopupView", () => {
   it("shows when store emits isOpen=true with anchorRect", () => {
     store.setState({
       isOpen: true,
-      anchorRect: { top: 50, left: 100, width: 10, height: 20 },
+      anchorRect: ANCHOR,
       closePopup: closeFn,
       value: "test",
     });
@@ -178,7 +173,7 @@ describe("WysiwygPopupView", () => {
   it("hides when store emits isOpen=false after being open", () => {
     store.setState({
       isOpen: true,
-      anchorRect: { top: 50, left: 100, width: 10, height: 20 },
+      anchorRect: ANCHOR,
       closePopup: closeFn,
       value: "open",
     });
@@ -197,7 +192,7 @@ describe("WysiwygPopupView", () => {
   it("does not call onShow when already open and store updates", () => {
     store.setState({
       isOpen: true,
-      anchorRect: { top: 50, left: 100, width: 10, height: 20 },
+      anchorRect: ANCHOR,
       closePopup: closeFn,
       value: "first",
     });
@@ -207,7 +202,7 @@ describe("WysiwygPopupView", () => {
     // Another update while still open
     store.setState({
       isOpen: true,
-      anchorRect: { top: 50, left: 100, width: 10, height: 20 },
+      anchorRect: ANCHOR,
       closePopup: closeFn,
       value: "second",
     });
@@ -230,7 +225,7 @@ describe("WysiwygPopupView", () => {
   it("Escape key closes popup and focuses editor", () => {
     store.setState({
       isOpen: true,
-      anchorRect: { top: 50, left: 100, width: 10, height: 20 },
+      anchorRect: ANCHOR,
       closePopup: closeFn,
       value: "open",
     });
@@ -249,7 +244,7 @@ describe("WysiwygPopupView", () => {
 
     store.setState({
       isOpen: true,
-      anchorRect: { top: 50, left: 100, width: 10, height: 20 },
+      anchorRect: ANCHOR,
       closePopup: closeFn,
       value: "open",
     });
@@ -263,7 +258,7 @@ describe("WysiwygPopupView", () => {
   it("click outside closes popup", () => {
     store.setState({
       isOpen: true,
-      anchorRect: { top: 50, left: 100, width: 10, height: 20 },
+      anchorRect: ANCHOR,
       closePopup: closeFn,
       value: "open",
     });
@@ -282,7 +277,7 @@ describe("WysiwygPopupView", () => {
   it("scroll closes popup", () => {
     store.setState({
       isOpen: true,
-      anchorRect: { top: 50, left: 100, width: 10, height: 20 },
+      anchorRect: ANCHOR,
       closePopup: closeFn,
       value: "open",
     });
@@ -300,7 +295,7 @@ describe("WysiwygPopupView", () => {
   it("destroy removes container from DOM and unsubscribes", () => {
     store.setState({
       isOpen: true,
-      anchorRect: { top: 50, left: 100, width: 10, height: 20 },
+      anchorRect: ANCHOR,
       closePopup: closeFn,
       value: "open",
     });
@@ -325,7 +320,7 @@ describe("WysiwygPopupView", () => {
 
     store.setState({
       isOpen: true,
-      anchorRect: { top: 50, left: 100, width: 10, height: 20 },
+      anchorRect: ANCHOR,
       closePopup: closeFn,
       value: "open",
     });
@@ -342,32 +337,35 @@ describe("WysiwygPopupView", () => {
     expect(view.testIsVisible()).toBe(false);
   });
 
-  it("uses document.body as host when getPopupHostForDom returns null", () => {
-    vi.mocked(getPopupHostForDom).mockReturnValue(null);
+  it("mounts on document.body with fixed positioning when the editor DOM has no host", () => {
+    // A detached editor DOM has neither an .editor-container nor a parent.
+    view.destroy();
+    view = new TestPopupView(createEditorView(null), store);
 
-    store.setState({
-      isOpen: true,
-      anchorRect: { top: 50, left: 100, width: 10, height: 20 },
-      closePopup: closeFn,
-      value: "open",
-    });
+    store.setState({ isOpen: true, anchorRect: ANCHOR, closePopup: closeFn, value: "open" });
 
     expect(view.getContainer().style.position).toBe("fixed");
+    expect(view.getContainer().parentElement).toBe(document.body);
   });
 
-  it("uses host element when getPopupHostForDom returns one", () => {
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    vi.mocked(getPopupHostForDom).mockReturnValue(host);
+  it("mounts inside the enclosing .editor-container with absolute positioning", () => {
+    store.setState({ isOpen: true, anchorRect: ANCHOR, closePopup: closeFn, value: "open" });
 
-    store.setState({
-      isOpen: true,
-      anchorRect: { top: 50, left: 100, width: 10, height: 20 },
-      closePopup: closeFn,
-      value: "open",
-    });
+    const editorContainer = editorView.dom.parentElement;
+    expect(editorContainer?.classList.contains("editor-container")).toBe(true);
+    expect(view.getContainer().style.position).toBe("absolute");
+    expect(view.getContainer().parentElement).toBe(editorContainer);
+  });
+
+  it("falls back to the editor DOM's parent when there is no .editor-container", () => {
+    const parent = document.createElement("section");
+    document.body.appendChild(parent);
+    view.destroy();
+    view = new TestPopupView(createEditorView(parent), store);
+
+    store.setState({ isOpen: true, anchorRect: ANCHOR, closePopup: closeFn, value: "open" });
 
     expect(view.getContainer().style.position).toBe("absolute");
-    expect(view.getContainer().parentElement).toBe(host);
+    expect(view.getContainer().parentElement).toBe(parent);
   });
 });

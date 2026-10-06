@@ -10,6 +10,7 @@ import { useDocumentStore } from "@/stores/documentStore";
 import { closeTabWithDirtyCheck } from "./tabOperations";
 import { message } from "@tauri-apps/plugin-dialog";
 import { saveToPath } from "@/services/persistence/saveToPath";
+import { startTabStateCleanup } from "@/services/windowClose/tabCleanup";
 
 vi.mock("@/services/persistence/saveToPath", () => ({
   saveToPath: vi.fn(),
@@ -23,6 +24,9 @@ vi.mock("@/services/media/orphanAssetCleanup", () => ({
 }));
 
 const WINDOW_LABEL = "main";
+
+// The window runs this for its lifetime: a removed tab's state goes with it.
+startTabStateCleanup();
 
 function resetStores() {
   useTabStore.getState().removeWindow(WINDOW_LABEL);

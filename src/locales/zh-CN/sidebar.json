@@ -38,7 +38,7 @@
   "contextMenu.openTerminalHere": "在此处打开终端",
   "contextMenu.openTerminalHereMax": "在此处打开终端（最多 5 个会话）",
   "contextMenu.revealInFinder": "在 Finder 中显示",
-  "contextMenu.showInExplorer": "在文件管理器中显示",
+  "contextMenu.showInExplorer": "在资源管理器中显示",
   "contextMenu.showInFileManager": "在文件管理器中显示",
   "contextMenu.ariaLabel": "文件操作",
   "outline.documentOutline": "文档大纲",

@@ -55,3 +55,40 @@ describe("hunkDiff", () => {
     expect(hunkDiff("a\nb", "x\ny")).toEqual([{ before: ["a", "b"], after: ["x", "y"] }]);
   });
 });
+
+// WI-RA18.3 — one change is reported as one hunk even when the LCS could
+// split it across an unchanged line it shares with its own edge (a blank line
+// in a re-spaced loose list), so a rule sees the whole change.
+describe("hunkDiff compaction across an identical unchanged line", () => {
+  it("joins an insertion to the change before it", () => {
+    const authored = "1. a\n\n7. x\n8. y\n\nT";
+    const returned = "1. a\n\n4. x\n\n5. y\n\nT";
+    expect(hunkDiff(authored, returned)).toEqual([
+      { before: ["7. x", "8. y"], after: ["4. x", "", "5. y"] },
+    ]);
+  });
+
+  it("joins a deletion to the change before it", () => {
+    expect(hunkDiff("a\nX\n\nb\n\nT", "a\nY\n\nT")).toEqual([
+      { before: ["X", "", "b"], after: ["Y"] },
+    ]);
+  });
+
+  it("joins an insertion to the change after it", () => {
+    expect(hunkDiff("T\n\nX\nz", "T\n\nb\n\nY\nz")).toEqual([
+      { before: ["X"], after: ["b", "", "Y"] },
+    ]);
+  });
+
+  it("leaves a run where it is when sliding would not reach another change", () => {
+    expect(hunkDiff("a\n\nb", "a\n\n\nb")).toEqual([{ before: [], after: [""] }]);
+    expect(hunkDiff("a\nb\nc\nd", "a\nX\nb\nc\nd")).toEqual([{ before: [], after: ["X"] }]);
+  });
+
+  it("keeps separate changes separate when no identical line links them", () => {
+    expect(hunkDiff("a\nb\nc\nd\ne", "a\nX\nc\nY\ne")).toEqual([
+      { before: ["b"], after: ["X"] },
+      { before: ["d"], after: ["Y"] },
+    ]);
+  });
+});

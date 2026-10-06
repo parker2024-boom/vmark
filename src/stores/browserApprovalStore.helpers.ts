@@ -1,6 +1,6 @@
 /**
  * Pure helpers for the browser approval store (extracted for the file-size
- * gate, WI-NB5.3). No store, no Tauri — just the operation vocabulary and the
+ * gate). No store, no Tauri — just the operation vocabulary and the
  * small pure functions the store's actions call.
  *
  * @coordinates-with stores/browserApprovalStore.ts — the only consumer

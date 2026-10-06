@@ -1,5 +1,5 @@
 /** Regression #1491: source footnote previews must not interrupt raw-text editing. */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { useFootnotePopupStore as store } from "@/stores/footnotePopupStore";
@@ -30,15 +30,21 @@ function pointer(type: string) {
   view.contentDOM.dispatchEvent(new MouseEvent(type, { bubbles: true }));
 }
 
+/** Run the popup's hover/hide timers and its autofocus frame to completion. */
 async function settle() {
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  await vi.advanceTimersByTimeAsync(200);
 }
+
+beforeEach(() => {
+  vi.useFakeTimers();
+});
 
 afterEach(() => {
   view?.destroy();
   parent?.remove();
   store.getState().closePopup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("source footnote editing", () => {

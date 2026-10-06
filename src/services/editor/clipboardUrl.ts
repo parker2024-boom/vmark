@@ -3,6 +3,8 @@
  *
  * Provides async clipboard reading with URL detection.
  * Uses Tauri clipboard plugin with web API fallback.
+ *
+ * @module services/editor/clipboardUrl
  */
 
 import { readText } from "@tauri-apps/plugin-clipboard-manager";

@@ -14,7 +14,9 @@ vi.mock("@/contexts/WindowContext", () => ({
   useIsDocumentWindow: () => true,
 }));
 
-vi.mock("@/hooks/useDocumentState", () => ({
+vi.mock("@/hooks/useDocumentState", async (importOriginal) => ({
+  // The real right cluster's word counts read the document hooks for real.
+  ...(await importOriginal<typeof import("@/hooks/useDocumentState")>()),
   useDocumentLastAutoSave: () => null,
   useDocumentIsMissing: () => false,
   useDocumentIsDivergent: () => false,
@@ -64,10 +66,6 @@ vi.mock("./useStatusBarTabDrag", () => ({
 
 vi.mock("./useQuitFeedback", () => ({
   useQuitFeedback: () => false,
-}));
-
-vi.mock("./StatusBarRight", () => ({
-  StatusBarRight: () => <div data-testid="status-bar-right" />,
 }));
 
 vi.mock("@/components/Tabs/Tab", () => ({
@@ -138,6 +136,9 @@ describe("StatusBar accessibility", () => {
   });
 });
 
+/** The editor-only right cluster, found by its MCP status button. */
+const editorControls = () => document.querySelector(".status-mcp");
+
 describe("StatusBar — browser workspace (WI-S1.3)", () => {
   beforeEach(() => {
     useUIStore.setState({ sidebarVisible: true, statusBarVisible: true });
@@ -155,7 +156,7 @@ describe("StatusBar — browser workspace (WI-S1.3)", () => {
     render(<StatusBar />);
     expect(screen.getByRole("tab", { name: "Browser" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Browser" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.queryByTestId("status-bar-right")).toBeNull();
+    expect(editorControls()).toBeNull();
     expect(document.querySelector(".status-bar--browser")).toBeInTheDocument();
   });
 
@@ -163,7 +164,7 @@ describe("StatusBar — browser workspace (WI-S1.3)", () => {
     const id = useTabStore.getState().createTab("main", null);
     useTabStore.getState().setActiveTab("main", id);
     render(<StatusBar />);
-    expect(screen.getByTestId("status-bar-right")).toBeInTheDocument();
+    expect(editorControls()).toBeInTheDocument();
     expect(screen.queryByRole("textbox")).toBeNull();
   });
 

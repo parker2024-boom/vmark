@@ -3,12 +3,12 @@
  *
  * Purpose: Registers OSC (Operating System Command) escape-sequence handlers on
  * an xterm.js Terminal. Handles OSC 7 (current working directory) and OSC 133
- * (FinalTerm command boundaries) — both emitted by the shell-integration rc
- * (WI-3.1). OSC 7 feeds relative file-link resolution + "new terminal here"
- * (WI-2.x); OSC 133 builds a list of command marks (prompt line + exit code)
- * that drive prompt navigation (WI-3.3) and exit-status decorations (WI-3.4).
+ * (FinalTerm command boundaries) — both emitted by the shell-integration rc.
+ * OSC 7 feeds relative file-link resolution + "new terminal here";
+ * OSC 133 builds a list of command marks (prompt line + exit code)
+ * that drive prompt navigation and exit-status decorations.
  *
- * Also exposes `commandOutputRange` / `readBufferRange` (WI-4.4): the pure
+ * Also exposes `commandOutputRange` / `readBufferRange`: the pure
  * arithmetic that turns a clicked buffer line into the output span of the
  * command that produced it, excluding its prompt line.
  *
@@ -75,7 +75,7 @@ export interface CommandMark {
   marker: IMarker;
   /** Exit code from OSC 133;D;<code>, or undefined while the command runs. */
   exitCode?: number;
-  /** Exit-status gutter decoration (WI-3.4), created once the code is known. */
+  /** Exit-status gutter decoration, created once the code is known. */
   decoration?: IDecoration;
 }
 
@@ -96,7 +96,7 @@ export interface Osc133Handle {
 
 /**
  * Register OSC 133 (FinalTerm) command-boundary handling. The integration rc
- * (WI-3.1) emits, per prompt: `133;D;<code>` (previous command done), `133;A`
+ * emits, per prompt: `133;D;<code>` (previous command done), `133;A`
  * (new prompt start). So on `A` we open a command mark at the prompt line; on
  * `D;<code>` we record the exit code of the command being closed.
  */
@@ -146,7 +146,7 @@ export function setupOsc133(term: Terminal): Osc133Handle {
         const code = parseInt(rest, 10);
         if (!Number.isNaN(code)) {
           current.exitCode = code;
-          decorateCommand(term, current); // WI-3.4 exit-status gutter mark
+          decorateCommand(term, current); // exit-status gutter mark
         }
       }
       // Close the command: its exit code is immutable until the next prompt, so
@@ -180,7 +180,7 @@ export function setupOsc133(term: Terminal): Osc133Handle {
 }
 
 /**
- * Add an exit-status gutter decoration to a command's prompt line (WI-3.4):
+ * Add an exit-status gutter decoration to a command's prompt line:
  * a thin left bar, green for success / red for failure. Styled via CSS classes
  * (tokens) in terminal-panel.css. The decoration is tied to the marker and is
  * disposed automatically when the marker scrolls out.
@@ -198,7 +198,7 @@ function decorateCommand(term: Terminal, cmd: CommandMark): void {
 
 /**
  * Scroll the terminal to the previous/next command prompt relative to the
- * current viewport (WI-3.3). No-op when there are no command marks.
+ * current viewport. No-op when there are no command marks.
  */
 export function scrollToAdjacentCommand(
   term: Terminal,
@@ -218,7 +218,7 @@ export function scrollToAdjacentCommand(
   if (target !== undefined) term.scrollToLine(target);
 }
 
-/* ─────────────────── command output range (WI-4.4) ─────────────────── */
+/* ─────────────────── command output range ─────────────────── */
 
 /** An inclusive buffer-line span. */
 export interface CommandRange {
@@ -229,7 +229,7 @@ export interface CommandRange {
 }
 
 /**
- * The output range of the command containing `line` (WI-4.4 / F4).
+ * The output range of the command containing `line` (F4).
  *
  * The OSC 133 `A` marks sit on PROMPT lines, so a command's output is
  * everything strictly after its own mark and strictly before the next one.

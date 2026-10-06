@@ -1,4 +1,4 @@
-//! Delegation lifecycle (WI-3.3; design-3.md D2, spec §5.4.7 rev 2).
+//! Delegation lifecycle (design-3.md D2, spec §5.4.7 rev 2).
 //! Kernel tier: grants bind a scope to the authenticated bridge
 //! principal with a REQUIRED expiry; revocation is supersession with an
 //! empty scope (append-only, I5). `live_delegation_for` is the single

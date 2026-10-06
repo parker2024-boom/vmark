@@ -1,4 +1,11 @@
 /**
+ * deepMerge — recursively merges persisted settings over the current defaults,
+ * so settings added since the last save keep their default values.
+ *
+ * @module utils/deepMerge
+ */
+
+/**
  * Deep merge utility for settings migration.
  * Merges persisted state into current defaults, preserving new default properties.
  */

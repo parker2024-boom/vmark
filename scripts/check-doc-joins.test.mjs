@@ -65,7 +65,7 @@ describe("loadJoins", () => {
 
   it("every declared join module exists and honours the contract", async () => {
     const joins = await loadJoins(ROOT, JOIN_MODULES);
-    expect(joins.map((j) => j.id)).toEqual(["lint-table", "settings-defaults", "readme-claims", "journey-inventory"]);
+    expect(joins.map((j) => j.id)).toEqual(["lint-table", "settings-defaults", "readme-claims", "journey-inventory", "guide-claims", "locale-structure"]);
     for (const j of joins) expect(typeof j.DEFAULT_PATHS).toBe("object");
   });
 
@@ -88,7 +88,7 @@ describe("loadJoins", () => {
 describe("on the live tree", () => {
   it("the gate is clean", () => {
     const out = execFileSync("node", ["scripts/check-doc-joins.mjs"], { cwd: ROOT, encoding: "utf8" });
-    expect(out).toMatch(/✓ check-doc-joins: 4 joins clean/);
+    expect(out).toMatch(/✓ check-doc-joins: 6 joins clean/);
   });
 
   it("exits 64 on an unknown flag", () => {

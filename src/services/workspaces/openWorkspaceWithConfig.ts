@@ -21,7 +21,7 @@ import {
   type OpenWorkspaceInstanceOptions,
 } from "@/services/workspaces/workspaceInstanceActions";
 
-// Guard extracted to workspaceConfigGuard.ts (WI-13.3, cycle break);
+// Guard extracted to workspaceConfigGuard.ts (cycle break);
 // re-exported here for existing consumers.
 export { isValidWorkspaceConfig } from "./workspaceConfigGuard";
 
@@ -44,7 +44,7 @@ export async function openWorkspaceWithConfig(
   rootPath: string,
   options: OpenWorkspaceInstanceOptions = {},
 ): Promise<WorkspaceConfig | null> {
-  // WI-17.2: a variant spelling of an already-railed root must address the
+  // A variant spelling of an already-railed root must address the
   // SAME config file and instance — resolve to the stored spelling first.
   rootPath = resolveStableRootPath(options.windowLabel ?? "main", rootPath, options.platform);
   // Fire-and-forget quarantine strip — settling does not block workspace open.
@@ -63,7 +63,7 @@ export async function openWorkspaceWithConfig(
       return openWorkspaceWithDefaults(rootPath, options);
     }
     useWorkspaceStore.getState().openWorkspace(rootPath, config);
-    // WI-13.3: hand the just-read config to the rail coordinator so an
+    // Hand the just-read config to the rail coordinator so an
     // already-railed root's full context switch does not re-read the disk.
     openOrActivateWorkspaceInstance(rootPath, { ...options, preloadedConfig: config });
     return config;

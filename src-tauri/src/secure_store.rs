@@ -25,7 +25,7 @@
 //!     actually do. An empty key is `invalid-input` (a caller bug); everything
 //!     else is `internal`.
 //!
-//!   - **macOS classifies the OSStatus keyring hides (WI-FL6.7).** An earlier
+//!   - **macOS classifies the OSStatus keyring hides.** An earlier
 //!     revision claimed `NoStorageAccess` covered the ACL denial described in
 //!     the macOS caveat below. It does not: `errSecAuthFailed` (-25293) is NOT
 //!     in keyring's mapping list (`macos.rs::decode_error`) and falls through
@@ -96,7 +96,7 @@ mod macos_status {
     pub(super) const ERR_SEC_INTERACTION_NOT_ALLOWED: i32 = -25308;
 
     /// The pure mapping. Every status outside the named rows is `Internal`:
-    /// nothing is known about it, so nothing licenses a retry (#241).
+    /// nothing is known about it, so nothing licenses a retry.
     pub(super) fn code_for_status(status: i32) -> ErrorCode {
         match status {
             ERR_SEC_AUTH_FAILED | ERR_SEC_INTERACTION_NOT_ALLOWED => ErrorCode::PermissionDenied,
@@ -225,7 +225,7 @@ fn validated_entry(key: &str) -> Result<Entry, CommandError> {
 
 /// Run one keychain operation off the IPC thread.
 ///
-/// **Why these three commands are `async` (audit #470).** A non-`async`
+/// **Why these three commands are `async`.** A non-`async`
 /// `#[tauri::command]` is `ExecutionContext::Blocking`, so Tauri runs its body
 /// inline on the thread that delivered the IPC message — and every keychain
 /// call here can block for an unbounded time: a locked login keychain, an

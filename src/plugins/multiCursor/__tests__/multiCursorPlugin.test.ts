@@ -5,7 +5,7 @@ import {
   multiCursorPlugin,
   multiCursorPluginKey,
 } from "../multiCursorPlugin";
-import { MultiSelection } from "../MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 
 // Simple schema for testing
 const schema = new Schema({

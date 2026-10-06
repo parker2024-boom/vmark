@@ -7,7 +7,7 @@
  *   publishes null, clearing any stale IR; destroy() publishes null so
  *   a closed editor leaves nothing behind.
  *
- *   Successor to the retired sourceGhaWorkflowPreview plugin (WI-2.4):
+ *   Successor to the retired sourceGhaWorkflowPreview plugin:
  *   the preview surface moved to the yaml adapter's schemaRenderer,
  *   which parses for its own props, but the store still needs a writer
  *   tied to the source editor's lifecycle — completion and cursor sync

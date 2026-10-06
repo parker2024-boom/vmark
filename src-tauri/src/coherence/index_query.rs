@@ -26,7 +26,7 @@ impl CoherenceIndex {
     }
 
     /// Latest registered (object → path) map and its reverse, plus schema.
-    /// Ordered by PARSED time (audit R21: lexical TEXT ordering breaks on
+    /// Ordered by PARSED time (lexical TEXT ordering breaks on
     /// mixed precision or offsets), entry id as the tiebreak.
     pub fn registry_state(&self) -> Result<RegistryState, String> {
         let mut stmt = self
@@ -177,7 +177,7 @@ impl CoherenceIndex {
         Ok(out)
     }
 
-    /// One query for every resolution, grouped by edge (audit R17: a
+    /// One query for every resolution, grouped by edge (a
     /// per-edge query is O(edges) round-trips at §10 scale). `pub(super)` so the
     /// candidate preview (`preview.rs`) can project the affected edges' states.
     pub(super) fn all_resolutions(

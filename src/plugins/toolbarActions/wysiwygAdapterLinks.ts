@@ -3,6 +3,8 @@
  *
  * Link-related toolbar actions for WYSIWYG mode.
  * Handles wiki links and bookmark links.
+ *
+ * @module plugins/toolbarActions/wysiwygAdapterLinks
  */
 
 import type { Mark, MarkType, ResolvedPos } from "@tiptap/pm/model";

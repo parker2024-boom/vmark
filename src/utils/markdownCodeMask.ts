@@ -18,6 +18,7 @@
  * @coordinates-with cjkFormatter/formatter.ts — mask prevents CJK rules from mangling code
  * @module utils/markdownCodeMask
  */
+
 /**
  * True if a backtick run of exactly `runLen` exists in `markdown` at or after
  * `from`. A CommonMark code span is closed only by a run of equal length; runs

@@ -3,6 +3,8 @@
  *
  * Heuristics to detect if clipboard content looks like source code
  * and optionally detect the programming language.
+ *
+ * @module utils/codeDetection/detection
  */
 
 import { calculateCodeScore, detectLanguage } from "./scoring";

@@ -71,7 +71,7 @@ function collectActionStates(context: ToolbarContext): {
     if (descriptor.run.type !== "adapter") continue;
     const action = descriptor.run.action;
     const item = TOOLBAR_ITEM_BY_ACTION.get(action);
-    /* v8 ignore next -- @preserve reason: the WI-1.3 drift test guarantees every adapter action exists in TOOLBAR_GROUPS */
+    /* v8 ignore next -- @preserve reason: the descriptor drift test in menuModel.test.ts guarantees every adapter action exists in TOOLBAR_GROUPS */
     if (!item) continue;
     const state = getToolbarItemState(item, context);
     if (state.active) active.push(action);
@@ -122,7 +122,7 @@ export function buildWysiwygSnapshot(): EditorContextMenuSnapshot | null {
 }
 
 /** Snapshot of the Source (CodeMirror) surface, or null when not ready.
- *  Link targets are parsed from the link's source syntax (WI-4.2);
+ *  Link targets are parsed from the link's source syntax;
  *  unresolved targets yield `href: null`, which keeps Copy Link disabled. */
 export function buildSourceSnapshot(): EditorContextMenuSnapshot | null {
   const toolbarContext = buildSourceContext();

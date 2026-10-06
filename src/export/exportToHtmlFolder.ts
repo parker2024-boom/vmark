@@ -3,8 +3,8 @@
  * and report what came back.
  *
  * Purpose: split out of `useExportOperations.ts` (round 3) when that file passed
- * the 300-line limit. It is also the answer to #696, which asked for this
- * operation's folder-selection and result-presentation halves to stop sharing a
+ * the 300-line limit. It also lets this operation's folder-selection and
+ * result-presentation halves stop sharing a
  * function with the print and clipboard paths: what is left there is the print
  * pipeline and the clipboard, and this is the one operation that writes a
  * directory.
@@ -44,7 +44,7 @@ export function exportFolderPath(selectedPath: string): string {
  *
  * `warnings` holds CATEGORIES — every missing resource is summarised into one
  * line — so its LENGTH said "1 resource could not be included" for three
- * missing images (audit round 3, #699). `missingCount` is the number the
+ * missing images. `missingCount` is the number the
  * sentence claims to be reporting. A warning with no missing resource is an
  * asset that would not embed: real, but not a count of resources, so it gets
  * its own sentence rather than a wrong number.
@@ -113,7 +113,7 @@ export async function exportToHtml(
     if (!selectedPath) return false;
 
     // Strip the .html the panel needed — but never down to the PARENT folder,
-    // whose index.html this export would then replace (audit round 2).
+    // whose index.html this export would then replace.
     const folderPath = exportFolderPath(selectedPath);
 
     // Render markdown to HTML

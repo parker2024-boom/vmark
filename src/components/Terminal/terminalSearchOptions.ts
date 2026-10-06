@@ -1,7 +1,7 @@
 /**
  * terminalSearchOptions
  *
- * Purpose: The pure half of terminal search (WI-3.1/3.2) — the case /
+ * Purpose: The pure half of terminal search — the case /
  * whole-word / regex toggle state, its translation into xterm's
  * `ISearchOptions`, and the interpretation of the addon's result event.
  * Extracted so TerminalSearchBar.tsx stays under the file-size limit and so

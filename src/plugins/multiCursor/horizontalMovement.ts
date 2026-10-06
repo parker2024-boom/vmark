@@ -6,21 +6,44 @@
  *
  * Key decisions:
  *   - Uses wordSegmentation utility for word boundaries (CJK-aware via Intl.Segmenter)
+ *   - Each textblock is segmented once per keypress, not once per cursor in it
  *   - Line-start/end uses doc.resolve to find textblock boundaries
  *   - Backward flags are remapped through normalization via remapBackwardFlags()
  *
  * @coordinates-with keymap.ts — binds arrow key combos to these handlers
- * @coordinates-with rangeUtils.ts — normalizes resulting ranges and remaps backward flags
+ * @coordinates-with shared/rangeUtils.ts — normalizes resulting ranges and remaps backward flags
  * @module plugins/multiCursor/horizontalMovement
  */
 import { Selection, SelectionRange } from "@tiptap/pm/state";
 import type { EditorState, Transaction } from "@tiptap/pm/state";
-import { findWordEdge } from "@/utils/wordSegmentation";
-import { MultiSelection } from "./MultiSelection";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+import { findWordEdgeInSegments, getWordSegments, type WordSegment } from "@/utils/wordSegmentation";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 import { graphemeStepTarget } from "./graphemeMovement";
-import { normalizeRangesWithPrimary, remapBackwardFlags } from "./rangeUtils";
+import { normalizeRangesWithPrimary, remapBackwardFlags } from "@/plugins/shared/rangeUtils";
 
 export type HorizontalUnit = "char" | "word" | "line";
+
+/** A textblock's word segments and text length, keyed by where it starts. */
+type WordsOf = (blockStart: number, block: ProseMirrorNode) => { segments: WordSegment[]; length: number };
+
+/**
+ * Word segments per textblock for ONE keypress: each block is read and
+ * segmented once however many cursors sit in it. Per cursor, a paragraph with
+ * a cursor on every word was segmented N times — quadratic in the cursors.
+ */
+function wordsOfCache(): WordsOf {
+  const cache = new Map<number, { segments: WordSegment[]; length: number }>();
+  return (blockStart, block) => {
+    let words = cache.get(blockStart);
+    if (!words) {
+      const text = block.textContent;
+      words = { segments: getWordSegments(text), length: text.length };
+      cache.set(blockStart, words);
+    }
+    return words;
+  };
+}
 
 function moveRangeHorizontally(
   doc: EditorState["doc"],
@@ -28,6 +51,7 @@ function moveRangeHorizontally(
   dir: -1 | 1,
   extend: boolean,
   unit: HorizontalUnit,
+  wordsOf: WordsOf,
   backward?: boolean
 ): SelectionRange {
   // Non-empty selection without extend: collapse to start or end
@@ -72,8 +96,8 @@ function moveRangeHorizontally(
   if (unit === "line") {
     targetPos = dir < 0 ? blockStart : blockEnd;
   } else {
-    const text = $head.parent.textContent;
-    const edge = findWordEdge(text, $head.parentOffset, dir);
+    const words = wordsOf(blockStart, $head.parent);
+    const edge = findWordEdgeInSegments(words.segments, words.length, $head.parentOffset, dir);
     if (edge === null) return range;
     targetPos = blockStart + edge;
   }
@@ -102,8 +126,9 @@ export function handleMultiCursorHorizontal(
 
   const dir = direction === "ArrowLeft" ? -1 : 1;
   const backwardFlags = selection.backward;
+  const wordsOf = wordsOfCache();
   const nextRanges = selection.ranges.map((range, i) =>
-    moveRangeHorizontally(doc, range, dir, extend, unit, backwardFlags?.[i])
+    moveRangeHorizontally(doc, range, dir, extend, unit, wordsOf, backwardFlags?.[i])
   );
 
   // Derive updated backward flags: compare original anchor to new head

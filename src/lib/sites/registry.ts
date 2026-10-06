@@ -1,14 +1,15 @@
 /**
  * Purpose: Site plugin registry — a module-singleton that dispatches on origin,
  * mirroring `src/lib/formats/registry.ts` (which dispatches on extension).
- * Wiring plan: dev-docs/plans/20260819-browser-wire-and-borrows.md WI-NB4.2 (ADR-S1).
+ * That is the wiring decision: one origin-keyed registry, as format dispatch
+ * has one extension-keyed registry.
  *
  * Validation is hand-rolled (the repo does not use zod; the format registry sets the
  * precedent). Pattern parsing is delegated to the origin module so wildcard semantics
  * cannot drift, and registered manifests are frozen so a post-registration mutation
  * cannot silently widen the origin-to-plugin security boundary.
  *
- * Registration is ATOMIC with the plugin's reader (WI-NB4.2): `registerSite`
+ * Registration is ATOMIC with the plugin's reader: `registerSite`
  * takes the pair, so a manifest without a working implementation — "registered
  * but unreadable" — is unrepresentable. `readerForUrl` is the production
  * dispatch point: origin security comes from `dispatchSite` (this registry),
@@ -17,7 +18,9 @@
  *
  * @coordinates-with lib/browser/origin/originGuard.ts — pattern parsing + matching
  * @coordinates-with lib/browser/reader/siteReader.ts — the SiteReader contract + fallback
+ * @module lib/sites/registry
  */
+
 import {
   canonicalizeOrigin,
   describeOriginPattern,
@@ -173,7 +176,7 @@ function validateReader(manifest: SiteManifest, reader: SiteReader): void {
   }
 }
 
-/** Register a site plugin — manifest and reader as one atomic pair (WI-NB4.2).
+/** Register a site plugin — manifest and reader as one atomic pair.
  *  Throws on any validation failure (fail loud), committing nothing. */
 export function registerSite(manifest: SiteManifest, reader: SiteReader): void {
   // Snapshot FIRST: what gets validated is exactly what gets committed.
@@ -208,7 +211,7 @@ export function siteReaderById(id: string): SiteReader | undefined {
 }
 
 /**
- * The reader for `url` — the production dispatch point (WI-NB4.1). Origin
+ * The reader for `url` — the production dispatch point. Origin
  * security first (`dispatchSite`), then the site reader's own URL refinement,
  * then the generic fallback; null when nothing can read the URL at all.
  */

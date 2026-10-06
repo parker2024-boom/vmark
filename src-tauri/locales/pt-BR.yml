@@ -307,7 +307,7 @@ errors:
   workflow.restoreWhileRunning: "Há um fluxo de trabalho em execução. Aguarde a conclusão ou cancele-o antes de restaurar arquivos."
   workflow.restoreSuperseded: "Outro fluxo de trabalho foi executado depois deste instantâneo, então restaurá-lo poderia desfazer as alterações dele. Nada foi restaurado."
 
-  # === Caminho de salvamento (file_write.rs, WI-14 CommandError) ===
+  # === Caminho de salvamento (files/write.rs, WI-14 CommandError) ===
   save.parentMissing: "A pasta deste arquivo não existe mais: %{dir}"
   save.noParentDirectory: "O caminho do arquivo não tem pasta superior"
   save.symlinkLoop: "O atalho deste arquivo aponta em círculo, então o arquivo real não foi encontrado"
@@ -357,7 +357,13 @@ errors:
 
   # === CLI install ===
   cli.noFile: "A instalação parece ter tido sucesso, mas o arquivo não foi criado."
-  cli.mismatch: "Instalação concluída, mas o conteúdo do arquivo não corresponde ao script esperado."
+  cli.mismatch: "O comando instalado não correspondia ao script esperado, por isso foi removido."
+  cli.mismatchNotRemoved: "O arquivo “%{path}” não corresponde ao script esperado e não pôde ser removido. Exclua-o manualmente."
+
+  # === External editor ===
+  externalEditor.unknownName: "“%{name}” não é um editor que o VMark reconheça pelo nome: informe o caminho completo do editor"
+  externalEditor.notAnEditor: "“%{name}” executa os arquivos que recebe em vez de abri-los, por isso não pode ser usado como editor externo"
+  externalEditor.notPlainPath: "O editor externo deve ser o nome de um editor ou um caminho completo, sem “..” e sem barra no final"
 
   # === Genies ===
   genie.pathBlocked: "O caminho do Genie está fora dos diretórios permitidos"
@@ -412,7 +418,7 @@ errors:
   # === Secure store (secure_store.rs) ===
   secureStore.keychainDenied: "O acesso às chaves foi negado. Permita o VMark no aviso das chaves ou conceda o acesso no app Acesso às Chaves e tente novamente."
 
-  # === Permissões de espaços de trabalho (workspace_grants/commands.rs, WI-LX1.1) ===
+  # === Permissões de espaços de trabalho (workspace/grants/commands.rs, WI-LX1.1) ===
   workspaceAccess.notGranted: "O VMark não tem acesso a “%{path}”. Escolha a pasta em Arquivo → Abrir espaço de trabalho... para permitir."
   workspaceAccess.pickerBusy: "Já há uma caixa de diálogo de pasta aberta"
   workspaceAccess.checkBusy: "O VMark ainda está verificando o acesso a essa pasta. Tente novamente em instantes"

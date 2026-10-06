@@ -10,7 +10,7 @@
 /** The composed walk every perception path runs on: each element under `root` (a
  *  Document, ShadowRoot or Element; root itself excluded) in composed pre-order —
  *  an element, then its OPEN shadow tree, then its light children (S-05) — is
- *  handed to `visit`. Lazy in both dimensions (#103): a cursor per open node reads
+ *  handed to `visit`. Lazy in both dimensions: a cursor per open node reads
  *  children by index (a node a billion wide costs one cursor) and the walk stops
  *  after `budget` visited elements, returning true when it ran out with elements
  *  still unvisited so a consumer can say its answer is incomplete. Closed roots are

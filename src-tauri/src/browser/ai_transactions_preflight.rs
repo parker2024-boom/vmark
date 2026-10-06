@@ -18,7 +18,7 @@ use serde_json::json;
 /// literal (`blocked_destination`: `permission-denied`, `SSRF_BLOCKED`,
 /// `kind: ssrf-blocked`), plus the normalized host and why
 /// (`reason: resolves-private | unresolved`) — the MCP client already matches
-/// on that token, and a name and its literal are one policy (round 4, #7/#8).
+/// on that token, and a name and its literal are one policy.
 pub(crate) fn resolved_destination_refused(refused: &DestinationRefused) -> CommandError {
     let error = blocked_destination();
     let mut detail = error
@@ -44,7 +44,7 @@ pub(crate) fn preflight(
     let allow_loopback = state.ai_policy.lock().map_err(lock_failure)?.allow_loopback;
     preflight_destination(resolver, url, allow_loopback).map_err(|refused| {
         log::warn!(
-            "[browser] AI destination pre-flight refused {} ({})",
+            "[browser] AI destination pre-flight refused {:?} ({})",
             refused.host,
             refused.reason.as_str()
         );

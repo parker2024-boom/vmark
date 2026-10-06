@@ -1,17 +1,21 @@
-// WI-1A.5 — Format registry bootstrap.
-//
-// Single side-effect entry point that registers every adapter at app
-// start. Markdown, plain text, and YAML/YML are ALWAYS registered
-// (markdown is the core product; YAML shipped on by default in the
-// previous release with the GHA workflow viewer — reverting that
-// breaks the contract). Every other adapter is gated by a per-category
-// toggle in `settings.formats.*`.
-//
-// Default behavior with no toggles argument: register everything.
-// Production main.tsx passes the user's settings explicitly so
-// upgraders see a calm experience (only md/txt/yaml on first launch).
-// Tests typically need every format and call `bootstrapFormats()` (no
-// args) for the all-on shape.
+/**
+ * Format registry bootstrap.
+ *
+ * Single side-effect entry point that registers every adapter at app
+ * start. Markdown, plain text, and YAML/YML are ALWAYS registered
+ * (markdown is the core product; YAML shipped on by default in the
+ * previous release with the GHA workflow viewer — reverting that
+ * breaks the contract). Every other adapter is gated by a per-category
+ * toggle in `settings.formats.*`.
+ *
+ * Default behavior with no toggles argument: register everything.
+ * Production main.tsx passes the user's settings explicitly so
+ * upgraders see a calm experience (only md/txt/yaml on first launch).
+ * Tests typically need every format and call `bootstrapFormats()` (no
+ * args) for the all-on shape.
+ *
+ * @module lib/formats/registryBootstrap
+ */
 
 import { registerMarkdownFormat } from "./adapters/markdown";
 import { registerTxtFormat } from "./adapters/txt";
@@ -81,13 +85,13 @@ export function bootstrapFormats(toggles?: Partial<FormatsToggles>): void {
     registerSvgFormat();
   }
 
-  // Phase 3 — HTML adapter (sandboxed; OWASP sign-off still pending — WI-3.4, surfaced as `preview.signOffPending`).
+  // Phase 3 — HTML adapter (sandboxed; OWASP sign-off still pending, surfaced as `preview.signOffPending`).
   if (t.htmlPreview) {
     registerHtmlFormat();
   }
 
   // Phase 4 — code viewers (read-only-default per ADR-3, editing
-  // toggle via WI-4.3, "Open in external editor" via WI-4.4).
+  // toggle and "Open in external editor").
   if (t.codeViewers) {
     registerCodeFormats();
   }
@@ -109,7 +113,7 @@ export function bootstrapFormats(toggles?: Partial<FormatsToggles>): void {
  * via `useTabStore.getState().recomputeAllFormatIds()`.
  */
 export function rebootstrapFormats(toggles?: Partial<FormatsToggles>): void {
-  // ATOMIC (audit R3 #801): the rebuild runs against a fresh registry and is
+  // ATOMIC: the rebuild runs against a fresh registry and is
   // installed only if it completes. Clearing first and re-registering into the
   // live maps left a half-built registry — and `dispatchEditor` throwing — when
   // an adapter combination only a toggle can produce failed to register.

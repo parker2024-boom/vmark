@@ -1,3 +1,10 @@
+/**
+ * WorkspaceSettingsGroup — the settings group with the toggle that turns
+ * workspace rail mode on or off.
+ *
+ * @module pages/settings/WorkspaceSettingsGroup
+ */
+
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { SettingRow, SettingsGroup, Toggle } from "./components";

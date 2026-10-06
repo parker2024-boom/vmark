@@ -1,10 +1,18 @@
 [package]
 name = "vmark"
-version = "0.9.91"
+version = "0.9.93"
 description = "The plain-text workspace where humans and AI collaborate"
 authors = ["Xiaolai"]
 license = "ISC"
 edition = "2021"
+# The oldest toolchain this crate claims to build on. It is the floor the
+# dependency tree sets: the highest `rust-version` any locked dependency
+# declares (`cargo metadata`; notify-rust and serde-saphyr at the time of
+# writing). CI and releases build on current stable, not on this version, so
+# what holds the claim is cargo refusing an older toolchain and clippy's
+# `incompatible_msrv` lint refusing a std API newer than this. Raise it when a
+# dependency bump raises that floor.
+rust-version = "1.89"
 # Required since `pdf_smoke` was added: a second [[bin]] makes bare `cargo run`
 # ambiguous, and `tauri dev` runs exactly that — so without this, `pnpm
 # tauri:dev` dies with "could not determine which binary to run" before the app
@@ -115,7 +123,6 @@ tauri-plugin-window-state = "2"
 tauri-plugin-store = "2"
 tempfile = "3"
 sha2 = "0.10"
-ed25519-dalek = "3"
 base64 = "0.23"
 gethostname = "1.1"
 rust-i18n = "4"
@@ -166,7 +173,10 @@ keyring = { version = "3", features = ["apple-native"] }
 # `base::Error` is used — cargo unifies keyring's default set on top regardless.
 security-framework = { version = "3", default-features = false }
 objc2 = "0.6"
-block2 = "0.6" # SPIKE-1/5 probe (throwaway) — remove with src/spike_embed.rs before WI-1.2
+# Objective-C blocks: the completion handlers and decision handlers the embedded
+# browser passes to WebKit (`browser/*_macos.rs`). Same version objc2-web-kit's
+# `block2` feature resolves.
+block2 = "0.6"
 objc2-app-kit = { version = "0.3", features = ["NSApplication", "NSMenu", "NSMenuItem", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSResponder", "NSDocumentController", "NSPrintInfo", "NSPrintOperation", "NSView", "NSWindow", "NSGraphics", "NSEvent", "NSFontManager"] }
 objc2-foundation = { version = "0.3", features = ["NSString", "NSURL", "NSURLRequest", "NSData", "NSDate", "NSRunLoop", "NSError", "NSDictionary", "NSValue", "NSKeyValueObserving", "NSProcessInfo", "NSUserDefaults", "NSArray", "NSUUID", "NSHTTPCookie"] }
 objc2-web-kit = { version = "0.3", features = ["WKWebView", "WKWebViewConfiguration", "WKNavigation", "WKNavigationDelegate", "WKUIDelegate", "WKNavigationAction", "WKWindowFeatures", "WKFrameInfo", "WKPDFConfiguration", "WKSnapshotConfiguration", "WKWebsiteDataStore", "WKUserScript", "WKUserContentController", "WKContentWorld", "WKContentRuleList", "WKContentRuleListStore", "WKHTTPCookieStore", "block2", "objc2-core-foundation"] }
@@ -249,6 +259,14 @@ tauri = { version = "2", features = ["protocol-asset", "test"] }
 #   cli_install, workflow approval) to keep a panicking background task from
 #   taking down the whole app; `panic = "abort"` would defeat all of it for a
 #   ~2–3% size win.
+# Every `unsafe` block and `unsafe impl` states, in a `// SAFETY:` comment
+# directly above it, the invariant that makes it sound and who upholds it. The
+# lint applies to every target of the package (lib, bins, tests) and is checked
+# for Windows-only code by scripts/check-cross-target.sh, which runs clippy for
+# that target.
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

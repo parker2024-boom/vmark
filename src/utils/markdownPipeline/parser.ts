@@ -5,7 +5,8 @@
  * with support for GFM, math, frontmatter, wiki links, and custom inline syntax.
  *
  * Pipeline: markdown string → normalizeBareListMarkers → preprocessEscapedMarkers
- *   → unified/remark → restoreEscapedMarkers → fixNormalizationSpread? → MDAST
+ *   → remark parse → restoreRawEscapedMarkers → remark transforms
+ *   → restoreEscapedMarkers → fixNormalizationSpread? → MDAST
  *
  * Key decisions:
  *   - Lazy plugin loading based on content analysis (analyzeContent) — avoids
@@ -29,6 +30,7 @@ import { perfStart, perfEnd } from "@/utils/perfLog";
 import {
   preprocessEscapedMarkers,
   restoreEscapedMarkers,
+  restoreRawEscapedMarkers,
 } from "./parser/escapeMarkers";
 import {
   normalizeBareListMarkers,
@@ -89,13 +91,20 @@ export function parseMarkdownToMdast(
   const result = processor.parse(preprocessed);
   perfEnd("remarkParse");
 
+  // Placeholders exist only if the source held an escaped marker; without
+  // one there is nothing to restore, and nothing in the tree is touched.
+  const hasPlaceholders = preprocessed !== normalized;
+  // Where the parser read no escapes (code, math, …), put the source back
+  // before a transform can turn such a node into text.
+  if (hasPlaceholders) restoreRawEscapedMarkers(result as Root, preprocessed);
+
   // Run transforms (plugins that modify the tree)
   perfStart("remarkRunSync");
   const transformed = processor.runSync(result);
   perfEnd("remarkRunSync");
 
-  // Restore escaped markers back to literal characters
-  restoreEscapedMarkers(transformed as Root);
+  // The marks have been read: placeholders become the literal markers.
+  if (hasPlaceholders) restoreEscapedMarkers(transformed as Root);
 
   // Fix spread artifacts only when normalization inserted blank lines
   if (wasNormalized) {

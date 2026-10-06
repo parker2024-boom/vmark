@@ -32,6 +32,13 @@ import { ImagePreviewView, getImagePreviewView, hideImagePreview } from "../Imag
 // so that resetMediaElements() doesn't throw when calling videoEl.pause() / audioEl.pause().
 HTMLMediaElement.prototype.pause = vi.fn();
 
+// Source resolution, load handlers and the reposition frame all run on a fake
+// clock the tests advance, instead of sleeping and hoping the work finished.
+beforeEach(() => void vi.useFakeTimers());
+afterEach(() => void vi.useRealTimers());
+/** Long enough on the fake clock for two animation frames to run. */
+const TWO_FRAMES_MS = 32;
+
 // Helper to create mock DOMRect
 const createMockRect = (overrides: Partial<DOMRect> = {}): DOMRect => ({
   top: 100,
@@ -73,9 +80,7 @@ describe("ImagePreviewView mounting", () => {
     container = createEditorContainer();
   });
 
-  afterEach(() => {
-    container.remove();
-  });
+  afterEach(() => container.remove());
 
   it("mounts inside editor-container when editorDom provided", () => {
     const view = new ImagePreviewView();
@@ -197,9 +202,7 @@ describe("ImagePreviewView loading states", () => {
     container = createEditorContainer();
   });
 
-  afterEach(() => {
-    container.remove();
-  });
+  afterEach(() => container.remove());
 
   it("shows loading state initially", () => {
     const view = new ImagePreviewView();
@@ -230,7 +233,7 @@ describe("ImagePreviewView loading states", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("   ", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     const error = container.querySelector(".image-preview-error") as HTMLElement;
     expect(error.textContent).toBe("No media path");
@@ -278,9 +281,7 @@ describe("ImagePreviewView media types", () => {
     container = createEditorContainer();
   });
 
-  afterEach(() => {
-    container.remove();
-  });
+  afterEach(() => container.remove());
 
   it("shows video element for video type", () => {
     const view = new ImagePreviewView();
@@ -368,9 +369,7 @@ describe("ImagePreviewView external URLs", () => {
     container = createEditorContainer();
   });
 
-  afterEach(() => {
-    container.remove();
-  });
+  afterEach(() => container.remove());
 
   it("loads external HTTP URL directly", async () => {
     const view = new ImagePreviewView();
@@ -378,7 +377,7 @@ describe("ImagePreviewView external URLs", () => {
 
     view.show("https://example.com/image.png", anchorRect, editorDom);
 
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     view.destroy();
   });
@@ -388,7 +387,7 @@ describe("ImagePreviewView external URLs", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("data:image/png;base64,abc", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     view.destroy();
   });
@@ -418,20 +417,18 @@ describe("ImagePreviewView updateContent", () => {
     container = createEditorContainer();
   });
 
-  afterEach(() => {
-    container.remove();
-  });
+  afterEach(() => container.remove());
 
   it("updateContent triggers new load", async () => {
     const view = new ImagePreviewView();
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("test.png", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 10));
+    await vi.advanceTimersByTimeAsync(10);
 
     // Update to empty path should show error
     view.updateContent("   ");
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     const error = container.querySelector(".image-preview-error") as HTMLElement;
     expect(error.textContent).toBe("No media path");
@@ -484,9 +481,7 @@ describe("ImagePreviewView image loading", () => {
     container = createEditorContainer();
   });
 
-  afterEach(() => {
-    container.remove();
-  });
+  afterEach(() => container.remove());
 
   it("shows image on successful load via onload", async () => {
     // Override Image so that setting src triggers onload synchronously
@@ -507,7 +502,7 @@ describe("ImagePreviewView image loading", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("data:image/png;base64,abc", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 100));
+    await vi.advanceTimersByTimeAsync(100);
 
     const img = container.querySelector(".image-preview-img") as HTMLElement;
     expect(img.style.display).toBe("block");
@@ -535,7 +530,7 @@ describe("ImagePreviewView image loading", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("data:image/png;base64,invalid", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 100));
+    await vi.advanceTimersByTimeAsync(100);
 
     const error = container.querySelector(".image-preview-error") as HTMLElement;
     expect(error.textContent).toBe("Failed to load");
@@ -563,7 +558,7 @@ describe("ImagePreviewView image loading", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("data:image/png;base64,abc", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     // Hide increments token, making the pending load stale
     view.hide();
@@ -597,7 +592,7 @@ describe("ImagePreviewView image loading", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("data:image/png;base64,abc", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     view.hide();
 
@@ -622,16 +617,14 @@ describe("ImagePreviewView video/audio loading", () => {
     container = createEditorContainer();
   });
 
-  afterEach(() => {
-    container.remove();
-  });
+  afterEach(() => container.remove());
 
   it("shows video on loadedmetadata", async () => {
     const view = new ImagePreviewView();
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("https://example.com/video.mp4", anchorRect, editorDom, "video");
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     const video = container.querySelector(".image-preview-video") as HTMLVideoElement;
     // Simulate loadedmetadata event
@@ -649,7 +642,7 @@ describe("ImagePreviewView video/audio loading", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("https://example.com/broken.mp4", anchorRect, editorDom, "video");
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     const video = container.querySelector(".image-preview-video") as HTMLVideoElement;
     video.dispatchEvent(new Event("error"));
@@ -665,7 +658,7 @@ describe("ImagePreviewView video/audio loading", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("https://example.com/audio.mp3", anchorRect, editorDom, "audio");
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     const audio = container.querySelector(".image-preview-audio") as HTMLAudioElement;
     audio.dispatchEvent(new Event("loadedmetadata"));
@@ -682,7 +675,7 @@ describe("ImagePreviewView video/audio loading", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("https://example.com/broken.mp3", anchorRect, editorDom, "audio");
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     const audio = container.querySelector(".image-preview-audio") as HTMLAudioElement;
     audio.dispatchEvent(new Event("error"));
@@ -698,7 +691,7 @@ describe("ImagePreviewView video/audio loading", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("https://example.com/video.mp4", anchorRect, editorDom, "video");
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     const video = container.querySelector(".image-preview-video") as HTMLVideoElement;
 
@@ -720,7 +713,7 @@ describe("ImagePreviewView video/audio loading", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("https://example.com/video.mp4", anchorRect, editorDom, "video");
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     const video = container.querySelector(".image-preview-video") as HTMLVideoElement;
 
@@ -741,7 +734,7 @@ describe("ImagePreviewView video/audio loading", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("https://example.com/video.mp4", anchorRect, editorDom, "video");
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     const video = container.querySelector(".image-preview-video") as HTMLVideoElement;
     const removeEventListenerSpy = vi.spyOn(video, "removeEventListener");
@@ -764,9 +757,7 @@ describe("ImagePreviewView path resolution", () => {
     container = createEditorContainer();
   });
 
-  afterEach(() => {
-    container.remove();
-  });
+  afterEach(() => container.remove());
 
   it("resolves absolute path via convertFileSrc", async () => {
     const { convertFileSrc } = await import("@tauri-apps/api/core");
@@ -774,7 +765,7 @@ describe("ImagePreviewView path resolution", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("/absolute/path/to/image.png", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     expect(convertFileSrc).toHaveBeenCalledWith("/absolute/path/to/image.png");
 
@@ -787,7 +778,7 @@ describe("ImagePreviewView path resolution", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("C:\\Users\\test\\image.png", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     // Should normalize backslashes to forward slashes
     expect(convertFileSrc).toHaveBeenCalledWith("C:/Users/test/image.png");
@@ -801,7 +792,7 @@ describe("ImagePreviewView path resolution", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("./assets/image.png", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     expect(join).toHaveBeenCalledWith("/test/dir", "assets/image.png");
 
@@ -814,7 +805,7 @@ describe("ImagePreviewView path resolution", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("assets/photo.png", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     expect(join).toHaveBeenCalledWith("/test/dir", "assets/photo.png");
 
@@ -833,7 +824,7 @@ describe("ImagePreviewView path resolution", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("evidence/page-1.png", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     expect(join).toHaveBeenCalledWith("/test/dir", "evidence/page-1.png");
 
@@ -848,7 +839,7 @@ describe("ImagePreviewView path resolution", () => {
     const view = new ImagePreviewView();
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
     view.show(src as string, anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
     if (ok) expect(join).toHaveBeenCalledWith("/test/dir", src);
     else expect(join).not.toHaveBeenCalled();
     view.destroy();
@@ -867,7 +858,7 @@ describe("ImagePreviewView path resolution", () => {
 
     // Should not throw, falls back to original src
     view.show("./assets/image.png", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     // Restore
     (useTabStore as unknown as Record<string, unknown>).getState = origGetState;
@@ -882,7 +873,7 @@ describe("ImagePreviewView path resolution", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("./assets/image.png", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 100));
+    await vi.advanceTimersByTimeAsync(100);
 
     // Should show error or fallback gracefully (path resolution failed in the try/catch inside resolveImageSrc)
     view.destroy();
@@ -900,7 +891,7 @@ describe("ImagePreviewView path resolution", () => {
 
     // Relative path needs getActiveFilePath, which will throw → catch returns null
     view.show("./assets/image.png", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     // Restore
     (useTabStore as unknown as Record<string, unknown>).getState = origGetState;
@@ -919,7 +910,7 @@ describe("ImagePreviewView path resolution", () => {
 
     // Absolute path will call convertFileSrc which will throw
     view.show("/absolute/path.png", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 100));
+    await vi.advanceTimersByTimeAsync(100);
 
     const error = container.querySelector(".image-preview-error") as HTMLElement;
     expect(error.textContent).toBe("Path resolution failed");
@@ -940,7 +931,7 @@ describe("ImagePreviewView path resolution", () => {
     // Immediately hide to increment token
     view.hide();
 
-    await new Promise((r) => setTimeout(r, 100));
+    await vi.advanceTimersByTimeAsync(100);
 
     // Error should NOT be shown (stale token)
     const error = container.querySelector(".image-preview-error") as HTMLElement;
@@ -955,7 +946,7 @@ describe("ImagePreviewView path resolution", () => {
 
     // A path that's not external, not absolute, and not relative
     view.show("some-random-path", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     view.destroy();
   });
@@ -974,7 +965,7 @@ describe("ImagePreviewView path resolution", () => {
 
     // Absolute path → convertFileSrc → throws string → catch receives non-Error
     view.show("/absolute/path/img.png", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 100));
+    await vi.advanceTimersByTimeAsync(100);
 
     // The catch handler calls String("string-error-not-an-Error-object") and shows error
     const error = container.querySelector(".image-preview-error") as HTMLElement;
@@ -993,9 +984,7 @@ describe("ImagePreviewView stale load cancellation", () => {
     container = createEditorContainer();
   });
 
-  afterEach(() => {
-    container.remove();
-  });
+  afterEach(() => container.remove());
 
   it("cancels pending image load on hide", async () => {
     const origImage = globalThis.Image;
@@ -1011,13 +1000,13 @@ describe("ImagePreviewView stale load cancellation", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("https://example.com/slow.png", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     // Hide before image loads (increments resolveToken)
     view.hide();
 
     // Now trigger the stale onload
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
     if (pendingOnload) pendingOnload();
 
     // Image should NOT be shown since the load was stale
@@ -1033,7 +1022,7 @@ describe("ImagePreviewView stale load cancellation", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("https://example.com/video.mp4", anchorRect, editorDom, "video");
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     const video = container.querySelector(".image-preview-video") as HTMLVideoElement;
 
@@ -1064,7 +1053,7 @@ describe("ImagePreviewView stale load cancellation", () => {
     // Hide before resolve completes
     view.hide();
 
-    await new Promise((r) => setTimeout(r, 300));
+    await vi.advanceTimersByTimeAsync(300);
 
     // Should not have shown anything
     expect(view.isVisible()).toBe(false);
@@ -1085,9 +1074,7 @@ describe("ImagePreviewView — rAF repositioning after load", () => {
     container = createEditorContainer();
   });
 
-  afterEach(() => {
-    container.remove();
-  });
+  afterEach(() => container.remove());
 
   it("repositions after image loads when visible and anchorRect exists", async () => {
     // Use mock Image that fires onload after rAF
@@ -1109,10 +1096,10 @@ describe("ImagePreviewView — rAF repositioning after load", () => {
     view.show("data:image/png;base64,abc", anchorRect, editorDom);
 
     // Wait for resolve + onload
-    await new Promise((r) => setTimeout(r, 100));
+    await vi.advanceTimersByTimeAsync(100);
 
     // Wait for rAF to fire (repositioning)
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await vi.advanceTimersByTimeAsync(TWO_FRAMES_MS);
 
     // View should still be visible with repositioned popup
     expect(view.isVisible()).toBe(true);
@@ -1140,14 +1127,14 @@ describe("ImagePreviewView — rAF repositioning after load", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("data:image/png;base64,abc", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     // Hide first, then trigger onload
     view.hide();
     if (savedOnload) savedOnload();
 
     // Wait for rAF
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await vi.advanceTimersByTimeAsync(TWO_FRAMES_MS);
 
     // View should remain hidden
     expect(view.isVisible()).toBe(false);
@@ -1161,13 +1148,13 @@ describe("ImagePreviewView — rAF repositioning after load", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("https://example.com/video.mp4", anchorRect, editorDom, "video");
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     const video = container.querySelector(".image-preview-video") as HTMLVideoElement;
     video.dispatchEvent(new Event("loadedmetadata"));
 
     // Wait for rAF
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await vi.advanceTimersByTimeAsync(TWO_FRAMES_MS);
 
     expect(view.isVisible()).toBe(true);
 
@@ -1179,7 +1166,7 @@ describe("ImagePreviewView — rAF repositioning after load", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("https://example.com/video.mp4", anchorRect, editorDom, "video");
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     const video = container.querySelector(".image-preview-video") as HTMLVideoElement;
 
@@ -1187,7 +1174,7 @@ describe("ImagePreviewView — rAF repositioning after load", () => {
     view.hide();
     video.dispatchEvent(new Event("loadedmetadata"));
 
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await vi.advanceTimersByTimeAsync(TWO_FRAMES_MS);
 
     expect(view.isVisible()).toBe(false);
 
@@ -1214,11 +1201,11 @@ describe("ImagePreviewView — rAF repositioning after load", () => {
 
     // First show
     view.show("data:image/png;base64,first", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     // Second show (increments token, making first stale)
     view.show("data:image/png;base64,second", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     // Fire the first onload (stale) — should be ignored
     if (onloadCallbacks[0]) onloadCallbacks[0]();
@@ -1272,9 +1259,7 @@ describe("ImagePreviewView — remaining uncovered branches", () => {
     container = createEditorContainer();
   });
 
-  afterEach(() => {
-    container.remove();
-  });
+  afterEach(() => container.remove());
 
   it("getActiveFilePath returns null when getDocument returns object with no filePath (line 55 ?? branch)", async () => {
     // Branch 2: getDocument(tabId)?.filePath ?? null — ??(null) fires when filePath is undefined.
@@ -1291,7 +1276,7 @@ describe("ImagePreviewView — remaining uncovered branches", () => {
     // Relative path triggers getActiveFilePath() — since filePath is undefined,
     // the ?? null branch fires and returns null, so resolveImageSrc returns the original src.
     view.show("./assets/image.png", anchorRect, editorDom);
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     // Restore
     (useDocumentStore as unknown as Record<string, unknown>).getState = origGetState;
@@ -1306,7 +1291,7 @@ describe("ImagePreviewView — remaining uncovered branches", () => {
     const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
 
     view.show("https://example.com/sound.ogg", anchorRect, editorDom, "audio");
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     const audio = container.querySelector(".image-preview-audio") as HTMLAudioElement;
     expect(audio).not.toBeNull();
@@ -1346,7 +1331,7 @@ describe("ImagePreviewView — remaining uncovered branches", () => {
 
     view.show("https://example.com/img.png", anchorRect, editorDom, "image");
     // Wait for resolveImageSrc (external URL resolves immediately) + onload microtask
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     // At this point: onload fired (valid token), rAF callback is captured but not yet run.
     // Now hide the view — sets visible=false.
@@ -1379,7 +1364,7 @@ describe("ImagePreviewView — remaining uncovered branches", () => {
     // Use video type so we avoid the audio-specific ternary and ensure we can dispatch event easily
     view.show("https://example.com/video.mp4", anchorRect, editorDom, "video");
     // Wait for resolveImageSrc async
-    await new Promise((r) => setTimeout(r, 50));
+    await vi.advanceTimersByTimeAsync(50);
 
     const video = container.querySelector(".image-preview-video") as HTMLVideoElement;
 

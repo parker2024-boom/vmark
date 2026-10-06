@@ -1,4 +1,4 @@
-//! Authorization commands for the embedded browser driver (WI-2.1 / R4 / R5).
+//! Authorization commands for the embedded browser driver (R4 / R5).
 //!
 //! The origin/operation/one-shot enforcement surface, split from the lifecycle
 //! commands to keep each file under the size limit. The authoritative gate
@@ -28,7 +28,7 @@ use crate::browser::surface::{self, AttachmentState, BrowserSurface};
 use crate::command_error::CommandError;
 use tauri::{AppHandle, State};
 
-/// Mirror the invoking window's approval store into the driver (WI-2.1).
+/// Mirror the invoking window's approval store into the driver.
 ///
 /// The driver's copy is the **authoritative** one: `browser_eval` reads it, so a
 /// caller that never syncs simply gets default-deny. Passing an empty vec revokes
@@ -66,8 +66,8 @@ pub async fn browser_add_one_shot(
     // The exact script a payload-binding one-shot (`style`, `eval`, `session`,
     // `type`, `key`, `scroll`) authorizes. Required for those operations, ignored
     // otherwise. The driver stores only its hash and binds the eval to it — an
-    // approved script cannot be swapped out on the retry. (Security review P5,
-    // High #1; audit 20260903 A-05.)
+    // approved script cannot be swapped out on the retry
+    // (audit 20260903 A-05).
     eval_script: Option<String>,
 ) -> Result<(), CommandError> {
     // Bound the payload before any authority is minted from it. A one-shot bound to
@@ -90,8 +90,8 @@ pub async fn browser_add_one_shot(
     .map_err(CommandError::invalid_input)
 }
 
-/// Withdraw an unspent one-shot the frontend no longer wants honoured (round 3,
-/// #124): a workflow run cancelled while its "Allow once" mint was in flight
+/// Withdraw an unspent one-shot the frontend no longer wants honoured:
+/// a workflow run cancelled while its "Allow once" mint was in flight
 /// leaves the driver holding an authorization nobody will spend on purpose. The
 /// identity is the mint's own; the count removed is returned (0 is not an error —
 /// the one-shot may already have lapsed with a navigation).
@@ -139,8 +139,8 @@ pub async fn browser_ai_attach(
         .map_err(CommandError::invalid_input)
 }
 
-/// The attachment `tab_id` currently holds, as the authority sees it (round 4,
-/// #37). Read-only, no gate: it reveals nothing the frontend did not mint itself,
+/// The attachment `tab_id` currently holds, as the authority sees it.
+/// Read-only, no gate: it reveals nothing the frontend did not mint itself,
 /// and it is how the frontend's mirror learns whether the driver spent a one-use
 /// attachment instead of inferring it from a denylist of refusal tokens
 /// (`attachment_state.rs`). Unknown tab: `attached: false`.
@@ -153,7 +153,7 @@ pub async fn browser_ai_attachment_state(
 }
 
 /// Evaluate `script` in the driver's isolated content world and return its
-/// string result (WI-2.1). The script must `return` a JSON STRING; anything else
+/// string result. The script must `return` a JSON STRING; anything else
 /// is reported as an `EVAL_FAILED` script error.
 /// Authorization is delegated to `authorize_driver_op` (the shared gate); this
 /// command adds only the `act`-target validation and the eval side effect.
@@ -181,7 +181,7 @@ pub async fn browser_eval(
     // and the webview handler, but both sit above this boundary and are therefore
     // advisory — a caller that invokes the command directly was previously handed an
     // unbounded `String`. Bound the payload before interpreting anything else about
-    // it; `BROWSER_DISABLED` still outranks it. (Audit 2026-07-28.)
+    // it; `BROWSER_DISABLED` still outranks it.
     ensure_script_within_limit("script", &script).map_err(CommandError::invalid_input)?;
     // A target is both halves or neither — see `mint::parse_act_target` (Audit, High).
     let target = parse_act_target(role, name).map_err(CommandError::invalid_input)?;
@@ -204,8 +204,7 @@ pub async fn browser_eval(
     // This check is the CHEAP one — it rejects an already-stale command without paying
     // for a main-thread round trip. It is no longer the last word: `surface::eval` now
     // re-verifies the same generation INSIDE its main-thread closure, in the same turn
-    // as the dispatch, which closes the window this check alone used to leave open
-    // (Security review P5, High #2 — WI-2.1/2.2).
+    // as the dispatch, which closes the window this check alone used to leave open.
     if !command_still_fresh(&state, &tab_id, generation) {
         return Err(stale_command(&tab_id, "before the script could run"));
     }
@@ -215,7 +214,7 @@ pub async fn browser_eval(
     surface::eval(&app, tab_id, script, generation).map_err(eval_error)
 }
 
-/// Capture the tab's current rendering as a base64 JPEG (WI-P1.1).
+/// Capture the tab's current rendering as a base64 JPEG.
 ///
 /// Read-class: it authorizes exactly like `read` — an AI-owned tab may capture
 /// its own committed page; a human tab requires an attachment (consumed on
@@ -243,7 +242,7 @@ pub async fn browser_screenshot(
     Ok(image)
 }
 
-/// Mint a per-use profile-open grant from the user's "Allow once" (WI-P6.1 H1). The
+/// Mint a per-use profile-open grant from the user's "Allow once". The
 /// driver is the authority: `browser_ai_create` consumes a matching grant (profile +
 /// destination origin) before applying a named profile.
 #[tauri::command]
@@ -272,7 +271,7 @@ pub async fn browser_add_profile_open(
     Ok(())
 }
 
-/// Delete a named profile's on-disk WebKit data (WI-P6.5) — user-initiated from the
+/// Delete a named profile's on-disk WebKit data — user-initiated from the
 /// management UI's "Remove profile", so removal actually revokes the login.
 #[tauri::command]
 pub async fn browser_forget_profile(app: AppHandle, profile: String) -> Result<(), CommandError> {

@@ -3,9 +3,10 @@
 //! Platform pieces shared by every child-process spawn in the backend:
 //! the `CREATE_NO_WINDOW` creation flag (a GUI app has no attached console,
 //! so console-subsystem children flash a visible console window unless
-//! suppressed — issue #1091), the `.cmd`-shim-aware `build_command`
-//! constructor, the PATH-hijack-safe `where.exe` / `which` lookup, and the
-//! PowerShell `$PROFILE` PATH probe.
+//! suppressed — issue #1091), the `build_command` constructor (which never
+//! puts a shell in front of the program, so a Windows `.cmd` shim gets the
+//! standard library's batch-file argument escaping), the PATH-hijack-safe
+//! `where.exe` / `which` lookup, and the PowerShell `$PROFILE` PATH probe.
 
 use std::process::Command;
 
@@ -41,38 +42,46 @@ pub(crate) fn hide_console_window(_cmd: &mut Command) {}
 // Command Building
 // ============================================================================
 
-/// Build a `std::process::Command` for the given executable and args.
+/// Build a `std::process::Command` for the given executable and args, marked
+/// `CREATE_NO_WINDOW` on Windows so the child never flashes a console window.
 ///
-/// On Windows, `.cmd`/`.bat` shims (created by npm/yarn global installs)
-/// must run through `cmd.exe /c`, and the command is always marked
-/// `CREATE_NO_WINDOW` so the child never flashes a console window.
-/// On macOS/Linux this is a plain spawn.
+/// The program is always `exe` itself, never a shell placed in front of it —
+/// including for the `.cmd`/`.bat` shims npm/yarn global installs create on
+/// Windows. The standard library runs a batch file through the system
+/// `cmd.exe` on its own, and only then escapes each argument by cmd.exe's
+/// rules (`&`, `|`, `"` and `%VAR%` arrive as text), refusing the spawn with
+/// `InvalidInput` when an argument cannot be escaped — a line break or a NUL.
+/// Naming `cmd.exe` as the program here would switch that off: its arguments
+/// get the ordinary quoting, which cmd.exe does not follow, so an argument
+/// could start a second command.
+///
+/// Arguments are therefore for values the app chose (flags, file paths).
+/// Text the app did not write — the AI prompt — travels on the child's stdin
+/// (`cli.rs`), and [`spawn_failure`] words the refusal when one slips through.
 ///
 /// Returns `std::process::Command` (not `tokio::process::Command`) so other
 /// modules (pandoc, actionlint) can keep using synchronous spawn semantics.
 /// `cli.rs` converts to `tokio::process::Command` at its call site.
 pub(crate) fn build_command(exe: &str, args: &[&str]) -> Command {
-    #[cfg(target_os = "windows")]
-    {
-        let lower = exe.to_lowercase();
-        if lower.ends_with(".cmd") || lower.ends_with(".bat") {
-            // Use absolute path to cmd.exe to prevent CWD/PATH hijack attacks
-            let system_root =
-                std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_string());
-            let cmd_path = std::path::PathBuf::from(system_root)
-                .join("System32")
-                .join("cmd.exe");
-            let mut c = Command::new(cmd_path);
-            c.args(["/c", exe]);
-            c.args(args);
-            hide_console_window(&mut c);
-            return c;
-        }
-    }
     let mut c = Command::new(exe);
     c.args(args);
     hide_console_window(&mut c);
     c
+}
+
+/// Word a failed spawn of `program` for the caller's error channel.
+///
+/// `InvalidInput` is not "the program is missing": it is the standard library
+/// refusing to hand an argument over because it holds something that cannot
+/// be passed on intact (see [`build_command`]). It is logged as an error and
+/// named in the message, so it is never mistaken for a missing install.
+pub(crate) fn spawn_failure(program: &str, error: &std::io::Error) -> String {
+    if error.kind() == std::io::ErrorKind::InvalidInput {
+        log::error!("[spawn] {program:?}: an argument was refused at spawn: {error}");
+        format!("Failed to spawn {program}: an argument cannot be passed to it safely ({error})")
+    } else {
+        format!("Failed to spawn {program}: {error}")
+    }
 }
 
 // ============================================================================

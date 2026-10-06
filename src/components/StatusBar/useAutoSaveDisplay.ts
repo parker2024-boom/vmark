@@ -30,7 +30,7 @@ export function useAutoSaveDisplay(
   // Legitimate setState-in-effect: shows the "auto-saved" badge in response to a
   // new save timestamp and refreshes the relative time on a timer — driven by an
   // external event + timers, not derivable during render (#1063).
-  /* eslint-disable react-hooks/set-state-in-effect */
+  /* eslint-disable react-hooks/set-state-in-effect -- badge shown in response to an external save timestamp and refreshed by timers */
   useEffect(() => {
     if (!lastAutoSave) return;
 

@@ -5,26 +5,26 @@
 //!     the execution ID immediately — so the frontend can subscribe to events
 //!     before any step runs.
 //!   - Concurrency guard: only one workflow at a time via AtomicBool, claimed
-//!     through `state::AdmissionGuard` so every refusal releases it (#259).
+//!     through `state::AdmissionGuard` so every refusal releases it.
 //!   - Cancellation via shared CancellationToken (AtomicBool checked per step).
 //!   - Snapshots created before execution for file-modifying steps — and
-//!     REQUIRED: a snapshot that fails refuses the run (`prepare.rs`, #266).
-//!   - `run_workflow` is four steps in order (#262): admit (`admit_run`),
+//!     REQUIRED: a snapshot that fails refuses the run (`prepare.rs`).
+//!   - `run_workflow` is four steps in order: admit (`admit_run`),
 //!     settle the id (`prepare::execution_id_for`, then
-//!     `state.begin_execution`, which refuses a reused one — #264), prepare
+//!     `state.begin_execution`, which refuses a reused one), prepare
 //!     (`prepare::prepare_run`: snapshot, cancel check, genies directory),
 //!     spawn (`launch::spawn_run`, which owns the flag from then on).
-//!   - **The feature flag is enforced here, not only in the UI (WI-19).**
+//!   - **The feature flag is enforced here, not only in the UI.**
 //!     `run_workflow` admits through `admit_run`, whose first check is the
 //!     gate (`require_workflow_engine_enabled`); the state starts fail-closed.
 //!     The gate and the claim run under the state's admission lock, the same
 //!     one `workflow_engine_policy(false)` holds across its flag write and its
-//!     cancel (#260). Only the command that STARTS work is gated:
+//!     cancel. Only the command that STARTS work is gated:
 //!     `cancel_workflow` and `respond_workflow_approval` are not; gating them
 //!     made a running workflow unstoppable by the user who just switched it
-//!     off (audit 20260803 §3). `workflow_engine_policy` is not gated either —
+//!     off. `workflow_engine_policy` is not gated either —
 //!     it IS the setter.
-//!   - Errors are `CommandError` (WI-14), not `String`: the frontend has to be
+//!   - Errors are `CommandError`, not `String`: the frontend has to be
 //!     able to tell `feature-disabled` from `conflict` (already running) from
 //!     `invalid-input` (bad YAML) without matching prose.
 
@@ -57,12 +57,12 @@ fn admit_run<'s>(
     execution_id: &str,
 ) -> Result<(RawWorkflow, PathBuf, AdmissionGuard<'s>), CommandError> {
     let admission = {
-        // Gate and claim under one lock (#260): the feature gate comes FIRST —
+        // Gate and claim under one lock: the feature gate comes FIRST —
         // before the concurrency claim, so a refused call cannot leave
         // `running` latched true for the rest of the session.
         let _serial = state.admission_lock();
         require_workflow_engine_enabled(state)?;
-        // Claim and publish in one step (#559): `request_cancel` matches
+        // Claim and publish in one step: `request_cancel` matches
         // against the published id, so a cancel landing between a separate
         // claim and publication saw `None`, answered `NotRunning`, and was
         // dropped — leaving a run the frontend had already asked to stop.
@@ -85,7 +85,7 @@ fn admit_run<'s>(
 /// containing `genie/*` steps will fail those steps with a clear error if
 /// no provider is supplied.
 ///
-/// Generic over the runtime — like the runner it spawns (#263) — so
+/// Generic over the runtime — like the runner it spawns — so
 /// `commands.test.rs` drives the whole composition on a mock app: what the
 /// command returns, what it publishes before it spawns, and what a refusal
 /// leaves behind. `admit_run` alone could be tested without an app, and that
@@ -112,8 +112,8 @@ pub async fn run_workflow<R: tauri::Runtime>(
     state: State<'_, WorkflowRunnerState>,
 ) -> Result<String, CommandError> {
     // The caller's id — pre-generated so the frontend can subscribe to events
-    // before invoke() resolves — validated (#264), or a fresh one. Settled
-    // BEFORE admission (#559) so the claim and the publication happen in one
+    // before invoke() resolves — validated, or a fresh one. Settled
+    // BEFORE admission so the claim and the publication happen in one
     // critical section: a cancel that arrives while the snapshot is being
     // taken, or while the YAML is still being parsed, already matches. Every
     // `?` from here drops `admission`, which clears the id with the flag, so
@@ -122,18 +122,18 @@ pub async fn run_workflow<R: tauri::Runtime>(
     // A root that contains app data would let a save-file step rewrite the
     // workspace-grant list (WI-LX1.1). Refused before anything is claimed, so
     // the ordinary refusal spends no execution id…
-    crate::workspace_grants::refuse_root_containing_list(
+    crate::workspace::grants::refuse_root_containing_list(
         &app,
         std::path::Path::new(&workspace_root),
     )?;
     let (workflow, workspace, admission) =
         admit_run(&state, &yaml, &workspace_root, &execution_id)?;
-    // …and checked AGAIN on the ADMITTED root (#67): the one canonical
+    // …and checked AGAIN on the ADMITTED root: the one canonical
     // `PathBuf` the snapshot, the runner and every step then use. The check
     // above resolved the caller's string on its own, and a link retargeted in
     // between could answer it differently; this is the check that binds. A
     // refusal here drops `admission`, releasing the claim and the published id.
-    crate::workspace_grants::refuse_root_containing_list(&app, &workspace)?;
+    crate::workspace::grants::refuse_root_containing_list(&app, &workspace)?;
     let capture_policy = capture_policy.unwrap_or(CapturePolicy::TrackedOnly);
 
     let genies_dir = prepare_run(&app, &state, &workflow, &workspace, &execution_id).await?;
@@ -169,7 +169,7 @@ pub async fn run_workflow<R: tauri::Runtime>(
 /// execution that already finished — is rejected so it can't cancel a workflow
 /// that started in the meantime.
 ///
-/// **Deliberately NOT gated on the engine flag** (audit 20260803 §3). Turning
+/// **Deliberately NOT gated on the engine flag**. Turning
 /// `advanced.workflowEngine` off while a workflow runs used to make that
 /// workflow unstoppable: the UI vanished and the only command that could stop
 /// it started returning `feature-disabled`. A gate whose job is "do not START
@@ -187,7 +187,10 @@ pub async fn cancel_workflow(
 ) -> Result<(), CommandError> {
     match state.request_cancel(&execution_id) {
         CancelDecision::Cancel => {
-            log::info!("Workflow cancellation requested for {}", execution_id);
+            log::info!(
+                "Workflow cancellation requested for {}",
+                crate::peer_text::peer_text(&execution_id)
+            );
             Ok(())
         }
         CancelDecision::NotRunning => Err(localized_error!(
@@ -229,7 +232,7 @@ pub async fn respond_workflow_approval(
 /// gated: it is the gate's setter, it starts nothing, and gating it would make
 /// the engine unswitchable.
 ///
-/// **Threat model (audit 20260803 §4).** This is an unauthenticated boolean
+/// **Threat model.** This is an unauthenticated boolean
 /// setter, and that is the intended design, not an oversight. It MIRRORS a
 /// frontend-authoritative setting; the authoritative copy lives in the
 /// webview's localStorage and is pushed here because Rust cannot read it. What
@@ -240,12 +243,12 @@ pub async fn respond_workflow_approval(
 /// app's own privilege and is inside the trust boundary by definition, so it
 /// could simply call `run_workflow` were the flag not consulted at all.
 /// Persisting the flag Rust-side would move the toggle, not the boundary — see
-/// rule 60 §12's WI-19 verdict.
+/// rule 60 §12's dark-feature verdict.
 ///
 /// The `false` transition also asks any in-flight run to stop: the user who
 /// turns the engine off is asking for it to be off, and the panel that carries
 /// the cancel button is exactly what disappears. Flag and cancel are applied
-/// under the admission lock, so a start cannot slip between them (#260).
+/// under the admission lock, so a start cannot slip between them.
 #[tauri::command]
 pub async fn workflow_engine_policy(
     enabled: bool,

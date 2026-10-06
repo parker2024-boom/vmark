@@ -1,3 +1,10 @@
+/**
+ * solarized — design tokens for the Solarized theme, a dark theme on the
+ * Solarized Dark palette.
+ *
+ * @module theme/themes/solarized
+ */
+
 import type { ThemeTokens } from "../tokens";
 import { sharedPrimitives, darkShadows, subtleDark, hoverDark } from "../tokens";
 
@@ -19,29 +26,29 @@ export const solarized: ThemeTokens = {
     // base0 #839496, base1 #93a1a1, base01 #586e75
     // secondary lifted toward base1 to clear 4.5 on base02/tertiary — the
     // canonical grey ladder is too tight for AA and nearly collapses into
-    // primary here; recorded as the Q6/AA trade (WI-UI1.2).
+    // primary here; recorded as the Q6/AA trade.
     text: { primary: "#93a1a1", secondary: "#91a0a2", tertiary: "#6a7e84" },
     // Q6 split: text-safe accent for TEXT roles (#268bd2 measured 4.08:1 on
     // base03); the canonical blue survives in the fill tint below and in the
     // terminal ANSI palette (D10).
     accent: { primary: "#53a4de", bg: "rgba(38, 139, 210, 0.14)" },
     // Deep base03-adjacent ink: 5.1:1 on the canonical blue fill. `white`
-    // measured 3.68:1 and base03 itself 4.08:1 (WI-UI1.1 / Q6).
+    // measured 3.68:1 and base03 itself 4.08:1 (Q6).
     contrastText: "#001519",
     border: "#0e4753",
     /** D8 — control boundary ≥ 3:1 on primary and secondary; `border` stays a divider. */
     controlBorder: "#628084",
     // alpha .22 → .16: text.primary over the composited selection measured
-    // 4.17:1 (WI-UI1.2).
+    // 4.17:1.
     selection: "rgba(38, 139, 210, 0.16)",
     subtle: subtleDark,
     hover: hoverDark,
-    strong: "#72a2cb", // blue, lightened for bold on dark base (AA on base02, WI-UI1.2)
+    strong: "#72a2cb", // blue, lightened for bold on dark base (AA on base02)
     emphasis: "#cb9b6e", // yellow/orange tint for italics
     semantic: {
       error: "#e97e7c", // red, lifted to AA on base02
       errorBg: "rgba(220, 50, 47, 0.15)",
-      // WI-UI1.1: the value solarized actually renders (was a dead light field
+      // The value solarized actually renders (was a dead light field
       // shadowed by a legacy override).
       errorHover: "#e87f7c",
       warning: "#bf9821", // yellow, lifted
@@ -85,7 +92,7 @@ export const solarized: ThemeTokens = {
     // `ls` output into body grey. D10: fix at the renderer, keep the palette.
     boldTextInBrightColors: false,
   },
-  // Solarized-ADJACENT code palette, lifted to 4.5:1 (WI-UI1.5): the canonical
+  // Solarized-ADJACENT code palette, lifted to 4.5:1: the canonical
   // syntax colours on base02 fail AA by design (red 2.81, magenta 2.86), so
   // each accent keeps its hue and takes the smallest lift that clears the
   // floor on both backgrounds.

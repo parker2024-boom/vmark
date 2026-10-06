@@ -1,5 +1,5 @@
 /**
- * MCP v2 `vmark.browser.*` handler entry points (WI-2.5 / R5).
+ * MCP v2 `vmark.browser.*` handler entry points.
  *
  * `read` returns an ARIA snapshot (with stable refs) of the current page. The act
  * path (`act` — click / type / scroll / key) lives in `browserAct.ts`;
@@ -21,6 +21,7 @@ import { wrapHandler } from "./wrapHandler";
 import { buildSnapshotScript } from "@/lib/browser/agent/actScript";
 import { urlForAgent } from "@/lib/browser/url";
 import { runReadClass, parseEvalResult } from "./browserReadClass";
+import { readOperationArgsChecked } from "./readOperationArgs";
 export {
   handleBrowserNavigate,
   handleBrowserOpen,
@@ -42,7 +43,7 @@ export { handleBrowserWorkflowRecord } from "./browserRecord";
 export { handleBrowserClose } from "./browserClose";
 
 /**
- * The snapshot script returns `{nodes, truncated, unreachable}` (audit S-05/S-06:
+ * The snapshot script returns `{nodes, truncated, unreachable}` (it is
  * bounded, and honest about closed shadow roots and frames it cannot walk). The
  * response keeps `snapshot` as the node array the model already knows and adds
  * the two facts beside it; a bare array (an older script) passes through as-is.
@@ -67,7 +68,7 @@ function snapshotData(parsed: unknown): Record<string, unknown> {
  */
 export async function handleBrowserRead(id: string, args: Record<string, unknown>): Promise<void> {
   return wrapHandler(id, () =>
-    runReadClass<string>(id, args, {
+    runReadClass<string>(id, readOperationArgsChecked("vmark.browser.read", args), {
       invoke: (tab) =>
         invoke<string>("browser_eval", {
           tabId: tab.tabId,

@@ -3,10 +3,10 @@ import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { useShortcutsStore } from "@/stores/settingsStore";
 import { bindPluginHostSettings } from "@/services/assembly/bindHostSettings";
 import { buildSourceShortcutKeymap, getSourceBlockBounds } from "./sourceShortcuts";
+import { bindHostSearch, resetHostSearch } from "@/plugins/shared/hostSearch";
 
 // Shared mock state — must be hoisted so the vi.mock factory can close over it
-const { uiStoreState, runEditorActionMock } = vi.hoisted(() => ({
-  uiStoreState: { toggleSidebar: vi.fn() },
+const { runEditorActionMock } = vi.hoisted(() => ({
   runEditorActionMock: vi.fn(),
 }));
 
@@ -17,44 +17,6 @@ const { uiStoreState, runEditorActionMock } = vi.hoisted(() => ({
 // partially — sourceShortcuts only consumes the runEditorAction export anyway.
 vi.mock("@/services/editor/runEditorAction", () => ({
   runEditorAction: (...args: unknown[]) => runEditorActionMock(...args),
-}));
-
-// Mock heavy dependencies so callbacks can be invoked without real CodeMirror state
-vi.mock("@/plugins/shared/hostSearch", () => ({
-  bindHostSearch: vi.fn(),
-  resetHostSearch: vi.fn(),
-  hostSearch: {
-    current: () => uiStoreState.search,
-    open: () => uiStoreState.searchOpen(),
-    findNext: () => uiStoreState.searchFindNext(),
-    findPrevious: () => uiStoreState.searchFindPrevious(),
-  },
-}));
-
-vi.mock("./sourceShortcutsHelpers", () => ({
-  runSourceAction: vi.fn((action: string) => (_view: unknown) => { void action; return true; }),
-  setHeading: vi.fn((_level: number) => (_view: unknown) => true),
-  increaseHeadingLevel: vi.fn((_view: unknown) => true),
-  decreaseHeadingLevel: vi.fn((_view: unknown) => true),
-  toggleBlockquote: vi.fn((_view: unknown) => true),
-  toggleList: vi.fn((_view: unknown, _type: string) => true),
-  openFindBar: vi.fn(() => true),
-  findNextMatch: vi.fn((_view: unknown) => true),
-  findPreviousMatch: vi.fn((_view: unknown) => true),
-  formatCJKSelection: vi.fn((_view: unknown) => true),
-  formatCJKFile: vi.fn((_view: unknown) => true),
-  copySelectionAsHtml: vi.fn((_view: unknown) => true),
-  doTransformUppercase: vi.fn((_view: unknown) => true),
-  doTransformLowercase: vi.fn((_view: unknown) => true),
-  doTransformTitleCase: vi.fn((_view: unknown) => true),
-  doTransformToggleCase: vi.fn((_view: unknown) => true),
-  doMoveLineUp: vi.fn((_view: unknown) => true),
-  doMoveLineDown: vi.fn((_view: unknown) => true),
-  doDuplicateLine: vi.fn((_view: unknown) => true),
-  doDeleteLine: vi.fn((_view: unknown) => true),
-  doJoinLines: vi.fn((_view: unknown) => true),
-  doSortLinesAsc: vi.fn((_view: unknown) => true),
-  doSortLinesDesc: vi.fn((_view: unknown) => true),
 }));
 
 vi.mock("@codemirror/commands", () => ({
@@ -176,13 +138,18 @@ describe("buildSourceShortcutKeymap", () => {
     expect(cmCommands.selectLine).toHaveBeenCalledWith(mockView);
   });
 
-  it("findReplace binding calls openFindBar (line 190)", async () => {
-    const helpers = await import("./sourceShortcutsHelpers");
-    const shortcut = useShortcutsStore.getState().getShortcut("findReplace");
-    const binding = getBinding(shortcut);
-    expect(binding).toBeDefined();
-    binding!.run!(mockView);
-    expect(helpers.openFindBar).toHaveBeenCalled();
+  it("findReplace binding opens the host's find bar", () => {
+    const open = vi.fn();
+    bindHostSearch({ open });
+    try {
+      const shortcut = useShortcutsStore.getState().getShortcut("findReplace");
+      const binding = getBinding(shortcut);
+      expect(binding).toBeDefined();
+      expect(binding!.run!(mockView)).toBe(true);
+      expect(open).toHaveBeenCalledTimes(1);
+    } finally {
+      resetHostSearch();
+    }
   });
 });
 

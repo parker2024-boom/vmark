@@ -1,10 +1,12 @@
-// WI-1.3 — edge derivation for the GHA workflow IR.
-//
-// Origin: GitHub Actions workflow viewer plan (2026-05-04, retired) §4.1
-//
-// Pure-function module — no parser dependency, just operates on already-
-// parsed JobIR[]. Lifted out so the renderer-side can also call detectCycles
-// on a hypothetical edge set without re-running parse.
+/**
+ * Edge derivation for the GHA workflow IR.
+ *
+ * Pure-function module — no parser dependency, just operates on already-
+ * parsed JobIR[]. Lifted out so the renderer-side can also call detectCycles
+ * on a hypothetical edge set without re-running parse.
+ *
+ * @module lib/ghaWorkflow/parser/edges
+ */
 
 import type { Diagnostic, JobIR } from "../types";
 

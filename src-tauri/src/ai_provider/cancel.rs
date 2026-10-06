@@ -6,7 +6,7 @@
 //! child (`cli.rs`) or drops the in-flight REST request (`dispatch.rs`).
 //! Before this the streaming path wired a fresh token nothing could fire, and
 //! the frontend's cancel only dropped its `ai:response` listener while the
-//! provider ran on to completion (audit #375).
+//! provider ran on to completion.
 //!
 //! Key decisions:
 //!   - Managed Tauri state, never a static (rule 50 §10): every caller holds
@@ -26,7 +26,7 @@
 //!     to swallow, which would also hide a genuinely wrong id. `cancel_workflow`
 //!     answers `not-found` instead because its execution id is user-visible
 //!     panel state, where a stale id means a stale panel.
-//!   - Desired state means it also holds FORWARD (audit #242). `run_ai_prompt`
+//!   - Desired state means it also holds FORWARD. `run_ai_prompt`
 //!     and `cancel_ai_prompt` are two independently spawned command futures,
 //!     so a cancel for an id whose registration has not run yet used to be a
 //!     successful no-op and the request then started under a fresh, uncancelled
@@ -77,9 +77,12 @@ impl AiPromptCancelRegistry {
         let token = CancellationToken::new();
         // A cancel that arrived before this registration is honoured here, not
         // dropped: the dispatch starts already cancelled and ends at its first
-        // check rather than running to completion unstoppably (#242).
+        // check rather than running to completion unstoppably.
         if self.take_pre_cancel(request_id) {
-            log::info!("AI prompt {request_id} was cancelled before it registered");
+            log::info!(
+                "AI prompt {request_id} was cancelled before it registered",
+                request_id = crate::peer_text::peer_text(request_id)
+            );
             token.cancel();
         }
         table.insert(request_id.to_owned(), token.clone());
@@ -187,9 +190,15 @@ pub async fn cancel_ai_prompt(
     request_id: String,
 ) -> Result<(), CommandError> {
     if state.cancel(&request_id) {
-        log::info!("AI prompt cancellation requested for {request_id}");
+        log::info!(
+            "AI prompt cancellation requested for {request_id}",
+            request_id = crate::peer_text::peer_text(&request_id)
+        );
     } else {
-        log::debug!("cancel_ai_prompt: no request in flight for {request_id}");
+        log::debug!(
+            "cancel_ai_prompt: no request in flight for {request_id}",
+            request_id = crate::peer_text::peer_text(&request_id)
+        );
     }
     Ok(())
 }

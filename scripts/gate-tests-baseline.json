@@ -1,19 +1,10 @@
 {
  "//": [
-  "WI-UI0.4 (C12) \u2014 check:static gates whose scripts/ file has NO sibling",
-  "scripts/<stem>.test.* self-test. Identity list, ratchets DOWN only: give",
-  "a gate a test, remove its entry. A new untested gate fails the parity",
-  "assertion in check-scripts-parity.test.mjs; an entry whose gate gained a",
-  "test (or left check:static) is stale and fails too."
+  "Script files CI runs that have NO sibling scripts/<stem>.test.* self-test.",
+  "EMPTY, and required to stay empty: check-scripts-parity.test.mjs asserts",
+  "both that every script a ci.yml step runs has a self-test and that this",
+  "list is []. It began as eight check:static gates and was paid down to",
+  "zero. A new CI script lands with its test; do not add an entry here."
  ],
- "untested": [
-  "check-extension-budget.mjs",
-  "check-hooks-react-purity.mjs",
-  "check-i18n-keys.ts",
-  "check-knip-baseline.mjs",
-  "check-merge-drops.mjs",
-  "check-test-timer-isolation.mjs",
-  "check-type-aware.mjs",
-  "lint-console.sh"
- ]
+ "untested": []
 }

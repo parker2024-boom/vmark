@@ -1,10 +1,10 @@
 /**
- * browserOpenFlow — the stages of `vmark.browser.open` (round 3, #54): profile
+ * browserOpenFlow — the stages of `vmark.browser.open`: profile
  * parsing, profile authorization, and the tab-creation transaction. Split out of
  * `browserOpen.ts` so each stage is a function with one job and its own tests; the
  * handler validates the request, reads the posture ONCE, and runs the stages.
  *
- * Profile authorization (WI-P6.1 H1): opening a NAMED profile needs a fresh per-use
+ * Profile authorization: opening a NAMED profile needs a fresh per-use
  * approval — without a single-use (profile, origin) grant the prompt is raised and
  * NO tab is created, so a guessed profile can never silently open authenticated
  * content. The prompt honours the same dedup and cap as `requestApproval`, so an
@@ -20,7 +20,7 @@
  * ticket. In shared posture an `open` refused pending destination approval KEEPS
  * the record and names the retry verb (`navigate {tabId}`), because the one-shot
  * the prompt mints is bound to that tabId and a fresh `open` would create a tab it
- * cannot match (audit L-02) — unless no prompt could be queued, when nothing can
+ * cannot match — unless no prompt could be queued, when nothing can
  * ever authorize the provisional tab and keeping it leaks a tab and a registry
  * slot. Any other creation failure discards the record and reports the driver's
  * typed refusal.
@@ -59,11 +59,10 @@ const PROFILE_RE = /^[A-Za-z0-9._-]{1,64}$/;
 export type ProfileParse = { ok: true; profile: string | undefined } | { ok: false };
 
 /**
- * An optional named profile (WI-P6.1): an AI-sandbox persistent store. A profile
+ * An optional named profile: an AI-sandbox persistent store. A profile
  * that is PRESENT but malformed — including an empty/whitespace string — is
  * rejected, never silently downgraded to an unnamed tab (a different posture than
- * asked for). Only an absent profile means "no profile" (sec review WI-P6.1
- * Validation, re-verify round 2).
+ * asked for). Only an absent profile means "no profile".
  */
 export function readProfile(raw: unknown): ProfileParse {
   if (raw == null) return { ok: true, profile: undefined };

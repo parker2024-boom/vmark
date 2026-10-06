@@ -1,0 +1,7 @@
+# Issue-template chooser. `blank_issues_enabled` is left unset on purpose:
+# GitHub's default (blank issues allowed) is the behaviour this repository had
+# before this file existed, and this file only adds the contact link.
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/xiaolai/vmark/security/advisories/new
+    about: Please report security problems privately, not in a public issue. See SECURITY.md for scope and what to expect.

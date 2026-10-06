@@ -1,7 +1,15 @@
+/**
+ * BrowserChrome — renders the browser workspace's page tabs and omnibox,
+ * either stacked inside the pane or side by side in the macOS title bar.
+ *
+ * @module components/Browser/BrowserChrome
+ */
+
 import { useTranslation } from "react-i18next";
 import { useWindowLabel } from "@/contexts/WindowContext";
 import { useTabStore } from "@/stores/tabStore";
-import { useBrowserLeaseStore } from "@/services/browser/lease";
+import { browserLease } from "@/services/browser/lease";
+import { useBrowserLeaseStore } from "@/stores/browserLeaseStore";
 import { BrowserOmnibox } from "./BrowserOmnibox";
 import { BrowserPageTabs } from "./BrowserPageTabs";
 import { getBrowserWorkspaceView } from "./browserWorkspace";
@@ -60,7 +68,7 @@ export function BrowserChrome({
   const requested = requestedPageId ?? (view.browserWorkspaceActive ? view.activeBrowserPageId : null);
   const activePageId = view.browserPages.some((page) => page.id === requested) ? requested : null;
 
-  // WI-NB5.1: the chrome is the one place React can see human input (the page
+  // The chrome is the one place React can see human input (the page
   // itself is a native sibling view), so any interaction here while the AI
   // holds the lease is a human takeover. Subscribed, so the indicator appears
   // the moment a workflow run acquires the lease and vanishes on release.
@@ -71,8 +79,8 @@ export function BrowserChrome({
   if (!activePageId) return null;
 
   const reclaim = (): void => {
-    if (useBrowserLeaseStore.getState().currentHolder(activePageId) === "ai") {
-      useBrowserLeaseStore.getState().reclaimForHuman(activePageId);
+    if (browserLease.currentHolder(activePageId) === "ai") {
+      browserLease.reclaimForHuman(activePageId);
     }
   };
 

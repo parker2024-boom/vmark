@@ -2,90 +2,41 @@
  * Tests for tiptap.ts (Table UI Extension)
  *
  * Covers: extension metadata, plugin key, plugin state init/apply,
- * TiptapTableUIPluginView (constructor/update/destroy),
- * cmdWhenInTable guard, and contextmenu DOM event handler.
+ * TiptapTableUIPluginView (constructor/update/destroy), the in-table keymap
+ * (row insertion and arrow escape), and the contextmenu DOM event handler.
  *
- * Strategy: Mocks are placed on the leaf dependencies (ColumnResizeManager,
- * TiptapTableContextMenu, tableDom, tableActions, tableEscape, imeGuard)
- * so the actual tiptap.ts code executes end-to-end.
+ * Strategy: every table collaborator is REAL — the context menu, the column
+ * resize manager, the DOM lookup, the row actions (prosemirror-tables) and the
+ * arrow escape — so each test asserts what the user would see: rows added, a
+ * paragraph inserted, resize handles mounted, a menu shown. The only double is
+ * the EditorView object itself (a plain object over a real EditorState), plus
+ * the stylesheet import, which carries no logic.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// ---------- Mocks (before imports) ----------
-
-const mockContextMenu = {
-  show: vi.fn(),
-  hide: vi.fn(),
-  destroy: vi.fn(),
-  updateView: vi.fn(),
-};
-
-const mockColumnResize = {
-  scheduleUpdate: vi.fn(),
-  destroy: vi.fn(),
-};
-
-vi.mock("./columnResize", () => {
-  // Must be a real constructor function for `new` to work
-  function MockColumnResizeManager() {
-    return mockColumnResize;
-  }
-  return { ColumnResizeManager: MockColumnResizeManager };
-});
-
-vi.mock("./TiptapTableContextMenu", () => {
-  function MockTiptapTableContextMenu() {
-    return mockContextMenu;
-  }
-  return { TiptapTableContextMenu: MockTiptapTableContextMenu };
-});
-
-const mockGetActiveTableElement = vi.fn(() => null);
-vi.mock("./tableDom", () => ({
-  getActiveTableElement: (...args: unknown[]) => mockGetActiveTableElement(...args),
-}));
-
-const mockIsInTable = vi.fn(() => false);
-const mockAddRowAbove = vi.fn(() => true);
-const mockAddRowBelow = vi.fn(() => true);
-vi.mock("./tableActions.tiptap", () => ({
-  isInTable: (...args: unknown[]) => mockIsInTable(...args),
-  addRowAbove: (...args: unknown[]) => mockAddRowAbove(...args),
-  addRowBelow: (...args: unknown[]) => mockAddRowBelow(...args),
-}));
-
-const mockEscapeUp = vi.fn(() => false);
-const mockEscapeDown = vi.fn(() => false);
-vi.mock("./tableEscape", () => ({
-  escapeTableUp: (...args: unknown[]) => mockEscapeUp(...args),
-  escapeTableDown: (...args: unknown[]) => mockEscapeDown(...args),
-}));
-
-vi.mock("@/utils/imeGuard", () => ({
-  guardProseMirrorCommand: (cmd: unknown) => cmd,
-}));
-
 vi.mock("./table-ui.css", () => ({}));
 
-// ---------- Imports (after mocks) ----------
-
 import { tableUIExtension, tiptapTableUIPluginKey } from "./tiptap";
+import { TiptapTableContextMenu } from "./TiptapTableContextMenu";
 import { Schema, type Node as PmNode } from "@tiptap/pm/model";
-import { EditorState, Plugin, type Transaction } from "@tiptap/pm/state";
+import { EditorState, Plugin, TextSelection, type Transaction } from "@tiptap/pm/state";
+import { tableNodes } from "@tiptap/pm/tables";
 import type { EditorView } from "@tiptap/pm/view";
 
 // ---------- Schema & helpers ----------
+
+const tables = tableNodes({ tableGroup: "block", cellContent: "block+", cellAttributes: {} });
 
 const schema = new Schema({
   nodes: {
     doc: { content: "block+" },
     paragraph: { group: "block", content: "inline*" },
     text: { group: "inline", inline: true },
-    table: { group: "block", content: "tableRow+", tableRole: "table" },
-    tableRow: { content: "(tableCell | tableHeader)+", tableRole: "row" },
-    tableCell: { content: "block+", attrs: { alignment: { default: null } }, tableRole: "cell" },
-    tableHeader: { content: "block+", attrs: { alignment: { default: null } }, tableRole: "header_cell" },
+    table: tables.table,
+    table_row: tables.table_row,
+    table_cell: tables.table_cell,
+    table_header: tables.table_header,
   },
 });
 
@@ -93,6 +44,40 @@ function createDoc(): PmNode {
   return schema.nodes.doc.create(null, [
     schema.nodes.paragraph.create(null, [schema.text("hello")]),
   ]);
+}
+
+/** A document that is ONLY a 2×2 table — the table is both first and last block. */
+function createTableDoc(): PmNode {
+  const cell = (text: string) =>
+    schema.nodes.table_cell.create(null, [schema.nodes.paragraph.create(null, [schema.text(text)])]);
+  const row = (a: string, b: string) => schema.nodes.table_row.create(null, [cell(a), cell(b)]);
+  return schema.nodes.doc.create(null, [schema.nodes.table.create(null, [row("a1", "b1"), row("a2", "b2")])]);
+}
+
+/** Position inside the text of the cell whose text is `text`. */
+function posInCell(doc: PmNode, text: string): number {
+  let found = -1;
+  doc.descendants((node, pos) => {
+    if (found < 0 && node.isText && node.text === text) found = pos + 1;
+  });
+  expect(found).toBeGreaterThan(0);
+  return found;
+}
+
+function rowCount(doc: PmNode): number {
+  let rows = 0;
+  doc.descendants((node) => {
+    if (node.type.name === "table_row") rows++;
+  });
+  return rows;
+}
+
+function rowTexts(doc: PmNode): string[] {
+  const texts: string[] = [];
+  doc.descendants((node) => {
+    if (node.type.name === "table_row") texts.push(node.textContent);
+  });
+  return texts;
 }
 
 /**
@@ -106,16 +91,29 @@ function getPlugins(): Plugin[] {
   return ext.config.addProseMirrorPlugins.call({ name: "tableUI", options: {} });
 }
 
-/** Build an EditorState that includes the table-UI plugins. */
-function createStateWithPlugins(): EditorState {
-  return EditorState.create({ doc: createDoc(), schema, plugins: getPlugins() });
+/** PluginKey's string id is not in its public typings. */
+const PLUGIN_KEY_ID = (tiptapTableUIPluginKey as unknown as { key: string }).key;
+
+function findMainPlugin(plugins: Plugin[]): Plugin {
+  return plugins.find((p) => (p as unknown as { key: string }).key === PLUGIN_KEY_ID)!;
 }
 
-/** Minimal mock EditorView that has the properties used by the plugin view. */
+/** Build an EditorState that includes the table-UI plugins. */
+function createStateWithPlugins(doc: PmNode = createDoc(), plugins: Plugin[] = getPlugins()): EditorState {
+  return EditorState.create({ doc, schema, plugins });
+}
+
+function withCursor(state: EditorState, pos: number): EditorState {
+  return state.apply(state.tr.setSelection(TextSelection.create(state.doc, pos)));
+}
+
+/** Minimal EditorView over a real EditorState: dispatch applies the transaction. */
 function createMockEditorView(state: EditorState): EditorView {
   let currentState = state;
+  const dom = document.createElement("div");
+  document.body.appendChild(dom);
   const view: Record<string, unknown> = {
-    dom: document.createElement("div"),
+    dom,
     get state() {
       return currentState;
     },
@@ -123,10 +121,42 @@ function createMockEditorView(state: EditorState): EditorView {
       currentState = currentState.apply(tr);
     },
     focus: vi.fn(),
+    composing: false,
     root: document,
+    // No rendered node views in this double, so no table scroll wrapper exists.
+    nodeDOM: () => null,
   };
   return view as unknown as EditorView;
 }
+
+function keyHandler(plugins: Plugin[]) {
+  return (plugins[0] as unknown as {
+    spec: { props: { handleKeyDown: (v: EditorView, e: KeyboardEvent) => boolean } };
+  }).spec.props.handleKeyDown;
+}
+
+function contextMenuHandler(plugins: Plugin[]) {
+  return (findMainPlugin(plugins) as unknown as {
+    spec: { props: { handleDOMEvents: { contextmenu: (v: unknown, e: unknown) => boolean } } };
+  }).spec.props.handleDOMEvents.contextmenu;
+}
+
+/** prosemirror-keymap reads "Mod" as Cmd on Apple platforms and Ctrl elsewhere. */
+const IS_MAC = /Mac|iP(hone|[oa]d)/.test(navigator.platform);
+function modKey(init: KeyboardEventInit): KeyboardEvent {
+  return new KeyboardEvent("keydown", { ...init, metaKey: IS_MAC, ctrlKey: !IS_MAC, bubbles: true });
+}
+
+function visibleMenus(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>(".table-context-menu")].filter(
+    (el) => el.style.display !== "none",
+  );
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+  document.body.innerHTML = "";
+});
 
 // ---------- Tests ----------
 
@@ -143,7 +173,7 @@ describe("tableUIExtension metadata", () => {
 
 describe("tiptapTableUIPluginKey", () => {
   it("key string contains 'tiptapTableUI'", () => {
-    expect(tiptapTableUIPluginKey.key).toContain("tiptapTableUI");
+    expect(PLUGIN_KEY_ID).toContain("tiptapTableUI");
   });
 });
 
@@ -151,16 +181,12 @@ describe("Plugin state (init / apply)", () => {
   let state: EditorState;
 
   beforeEach(() => {
-    vi.clearAllMocks();
     state = createStateWithPlugins();
   });
 
   it("initialises with contextMenu: null", () => {
-    const ps = tiptapTableUIPluginKey.getState(state);
-    // The plugin view constructor dispatches a tr that sets the contextMenu,
-    // but because we never created the plugin *view* (just the state), init returns null.
-    // When plugins are in the state but no EditorView exists, we only see init().
-    expect(ps).toEqual({ contextMenu: null });
+    // Only the state exists here — no plugin view — so init() is all that ran.
+    expect(tiptapTableUIPluginKey.getState(state)).toEqual({ contextMenu: null });
   });
 
   it("updates state via meta", () => {
@@ -172,363 +198,232 @@ describe("Plugin state (init / apply)", () => {
 
   it("preserves state when transaction has no meta", () => {
     const fakeMenu = { show: vi.fn() };
-    const tr1 = state.tr.setMeta(tiptapTableUIPluginKey, { contextMenu: fakeMenu });
-    const s2 = state.apply(tr1);
-
-    const tr2 = s2.tr.insertText("x");
-    const s3 = s2.apply(tr2);
+    const s2 = state.apply(state.tr.setMeta(tiptapTableUIPluginKey, { contextMenu: fakeMenu }));
+    const s3 = s2.apply(s2.tr.insertText("x"));
     expect(tiptapTableUIPluginKey.getState(s3)?.contextMenu).toBe(fakeMenu);
   });
 });
 
 describe("TiptapTableUIPluginView lifecycle", () => {
-  /**
-   * The plugin's `view()` factory returns a TiptapTableUIPluginView.
-   * We grab the factory from the registered plugins and invoke it manually.
-   */
-
-  let state: EditorState;
   let mockView: EditorView;
   let pluginViewObj: { update: (v: EditorView) => void; destroy: () => void };
 
-  function findMainPlugin(plugins: Plugin[]): Plugin {
-    return plugins.find((p) => (p as unknown as { key: string }).key === tiptapTableUIPluginKey.key)!;
+  function mountPluginView(state: EditorState, plugins: Plugin[]) {
+    mockView = createMockEditorView(state);
+    const viewFactory = (findMainPlugin(plugins) as unknown as { spec: { view: (v: EditorView) => unknown } }).spec.view;
+    pluginViewObj = viewFactory(mockView) as typeof pluginViewObj;
   }
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    const plugins = getPlugins();
-    state = EditorState.create({ doc: createDoc(), schema, plugins });
-    mockView = createMockEditorView(state);
-
-    const mainPlugin = findMainPlugin(plugins);
-    // The plugin spec exposes `.spec.view`
-    const viewFactory = (mainPlugin as unknown as { spec: { view: (v: EditorView) => unknown } }).spec.view!;
-    pluginViewObj = viewFactory(mockView) as typeof pluginViewObj;
-  });
+  /** Render a real <table> into the view DOM and put the DOM caret in its first cell. */
+  function renderTableWithDomCaret(): HTMLTableElement {
+    const table = document.createElement("table");
+    table.innerHTML = "<tr><td>a1</td><td>b1</td><td>c1</td></tr><tr><td>a2</td><td>b2</td><td>c2</td></tr>";
+    mockView.dom.appendChild(table);
+    const textNode = table.querySelector("td")!.firstChild!;
+    document.getSelection()!.collapse(textNode, 1);
+    return table;
+  }
 
   afterEach(() => {
     try {
       pluginViewObj.destroy();
     } catch {
-      // May already be destroyed
+      // Already destroyed by the test.
     }
   });
 
-  it("constructor creates context menu and column resize (verified via mock objects)", () => {
-    // The constructor creates instances of both — verified by the mocks
-    // returning our mock objects. If the constructor didn't call `new`, the
-    // pluginViewObj would fail on subsequent method calls.
-    expect(pluginViewObj).toBeDefined();
-    // The context menu mock should have been stored in plugin state
-    const ps = tiptapTableUIPluginKey.getState(mockView.state);
-    expect(ps?.contextMenu).toBe(mockContextMenu);
+  it("registers a real context menu in plugin state once mounting completes", async () => {
+    const plugins = getPlugins();
+    mountPluginView(createStateWithPlugins(createDoc(), plugins), plugins);
+    // The registration is deferred out of view() initialisation.
+    expect(tiptapTableUIPluginKey.getState(mockView.state)?.contextMenu).toBeNull();
+    await Promise.resolve();
+    expect(tiptapTableUIPluginKey.getState(mockView.state)?.contextMenu).toBeInstanceOf(TiptapTableContextMenu);
   });
 
-  it("constructor dispatches meta to store contextMenu in plugin state", () => {
-    const ps = tiptapTableUIPluginKey.getState(mockView.state);
-    expect(ps?.contextMenu).toBe(mockContextMenu);
-  });
-
-  it("update calls contextMenu.updateView", () => {
-    mockIsInTable.mockReturnValue(false);
-    pluginViewObj.update(mockView);
-    expect(mockContextMenu.updateView).toHaveBeenCalledWith(mockView);
-  });
-
-  it("update schedules column resize when in table and element found", () => {
-    const fakeTable = document.createElement("table");
-    mockIsInTable.mockReturnValue(true);
-    mockGetActiveTableElement.mockReturnValue(fakeTable);
-
-    pluginViewObj.update(mockView);
-
-    expect(mockColumnResize.scheduleUpdate).toHaveBeenCalledWith(fakeTable);
-  });
-
-  it("update does NOT schedule resize when not in table", () => {
-    mockIsInTable.mockReturnValue(false);
-    pluginViewObj.update(mockView);
-    expect(mockColumnResize.scheduleUpdate).not.toHaveBeenCalled();
-  });
-
-  it("update does NOT schedule resize when getActiveTableElement returns null", () => {
-    mockIsInTable.mockReturnValue(true);
-    mockGetActiveTableElement.mockReturnValue(null);
-    pluginViewObj.update(mockView);
-    expect(mockColumnResize.scheduleUpdate).not.toHaveBeenCalled();
-  });
-
-  it("destroy cleans up contextMenu and columnResize", () => {
+  it("does not register the menu when destroyed before the deferred registration runs", async () => {
+    const plugins = getPlugins();
+    mountPluginView(createStateWithPlugins(createDoc(), plugins), plugins);
     pluginViewObj.destroy();
-    expect(mockContextMenu.destroy).toHaveBeenCalled();
-    expect(mockColumnResize.destroy).toHaveBeenCalled();
+    await Promise.resolve();
+    expect(tiptapTableUIPluginKey.getState(mockView.state)?.contextMenu).toBeNull();
   });
 
-  it("destroy sets contextMenu to null in plugin state", () => {
+  it("update mounts column resize handles on the active table after the debounce", () => {
+    vi.useFakeTimers();
+    const plugins = getPlugins();
+    const doc = createTableDoc();
+    mountPluginView(withCursor(createStateWithPlugins(doc, plugins), posInCell(doc, "a1")), plugins);
+    const table = renderTableWithDomCaret();
+
+    pluginViewObj.update(mockView);
+    expect(table.querySelectorAll(".table-resize-handle")).toHaveLength(0);
+    vi.advanceTimersByTime(200);
+
+    // One handle between each pair of header-row columns (none after the last).
+    expect(table.querySelectorAll("tr:first-child .table-resize-handle")).toHaveLength(2);
+  });
+
+  it("update does NOT mount handles when the selection is outside any table", () => {
+    vi.useFakeTimers();
+    const plugins = getPlugins();
+    mountPluginView(withCursor(createStateWithPlugins(createDoc(), plugins), 2), plugins);
+    const table = renderTableWithDomCaret();
+
+    pluginViewObj.update(mockView);
+    vi.advanceTimersByTime(1000);
+    expect(table.querySelectorAll(".table-resize-handle")).toHaveLength(0);
+  });
+
+  it("update does NOT mount handles when the DOM caret is not inside a table element", () => {
+    vi.useFakeTimers();
+    const plugins = getPlugins();
+    const doc = createTableDoc();
+    mountPluginView(withCursor(createStateWithPlugins(doc, plugins), posInCell(doc, "a1")), plugins);
+    const table = renderTableWithDomCaret();
+    const outside = document.createElement("p");
+    outside.textContent = "outside";
+    mockView.dom.appendChild(outside);
+    document.getSelection()!.collapse(outside.firstChild!, 0);
+
+    pluginViewObj.update(mockView);
+    vi.advanceTimersByTime(1000);
+    expect(table.querySelectorAll(".table-resize-handle")).toHaveLength(0);
+  });
+
+  it("destroy cancels a pending resize, removes the shown menu, and clears plugin state", async () => {
+    vi.useFakeTimers();
+    const plugins = getPlugins();
+    const doc = createTableDoc();
+    mountPluginView(withCursor(createStateWithPlugins(doc, plugins), posInCell(doc, "a1")), plugins);
+    await Promise.resolve();
+    const menu = tiptapTableUIPluginKey.getState(mockView.state)!.contextMenu!;
+    menu.show(10, 10);
+    expect(visibleMenus()).toHaveLength(1);
+    const table = renderTableWithDomCaret();
+    pluginViewObj.update(mockView);
+
     pluginViewObj.destroy();
-    const ps = tiptapTableUIPluginKey.getState(mockView.state);
-    expect(ps?.contextMenu).toBeNull();
+    vi.advanceTimersByTime(1000);
+
+    expect(table.querySelectorAll(".table-resize-handle")).toHaveLength(0);
+    expect(document.querySelectorAll(".table-context-menu")).toHaveLength(0);
+    expect(tiptapTableUIPluginKey.getState(mockView.state)?.contextMenu).toBeNull();
   });
 
   it("destroy tolerates dispatch failure (view already destroyed)", () => {
-    // Replace dispatch to throw
+    const plugins = getPlugins();
+    mountPluginView(createStateWithPlugins(createDoc(), plugins), plugins);
     (mockView as unknown as { dispatch: () => void }).dispatch = () => {
       throw new Error("view destroyed");
     };
-    // Should NOT throw
     expect(() => pluginViewObj.destroy()).not.toThrow();
   });
 });
 
-describe("cmdWhenInTable guard", () => {
-  /**
-   * cmdWhenInTable wraps action functions into ProseMirror Commands.
-   * The keymap binds Mod-Enter → cmdWhenInTable(addRowBelow), etc.
-   * We test by getting the keymap plugin and invoking the commands.
-   */
-
-  let state: EditorState;
-  let mockView: EditorView;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
+describe("in-table keymap (cmdWhenInTable)", () => {
+  it("Mod-Enter outside a table is not handled and leaves the document alone", () => {
     const plugins = getPlugins();
-    state = EditorState.create({ doc: createDoc(), schema, plugins });
-    mockView = createMockEditorView(state);
+    const view = createMockEditorView(withCursor(createStateWithPlugins(createDoc(), plugins), 2));
+    const before = view.state.doc;
+    expect(keyHandler(plugins)(view, modKey({ key: "Enter" }))).toBe(false);
+    expect(view.state.doc.eq(before)).toBe(true);
   });
 
-  it("returns false when view is undefined", () => {
-    // The keymap plugin is the first plugin returned by getPlugins()
-    const _keymapPlugin = getPlugins()[0];
-    // ProseMirror keymap plugin stores bindings in props.handleKeyDown
-    // We can test cmdWhenInTable indirectly through the state command pattern
-    // cmdWhenInTable: (_state, _dispatch, view) => if (!view) return false;
-
-    // Simulate the pattern
-    const _cmdFn = vi.fn(() => true);
-    const wrappedCmd = (_s: unknown, _d: unknown, view: unknown) => {
-      if (!view) return false;
-      return true;
-    };
-    expect(wrappedCmd(null, null, undefined)).toBe(false);
-    expect(wrappedCmd(null, null, mockView)).toBe(true);
-  });
-
-  it("returns false when isInTable returns false", () => {
-    mockIsInTable.mockReturnValue(false);
-
-    // Simulate: if (!isInTable(view)) return false;
-    expect(mockIsInTable(mockView)).toBe(false);
-  });
-
-  it("delegates to wrapped function when in table", () => {
-    mockIsInTable.mockReturnValue(true);
-    mockAddRowBelow.mockReturnValue(true);
-
-    // Simulate the full cmdWhenInTable flow
-    const inTable = mockIsInTable(mockView);
-    expect(inTable).toBe(true);
-    const result = mockAddRowBelow(mockView);
-    expect(result).toBe(true);
-  });
-});
-
-describe("cmdWhenInTable via real EditorView keydown dispatch (L81-83, L98-102)", () => {
-  /**
-   * To invoke the actual cmdWhenInTable code, we use a real ProseMirror EditorView
-   * and dispatch synthetic keydown events. Since guardProseMirrorCommand is mocked
-   * as identity, the keymap bindings ARE the cmdWhenInTable closures.
-   */
-
-  let realView: import("@tiptap/pm/view").EditorView;
-
-  afterEach(() => {
-    try { realView?.destroy(); } catch { /* ignore */ }
-  });
-
-  function _createRealView() {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { EditorView: PmEditorView } = require("@tiptap/pm/view");
-    const parent = document.createElement("div");
-    document.body.appendChild(parent);
+  it("Mod-Enter in a table adds a row below the current one", () => {
     const plugins = getPlugins();
-    const st = EditorState.create({ doc: createDoc(), schema, plugins });
-    realView = new PmEditorView(parent, { state: st });
-    return realView;
-  }
-
-  it("Mod-Enter dispatched on real view invokes cmdWhenInTable (no-op test — graceful)", () => {
-    // createRealView not needed; tested via handleKeyDown below
-    expect(true).toBe(true);
+    const doc = createTableDoc();
+    const view = createMockEditorView(withCursor(createStateWithPlugins(doc, plugins), posInCell(doc, "a1")));
+    expect(keyHandler(plugins)(view, modKey({ key: "Enter" }))).toBe(true);
+    expect(rowTexts(view.state.doc)).toEqual(["a1b1", "", "a2b2"]);
   });
 
-  it("cmdWhenInTable returns false when view is undefined — direct closure test (L81)", () => {
-    // Since we can't easily extract the closure, we test it via the contextmenu handler approach
-    // The real cmdWhenInTable: return (_state, _dispatch, view) => { if (!view) return false; ... }
-    // We trigger this by calling through the keymap manually:
+  it("Mod-Shift-Enter in a table adds a row above the current one", () => {
     const plugins = getPlugins();
-    const keymapPlugin = plugins[0];
-
-    // Call handleKeyDown with a fake event that matches "Mod-Enter"
-    // prosemirror-keymap's handleKeyDown(view, event) calls cmd(state, dispatch, view)
-    // We supply a mock view that simulates isInTable returning false
-    const handleKeyDown = (keymapPlugin as unknown as { spec: { props: { handleKeyDown: (v: EditorView, e: KeyboardEvent) => boolean } } })
-      .spec.props.handleKeyDown;
-
-    const fakeState = createStateWithPlugins();
-    const fakeView = createMockEditorView(fakeState);
-    mockIsInTable.mockReturnValue(false);
-
-    // Simulate Mod+Enter via a real KeyboardEvent
-    const event = new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true });
-    const result = handleKeyDown(fakeView, event);
-    // Returns false because isInTable returns false OR keymap doesn't match
-    expect(typeof result).toBe("boolean");
+    const doc = createTableDoc();
+    const view = createMockEditorView(withCursor(createStateWithPlugins(doc, plugins), posInCell(doc, "a2")));
+    expect(keyHandler(plugins)(view, modKey({ key: "Enter", shiftKey: true }))).toBe(true);
+    expect(rowTexts(view.state.doc)).toEqual(["a1b1", "", "a2b2"]);
   });
 
-  it("cmdWhenInTable with isInTable=true calls addRowBelow (L83)", () => {
-    mockIsInTable.mockReturnValue(true);
-    mockAddRowBelow.mockReturnValue(true);
-
+  it("row insertion is suppressed during IME composition", () => {
     const plugins = getPlugins();
-    const keymapPlugin = plugins[0];
-    const handleKeyDown = (keymapPlugin as unknown as { spec: { props: { handleKeyDown: (v: EditorView, e: KeyboardEvent) => boolean } } })
-      .spec.props.handleKeyDown;
-
-    const fakeState = createStateWithPlugins();
-    const fakeView = createMockEditorView(fakeState);
-
-    const event = new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true });
-    handleKeyDown(fakeView, event);
-    // After calling with view + isInTable=true, addRowBelow should be called
-    expect(mockAddRowBelow).toHaveBeenCalled();
+    const doc = createTableDoc();
+    const view = createMockEditorView(withCursor(createStateWithPlugins(doc, plugins), posInCell(doc, "a1")));
+    (view as unknown as { composing: boolean }).composing = true;
+    expect(keyHandler(plugins)(view, modKey({ key: "Enter" }))).toBe(false);
+    expect(rowCount(view.state.doc)).toBe(2);
   });
 
-  it("ArrowUp with isInTable=true calls escapeTableUp (L101)", () => {
-    mockIsInTable.mockReturnValue(true);
-    mockEscapeUp.mockReturnValue(true);
-
+  it("ArrowUp in the first row of a leading table inserts a paragraph above it", () => {
     const plugins = getPlugins();
-    const keymapPlugin = plugins[0];
-    const handleKeyDown = (keymapPlugin as unknown as { spec: { props: { handleKeyDown: (v: EditorView, e: KeyboardEvent) => boolean } } })
-      .spec.props.handleKeyDown;
-
-    const fakeState = createStateWithPlugins();
-    const fakeView = createMockEditorView(fakeState);
-
-    const event = new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true });
-    handleKeyDown(fakeView, event);
-    expect(mockEscapeUp).toHaveBeenCalled();
+    const doc = createTableDoc();
+    const view = createMockEditorView(withCursor(createStateWithPlugins(doc, plugins), posInCell(doc, "b1")));
+    expect(keyHandler(plugins)(view, new KeyboardEvent("keydown", { key: "ArrowUp" }))).toBe(true);
+    expect(view.state.doc.firstChild?.type.name).toBe("paragraph");
+    expect(view.state.selection.$from.parent.type.name).toBe("paragraph");
+    expect(view.state.selection.from).toBe(1);
   });
 
-  it("ArrowDown with isInTable=true calls escapeTableDown (L102)", () => {
-    mockIsInTable.mockReturnValue(true);
-    mockEscapeDown.mockReturnValue(true);
-
+  it("ArrowUp in a later row is left to the default behaviour", () => {
     const plugins = getPlugins();
-    const keymapPlugin = plugins[0];
-    const handleKeyDown = (keymapPlugin as unknown as { spec: { props: { handleKeyDown: (v: EditorView, e: KeyboardEvent) => boolean } } })
-      .spec.props.handleKeyDown;
-
-    const fakeState = createStateWithPlugins();
-    const fakeView = createMockEditorView(fakeState);
-
-    const event = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true });
-    handleKeyDown(fakeView, event);
-    expect(mockEscapeDown).toHaveBeenCalled();
+    const doc = createTableDoc();
+    const view = createMockEditorView(withCursor(createStateWithPlugins(doc, plugins), posInCell(doc, "a2")));
+    expect(keyHandler(plugins)(view, new KeyboardEvent("keydown", { key: "ArrowUp" }))).toBe(false);
+    expect(view.state.doc.firstChild?.type.name).toBe("table");
   });
 
-  it("Mod-Shift-Enter with isInTable=true calls addRowAbove (L99)", () => {
-    mockIsInTable.mockReturnValue(true);
-    mockAddRowAbove.mockReturnValue(true);
-
+  it("ArrowDown in the last row of a trailing table inserts a paragraph below it", () => {
     const plugins = getPlugins();
-    const keymapPlugin = plugins[0];
-    const handleKeyDown = (keymapPlugin as unknown as { spec: { props: { handleKeyDown: (v: EditorView, e: KeyboardEvent) => boolean } } })
-      .spec.props.handleKeyDown;
-
-    const fakeState = createStateWithPlugins();
-    const fakeView = createMockEditorView(fakeState);
-
-    // Try both metaKey and ctrlKey variants (ProseMirror "Mod" maps to either)
-    const eventMeta = new KeyboardEvent("keydown", { key: "Enter", metaKey: true, shiftKey: true, bubbles: true });
-    handleKeyDown(fakeView, eventMeta);
-
-    const eventCtrl = new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, shiftKey: true, bubbles: true });
-    handleKeyDown(fakeView, eventCtrl);
-
-    // At least one variant should have triggered the command
-    expect(mockAddRowAbove).toHaveBeenCalled();
+    const doc = createTableDoc();
+    const view = createMockEditorView(withCursor(createStateWithPlugins(doc, plugins), posInCell(doc, "a2")));
+    expect(keyHandler(plugins)(view, new KeyboardEvent("keydown", { key: "ArrowDown" }))).toBe(true);
+    expect(view.state.doc.lastChild?.type.name).toBe("paragraph");
+    expect(view.state.selection.$from.parent).toBe(view.state.doc.lastChild);
   });
-});
 
-describe("contextmenu DOM event handler — pluginState null/missing contextMenu", () => {
-  it("handles contextmenu when plugin state contextMenu is null", () => {
-    mockIsInTable.mockReturnValue(true);
-
+  it("ArrowDown outside a table is not handled", () => {
     const plugins = getPlugins();
-    const state = EditorState.create({ doc: createDoc(), schema, plugins });
-    const mockView = createMockEditorView(state);
-
-    // plugin state has contextMenu: null by default (init)
-    // Don't set contextMenu in plugin state
-    const mainPlugin = plugins.find((p) => (p as unknown as { key: string }).key === tiptapTableUIPluginKey.key)!;
-    const handler = (mainPlugin as unknown as { spec: { props: { handleDOMEvents: { contextmenu: (v: unknown, e: unknown) => boolean } } } })
-      .spec.props!.handleDOMEvents!.contextmenu;
-
-    const event = { preventDefault: vi.fn(), clientX: 100, clientY: 200 };
-    // contextMenu is null, so show() won't be called but it still returns true
-    const result = handler(mockView, event);
-    expect(result).toBe(true);
-    expect(event.preventDefault).toHaveBeenCalled();
+    const view = createMockEditorView(withCursor(createStateWithPlugins(createDoc(), plugins), 2));
+    expect(keyHandler(plugins)(view, new KeyboardEvent("keydown", { key: "ArrowDown" }))).toBe(false);
   });
 });
 
 describe("contextmenu DOM event handler", () => {
-  let state: EditorState;
-  let mockView: EditorView;
-
-  function findMainPlugin(): Plugin {
+  it("returns false and leaves the native menu alone when not in a table", () => {
     const plugins = getPlugins();
-    return plugins.find((p) => (p as unknown as { key: string }).key === tiptapTableUIPluginKey.key)!;
-  }
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    const plugins = getPlugins();
-    state = EditorState.create({ doc: createDoc(), schema, plugins });
-    mockView = createMockEditorView(state);
-
-    // Set up plugin state with context menu
-    const tr = state.tr.setMeta(tiptapTableUIPluginKey, { contextMenu: mockContextMenu });
-    (mockView as unknown as { dispatch: (t: Transaction) => void }).dispatch(tr);
-  });
-
-  it("returns false when not in table", () => {
-    mockIsInTable.mockReturnValue(false);
-
-    const plugin = findMainPlugin();
-    const handler = (plugin as unknown as { spec: { props: { handleDOMEvents: { contextmenu: (v: unknown, e: unknown) => boolean } } } })
-      .spec.props!.handleDOMEvents!.contextmenu;
-
+    const view = createMockEditorView(withCursor(createStateWithPlugins(createDoc(), plugins), 2));
     const event = { preventDefault: vi.fn(), clientX: 100, clientY: 200 };
-    const result = handler(mockView, event);
-    expect(result).toBe(false);
+    expect(contextMenuHandler(plugins)(view, event)).toBe(false);
     expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(visibleMenus()).toHaveLength(0);
   });
 
-  it("prevents default and shows context menu when in table", () => {
-    mockIsInTable.mockReturnValue(true);
+  it("in a table with no menu registered yet, still swallows the native menu", () => {
+    const plugins = getPlugins();
+    const doc = createTableDoc();
+    const view = createMockEditorView(withCursor(createStateWithPlugins(doc, plugins), posInCell(doc, "a1")));
+    const event = { preventDefault: vi.fn(), clientX: 100, clientY: 200 };
+    expect(contextMenuHandler(plugins)(view, event)).toBe(true);
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(visibleMenus()).toHaveLength(0);
+  });
 
-    const plugin = findMainPlugin();
-    const handler = (plugin as unknown as { spec: { props: { handleDOMEvents: { contextmenu: (v: unknown, e: unknown) => boolean } } } })
-      .spec.props!.handleDOMEvents!.contextmenu;
+  it("in a table, prevents default and shows the table menu at the pointer", () => {
+    const plugins = getPlugins();
+    const doc = createTableDoc();
+    const view = createMockEditorView(withCursor(createStateWithPlugins(doc, plugins), posInCell(doc, "a1")));
+    const menu = new TiptapTableContextMenu(view);
+    view.dispatch(view.state.tr.setMeta(tiptapTableUIPluginKey, { contextMenu: menu }));
 
     const event = { preventDefault: vi.fn(), clientX: 150, clientY: 250 };
-    const result = handler(mockView, event);
-    expect(result).toBe(true);
+    expect(contextMenuHandler(plugins)(view, event)).toBe(true);
     expect(event.preventDefault).toHaveBeenCalled();
-    expect(mockContextMenu.show).toHaveBeenCalledWith(150, 250);
+
+    const [shown] = visibleMenus();
+    expect(shown).toBeDefined();
+    expect(shown.style.left).toBe("150px");
+    expect(shown.style.top).toBe("250px");
+    menu.destroy();
   });
 });

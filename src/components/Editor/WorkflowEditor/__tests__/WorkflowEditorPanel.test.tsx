@@ -30,7 +30,6 @@ vi.mock("@/services/ime/imeToast", async (importOriginal) => {
   };
 });
 
-import { __resetActionlintPathCacheForTests } from "@/lib/ghaWorkflow/lint/actionlint";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import type { WorkflowIR } from "@/lib/ghaWorkflow/types";
@@ -495,7 +494,6 @@ describe("WorkflowEditorPanel — actionlint rows in the banner (WI-FL3.8)", () 
     infoMock.mockReset();
     warningMock.mockReset();
     lintReplies({ kind: "ok", diagnostics: [SHELLCHECK_ROW] });
-    __resetActionlintPathCacheForTests();
     __resetActionlintNoticesForTests();
     useDocumentStore.setState({ documents: {} });
     useDocumentStore

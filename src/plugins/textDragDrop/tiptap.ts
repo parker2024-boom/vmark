@@ -82,7 +82,7 @@ export const textDragDropExtension = Extension.create({
               const { state } = view;
               const { selection } = state;
 
-              // Only activate for non-empty TextSelection (#1)
+              // Only activate for non-empty TextSelection
               if (!(selection instanceof TextSelection) || selection.empty) return false;
 
               // Check if click is inside the current selection
@@ -90,7 +90,7 @@ export const textDragDropExtension = Extension.create({
               if (!pos) return false;
 
               const clickPos = pos.pos;
-              // Use exclusive end boundary (#2)
+              // Use exclusive end boundary
               if (clickPos < selection.from || clickPos >= selection.to) return false;
 
               // Cancel any previous drag session for this view
@@ -114,7 +114,7 @@ export const textDragDropExtension = Extension.create({
                 if (!dragActive) {
                   const dx = e.clientX - startX;
                   const dy = e.clientY - startY;
-                  // Compare squared distance (#11)
+                  // Compare squared distance
                   if (dx * dx + dy * dy < DRAG_THRESHOLD_SQ) return;
 
                   // Activate drag
@@ -123,7 +123,7 @@ export const textDragDropExtension = Extension.create({
                   document.body.appendChild(dropCursor);
                 }
 
-                // Throttle position updates via rAF (#10)
+                // Throttle position updates via rAF
                 const clientX = e.clientX;
                 const clientY = e.clientY;
                 if (rafId) cancelAnimationFrame(rafId);
@@ -136,7 +136,7 @@ export const textDragDropExtension = Extension.create({
                       dropCursor.style.display = "block";
                     }
                   } else {
-                    // Mouse outside editor — clear drop target (#3)
+                    // Mouse outside editor — clear drop target
                     currentDropPos = null;
                     dropCursor.style.display = "none";
                   }
@@ -160,7 +160,7 @@ export const textDragDropExtension = Extension.create({
                 cleanup();
 
                 if (!wasActive || dropPos === null) {
-                  // Not a drag — set cursor at mouseup position (#4)
+                  // Not a drag — set cursor at mouseup position
                   if (!wasActive) {
                     const upPos = view.posAtCoords({ left: e.clientX, top: e.clientY });
                     if (upPos) {
@@ -181,7 +181,7 @@ export const textDragDropExtension = Extension.create({
                 // Don't move if dropping inside the original selection
                 if (dropPos >= from && dropPos <= to) return;
 
-                // Execute text move using mapping for robust position tracking (#5)
+                // Execute text move using mapping for robust position tracking
                 try {
                   const slice = view.state.doc.slice(from, to);
                   let tr = view.state.tr;
@@ -191,7 +191,7 @@ export const textDragDropExtension = Extension.create({
                   const mappedDropPos = tr.mapping.map(dropPos);
                   tr = tr.replaceRange(mappedDropPos, mappedDropPos, slice);
 
-                  // Place cursor at end of dropped text (#6)
+                  // Place cursor at end of dropped text
                   const contentLength = to - from;
                   const endPos = mappedDropPos + contentLength;
                   try {
@@ -221,7 +221,7 @@ export const textDragDropExtension = Extension.create({
                 }
               };
 
-              // Also cleanup on window blur (#8)
+              // Also cleanup on window blur
               const handleBlur = () => {
                 cleanup();
               };

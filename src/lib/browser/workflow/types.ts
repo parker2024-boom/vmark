@@ -1,11 +1,13 @@
 /**
  * Purpose: Types for the web-workflow IR (ADR-W1/W2).
- * Origin: Embedded browser sites and workflows plan (2026-07-12, retired) WI-4.1
+ * Origin: Embedded browser sites and workflows plan (retired)
  *
  * A workflow is authored as a markdown file (front-matter + typed steps) and parsed
  * into this IR. The step KIND selects the execution tier (R8); `api`/`action` are
  * deterministic tiers that self-heal by escalating to `goal` (reads only — never
  * writes, R8a). This module is pure data — no execution, no driver.
+ *
+ * @module lib/browser/workflow/types
  */
 
 /**

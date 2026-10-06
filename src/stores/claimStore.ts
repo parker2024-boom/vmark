@@ -1,5 +1,5 @@
 /**
- * Claim panel state (WI-2b.6) — mirror of the Rust claim listing plus
+ * Claim panel state — mirror of the Rust claim listing plus
  * panel UI state. Never persisted: the ledger is the source of truth;
  * rows are refreshed on demand (pull, like the breakdown).
  *

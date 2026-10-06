@@ -79,7 +79,8 @@ export function markCodeMirrorCompositionEnd(view: CodeMirrorView): void {
 export function isProseMirrorInCompositionGrace(view: ProseMirrorView | null | undefined): boolean {
   if (!view) return false;
   const last = proseMirrorCompositionEndAt.get(view);
-  if (!last) return false;
+  // @edge-case 0 is a valid end time (the clock's origin), not "never ended".
+  if (last === undefined) return false;
   return nowMs() - last < IME_GRACE_PERIOD_MS;
 }
 
@@ -87,7 +88,8 @@ export function isProseMirrorInCompositionGrace(view: ProseMirrorView | null | u
 export function isCodeMirrorInCompositionGrace(view: CodeMirrorView | null | undefined): boolean {
   if (!view) return false;
   const last = codeMirrorCompositionEndAt.get(view);
-  if (!last) return false;
+  // @edge-case 0 is a valid end time (the clock's origin), not "never ended".
+  if (last === undefined) return false;
   return nowMs() - last < IME_GRACE_PERIOD_MS;
 }
 

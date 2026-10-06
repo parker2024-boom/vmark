@@ -1,5 +1,5 @@
 /**
- * Browser occlusion controller (WI-1.4 / R2).
+ * Browser occlusion controller (R2).
  *
  * Purpose: the native webview is a sibling native view that paints ABOVE all DOM
  * regardless of z-index, so any overlay (command palette, dialog, context menu,
@@ -104,7 +104,7 @@ export class OcclusionController {
    * how you open a browser tab) freezes a tab whose native view does not exist yet. Rust
    * rejects it, correctly; nothing then retried, and the view finished creating and came
    * up LIVE on top of the overlay. Call this when a tab's native view becomes available:
-   * it makes the "next reconcile" actually arrive. (Audit verification, #4.)
+   * it makes the "next reconcile" actually arrive.
    *
    * Idempotent — a no-op when reality already matches intent.
    */

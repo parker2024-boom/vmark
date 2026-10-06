@@ -4,7 +4,7 @@
  * Purpose: CJK text formatting actions for WYSIWYG mode — block-level
  * formatting and whole-file formatting via markdown roundtrip (preserves
  * inline marks). Also handles trailing space removal, blank line collapse,
- * and the line-ending actions — which are METADATA-ONLY (WI-1.7): the buffer
+ * and the line-ending actions — which are METADATA-ONLY: the buffer
  * stays LF-canonical and the convention is applied at save time.
  *
  * @coordinates-with wysiwygAdapter.ts — main dispatcher delegates CJK/cleanup actions here
@@ -139,7 +139,7 @@ export function handleCollapseBlankLines(context: WysiwygToolbarContext): boolea
 }
 
 /**
- * Record the document's line-ending convention. METADATA-ONLY (WI-1.7): the
+ * Record the document's line-ending convention. METADATA-ONLY: the
  * buffer stays LF-canonical and `saveToPath` applies the convention at write
  * time. The old buffer round-trip put literal `\r` into PM text nodes.
  */

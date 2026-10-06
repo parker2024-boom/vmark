@@ -8,7 +8,7 @@
  */
 import type { EditorState, Transaction } from "@tiptap/pm/state";
 import type { Mapping } from "@tiptap/pm/transform";
-import { createMarkdownPasteSlice } from "@/plugins/markdownPaste/tiptap";
+import { createMarkdownPasteSlice } from "@/plugins/shared/markdownPasteSlice";
 import type { AiSuggestion } from "./types";
 
 /**
@@ -38,8 +38,8 @@ export function applySuggestionToTr(
   // content intact, duplicating it alongside the replacement (issue #805).
   // The marker is the explicit wholeDoc flag — `from === 0` is NOT a safe
   // sentinel, since a first-block suggestion legitimately starts at 0 and
-  // must NOT swallow the whole document (cross-model review, audit
-  // 20260612 remediation).
+  // must NOT swallow the whole document (cross-model review
+  // during an audit remediation).
   if (suggestion.wholeDoc) {
     suggestion = { ...suggestion, to: docSize };
   }
@@ -94,7 +94,7 @@ function rangeTouched(mapping: Mapping, from: number, to: number): boolean {
 
 /**
  * Compute remapped suggestion ranges after a document-changing transaction
- * (audit H8 — stored from/to are absolute and must follow the document).
+ * (stored from/to are absolute and must follow the document).
  *
  * - Edits outside a suggestion's range shift it (content-tracking assoc).
  * - Edits that touch the range content dismiss the suggestion (`range: null`)

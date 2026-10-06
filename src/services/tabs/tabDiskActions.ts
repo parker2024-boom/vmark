@@ -1,5 +1,5 @@
 /**
- * Disk actions for the tab context menu (WI-DSPL1.5 extraction).
+ * Disk actions for the tab context menu.
  *
  * Pulled out of `useTabContextMenuActions` to make room for "Open to the Side"
  * — that file sat exactly on its 300-line-limit baseline. Both are genuinely

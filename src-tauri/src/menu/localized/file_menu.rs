@@ -35,7 +35,7 @@ pub(super) fn build(app: &tauri::AppHandle, accel: &AccelFn) -> tauri::Result<Su
             true,
             accel("new-window", "CmdOrCtrl+Shift+N"),
         )?),
-        // Embedded browser (WI-S0.5). A NATIVE item, not just a DOM shortcut: once the
+        // Embedded browser. A NATIVE item, not just a DOM shortcut: once the
         // browser's WKWebView is first responder it consumes the key event, so React's
         // window.keydown never fires and no frontend shortcut works while browsing.
         // AppKit dispatches menu accelerators regardless of who holds focus.
@@ -82,7 +82,7 @@ pub(super) fn build(app: &tauri::AppHandle, accel: &AccelFn) -> tauri::Result<Su
             true,
             accel("close", "CmdOrCtrl+W"),
         )?),
-        // Unbound by default (WI-FL3.3, D12): the conventional Cmd+Shift+T is
+        // Unbound by default: the conventional Cmd+Shift+T is
         // Insert Table's. The frontend routes menu:reopen-closed-tab to the
         // tab.reopenClosed command; a user-assigned chord arrives here through
         // update_menu_accelerators like every other customizable item.

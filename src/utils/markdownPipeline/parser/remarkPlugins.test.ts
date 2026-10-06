@@ -18,6 +18,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { analyzeContent, remarkValidateMath, remarkDepthLimit, MAX_MDAST_DEPTH } from "./remarkPlugins";
+import { createProcessor } from "./processorFactory";
 
 const ambiguous = (md: string): boolean => analyzeContent(md).hasAmbiguousListUnderline;
 
@@ -130,5 +131,65 @@ describe("remarkDepthLimit — direct semantics (audit round 1)", () => {
     walk(root as Chain, 0);
     expect(maxDepth).toBeLessThanOrEqual(MAX_MDAST_DEPTH + 2);
     expect(texts).toContain("leaf"); // content survives, structure flattens
+  });
+});
+
+// WI-RA26.2 — math rejected as invalid becomes text that MERGES with its text
+// neighbours, so the mdast is the one a text parse would have produced. Left as
+// separate siblings, a paragraph read back from its own serialization (one text
+// node) differed from the first read (spec case math-12: "3 vs 1").
+describe("remarkValidateMath — rejected math merges into the surrounding text", () => {
+  interface Point { line: number; column: number; offset?: number }
+  interface Node {
+    type: string;
+    value?: string;
+    children?: Node[];
+    position?: { start: Point; end: Point };
+  }
+  const paragraphOf = (md: string): Node => {
+    const processor = createProcessor(md);
+    const root = processor.runSync(processor.parse(md)) as unknown as Node;
+    return root.children![0];
+  };
+  const shape = (n: Node) => n.children!.map((c) => [c.type, c.value]);
+
+  it.each([
+    { name: "leading-space math between text", md: "a $ b$ c" },
+    { name: "trailing-space math between text", md: "a $b $ c" },
+    { name: "rejected math at the start", md: "$ b$ c" },
+    { name: "rejected math at the end", md: "a $b $" },
+    { name: "two rejected spans in a row", md: "x $ y$, $z $ w" },
+    { name: "rejected math with no text around it", md: "$ b$" },
+    { name: "CJK around rejected math", md: "中文 $ 公式$ 文字" },
+    { name: "rejected math spanning a line", md: "a $\nb$ c" },
+  ])("$name → one text node", ({ md }) => {
+    expect(shape(paragraphOf(md))).toEqual([["text", md]]);
+  });
+
+  it("does not merge across VALID math", () => {
+    expect(shape(paragraphOf("a $ b$ $c$ d"))).toEqual([
+      ["text", "a $ b$ "],
+      ["inlineMath", "c"],
+      ["text", " d"],
+    ]);
+  });
+
+  it("does not merge across other inline nodes", () => {
+    expect(shape(paragraphOf("a $ b$ **c** d")).map(([type]) => type)).toEqual([
+      "text",
+      "strong",
+      "text",
+    ]);
+  });
+
+  it("the merged node spans its parts in the source", () => {
+    const md = "a $ b$ c";
+    const [text] = paragraphOf(md).children!;
+    expect(text.position?.start.offset).toBe(0);
+    expect(text.position?.end.offset).toBe(md.length);
+  });
+
+  it("leaves a paragraph with no rejected math untouched", () => {
+    expect(shape(paragraphOf("plain $ text"))).toEqual([["text", "plain $ text"]]);
   });
 });

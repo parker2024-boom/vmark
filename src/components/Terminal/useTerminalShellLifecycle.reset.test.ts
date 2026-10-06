@@ -18,7 +18,8 @@ import { renderHook, act } from "@testing-library/react";
 import type { Terminal } from "@xterm/xterm";
 import { useTerminalShellLifecycle } from "./useTerminalShellLifecycle";
 import { wireSessionInput } from "./terminalSessionInputWiring";
-import { useUIStore, resetTerminalSessionStore } from "@/stores/uiStore";
+import { useUIStore } from "@/stores/uiStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { spawnPty } from "./spawnPty";
 import {
@@ -111,13 +112,11 @@ async function setup(cursorBlink = true) {
 beforeEach(() => {
   resetTerminalSessionStore();
   vi.mocked(spawnPty).mockReset();
-  useUIStore.setState({
-    terminalVisible: true,
-    terminal: {
-      sessions: [{ id: SESSION, label: "Terminal 1", ordinal: 1, isAlive: true }],
-      activeSessionId: SESSION,
-      lastActiveByScope: {},
-    },
+  useUIStore.setState({ terminalVisible: true });
+  useTerminalStore.setState({
+    sessions: [{ id: SESSION, label: "Terminal 1", ordinal: 1, isAlive: true }],
+    activeSessionId: SESSION,
+    lastActiveByScope: {},
   });
 });
 
@@ -264,21 +263,21 @@ describe("#1471 — a restarted session does not inherit the killed program's te
 
   it("drops the dead program's tab title", async () => {
     const { term, lifecycle } = await setup();
-    useUIStore.getState().terminalSetProgramTitle(SESSION, "Codex");
+    useTerminalStore.getState().terminalSetProgramTitle(SESSION, "Codex");
 
     await act(async () => {
       lifecycle.current.restartActiveSession();
     });
     await settle(term);
 
-    const session = useUIStore.getState().terminal.sessions.find((s) => s.id === SESSION);
+    const session = useTerminalStore.getState().sessions.find((s) => s.id === SESSION);
     expect(session?.programTitle ?? "").toBe("");
   });
 
   it("drops a title the old program had queued but xterm had not yet parsed", async () => {
     const { term, lifecycle } = await setup();
     // As in createSession: OSC 0/2 → the tab title.
-    term.onTitleChange((title) => useUIStore.getState().terminalSetProgramTitle(SESSION, title));
+    term.onTitleChange((title) => useTerminalStore.getState().terminalSetProgramTitle(SESSION, title));
     term.write("x".repeat(200_000) + "\x1b]2;Codex\x07");
 
     await act(async () => {
@@ -286,7 +285,7 @@ describe("#1471 — a restarted session does not inherit the killed program's te
     });
     await settle(term);
 
-    const session = useUIStore.getState().terminal.sessions.find((s) => s.id === SESSION);
+    const session = useTerminalStore.getState().sessions.find((s) => s.id === SESSION);
     expect(session?.programTitle ?? "").toBe("");
   });
 

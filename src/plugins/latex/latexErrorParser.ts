@@ -3,6 +3,8 @@
  *
  * Parses KaTeX error messages and provides helpful hints
  * for common LaTeX syntax errors.
+ *
+ * @module plugins/latex/latexErrorParser
  */
 
 import { stringifyUnknown } from "@/utils/stringifyUnknown";

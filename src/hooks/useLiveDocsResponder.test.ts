@@ -50,7 +50,7 @@ async function request(requestId: string) {
 
 function answer() {
   const call = mockInvoke.mock.calls.find((c) => c[0] === "live_docs_response");
-  return call?.[1] as { requestId: string; label: string; refs: string[] } | undefined;
+  return call?.[1] as { requestId: string; refs: string[] } | undefined;
 }
 
 beforeEach(() => {
@@ -74,7 +74,7 @@ describe("useLiveDocsResponder", () => {
     expect(bridge.events).toEqual(["live-docs:request"]);
   });
 
-  it("answers with its own label and the union of reference KEYS across every open buffer — deduplicated, never the content", async () => {
+  it("answers with the union of reference KEYS across every open buffer — deduplicated, never the content, and never naming a window", async () => {
     const a = "![one](./img/one.png)\n\n![again](img/one.png)";
     const b = "Text with ![two](assets/two.PNG?v=2) and a repeat ![one](./img/one.png)";
     openDocument(a, "/ws/a.md");
@@ -86,7 +86,9 @@ describe("useLiveDocsResponder", () => {
 
     const sent = answer();
     expect(sent?.requestId).toBe("req-1");
-    expect(sent?.label).toBe("doc-2");
+    // Rust counts the answer for the window it came from; a label in the
+    // payload would be a claim any page could make.
+    expect(sent).not.toHaveProperty("label");
     const expected = new Set<string>([...extractImageReferenceKeys(a), ...extractImageReferenceKeys(b)]);
     expect(new Set(sent?.refs)).toEqual(expected);
     expect(sent?.refs).toHaveLength(expected.size); // no duplicates on the wire
@@ -100,7 +102,7 @@ describe("useLiveDocsResponder", () => {
 
     await request("req-empty");
 
-    expect(answer()).toEqual({ requestId: "req-empty", label: "main", refs: [] });
+    expect(answer()).toEqual({ requestId: "req-empty", refs: [] });
   });
 
   it("an untitled, never-saved buffer counts too — nothing on disk could vouch for its references", async () => {

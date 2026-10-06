@@ -1,4 +1,4 @@
-//! Feature gate for the bespoke YAML workflow engine (WI-19).
+//! Feature gate for the bespoke YAML workflow engine.
 //!
 //! The engine is `advanced.workflowEngine` — off by default, ~17.8k LOC, and
 //! until now the backend ignored it entirely: `run_workflow` was registered
@@ -20,7 +20,7 @@
 //! sole job is to not execute things.
 //!
 //! **Known consequence, deliberate.** A *workflow genie* dispatches through
-//! `run_workflow` (WI-7.1) and the genie picker does not consult the flag, so
+//! `run_workflow` and the genie picker does not consult the flag, so
 //! invoking one with the engine off now fails instead of silently running. That
 //! is the intended trade: `useGenieInvocation` surfaces the rendered message
 //! ("The workflow engine is turned off in Settings") through

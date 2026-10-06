@@ -11,7 +11,7 @@
  * @module components/Terminal/terminalSessionBell
  */
 import { useSettingsStore } from "@/stores/settingsStore";
-import { useUIStore } from "@/stores/uiStore";
+import { useTerminalStore } from "@/stores/terminalStore";
 import { applyTerminalBell } from "./terminalBell";
 import {
   maybeNotifyTerminalBell,
@@ -23,8 +23,8 @@ export function sessionBellHandler(sessionId: string): () => void {
   return () =>
     applyTerminalBell(sessionId, {
       bellMode: useSettingsStore.getState().terminal?.bellMode ?? "visual",
-      isActive: useUIStore.getState().terminal.activeSessionId === sessionId,
-      markActivity: (id) => useUIStore.getState().terminalMarkActivity(id),
+      isActive: useTerminalStore.getState().activeSessionId === sessionId,
+      markActivity: (id) => useTerminalStore.getState().terminalMarkActivity(id),
       notify: maybeNotifyTerminalBell,
       flagAttention: flagWindowAttentionOnBell,
     });

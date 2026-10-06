@@ -1,5 +1,5 @@
 /**
- * Merge-audit service (Phase 5, WI-5.3 frontend) — ADR-013 services tier.
+ * Merge-audit service (Phase 5 frontend) — ADR-013 services tier.
  *
  * A thin `invoke` wrapper over `coherence_merge_audit` (read-only): the edges a
  * completed git merge touched, for the human to re-check. Empty when HEAD is not

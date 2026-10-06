@@ -9,14 +9,14 @@
  * cleanup, the main-window placeholder / empty-window-close invariants, and —
  * when the removed instance was ACTIVE — the FULL context hydration of the
  * promoted successor (panes, active tab, sidebar root, config, terminal
- * realign), not just the terminal slice.
+ * realign), not just the terminal store.
  *
  * @coordinates-with closeWorkspaceInstance.ts — cleanupPerInstanceUi: true
  * @coordinates-with workspaceWindowActions.ts — move; UI/pane state stays (rail-plan gap G2, deferred)
  * @module services/workspaces/finalizeInstanceRemoval
  */
 import { invoke } from "@tauri-apps/api/core";
-import { useUIStore } from "@/stores/uiStore";
+import { useTerminalStore } from "@/stores/terminalStore";
 import { useClosedTabScopesStore } from "@/stores/tabStoreClosedScopes";
 import { useWorkspaceInstanceUiStore } from "@/stores/workspaceInstanceUiStore";
 import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
@@ -48,7 +48,7 @@ export function finalizeInstanceRemoval(
 
   store.removeWorkspaceInstance(windowLabel, workspaceInstanceId);
   if (cleanupPerInstanceUi) {
-    // WI-9.1/10.2 lifecycle: a closed instance's parallel per-instance state
+    // Lifecycle: a closed instance's parallel per-instance state
     // must not linger as orphans.
     useWorkspaceInstanceUiStore.getState().removeInstanceUiState(workspaceInstanceId);
     useWorkspacePaneLayoutsStore.getState().removePaneLayout(workspaceInstanceId);
@@ -56,7 +56,7 @@ export function finalizeInstanceRemoval(
   // WI-TS2.3 (D-T6): the instance's terminal sessions die with it — the store
   // removal IS the PTY kill — its lastActiveByScope slot drops with them, and
   // its closed-tab reopen history is cleaned per-instance.
-  useUIStore.getState().terminalRemoveScopeSessions(workspaceInstanceId);
+  useTerminalStore.getState().terminalRemoveScopeSessions(workspaceInstanceId);
   useClosedTabScopesStore.getState().removeClosedScope(windowLabel, workspaceInstanceId);
 
   if (windowLabel === "main") {
@@ -70,7 +70,8 @@ export function finalizeInstanceRemoval(
   ) {
     // Don't drop the rejection — a failed close should surface in logs rather
     // than become an unhandled promise rejection.
-    void invoke("close_window", { label: windowLabel }).catch((error) => {
+    // Closes the window that asks — this one, the window the instance left.
+    void invoke("close_window").catch((error) => {
       workspaceError("Failed to close emptied window:", error);
     });
   }
@@ -78,6 +79,6 @@ export function finalizeInstanceRemoval(
   if (!wasActive) return Promise.resolve();
   // Audit 20260831 #25: the promoted successor (ids[0], promoted with no
   // switch event) needs its FULL context — panes, active tab, sidebar root,
-  // config, and the terminal realign — not only the terminal slice.
+  // config, and the terminal realign — not only the terminal store.
   return hydrateWorkspaceInstanceContext(windowLabel);
 }

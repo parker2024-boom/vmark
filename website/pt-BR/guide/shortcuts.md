@@ -9,14 +9,14 @@ O VMark é projetado para fluxos de trabalho com teclado em primeiro lugar. A ma
 
 ## Teclas de Função no macOS
 
-O VMark usa teclas de função (F4–F10) para alternâncias rápidas de modo. No macOS, essas teclas são mapeadas para funções do sistema (brilho, volume, etc.) por padrão.
+O VMark usa teclas de função (F2–F10) para alternâncias rápidas de modo. No macOS, essas teclas são mapeadas para funções do sistema (brilho, volume, etc.) por padrão.
 
 **Para usar as teclas F diretamente sem segurar Fn:**
 
 1. Abra **Configurações do Sistema** → **Teclado**
 2. Habilite **"Usar teclas F1, F2, etc. como teclas de função padrão"**
 
-Alternativamente, segure a tecla **Fn** ao pressionar F4–F10 para acionar os atalhos do VMark.
+Alternativamente, segure a tecla **Fn** ao pressionar F2–F10 para acionar os atalhos do VMark.
 
 ::: tip
 Se você preferir manter as funções do sistema nas teclas F, pode personalizar os atalhos do VMark nas Configurações (`Mod + ,`) para usar combinações de teclas diferentes.
@@ -28,10 +28,12 @@ Se você preferir manter as funções do sistema nas teclas F, pode personalizar
 |-------|------|
 | `F2` | Próximo problema |
 | `Shift + F2` | Problema anterior |
-| `F4` | Ordenar Linhas Crescente |
-| `Shift + F4` | Ordenar Linhas Decrescente |
+| `F3` | Alternar Caracteres Invisíveis |
+| `F4` | Ordenar Linhas Crescente _(somente no modo Fonte; não faz nada no WYSIWYG)_ |
+| `Shift + F4` | Ordenar Linhas Decrescente _(somente no modo Fonte; não faz nada no WYSIWYG)_ |
 | `F5` | Peek de Fonte |
-| `F6` | Alternar Modo Fonte |
+| `F6` | Visualização de fonte (Markdown: WYSIWYG ⇄ Fonte; outros formatos: Fonte ⇄ Dividido) |
+| `Shift + F6` | Dividido / Visualização (Markdown: visualização dividida; outros formatos: Visualização ⇄ Dividido) |
 | `F7` | Alternar Barra de Status |
 | `F8` | Modo Foco |
 | `F9` | Modo Máquina de Escrever |
@@ -52,17 +54,16 @@ Se você preferir manter as funções do sistema nas teclas F, pode personalizar
 | Itálico | `Mod + I` |
 | Sublinhado | `Mod + U` |
 | Tachado | `Mod + Shift + X` |
-| Código Inline | `` Mod + Shift + ` `` |
+| Código Inline | Mod + Shift + `` ` `` |
 | Destaque | `Mod + Shift + M` |
 | Subscrito | `Alt + Mod + =` |
 | Sobrescrito | `Alt + Mod + Shift + =` |
 | Link | `Mod + K` |
-| Abrir Link (modo Fonte) | `Cmd + Clique` |
+| Abrir Link (modo Fonte) | `Cmd + Click` |
 | Remover Link | `Alt + Shift + K` |
 | Link Wiki | `Alt + Mod + K` |
 | Link de Favorito | `Alt + Mod + B` |
 | Limpar Formatação | `Mod + \` |
-| Alternar Ênfase | `Mod + Alt + E` _(nenhuma → itálico → negrito → negrito+itálico)_ |
 
 ## Formatação de Bloco
 
@@ -72,14 +73,12 @@ Se você preferir manter as funções do sistema nas teclas F, pode personalizar
 | Parágrafo | `Mod + Shift + 0` |
 | Aumentar Nível de Título | `Alt + Mod + ]` |
 | Diminuir Nível de Título | `Alt + Mod + [` |
-| Alternar Nível de Título | `Mod + Alt + H` _(P → H1 → H2 → … → H6)_ |
 | Citação | `Alt + Mod + Q` |
 | Bloco de Código | `Alt + Mod + C` |
 | Lista com Marcadores | `Alt + Mod + U` |
 | Lista Ordenada | `Alt + Mod + O` |
 | Lista de Tarefas | `Alt + Mod + X` |
 | Alternar Caixa de Seleção de Tarefa | `Mod + Shift + Enter` _(sensível ao contexto; não personalizável)_ |
-| Alternar Tipo de Lista | _(personalizável)_ |
 | Aumentar Recuo | `Mod + ]` |
 | Diminuir Recuo | `Mod + [` |
 | Linha Horizontal | `Alt + Mod + -` |
@@ -88,9 +87,9 @@ Se você preferir manter as funções do sistema nas teclas F, pode personalizar
 
 | Ação | Atalho |
 |------|--------|
-| Mover Linha Acima | `Alt + Cima` |
-| Mover Linha Abaixo | `Alt + Baixo` |
-| Duplicar Linha | `Shift + Alt + Baixo` |
+| Mover Linha Acima | `Alt + Up` |
+| Mover Linha Abaixo | `Alt + Down` |
+| Duplicar Linha | `Shift + Alt + Down` |
 | Excluir Linha | `Mod + Shift + K` |
 | Unir Linhas | `Mod + J` |
 | Ordenar Linhas Crescente | `F4` _(somente no modo Fonte)_ |
@@ -115,6 +114,7 @@ Se você preferir manter as funções do sistema nas teclas F, pode personalizar
 | Inserir Vídeo | — |
 | Inserir Áudio | — |
 | Inserir Tabela | `Mod + Shift + T` |
+| Sumário | _(personalizável)_ |
 | Matemática Inline | `Alt + Mod + M` |
 | Bloco Matemático | `Alt + Mod + Shift + M` |
 | Inserir Nota | `Alt + Mod + N` |
@@ -123,9 +123,9 @@ Se você preferir manter as funções do sistema nas teclas F, pode personalizar
 | Inserir Importante | `Alt + Mod + Shift + I` |
 | Inserir Cuidado | `Mod + Shift + U` |
 | Inserir Recolhível | `Alt + Mod + D` |
-| Inserir Diagrama | `Alt + Shift + Mod + D` |
+| Inserir Diagrama | `Alt + Mod + Shift + D` |
 | Inserir Diagrama Graphviz | _(personalizável)_ |
-| Inserir Mapa Mental | `Alt + Shift + Mod + K` |
+| Inserir Mapa Mental | `Alt + Mod + Shift + K` |
 | Alternar Comentário | `Mod + /` |
 
 ## Seleção e Múltiplos Cursores
@@ -133,13 +133,14 @@ Se você preferir manter as funções do sistema nas teclas F, pode personalizar
 | Ação | Atalho |
 |------|--------|
 | Selecionar Linha | `Mod + L` |
-| Expandir Seleção | `Ctrl + Shift + Cima` |
+| Selecionar Todas as Ocorrências no Bloco | `Alt + Mod + Shift + L` |
+| Expandir Seleção | `Ctrl + Shift + Up` |
 | Selecionar Próxima Ocorrência | `Mod + D` |
 | Pular Ocorrência | `Mod + Shift + D` |
 | Selecionar Todas as Ocorrências | `Mod + Shift + L` |
 | Desfazer Cursor Suave | `Alt + Mod + Z` |
-| Adicionar Cursor Acima | `Mod + Alt + Cima` |
-| Adicionar Cursor Abaixo | `Mod + Alt + Baixo` |
+| Adicionar Cursor Acima | `Mod + Alt + Up` |
+| Adicionar Cursor Abaixo | `Mod + Alt + Down` |
 | Colapsar Múltiplos Cursores | `Escape` |
 
 ## Localizar e Substituir
@@ -156,7 +157,9 @@ Se você preferir manter as funções do sistema nas teclas F, pode personalizar
 
 | Ação | Atalho |
 |------|--------|
-| Alternar Modo Fonte | `F6` |
+| Visualização de fonte (Markdown ⇄ Fonte; outros formatos Fonte ⇄ Dividido) | `F6` |
+| Dividido / Visualização (Markdown dividido; outros formatos Visualização ⇄ Dividido) | `Shift + F6` |
+| Dividir Editor — Dois Documentos | `Alt + Mod + \` |
 | Alternar Barra de Status | `F7` |
 | Modo Foco | `F8` |
 | Modo Máquina de Escrever | `F9` |
@@ -165,18 +168,35 @@ Se você preferir manter as funções do sistema nas teclas F, pode personalizar
 | Aumentar Zoom | `Mod + =` |
 | Diminuir Zoom | `Mod + -` |
 | Quebra de Linha | `Alt + Z` |
+| Última Aba Usada | `Ctrl + Tab` |
+| Dividir Editor — Dois Documentos | `Alt + Mod + \` |
+| Fechar Painel | `Alt + Mod + Shift + \` |
+| Focar o Outro Painel | `Alt + Mod + Shift + O` |
+| Alternar Barra Lateral | `Ctrl + Shift + 0` |
 | Alternar Esboço | `Ctrl + Shift + 1` |
 | Alternar Explorador de Arquivos | `Ctrl + Shift + 2` |
 | Alternar Histórico | `Ctrl + Shift + 3` |
+| Alternar Base de Conhecimento | `Ctrl + Shift + 4` |
+| Alternar Status das Janelas | `Ctrl + Shift + 5` |
 | Alternar Números de Linha (blocos de código) | `Alt + Mod + L` |
 | Alternar Terminal | Ctrl + `` ` `` |
+| Focar Terminal ou Editor | Ctrl + Shift + `` ` `` (Alt + Shift + `` ` `` no Windows/Linux) |
 | Alternar Visualização de Diagrama | `Alt + Mod + P` |
 | Ajustar Tabelas à Largura | _(personalizável)_ |
-| Barra de Ferramentas Universal | `Mod + Shift + P` |
+| Abrir Barra de Ferramentas Universal | `Mod + Shift + B` |
 | Peek de Fonte | `F5` |
 | Verificar Markdown | `Alt + Mod + V` |
 | Próximo problema | `F2` |
 | Problema anterior | `Shift + F2` |
+
+::: tip Alternar Base de Conhecimento
+`Ctrl + Shift + 4` fica oculto por padrão, junto com o item de menu **Visualizar → Base
+de conhecimento** e o comando da paleta. Nenhuma versão de lançamento, em nenhuma plataforma,
+inclui o runtime do servidor de conteúdo de que o recurso precisa, por isso os pontos de entrada
+só aparecem quando **Configurações → Avançado → Ferramentas de desenvolvedor** está ativado — veja
+[Base de conhecimento e Slidev](/pt-BR/guide/knowledge-base#requisitos). De qualquer forma, o atalho
+continua listado e personalizável em **Configurações → Atalhos**.
+:::
 
 ## Operações de Arquivo
 
@@ -184,6 +204,7 @@ Se você preferir manter as funções do sistema nas teclas F, pode personalizar
 |------|--------|
 | Novo Arquivo | `Mod + N` |
 | Abertura Rápida | `Mod + O` _(navegador de arquivos com busca fuzzy)_ |
+| Abrir Paleta de Comandos | `Mod + Shift + P` |
 | Abrir Arquivo... | Somente no menu _(seletor de arquivos nativo)_ |
 | Abrir Área de Trabalho | `Mod + Shift + O` |
 | Salvar | `Mod + S` |
@@ -228,12 +249,33 @@ Se você preferir manter as funções do sistema nas teclas F, pode personalizar
 |------|--------|
 | Nova Janela | `Mod + Shift + N` |
 | Nova Aba | `Mod + T` |
+| Nova Aba do Navegador | `Alt + Mod + Shift + B` |
+| Próxima Aba | `Mod + Shift + ]` |
+| Aba Anterior | `Mod + Shift + [` |
 | Fechar Aba | `Mod + W` |
+| Reabrir Aba Fechada | _(personalizável)_ |
 | Alternar Arquivos Ocultos | `Mod + Shift + .` |
-| Alternar Todos os Arquivos | _(personalizável)_ |
+| Alternar Todos os Arquivos | `Mod + Shift + A` |
 
 ::: tip Nota Windows/Linux
 Alternar Arquivos Ocultos usa `Ctrl + H` no Windows e Linux.
+
+Alternar Barra Lateral usa `Alt + Shift + 0` no Windows e Linux, porque lá `Mod` é
+Ctrl — então a combinação do macOS `Ctrl + Shift + 0` colidiria com o
+`Mod + Shift + 0` de Parágrafo.
+:::
+
+::: tip Nova Aba do Navegador
+`Alt + Mod + Shift + B` abre uma aba do navegador incorporado e também aparece no menu
+**Arquivo**. O navegador incorporado vem ativado por padrão no macOS; se você o desativar
+em **Configurações → Avançado → Navegador incorporado**, o item de menu fica oculto
+(não acinzentado) até que você o ative de novo. O navegador é exclusivo do macOS, então o
+item nunca aparece no Windows nem no Linux.
+
+É um item de menu de verdade, e não apenas uma associação de teclado, e isso importa: assim que
+uma página web recebe o foco do teclado, o motor do navegador consome as teclas pressionadas antes que o VMark
+as veja, então um atalho interno do app não consegue disparar. Um acelerador de menu é despachado pelo
+próprio macOS, então continua funcionando enquanto você navega.
 :::
 
 ## Ajuda (somente macOS)
@@ -254,14 +296,14 @@ Tab e Shift+Tab são sensíveis ao contexto — eles escapam de parênteses, asp
 |----------|------------|
 | Antes de `)`, `]`, `}`, aspas | Pular o caractere de fechamento |
 | Antes de parênteses CJK `」`, `』`, etc. | Pular o parêntese de fechamento |
-| Dentro de **negrito**, *itálico*, `código` | Pular após a formatação |
+| Dentro de **negrito**, *itálico*, `code` | Pular após a formatação |
 | Dentro de um link | Pular após o link |
 
 | Contexto | Ação do Shift+Tab |
 |----------|------------------|
 | Após `(`, `[`, `{`, aspas | Pular antes do caractere de abertura |
 | Após parênteses CJK `「`, `『`, etc. | Pular antes do parêntese de abertura |
-| Dentro de **negrito**, *itálico*, `código` | Pular antes da formatação |
+| Dentro de **negrito**, *itálico*, `code` | Pular antes da formatação |
 | Dentro de um link | Pular antes do link |
 
 ::: tip
@@ -279,12 +321,6 @@ Quando o cursor estiver dentro de uma tabela:
 | Adicionar Linha Abaixo | `Mod + Enter` |
 | Adicionar Linha Acima | `Mod + Shift + Enter` |
 | Excluir Linha | `Mod + Backspace` |
-| Adicionar Coluna à Esquerda | `Alt + Mod + Left` |
-| Adicionar Coluna à Direita | `Alt + Mod + Right` |
-| Excluir Coluna | `Alt + Mod + Backspace` |
-| Alinhar Coluna à Esquerda | `Mod + Alt + Shift + L` |
-| Alinhar Coluna à Direita | `Mod + Shift + R` |
-| Alinhar Coluna ao Centro | _(personalizável)_ |
 | Formatar Tabela | `Alt + Mod + T` |
 | Sair da Tabela | Teclas de seta na borda da tabela |
 
@@ -314,12 +350,12 @@ Quando o terminal integrado estiver focado:
 | Ação | Atalho |
 |------|--------|
 | Alternar Terminal | `` Ctrl + ` `` |
-| Focar Terminal ou Editor | `` Ctrl + Shift + ` `` |
-| Copiar | `Mod + C` (com seleção) |
-| Colar | `Mod + V` |
-| Selecionar Tudo (somente a saída do terminal) | `Mod + A` |
-| Limpar | `Mod + K` |
-| Pesquisar | `Mod + F` |
+| Focar Terminal ou Editor | `` Ctrl + Shift + ` `` (`` Alt + Shift + ` `` no Windows/Linux) |
+| Copiar | `Mod + C` (com seleção); no Linux também `Ctrl + Shift + C` ou `Ctrl + Insert` |
+| Colar | `Mod + V`; no Linux também `Ctrl + Shift + V` ou `Shift + Insert` |
+| Selecionar Tudo (somente a saída do terminal) | `Mod + A` (`Ctrl + Shift + A` no Linux) |
+| Limpar | `Mod + K` (`Ctrl + Shift + K` no Linux) |
+| Pesquisar | `Mod + F` (`Ctrl + Shift + F` no Linux) |
 | Alternar para a sessão 1–5 | `Mod + 1` até `Mod + 5` |
 | Aumentar fonte do terminal | `Mod + =` |
 | Diminuir fonte do terminal | `Mod + -` |
@@ -341,6 +377,8 @@ No macOS, o terminal também traduz os atalhos habituais de edição de texto pa
 | Apagar a linha de entrada (envia `Ctrl + U`) | `Cmd + Backspace` |
 
 Combinações com `Ctrl`, como `Ctrl + A`, `Ctrl + R` e `Ctrl + W`, vão direto para o shell no macOS.
+
+No Linux, o terminal segue a convenção habitual dos terminais Linux: combinações simples de `Ctrl` + letra vão para o shell, então teclas do readline como `Ctrl + A`, `Ctrl + E`, `Ctrl + K`, `Ctrl + F`, `Ctrl + U` e `Ctrl + W` funcionam como em qualquer outro terminal Linux, e as ações próprias do terminal passam para `Ctrl + Shift`: `Ctrl + Shift + A` seleciona tudo, `Ctrl + Shift + K` limpa, `Ctrl + Shift + F` pesquisa, e `Ctrl + Shift + C` / `Ctrl + Shift + V` copiam e colam. `Ctrl + Insert` e `Shift + Insert` também copiam e colam. O terminal mantém duas combinações simples de `Ctrl`: `Ctrl + C` copia uma seleção (e envia SIGINT quando nada está selecionado), e `Ctrl + V` cola. `Ctrl + 1` até `Ctrl + 5` continuam alternando entre sessões.
 
 Quando a barra de pesquisa do terminal estiver aberta:
 

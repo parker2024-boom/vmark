@@ -1,6 +1,6 @@
 //! CLI-install menu action: toggles the `/usr/local/bin/vmark` shell command
-//! and shows a localized result dialog. Extracted from `menu_events` so that
-//! grab-bag dispatcher stays under its size baseline (audit 20260612).
+//! and shows a localized result dialog. Extracted from `menu::events` so that
+//! grab-bag dispatcher stays under its size baseline.
 
 use futures_util::FutureExt;
 use std::panic::AssertUnwindSafe;
@@ -42,7 +42,7 @@ pub fn run_install_toggle(app: AppHandle) {
                 .unwrap_or_else(|e| Err(format!("Task failed: {}", e)));
 
             // Localize the dialog from the structured outcome rather than
-            // string-matching English Ok messages (audit 20260612 deferred).
+            // string-matching English Ok messages.
             let title = rust_i18n::t!("cli.dialogTitle").to_string();
             match result {
                 Ok(outcome) => {

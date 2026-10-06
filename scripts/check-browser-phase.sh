@@ -310,8 +310,8 @@ case "$PHASE" in
     # DoD: occlusion incl. IME round-trip; live-webview bound; R12 surfaces;
     #      eval watchdog + automation lease; feature flag default-off.
     #
-    # WI-1.6: the original row ran the hibernation store's unit test under the
-    # label "live-webview cap enforced" — but that store was never wired, so
+    # Live-webview bound: the original row ran the hibernation store's unit
+    # test under the label "live-webview cap enforced" — but that store was never wired, so
     # the row certified enforcement that did not exist (review finding E4).
     # The store is deleted; the property is real, though, and is enforced by
     # the active-page-only surface lifecycle (one BrowserSurface mounted for

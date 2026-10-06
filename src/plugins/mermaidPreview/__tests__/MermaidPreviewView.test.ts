@@ -1,6 +1,11 @@
 /**
  * Tests for MermaidPreviewView — show/hide lifecycle, zoom, drag, resize,
  * content update debouncing, and destroy cleanup.
+ *
+ * The real preview renderer runs. Only the third-party diagram packages
+ * underneath it (`mermaid`, `markmap-lib`, `markmap-view`) are replaced,
+ * because their layout needs a real layout engine; a render is observed as
+ * a call into `mermaid.render` and as what lands in the preview DOM.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -24,41 +29,86 @@ vi.mock("@/plugins/shared/popupHostDom", () => ({
   toHostCoordsForDom: vi.fn((_host: HTMLElement, pos: { top: number; left: number }) => pos),
 }));
 
-vi.mock("../mermaidPreviewRender", () => ({
-  renderPreview: vi.fn(() => 1),
+const { mockMermaidRender, mockMarkmapTransform } = vi.hoisted(() => ({
+  mockMermaidRender: vi.fn(),
+  mockMarkmapTransform: vi.fn(),
+}));
+
+vi.mock("mermaid", () => ({
+  default: {
+    initialize: () => undefined,
+    render: (...args: unknown[]) => mockMermaidRender(...args),
+  },
+}));
+
+vi.mock("markmap-lib", () => ({
+  Transformer: class {
+    transform(md: string) {
+      return mockMarkmapTransform(md);
+    }
+  },
+}));
+
+vi.mock("markmap-view", () => ({
+  Markmap: {
+    create: () => ({ fit: () => undefined, destroy: () => undefined, svg: { on: () => undefined } }),
+  },
 }));
 
 import { MermaidPreviewView, getMermaidPreviewView } from "../MermaidPreviewView";
-import { renderPreview } from "../mermaidPreviewRender";
+
+/** The popup's diagram area (mounted in document.body when no editor DOM is given). */
+const previewEl = () => document.querySelector(".mermaid-preview-content") as HTMLElement;
+
+/** Let the async mermaid render chain (lazy import, render lock) settle. */
+const flushRender = () => vi.advanceTimersByTimeAsync(0);
+
+/** The diagram sources mermaid was asked to render, in order. */
+const mermaidSources = () => mockMermaidRender.mock.calls.map(([, source]) => source as string);
+
+beforeEach(() => {
+  mockMermaidRender.mockImplementation(async (_id: string, source: string) => ({
+    svg: '<svg viewBox="0 0 200 100"><text>' + source + "</text></svg>",
+  }));
+  mockMarkmapTransform.mockImplementation(() => ({ root: { content: "" } }));
+});
 import { cleanupDescendants } from "@/plugins/shared/diagramCleanup";
+
+/** Each test gets fake timers and its own view, destroyed afterwards. */
+function freshViewPerTest(assign: (view: MermaidPreviewView) => void): void {
+  let current: MermaidPreviewView;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    current = new MermaidPreviewView();
+    assign(current);
+  });
+  afterEach(() => {
+    current.destroy();
+    vi.useRealTimers();
+  });
+}
 
 describe("MermaidPreviewView", () => {
   let view: MermaidPreviewView;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useFakeTimers();
-    view = new MermaidPreviewView();
-  });
-
-  afterEach(() => {
-    view.destroy();
-    vi.useRealTimers();
-  });
+  freshViewPerTest((v) => (view = v));
 
   describe("show/hide lifecycle", () => {
     it("starts hidden", () => {
       expect(view.isVisible()).toBe(false);
     });
 
-    it("becomes visible after show()", () => {
-      const editorDom = document.createElement("div");
+    it("becomes visible after show() and renders the diagram", async () => {
       const anchor = { top: 50, left: 100, width: 10, height: 20 };
 
-      view.show("graph TD; A-->B", anchor, editorDom);
+      view.show("graph TD; A-->B", anchor);
 
       expect(view.isVisible()).toBe(true);
-      expect(renderPreview).toHaveBeenCalled();
+      expect(previewEl().querySelector(".mermaid-preview-loading")).not.toBeNull();
+      await flushRender();
+      expect(mermaidSources()).toEqual(["graph TD; A-->B"]);
+      expect(previewEl().querySelector("svg text")?.textContent).toBe("graph TD; A-->B");
     });
 
     it("becomes hidden after hide()", () => {
@@ -71,7 +121,7 @@ describe("MermaidPreviewView", () => {
       expect(cleanupDescendants).toHaveBeenCalled();
     });
 
-    it("clears debounce timer on hide", () => {
+    it("clears debounce timer on hide", async () => {
       const editorDom = document.createElement("div");
       view.show("graph TD; A-->B", { top: 50, left: 100, width: 10, height: 20 }, editorDom);
 
@@ -79,9 +129,9 @@ describe("MermaidPreviewView", () => {
       view.hide();
 
       // Advancing timers should not trigger render
-      vi.advanceTimersByTime(500);
-      // renderPreview called once on show(), not again after hide cleared timer
-      expect(vi.mocked(renderPreview)).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(500);
+      // Rendered once on show(), not again after hide cleared the timer
+      expect(mermaidSources()).toEqual(["graph TD; A-->B"]);
     });
 
     it("show with language parameter", () => {
@@ -91,59 +141,64 @@ describe("MermaidPreviewView", () => {
   });
 
   describe("updateContent", () => {
-    it("debounces mermaid rendering", () => {
+    it("debounces mermaid rendering", async () => {
       const editorDom = document.createElement("div");
       view.show("initial", { top: 0, left: 0, width: 10, height: 10 }, editorDom);
-      vi.mocked(renderPreview).mockClear();
+      await flushRender();
+      mockMermaidRender.mockClear();
 
       view.updateContent("update 1");
       view.updateContent("update 2");
       view.updateContent("update 3");
 
       // No immediate render
-      expect(renderPreview).not.toHaveBeenCalled();
+      await flushRender();
+      expect(mockMermaidRender).not.toHaveBeenCalled();
 
-      // After debounce period
-      vi.advanceTimersByTime(200);
-      expect(renderPreview).toHaveBeenCalledTimes(1);
+      // After debounce period: one render, of the latest content only
+      await vi.advanceTimersByTimeAsync(200);
+      expect(mermaidSources()).toEqual(["update 3"]);
     });
 
     it("renders SVG immediately without debounce", () => {
       view.show("initial", { top: 0, left: 0, width: 10, height: 10 }, undefined, "svg");
-      vi.mocked(renderPreview).mockClear();
 
-      view.updateContent("<svg></svg>", "svg");
+      view.updateContent('<svg xmlns="http://www.w3.org/2000/svg"><circle r="7"/></svg>', "svg");
 
-      // Should render immediately
-      expect(renderPreview).toHaveBeenCalledTimes(1);
+      // Rendered synchronously, with no timer advanced
+      expect(previewEl().querySelector("circle")?.getAttribute("r")).toBe("7");
+      expect(mockMermaidRender).not.toHaveBeenCalled();
     });
 
-    it("clears pending debounce timer for SVG", () => {
+    it("clears pending debounce timer for SVG", async () => {
       view.show("initial", { top: 0, left: 0, width: 10, height: 10 });
-      vi.mocked(renderPreview).mockClear();
+      await flushRender();
+      mockMermaidRender.mockClear();
 
       // Start a mermaid debounce
       view.updateContent("mermaid content");
-      expect(renderPreview).not.toHaveBeenCalled();
 
       // Switch to SVG — should cancel debounce and render immediately
-      view.updateContent("<svg></svg>", "svg");
-      expect(renderPreview).toHaveBeenCalledTimes(1);
+      view.updateContent('<svg xmlns="http://www.w3.org/2000/svg"><circle r="7"/></svg>', "svg");
+      expect(previewEl().querySelector("circle")).not.toBeNull();
 
       // The original debounce should not fire
-      vi.advanceTimersByTime(300);
-      expect(renderPreview).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(300);
+      expect(mockMermaidRender).not.toHaveBeenCalled();
+      expect(previewEl().querySelector("circle")).not.toBeNull();
     });
 
-    it("updates language when provided", () => {
+    it("updates language when provided", async () => {
       view.show("initial", { top: 0, left: 0, width: 10, height: 10 });
-      vi.mocked(renderPreview).mockClear();
+      await flushRender();
+      mockMermaidRender.mockClear();
 
-      view.updateContent("content", "markmap");
-      vi.advanceTimersByTime(200);
+      view.updateContent("# content", "markmap");
+      await vi.advanceTimersByTimeAsync(200);
 
-      const callArgs = vi.mocked(renderPreview).mock.calls[0];
-      expect(callArgs[1].currentLanguage).toBe("markmap");
+      // Rendered by the markmap path, not mermaid
+      expect(mockMarkmapTransform).toHaveBeenCalledWith("# content");
+      expect(mockMermaidRender).not.toHaveBeenCalled();
     });
   });
 
@@ -275,15 +330,14 @@ describe("MermaidPreviewView", () => {
       removeSpy.mockRestore();
     });
 
-    it("clears debounce timer on destroy", () => {
+    it("clears debounce timer on destroy", async () => {
       view.show("graph TD", { top: 0, left: 0, width: 10, height: 10 });
       view.updateContent("pending");
-      vi.mocked(renderPreview).mockClear();
 
       view.destroy();
 
-      vi.advanceTimersByTime(500);
-      expect(renderPreview).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(500);
+      expect(mermaidSources()).toEqual(["graph TD"]);
     });
 
     it("calls cleanupDescendants on destroy", () => {
@@ -511,7 +565,7 @@ describe("MermaidPreviewView", () => {
       view.show("graph TD; A-->B", { top: 0, left: 0, width: 10, height: 10 });
 
       // Zoom in triggers setZoom which calls applyZoom
-      // Preview content has no SVG in jsdom (mocked renderPreview doesn't add one)
+      // The mermaid render has not settled, so the preview holds no SVG yet
       const container = document.querySelector(".mermaid-preview-popup") as HTMLElement;
       const zoomInBtn = container?.querySelector('[data-action="in"]') as HTMLElement;
       zoomInBtn.click();
@@ -556,16 +610,7 @@ describe("getMermaidPreviewView", () => {
 describe("applyZoom — SVG with viewBox but no width/height (lines 235-250)", () => {
   let view: MermaidPreviewView;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useFakeTimers();
-    view = new MermaidPreviewView();
-  });
-
-  afterEach(() => {
-    view.destroy();
-    vi.useRealTimers();
-  });
+  freshViewPerTest((v) => (view = v));
 
   function injectSvg(attrs: Record<string, string> = {}) {
     view.show("graph TD", { top: 0, left: 0, width: 10, height: 10 });
@@ -661,16 +706,7 @@ describe("applyZoom — SVG with viewBox but no width/height (lines 235-250)", (
 describe("wheel zoom — boundary conditions", () => {
   let view: MermaidPreviewView;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useFakeTimers();
-    view = new MermaidPreviewView();
-  });
-
-  afterEach(() => {
-    view.destroy();
-    vi.useRealTimers();
-  });
+  freshViewPerTest((v) => (view = v));
 
   it("does not zoom when already at max and scrolling up", () => {
     view.show("graph TD", { top: 0, left: 0, width: 10, height: 10 });
@@ -720,16 +756,7 @@ describe("wheel zoom — boundary conditions", () => {
 describe("updatePosition — with editor container (line 277-279)", () => {
   let view: MermaidPreviewView;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useFakeTimers();
-    view = new MermaidPreviewView();
-  });
-
-  afterEach(() => {
-    view.destroy();
-    vi.useRealTimers();
-  });
+  freshViewPerTest((v) => (view = v));
 
   it("uses getBoundaryRects when editorDom has .editor-container ancestor", () => {
     const editorContainer = document.createElement("div");
@@ -768,16 +795,7 @@ describe("updatePosition — with editor container (line 277-279)", () => {
 describe("drag — small delta does not set hasDragged (line 106)", () => {
   let view: MermaidPreviewView;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useFakeTimers();
-    view = new MermaidPreviewView();
-  });
-
-  afterEach(() => {
-    view.destroy();
-    vi.useRealTimers();
-  });
+  freshViewPerTest((v) => (view = v));
 
   it("small mouse move (< 5px) does not mark as dragged", () => {
     view.show("graph TD", { top: 0, left: 0, width: 10, height: 10 });
@@ -805,16 +823,7 @@ describe("drag — small delta does not set hasDragged (line 106)", () => {
 describe("resize — missing data-corner attribute (line 129)", () => {
   let view: MermaidPreviewView;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useFakeTimers();
-    view = new MermaidPreviewView();
-  });
-
-  afterEach(() => {
-    view.destroy();
-    vi.useRealTimers();
-  });
+  freshViewPerTest((v) => (view = v));
 
   it("defaults to 'se' when resize handle has no data-corner", () => {
     view.show("graph TD", { top: 0, left: 0, width: 10, height: 10 });
@@ -843,16 +852,7 @@ describe("resize — missing data-corner attribute (line 129)", () => {
 describe("drag move — when not dragging (line 101)", () => {
   let view: MermaidPreviewView;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useFakeTimers();
-    view = new MermaidPreviewView();
-  });
-
-  afterEach(() => {
-    view.destroy();
-    vi.useRealTimers();
-  });
+  freshViewPerTest((v) => (view = v));
 
   it("ignores mousemove when not in drag state", () => {
     view.show("graph TD", { top: 0, left: 0, width: 10, height: 10 });
@@ -876,16 +876,7 @@ describe("drag move — when not dragging (line 101)", () => {
 describe("mouseup — when not dragging (line 112)", () => {
   let view: MermaidPreviewView;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useFakeTimers();
-    view = new MermaidPreviewView();
-  });
-
-  afterEach(() => {
-    view.destroy();
-    vi.useRealTimers();
-  });
+  freshViewPerTest((v) => (view = v));
 
   it("does nothing on mouseup when not in drag state", () => {
     view.show("graph TD", { top: 0, left: 0, width: 10, height: 10 });
@@ -907,16 +898,7 @@ describe("mouseup — when not dragging (line 112)", () => {
 describe("show — container parent check (line 262)", () => {
   let view: MermaidPreviewView;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useFakeTimers();
-    view = new MermaidPreviewView();
-  });
-
-  afterEach(() => {
-    view.destroy();
-    vi.useRealTimers();
-  });
+  freshViewPerTest((v) => (view = v));
 
   it("does not re-append when container is already in the correct host", () => {
     const anchor = { top: 0, left: 0, width: 10, height: 10 };
@@ -936,70 +918,53 @@ describe("show — container parent check (line 262)", () => {
 // Branch coverage: updateContent with language param (line 301)
 // ---------------------------------------------------------------------------
 
-describe("doRender — getCurrentToken and applyZoom callbacks (lines 345-346)", () => {
+describe("doRender — stale results and zoom on landing", () => {
   let view: MermaidPreviewView;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useFakeTimers();
-    view = new MermaidPreviewView();
-  });
+  freshViewPerTest((v) => (view = v));
 
-  afterEach(() => {
-    view.destroy();
-    vi.useRealTimers();
-  });
-
-  it("passes getCurrentToken callback that returns current renderToken", () => {
-    // Capture the callbacks passed to renderPreview
-    vi.mocked(renderPreview).mockImplementation((_content, opts) => {
-      // Call getCurrentToken callback to cover line 345
-      const token = opts.getCurrentToken();
-      expect(typeof token).toBe("number");
-      return token + 1;
-    });
-
+  it("discards a mermaid result that lands after a newer render (live token)", async () => {
     view.show("graph TD", { top: 0, left: 0, width: 10, height: 10 });
-    expect(renderPreview).toHaveBeenCalled();
+    // A newer, synchronous SVG render supersedes the in-flight mermaid one.
+    view.updateContent('<svg xmlns="http://www.w3.org/2000/svg"><circle r="7"/></svg>', "svg");
+
+    await flushRender();
+
+    expect(mermaidSources()).toEqual(["graph TD"]);
+    expect(previewEl().querySelector("circle")).not.toBeNull();
+    expect(previewEl().querySelector("text")).toBeNull();
   });
 
-  it("passes applyZoom callback that calls internal applyZoom", () => {
-    vi.mocked(renderPreview).mockImplementation((_content, opts) => {
-      // Call applyZoom callback to cover line 346
-      // This should not throw even without an SVG element
-      opts.applyZoom();
-      return 1;
-    });
-
+  it("applies the current zoom to the SVG once the render lands", async () => {
     view.show("graph TD", { top: 0, left: 0, width: 10, height: 10 });
-    expect(renderPreview).toHaveBeenCalled();
+    const zoomIn = document.querySelector('.mermaid-preview-popup [data-action="in"]') as HTMLElement;
+    zoomIn.click();
+
+    await flushRender();
+
+    const svg = previewEl().querySelector("svg") as SVGSVGElement;
+    // 110% of the viewBox's 200 x 100
+    expect(parseFloat(svg.style.width)).toBeCloseTo(220);
+    expect(parseFloat(svg.style.height)).toBeCloseTo(110);
   });
 });
 
 describe("updateContent — language override (line 301)", () => {
   let view: MermaidPreviewView;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useFakeTimers();
-    view = new MermaidPreviewView();
-  });
+  freshViewPerTest((v) => (view = v));
 
-  afterEach(() => {
-    view.destroy();
-    vi.useRealTimers();
-  });
-
-  it("does not update currentLanguage when language param is undefined", () => {
+  it("does not update currentLanguage when language param is undefined", async () => {
     view.show("graph TD", { top: 0, left: 0, width: 10, height: 10 });
-    vi.mocked(renderPreview).mockClear();
+    await flushRender();
+    mockMermaidRender.mockClear();
 
-    // Call without language — should keep current language
+    // Call without language — should keep current language (mermaid, from show())
     view.updateContent("updated content");
-    vi.advanceTimersByTime(200);
+    await vi.advanceTimersByTimeAsync(200);
 
-    const callArgs = vi.mocked(renderPreview).mock.calls[0];
-    expect(callArgs[1].currentLanguage).toBe("mermaid"); // Default from show()
+    expect(mermaidSources()).toEqual(["updated content"]);
+    expect(mockMarkmapTransform).not.toHaveBeenCalled();
   });
 });
 
@@ -1010,16 +975,7 @@ describe("updateContent — language override (line 301)", () => {
 describe("resize — mousedown on non-handle element (line 126)", () => {
   let view: MermaidPreviewView;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useFakeTimers();
-    view = new MermaidPreviewView();
-  });
-
-  afterEach(() => {
-    view.destroy();
-    vi.useRealTimers();
-  });
+  freshViewPerTest((v) => (view = v));
 
   it("does not start resize when mousedown target is not a resize handle", () => {
     view.show("graph TD", { top: 0, left: 0, width: 10, height: 10 });

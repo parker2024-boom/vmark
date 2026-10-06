@@ -1,10 +1,7 @@
 // @vitest-environment node
 import { describe, test, expect } from "vitest";
-import {
-  tokenizeQuotes,
-  analyzeQuotes,
-  applyContextualQuotes,
-} from "./quotePairing";
+import { tokenizeQuotes, analyzeQuotes } from "./quotePairing";
+import { applyContextualQuotes } from "./contextualQuotes";
 
 describe("quotePairing", () => {
   describe("tokenizeQuotes", () => {

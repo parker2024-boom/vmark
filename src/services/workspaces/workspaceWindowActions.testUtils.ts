@@ -1,8 +1,17 @@
+/**
+ * workspaceWindowActions.testUtils — shared mocks and store fixtures for the
+ * workspace window action tests: Tauri invoke and listen mocks, rail mode,
+ * workspace instances, tabs and transfer acknowledgements.
+ *
+ * @module services/workspaces/workspaceWindowActions.testUtils
+ */
+
 import { vi } from "vitest";
-import { useDocumentStore } from "@/stores/documentStore";
+import { useDocumentStore, useRevisionStore } from "@/stores/documentStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useTabStore } from "@/stores/tabStore";
 import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
+import { startTabStateCleanup } from "@/services/windowClose/tabCleanup";
 import { createWorkspaceInstance, createWorkspaceRootIdentity } from "@/utils/workspaceIdentity";
 import type {
   WorkspaceTransferAckPayload,
@@ -19,12 +28,20 @@ export const mockInvoke = mocks.mockInvoke;
 export const mockListen = mocks.mockListen;
 export const mockOpenWorkspaceWithConfig = mocks.mockOpenWorkspaceWithConfig;
 
-vi.mock("@tauri-apps/api/core", () => ({ invoke: mockInvoke }));
+// The factories read the hoisted `mocks` object, not the exports above: a
+// module imported while this file is still loading may reach these APIs first.
+vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.mockInvoke }));
 vi.mock("@tauri-apps/api/webviewWindow", () => ({
-  getCurrentWebviewWindow: () => ({ label: "main", listen: mockListen }),
+  getCurrentWebviewWindow: () => ({ label: "main", listen: mocks.mockListen }),
 }));
 
+let stopTabStateCleanup: (() => void) | null = null;
+
 export function resetWorkspaceActionTestState(): void {
+  // A window runs the tab-state cleanup for its whole lifetime, and the
+  // actions under test rely on it to free the state of a tab they remove.
+  stopTabStateCleanup?.();
+  stopTabStateCleanup = startTabStateCleanup();
   vi.useRealTimers();
   setLocationSearch("");
   setRailMode(false);
@@ -40,6 +57,7 @@ export function resetWorkspaceActionTestState(): void {
   useWorkspaceInstancesStore.getState().resetWorkspaceInstances();
   useTabStore.setState({ tabs: {}, activeTabId: {}, untitledCounter: 0 });
   useDocumentStore.setState({ documents: {} });
+  useRevisionStore.setState({ revisions: {} });
 }
 
 export function setRailMode(enabled: boolean): void {

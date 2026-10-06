@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, render, fireEvent } from "@testing-library/react";
 import { TerminalTabBar } from "./TerminalTabBar";
-import { resetTerminalSessionStore, useUIStore } from "@/stores/uiStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
 import {
@@ -62,10 +62,10 @@ afterEach(() => {
 
 describe("TerminalTabBar — scoped rendering (WI-TS3.1)", () => {
   it("renders only the visible population: active scope ∪ window-scoped", () => {
-    useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" });
-    useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" });
-    useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-b" });
-    useUIStore.getState().terminalCreateSession(); // window-scoped
+    useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" });
+    useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" });
+    useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-b" });
+    useTerminalStore.getState().terminalCreateSession(); // window-scoped
 
     const { container } = renderBar();
 
@@ -73,9 +73,9 @@ describe("TerminalTabBar — scoped rendering (WI-TS3.1)", () => {
   });
 
   it("rail OFF renders ALL sessions, stamped included (invariant 4)", () => {
-    useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" });
-    useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-b" });
-    useUIStore.getState().terminalCreateSession();
+    useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" });
+    useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-b" });
+    useTerminalStore.getState().terminalCreateSession();
     setRail(false);
 
     const { container } = renderBar();
@@ -84,9 +84,9 @@ describe("TerminalTabBar — scoped rendering (WI-TS3.1)", () => {
   });
 
   it("re-renders the swap on a rail switch (store-driven)", () => {
-    useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" });
-    useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" });
-    useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-b" });
+    useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" });
+    useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" });
+    useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-b" });
     const { container } = renderBar();
     expect(tabCount(container)).toBe(2); // A's pair
 
@@ -99,7 +99,7 @@ describe("TerminalTabBar — scoped rendering (WI-TS3.1)", () => {
 
   it("isMaxed gates on the VISIBLE union: a full hidden scope frees nothing, an empty scope frees the +", () => {
     for (let i = 0; i < 5; i++) {
-      useUIStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" });
+      useTerminalStore.getState().terminalCreateSession({ ownerInstanceId: "wsi-a" });
     }
     const { container } = renderBar();
     const plus = () =>
@@ -119,7 +119,7 @@ describe("TerminalTabBar — scoped rendering (WI-TS3.1)", () => {
     );
     fireEvent.click(plus!);
 
-    const created = useUIStore.getState().terminal.sessions[0];
+    const created = useTerminalStore.getState().sessions[0];
     expect(created?.workspaceInstanceId).toBe("wsi-a");
   });
 });

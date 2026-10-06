@@ -11,8 +11,8 @@ use super::session::SessionData;
 /// A session as it came off disk, paired with WHICH file served it.
 ///
 /// `recovered_from_backup` is true when `session.json` could not be parsed,
-/// migrated or validated and `session.prev.json` was substituted (audit
-/// 20260803 §11). The substitution used to be silent, and silence is the
+/// migrated or validated and `session.prev.json` was substituted.
+/// The substitution used to be silent, and silence is the
 /// problem: it happens UPSTREAM of the frontend's salvage boundary, so the
 /// payload arriving there is perfectly valid, nothing is quarantined, and a
 /// successful restore clears both files — destroying the corrupt main bytes.
@@ -26,7 +26,7 @@ pub struct LoadedSession {
     /// FILE stood in. A lossy repair of the main file used to be reported as
     /// ordinary main data with the details only in the log, so a successful
     /// restore then deleted the original bytes and the dropped documents were
-    /// gone for good (audit 20260906, B5/B6). The frontend uses this the same
+    /// gone for good. The frontend uses this the same
     /// way it uses the backup flag: preserve the originals rather than clear
     /// them.
     pub lossy_repair: bool,

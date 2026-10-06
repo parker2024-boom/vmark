@@ -5,18 +5,18 @@
 //! renders into a VISIBLE window and hands control to the user, where export
 //! renders off-screen and completes on its own.
 //!
-//! Settles once the dialog has been SHOWN, with the outcome `unknown`
-//! (WI-FL6.3). `ICoreWebView2_16::ShowPrintUI` takes only the dialog kind and
+//! Settles once the dialog has been SHOWN, with the outcome `unknown`.
+//! `ICoreWebView2_16::ShowPrintUI` takes only the dialog kind and
 //! returns as soon as the UI is up: no completion handler, no status. The
 //! interface's `Print` and `PrintToPdf` do report a `COREWEBVIEW2_PRINT_STATUS`,
 //! but neither shows a dialog, so they cannot replace this. Windows is the one
 //! platform that cannot say what the user then chose; macOS and Linux can.
 //!
 //! The window, the one-shot navigation and every failure's cleanup are
-//! `windows_nav.rs`'s, shared with export (#236, #237, #238, #239): the
+//! `windows_nav.rs`'s, shared with export: the
 //! completion is matched by the navigation id its start reported, the sink
-//! is claimed before the UI is shown (#227), and a caller whose bounded wait
-//! ends before that claim closes the window (#227). This file keeps what is
+//! is claimed before the UI is shown, and a caller whose bounded wait
+//! ends before that claim closes the window. This file keeps what is
 //! print's own: showing the print UI once the document loaded.
 //!
 //! @coordinates-with windows_nav.rs — builds, navigates and hands over the loaded webview
@@ -76,6 +76,9 @@ fn start_print(
         Box::new(|core, app, label, sink| {
             let outcome = core
                 .cast::<ICoreWebView2_16>()
+                // SAFETY: `v` is a live `ICoreWebView2_16` (`cast` is a checked
+                // `QueryInterface`), called on its own UI thread with a valid
+                // dialog-kind constant.
                 .and_then(|v| unsafe { v.ShowPrintUI(COREWEBVIEW2_PRINT_DIALOG_KIND_BROWSER) })
                 .map_err(|e| com_error("ShowPrintUI", &e))
                 .map(|()| PrintOutcome::from_show_print_ui());

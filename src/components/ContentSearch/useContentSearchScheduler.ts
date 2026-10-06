@@ -56,7 +56,7 @@ export function useContentSearchScheduler({
   // Synced during render (not an effect) so an already-pending debounced search
   // reads the latest exclusions even after an exclusion-only re-render. Read only
   // at query-execution time inside the debounce, never during render. #1063
-  // eslint-disable-next-line react-hooks/refs
+  // eslint-disable-next-line react-hooks/refs -- render-synced latest value, read only inside the debounced search, never during render
   excludeFoldersRef.current = excludeFolders;
 
   useEffect(() => {

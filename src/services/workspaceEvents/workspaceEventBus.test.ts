@@ -6,13 +6,22 @@ import {
   createWorkspaceEventBus,
   type FsSourceDeps,
 } from "./workspaceEventBus";
-import type { SemanticWorkspaceEvent } from "./types";
+import type { RawFsChangeBatch, SemanticWorkspaceEvent } from "./types";
 
 const ev = (path: string): SemanticWorkspaceEvent => ({
   kind: "modified",
   path,
   rootPath: "/ws",
   selfWrite: false,
+});
+
+/** One watcher batch as Rust emits it: a single modify of `/ws/a.md` by default. */
+const modifyBatch = (over: Partial<RawFsChangeBatch> = {}): RawFsChangeBatch => ({
+  watchId: "main",
+  rootPath: "/ws",
+  changes: [{ kind: "modify", paths: ["/ws/a.md"] }],
+  rescan: false,
+  ...over,
 });
 
 describe("createWorkspaceEventBus", () => {
@@ -123,7 +132,7 @@ describe("attachFsSource", () => {
     const publish = vi.spyOn(bus, "publish").mockImplementation(() => {});
     await attachFsSource(bus, "main", deps);
 
-    fire({ watchId: "main", rootPath: "/ws", paths: ["/ws/a.md"], kind: "modify" });
+    fire(modifyBatch());
     expect(publish).toHaveBeenCalledWith([
       { kind: "modified", path: "/ws/a.md", rootPath: "/ws", selfWrite: false },
     ]);
@@ -135,7 +144,7 @@ describe("attachFsSource", () => {
     const publish = vi.spyOn(bus, "publish").mockImplementation(() => {});
     await attachFsSource(bus, "main", deps);
 
-    fire({ watchId: "other", rootPath: "/ws", paths: ["/ws/a.md"], kind: "modify" });
+    fire(modifyBatch({ watchId: "other" }));
     expect(publish).toHaveBeenCalledWith([]);
   });
 
@@ -146,11 +155,11 @@ describe("attachFsSource", () => {
     const publish = vi.spyOn(bus, "publish").mockImplementation(() => {});
     await attachFsSource(bus, "main", deps);
 
-    fire({ watchId: "main", rootPath: "/ws", paths: ["/ws/a.md"], kind: "modify" });
+    fire(modifyBatch());
     expect(publish).toHaveBeenLastCalledWith([]); // no workspace yet
 
     root = "/ws";
-    fire({ watchId: "main", rootPath: "/ws", paths: ["/ws/a.md"], kind: "modify" });
+    fire(modifyBatch());
     expect(publish).toHaveBeenLastCalledWith([
       { kind: "modified", path: "/ws/a.md", rootPath: "/ws", selfWrite: false },
     ]);
@@ -163,7 +172,7 @@ describe("attachFsSource", () => {
     const publish = vi.spyOn(bus, "publish").mockImplementation(() => {});
     await attachFsSource(bus, "main", { ...deps, suppress });
 
-    fire({ watchId: "main", rootPath: "/ws", paths: ["/ws/a.md"], kind: "modify" });
+    fire(modifyBatch());
     await Promise.resolve();
     await Promise.resolve();
 
@@ -182,12 +191,67 @@ describe("attachFsSource", () => {
     const publish = vi.spyOn(bus, "publish").mockImplementation(() => {});
     await attachFsSource(bus, "main", { ...deps, suppress });
 
-    fire({ watchId: "main", rootPath: "/ws", paths: ["/ws/a.md"], kind: "modify" });
+    fire(modifyBatch());
     await Promise.resolve();
     await Promise.resolve();
 
     expect(publish).toHaveBeenLastCalledWith([
       { kind: "modified", path: "/ws/a.md", rootPath: "/ws", selfWrite: false },
     ]);
+  });
+
+  // WI-RA11.1 — one watcher batch in, every change of it out, and a watcher
+  // that lost track of the tree is heard.
+  it("publishes every change of one watcher batch in a single publish", async () => {
+    const { deps, fire } = fakeDeps();
+    const bus = createWorkspaceEventBus(50);
+    const publish = vi.spyOn(bus, "publish").mockImplementation(() => {});
+    await attachFsSource(bus, "main", deps);
+
+    fire(
+      modifyBatch({
+        changes: [
+          { kind: "create", paths: ["/ws/a.md"] },
+          { kind: "modify", paths: ["/ws/b.md"] },
+        ],
+      }),
+    );
+
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(publish).toHaveBeenCalledWith([
+      { kind: "created", path: "/ws/a.md", rootPath: "/ws", selfWrite: false },
+      { kind: "modified", path: "/ws/b.md", rootPath: "/ws", selfWrite: false },
+    ]);
+  });
+
+  it("publishes a rescan event when the watcher lost track of the tree", async () => {
+    const { deps, fire } = fakeDeps();
+    const bus = createWorkspaceEventBus(50);
+    const publish = vi.spyOn(bus, "publish").mockImplementation(() => {});
+    await attachFsSource(bus, "main", deps);
+
+    fire(modifyBatch({ changes: [], rescan: true }));
+
+    expect(publish).toHaveBeenCalledWith([
+      { kind: "rescan", path: "/ws", rootPath: "/ws", selfWrite: false },
+    ]);
+  });
+
+  it("delivers a rescan to subscribers through the bus", async () => {
+    vi.useFakeTimers();
+    try {
+      const { deps, fire } = fakeDeps();
+      const bus = createWorkspaceEventBus(50);
+      const seen: SemanticWorkspaceEvent[][] = [];
+      bus.subscribe((events) => seen.push(events));
+      await attachFsSource(bus, "main", deps);
+
+      fire(modifyBatch({ changes: [], rescan: true }));
+      vi.advanceTimersByTime(50);
+
+      expect(seen).toEqual([[{ kind: "rescan", path: "/ws", rootPath: "/ws", selfWrite: false }]]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

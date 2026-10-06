@@ -35,7 +35,7 @@ export function useTiptapSettingsSync(
       | undefined;
     const storage = allStorage?.showInvisibles;
     // editor.storage is Tiptap's intentionally-mutable extension storage, not React state (#1063).
-    // eslint-disable-next-line react-hooks/immutability
+    // eslint-disable-next-line react-hooks/immutability -- editor.storage is Tiptap's mutable extension storage, not React state
     if (storage) storage.enabled = showInvisibles;
     // Force a rebuild via the plugin's helper (recognised by PluginKey identity).
     const view = editor.view;

@@ -1,12 +1,16 @@
 /**
  * Tests for sourcePeekInline extension — extension structure, plugin state
  * init/apply, widget factory, live preview, and re-exports.
+ *
+ * The real header builder and the real CodeMirror peek editor run: the widget
+ * is rendered, its buttons clicked, and its CodeMirror view edited and keyed.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Schema } from "@tiptap/pm/model";
 import { EditorState, Transaction } from "@tiptap/pm/state";
 import { DecorationSet } from "@tiptap/pm/view";
+import { EditorView as CMEditorView, runScopeHandlers } from "@codemirror/view";
 
 // Mock CSS
 vi.mock("./source-peek-inline.css", () => ({}));
@@ -40,18 +44,6 @@ vi.mock("@/services/editor/sourcePeek", () => ({
   getExpandedSourcePeekRange: (...args: unknown[]) => mockGetExpandedSourcePeekRange(...args),
 }));
 
-const mockCreateEditHeader = vi.fn(() => document.createElement("div"));
-vi.mock("./sourcePeekHeader", () => ({
-  createEditHeader: (...args: unknown[]) => mockCreateEditHeader(...args),
-}));
-
-const mockCreateCodeMirrorEditor = vi.fn(() => document.createElement("div"));
-const mockCleanupCMView = vi.fn();
-vi.mock("./sourcePeekEditor", () => ({
-  createCodeMirrorEditor: (...args: unknown[]) => mockCreateCodeMirrorEditor(...args),
-  cleanupCMView: (...args: unknown[]) => mockCleanupCMView(...args),
-}));
-
 const mockGetMarkdownOptions = vi.fn(() => ({}));
 const mockCommitSourcePeek = vi.fn();
 const mockRevertAndCloseSourcePeek = vi.fn();
@@ -64,6 +56,7 @@ vi.mock("./sourcePeekActions", () => ({
   revertAndCloseSourcePeek: (...args: unknown[]) => mockRevertAndCloseSourcePeek(...args),
 }));
 
+import { createCodeMirrorEditor } from "./sourcePeekEditor";
 import {
   sourcePeekInlineExtension,
   sourcePeekInlinePluginKey,
@@ -75,6 +68,34 @@ import {
 } from "./tiptap";
 
 // --- Helpers ---
+
+/** Wait until CodeMirror is live inside `root`, and return its view. */
+async function liveCodeMirror(root: HTMLElement): Promise<CMEditorView> {
+  await vi.waitFor(() => expect(root.querySelector(".cm-editor")).not.toBeNull(), { timeout: 5000 });
+  return CMEditorView.findFromDOM(root.querySelector(".cm-editor") as HTMLElement)!;
+}
+
+/** Mount a standalone peek editor (the module's single tracked CodeMirror view). */
+async function mountPeekEditor(): Promise<HTMLElement> {
+  const noop = () => undefined;
+  const container = createCodeMirrorEditor("x", noop, noop, noop);
+  document.body.appendChild(container);
+  await liveCodeMirror(container);
+  return container;
+}
+
+const peekEditorMounted = (root: HTMLElement) => root.querySelector(".cm-editor") !== null;
+
+/** Press a key combination inside a CodeMirror view, through its keymaps. */
+function pressKey(cm: CMEditorView, key: string, mod = false) {
+  const isMac = /Mac/.test(navigator.platform);
+  const event = new KeyboardEvent("keydown", {
+    key,
+    metaKey: mod && isMac,
+    ctrlKey: mod && !isMac,
+  });
+  return runScopeHandlers(cm, event, "editor");
+}
 
 const schema = new Schema({
   nodes: {
@@ -169,7 +190,8 @@ describe("plugin state apply", () => {
     mockStoreState.livePreview = false;
   });
 
-  it("returns empty decorations and cleans up when not open", () => {
+  it("returns empty decorations and cleans up when not open", async () => {
+    const peek = await mountPeekEditor();
     const plugin = getPlugin();
     const prevState = { decorations: DecorationSet.empty, editingPos: null };
     const editorState = EditorState.create({ doc: createDoc("hello"), schema, plugins: [plugin] });
@@ -178,10 +200,11 @@ describe("plugin state apply", () => {
     const result = applyPluginState(plugin, tr, prevState, editorState);
     expect(result.decorations).toBe(DecorationSet.empty);
     expect(result.editingPos).toBeNull();
-    expect(mockCleanupCMView).toHaveBeenCalled();
+    expect(peekEditorMounted(peek)).toBe(false);
   });
 
-  it("returns empty decorations when open but no range", () => {
+  it("returns empty decorations when open but no range", async () => {
+    const peek = await mountPeekEditor();
     mockStoreState.isOpen = true;
     mockStoreState.range = null;
 
@@ -192,7 +215,7 @@ describe("plugin state apply", () => {
 
     const result = applyPluginState(plugin, tr, prevState, editorState);
     expect(result.decorations).toBe(DecorationSet.empty);
-    expect(mockCleanupCMView).toHaveBeenCalled();
+    expect(peekEditorMounted(peek)).toBe(false);
   });
 
   it("creates decorations when open with range and editingChanged meta", () => {
@@ -312,17 +335,10 @@ describe("plugin state apply", () => {
       (d: { spec: { key?: string } }) => d.spec?.key?.startsWith("source-peek:")
     );
     const mockView = { state: editorState, dispatch: vi.fn() };
-    widgetDeco.type.toDOM(mockView);
+    const widgetEl = widgetDeco.type.toDOM(mockView) as HTMLElement;
 
-    // createEditHeader should have been called with "heading"
-    expect(mockCreateEditHeader).toHaveBeenCalledWith(
-      "heading",
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-      expect.anything()
-    );
+    // The header names the store's block type, not the node's own type
+    expect(widgetEl.querySelector(".source-peek-inline-block-type")?.textContent).toBe("Heading");
   });
 });
 
@@ -337,78 +353,60 @@ describe("widget factory callbacks", () => {
     mockStoreState.livePreview = false;
   });
 
-  function getWidgetFactory() {
-    const plugin = getPlugin();
-    const editorState = EditorState.create({ doc: createDoc("hello"), schema, plugins: [plugin] });
-    const tr = editorState.tr.setMeta("sourcePeekEditingChanged", true);
-    const prevState = { decorations: DecorationSet.empty, editingPos: null };
-
-    applyPluginState(plugin, tr, prevState, editorState);
-
-    // The widget factory is the second argument to Decoration.widget
-    // We need to extract the toDOM function from the created widget decoration
-    // The decorations should have a widget at position 0
-    // Since we can't directly access the factory, we verify through the mock calls
-    return { editorState };
-  }
-
-  it("passes markdown to createCodeMirrorEditor", () => {
-    getWidgetFactory();
-    // Widget factory isn't called until the decoration is rendered.
-    // But we can verify the arguments to createEditHeader
-    // The factory is deferred, so let's verify the plugin state was created correctly.
-    expect(mockCreateEditHeader).not.toHaveBeenCalled(); // Not called until rendered
+  afterEach(() => {
+    document.body.replaceChildren();
   });
 
-  it("CodeMirror onChange callback updates store and applies live preview", () => {
-    // To test the onChange callback, we need to capture it from createCodeMirrorEditor
-    let capturedOnChange: ((md: string) => void) | null = null;
-    mockCreateCodeMirrorEditor.mockImplementation(
-      (_md: string, _onCommit: () => void, _onRevert: () => void, onChange: (md: string) => void) => {
-        capturedOnChange = onChange;
-        return document.createElement("div");
-      }
-    );
-
+  /** Apply an editing-changed transaction and render the peek widget. */
+  function renderWidget() {
     const plugin = getPlugin();
     const editorState = EditorState.create({ doc: createDoc("hello"), schema, plugins: [plugin] });
     const tr = editorState.tr.setMeta("sourcePeekEditingChanged", true);
-    const prevState = { decorations: DecorationSet.empty, editingPos: null };
-
-    const result = applyPluginState(plugin, tr, prevState, editorState);
-
-    // Now render the widget decoration by finding it and calling toDOM
-    const decos = result.decorations.find();
-    const widgetDeco = decos.find(
+    const result = applyPluginState(plugin, tr, { decorations: DecorationSet.empty, editingPos: null }, editorState);
+    const widgetDeco = result.decorations.find().find(
       (d: { spec: { key?: string } }) => d.spec?.key?.startsWith("source-peek:")
     );
     expect(widgetDeco).toBeDefined();
+    const mockView = { state: editorState, dispatch: vi.fn() };
+    const widgetEl = widgetDeco.type.toDOM(mockView) as HTMLElement;
+    document.body.appendChild(widgetEl);
+    return { widgetEl, mockView };
+  }
 
-    // Call the widget factory with a mock view
-    const mockView = {
-      state: editorState,
-      dispatch: vi.fn(),
-    };
-    const widgetEl = widgetDeco.type.toDOM(mockView);
+  it("is lazy: no widget DOM exists until the decoration is rendered", () => {
+    const plugin = getPlugin();
+    const editorState = EditorState.create({ doc: createDoc("hello"), schema, plugins: [plugin] });
+    const tr = editorState.tr.setMeta("sourcePeekEditingChanged", true);
+    applyPluginState(plugin, tr, { decorations: DecorationSet.empty, editingPos: null }, editorState);
+
+    expect(document.querySelector(".source-peek-inline")).toBeNull();
+  });
+
+  it("loads the store's markdown into the CodeMirror editor", async () => {
+    const { widgetEl } = renderWidget();
     expect(widgetEl).toBeInstanceOf(HTMLDivElement);
     expect(widgetEl.className).toBe("source-peek-inline");
 
-    // Verify createCodeMirrorEditor was called
-    expect(mockCreateCodeMirrorEditor).toHaveBeenCalled();
+    const cm = await liveCodeMirror(widgetEl);
+    expect(cm.state.doc.toString()).toBe("hello");
+  });
 
-    // Test the onChange callback
-    expect(capturedOnChange).not.toBeNull();
+  it("CodeMirror onChange callback updates store and applies live preview", async () => {
+    const { widgetEl, mockView } = renderWidget();
+    const cm = await liveCodeMirror(widgetEl);
+    const replaceAll = (text: string) =>
+      cm.dispatch({ changes: { from: 0, to: cm.state.doc.length, insert: text } });
 
     // Without live preview
     mockStoreState.livePreview = false;
-    capturedOnChange!("new markdown");
+    replaceAll("new markdown");
     expect(mockStoreState.setMarkdown).toHaveBeenCalledWith("new markdown");
     expect(mockApplySourcePeekMarkdown).not.toHaveBeenCalled();
 
     // With live preview
     mockStoreState.livePreview = true;
     mockStoreState.range = { from: 0, to: 7 };
-    capturedOnChange!("updated md");
+    replaceAll("updated md");
     expect(mockStoreState.setMarkdown).toHaveBeenCalledWith("updated md");
     expect(mockApplySourcePeekMarkdown).toHaveBeenCalledWith(
       mockView,
@@ -420,107 +418,41 @@ describe("widget factory callbacks", () => {
     expect(mockSetState).toHaveBeenCalledWith({ range: { from: 0, to: 10 } });
   });
 
-  it("CodeMirror onCommit and onRevert callbacks call action functions", () => {
-    let capturedOnCommit: (() => void) | null = null;
-    let capturedOnRevert: (() => void) | null = null;
-    mockCreateCodeMirrorEditor.mockImplementation(
-      (_md: string, onCommit: () => void, onRevert: () => void) => {
-        capturedOnCommit = onCommit;
-        capturedOnRevert = onRevert;
-        return document.createElement("div");
-      }
-    );
+  it("Mod-Enter commits and Escape reverts from inside CodeMirror", async () => {
+    const { widgetEl, mockView } = renderWidget();
+    const cm = await liveCodeMirror(widgetEl);
 
-    const plugin = getPlugin();
-    const editorState = EditorState.create({ doc: createDoc("hello"), schema, plugins: [plugin] });
-    const tr = editorState.tr.setMeta("sourcePeekEditingChanged", true);
-
-    const result = applyPluginState(plugin, tr, { decorations: DecorationSet.empty, editingPos: null }, editorState);
-    const decos = result.decorations.find();
-    const widgetDeco = decos.find(
-      (d: { spec: { key?: string } }) => d.spec?.key?.startsWith("source-peek:")
-    );
-    const mockView = { state: editorState, dispatch: vi.fn() };
-    widgetDeco.type.toDOM(mockView);
-
-    expect(capturedOnCommit).not.toBeNull();
-    capturedOnCommit!();
+    expect(pressKey(cm, "Enter", true)).toBe(true);
     expect(mockCommitSourcePeek).toHaveBeenCalledWith(mockView);
 
-    expect(capturedOnRevert).not.toBeNull();
-    capturedOnRevert!();
+    expect(pressKey(cm, "Escape")).toBe(true);
     expect(mockRevertAndCloseSourcePeek).toHaveBeenCalledWith(mockView);
   });
 
-  it("live preview onChange skips when range is null", () => {
-    let capturedOnChange: ((md: string) => void) | null = null;
-    mockCreateCodeMirrorEditor.mockImplementation(
-      (_md: string, _onCommit: () => void, _onRevert: () => void, onChange: (md: string) => void) => {
-        capturedOnChange = onChange;
-        return document.createElement("div");
-      }
-    );
-
-    const plugin = getPlugin();
-    const editorState = EditorState.create({ doc: createDoc("hello"), schema, plugins: [plugin] });
-    const tr = editorState.tr.setMeta("sourcePeekEditingChanged", true);
-
-    const result = applyPluginState(plugin, tr, { decorations: DecorationSet.empty, editingPos: null }, editorState);
-
-    const decos = result.decorations.find();
-    const widgetDeco = decos.find(
-      (d: { spec: { key?: string } }) => d.spec?.key?.startsWith("source-peek:")
-    );
-    const mockView = { state: editorState, dispatch: vi.fn() };
-    widgetDeco.type.toDOM(mockView);
+  it("live preview onChange skips when range is null", async () => {
+    const { widgetEl } = renderWidget();
+    const cm = await liveCodeMirror(widgetEl);
 
     // Set live preview on but range is null
     mockStoreState.livePreview = true;
     mockStoreState.range = null;
 
-    capturedOnChange!("test");
+    cm.dispatch({ changes: { from: 0, to: cm.state.doc.length, insert: "test" } });
     expect(mockStoreState.setMarkdown).toHaveBeenCalledWith("test");
     expect(mockApplySourcePeekMarkdown).not.toHaveBeenCalled();
   });
 
-  it("header callbacks invoke commit and revert", () => {
-    let capturedRevert: (() => void) | null = null;
-    let capturedCommit: (() => void) | null = null;
-    let capturedToggle: (() => void) | null = null;
-    mockCreateEditHeader.mockImplementation(
-      (_name: string, _hasChanges: boolean, onRevert: () => void, onCommit: () => void, onToggle: () => void) => {
-        capturedRevert = onRevert;
-        capturedCommit = onCommit;
-        capturedToggle = onToggle;
-        return document.createElement("div");
-      }
-    );
+  it("header buttons revert, commit and toggle live preview", () => {
+    const { widgetEl, mockView } = renderWidget();
+    const header = widgetEl.querySelector(".source-peek-inline-header") as HTMLElement;
 
-    const plugin = getPlugin();
-    const editorState = EditorState.create({ doc: createDoc("hello"), schema, plugins: [plugin] });
-    const tr = editorState.tr.setMeta("sourcePeekEditingChanged", true);
-
-    const result = applyPluginState(plugin, tr, { decorations: DecorationSet.empty, editingPos: null }, editorState);
-    const decos = result.decorations.find();
-    const widgetDeco = decos.find(
-      (d: { spec: { key?: string } }) => d.spec?.key?.startsWith("source-peek:")
-    );
-    const mockView = { state: editorState, dispatch: vi.fn() };
-    widgetDeco.type.toDOM(mockView);
-
-    // Test revert callback
-    expect(capturedRevert).not.toBeNull();
-    capturedRevert!();
+    (header.querySelector(".vm-icon-btn--danger") as HTMLButtonElement).click();
     expect(mockRevertAndCloseSourcePeek).toHaveBeenCalledWith(mockView);
 
-    // Test commit callback
-    expect(capturedCommit).not.toBeNull();
-    capturedCommit!();
+    (header.querySelector(".vm-icon-btn--primary") as HTMLButtonElement).click();
     expect(mockCommitSourcePeek).toHaveBeenCalledWith(mockView);
 
-    // Test toggle callback
-    expect(capturedToggle).not.toBeNull();
-    capturedToggle!();
+    (header.querySelector(".source-peek-live-toggle") as HTMLButtonElement).click();
     expect(mockStoreState.toggleLivePreview).toHaveBeenCalled();
     expect(mockView.dispatch).toHaveBeenCalled();
   });
@@ -539,14 +471,14 @@ describe("plugin decorations prop", () => {
 });
 
 describe("plugin view destroy", () => {
-  it("calls cleanupCMView on destroy", () => {
+  it("tears down the peek editor on destroy", async () => {
+    const peek = await mountPeekEditor();
     const plugin = getPlugin();
     const viewSpec = plugin.spec.view!({} as never);
     expect(viewSpec.destroy).toBeDefined();
 
-    mockCleanupCMView.mockClear();
     viewSpec.destroy!();
-    expect(mockCleanupCMView).toHaveBeenCalled();
+    expect(peekEditorMounted(peek)).toBe(false);
   });
 });
 

@@ -16,12 +16,14 @@
  *   - "full-cycle" mode: straight -> curly -> corner -> guillemets -> straight
  *
  * @coordinates-with quotePairing.ts — analyzeQuotes for straight/curly pair detection
+ * @coordinates-with paragraphBreaks.ts — corner and guillemet pairs stay inside one paragraph
  * @coordinates-with settingsStore.ts — QuoteStyle type, quoteToggleMode setting
  * @module lib/cjkFormatter/quoteToggle
  */
 
 import type { QuoteStyle } from "@/stores/settingsStore";
 import { analyzeQuotes } from "./quotePairing";
+import { paragraphCrossings } from "./paragraphBreaks";
 
 // ============================================================================
 // Types
@@ -188,7 +190,10 @@ function findAllQuotePairs(text: string): FoundPair[] {
 
   for (const [open, close, type, style] of bracketSets) {
     const stack: number[] = [];
+    const crossed = paragraphCrossings(text);
     for (let i = 0; i < text.length; i++) {
+      // A pair never spans a paragraph break, as in analyzeQuotes.
+      if (crossed(i)) stack.length = 0;
       if (text[i] === open) {
         stack.push(i);
       } else if (text[i] === close && stack.length > 0) {

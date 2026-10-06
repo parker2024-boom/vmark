@@ -29,7 +29,7 @@ import { normalizeBrowserSettings, sanitizePersistedSettings } from "./persistGu
  * cross-window `[42, null, {}]` would otherwise reach the link-scheme allowlist
  * and the settings UI. Hydration filters these separately during its
  * default-union; doing it here means the storage-event route gets the same
- * guard (audit Medium-10). Mutates `merged` in place — it is freshly built by
+ * guard. Mutates `merged` in place — it is freshly built by
  * deepMerge, so this touches no shared object.
  */
 function filterCustomLinkProtocols(merged: Record<string, unknown>): void {

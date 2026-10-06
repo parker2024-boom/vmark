@@ -1,4 +1,4 @@
-//! Bounded preview read-view (Phase 3.0, WI-3.0a; design v4.4). The forward-
+//! Bounded preview read-view (Phase 3.0; design v4.4). The forward-
 //! operator preview must project only the edges INCIDENT to the changed object
 //! (`upstream ∪ downstream`), not the whole graph the full breakdown loads. This
 //! adds the targeted incident-edge query over the `edges_by_upstream` /
@@ -87,7 +87,7 @@ impl CoherenceIndex {
     /// The edges affected by a set of changed objects — the union of each
     /// object's incident edges, **deduplicated by physical identity**
     /// (`txf, input, downstream, downstream_rev`). This is the deterministic,
-    /// total object→edge half of the merge-audit mapping (Phase 5, SP4/WI-5.1):
+    /// total object→edge half of the merge-audit mapping (Phase 5, SP4):
     /// a completed merge's changed files map (via the registry) to changed
     /// objects, and thence here to the edges to re-check. Order is deterministic
     /// (sorted by physical identity).

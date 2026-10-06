@@ -1,5 +1,5 @@
 /**
- * browserActParse — `vmark.browser.act` arguments → ONE validated action (round 3, #38).
+ * browserActParse — `vmark.browser.act` arguments → ONE validated action.
  *
  * Purpose: the act handler used to validate four operations, four targeting
  * modes and their exclusions inline, in the same function that gated, resolved,

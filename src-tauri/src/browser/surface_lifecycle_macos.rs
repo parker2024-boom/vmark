@@ -1,4 +1,4 @@
-//! Native-view lifecycle for the browser surface (WI-S0.10 / WI-S0.11).
+//! Native-view lifecycle for the browser surface.
 //!
 //! `evict_existing` and `destroy` both tear a WKWebView out of the view hierarchy, and
 //! both are about the same hazard: a native view that outlives the thing that owned it.
@@ -7,7 +7,7 @@
 //!
 //! **The pairing invariant.** A tab is in `WEBVIEWS` if and only if it is in `DELEGATES`,
 //! and `create` registers the two together before anything can pump the run loop. That is
-//! not tidiness — teardown depends on it. Since WI-S0.11 the delegate is a **KVO observer**
+//! not tidiness — teardown depends on it. The delegate is a **KVO observer**
 //! on its webview's `URL`, and the only way to unregister an observer is through the object
 //! being observed. So `detach` must find the webview to reach the delegate's observation,
 //! and the delegate may only be dropped afterwards.
@@ -18,7 +18,7 @@
 //! That destroy found `DELEGATES` populated and `WEBVIEWS` empty, so it had nothing to
 //! unobserve through, skipped the unobserve, and dropped the delegate anyway — leaving a
 //! KVO observer dangling on a webview that was about to go live. The next URL change would
-//! message a freed object. (Audit verification round 2, finding 11.)
+//! message a freed object.
 
 use crate::browser::native_failure::NativeSurfaceError;
 use tauri::AppHandle;
@@ -26,7 +26,7 @@ use tauri::AppHandle;
 /// Remove any webview already registered under `tab_id` from the view hierarchy.
 ///
 /// Nothing normally hits this — `destroy` runs on unmount. It exists for the rapid
-/// switch-away-and-back race (WI-S0.10), where a second `create` for the same tab can
+/// switch-away-and-back race, where a second `create` for the same tab can
 /// land before the first `destroy`. Without it the superseded view is dropped from the
 /// map but never removed from its superview: a live page, invisible to us, still
 /// painting over the UI, with no handle left to tear it down.
@@ -34,7 +34,7 @@ pub(super) fn evict_existing(tab_id: &str) {
     super::WEBVIEWS.with(|m| {
         if let Some(old) = m.borrow_mut().remove(tab_id) {
             log::warn!(
-                "[browser] evicting a superseded webview for {tab_id} (create/destroy race)"
+                "[browser] evicting a superseded webview for {tab_id:?} (create/destroy race)"
             );
             detach(&old, tab_id);
             old.removeFromSuperview();
@@ -64,11 +64,13 @@ fn detach(webview: &objc2_web_kit::WKWebView, tab_id: &str) {
             // ever does, the delegate was dropped while still observing this webview and we
             // are one URL change away from messaging a freed object — say so.
             log::error!(
-                "[browser] {tab_id}: webview with no delegate — a KVO observer may be dangling"
+                "[browser] {tab_id:?}: webview with no delegate — a KVO observer may be dangling"
             );
         }
     });
     // Then the delegate itself, so no late callback fires against a half-destroyed view.
+    // SAFETY: a live webview on the main thread (it is a main-thread-only type);
+    // clearing a delegate to nil is always permitted.
     unsafe {
         webview.setNavigationDelegate(None);
         webview.setUIDelegate(None);

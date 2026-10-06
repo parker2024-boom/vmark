@@ -1,150 +1,81 @@
 /**
- * History Operations (Hooks Layer)
+ * History Operations
  *
  * Purpose: Async CRUD for document version history — creating snapshots,
  *   loading past versions, deleting individual snapshots, pruning old entries,
  *   and managing the index file.
  *
  * Pipeline: Save triggers → createSnapshot(filePath, content) → file size guard
- *   → merge window check → write to appDataDir/history/{hash}/ → update index.json
- *   → prune if over limit
+ *   → wait behind earlier operations on this document's history → merge window
+ *   check → write to appDataDir/history/{hash}/ → update index.json → prune if
+ *   over limit
  *
  * Key decisions:
- *   - Lives in hooks/ (not utils/) because it uses Tauri filesystem APIs
- *   - History stored in appDataDir, not alongside documents (portable)
- *   - Index file tracks metadata; actual content in numbered snapshot files
+ *   - Every exported operation runs on the document's history queue, reads
+ *     included. An operation is a read-modify-write of the index; two that
+ *     overlapped each started from the same list and the later write discarded
+ *     the earlier one's change — see historyQueue.ts
+ *   - The exported functions queue; the `*Step` functions below do not. A
+ *     composite operation (a snapshot prunes, a revert reads then snapshots) is
+ *     ONE queued operation built from steps, because a queued operation that
+ *     queued another and awaited it would wait for itself
+ *   - A revert reads its target BEFORE taking the safety snapshot. Taking it
+ *     prunes, and at the snapshot limit the prune removes the oldest entry —
+ *     the version being restored, if that was the one asked for
  *   - Pruning respects HistorySettings (max count, max age)
  *   - Merge window consolidates consecutive auto-saves into one snapshot
  *   - File size guard skips snapshots for oversized files before any I/O
  *
+ * @coordinates-with historyQueue.ts — orders operations per document
+ * @coordinates-with historyStorage.ts — paths, and the index/snapshot file steps
  * @coordinates-with historyTypes.ts — shared types and constants
- * @coordinates-with historyRecovery.ts — recovery of deleted document history
+ * @coordinates-with historyRecovery.ts — removal of whole histories
  * @module services/history/historyOperations
  */
 
-import {
-  mkdir,
-  exists,
-  readTextFile,
-  writeTextFile,
-  remove,
-} from "@tauri-apps/plugin-fs";
-import { appDataDir, join } from "@tauri-apps/api/path";
+import { mkdir, exists, writeTextFile, remove } from "@tauri-apps/plugin-fs";
+import { join } from "@tauri-apps/api/path";
+import i18n from "@/i18n";
 import { historyLog, historyError } from "@/utils/debug";
 import {
   type Snapshot,
   type HistoryIndex,
   type HistorySettings,
-  HISTORY_FOLDER,
-  INDEX_FILE,
+  createHistoryIndex,
   generatePreview,
   getByteSize,
-  getDocumentName,
   hashPath,
-  parseHistoryIndex,
 } from "@/utils/historyTypes";
+import { serializeHistory } from "./historyQueue";
+import {
+  getDocHistoryDir,
+  getHistoryBaseDir,
+  readHistoryIndex,
+  readSnapshot,
+  saveHistoryIndex,
+} from "./historyStorage";
 
 // Re-export types for consumers
 export type { Snapshot, HistoryIndex, HistorySettings };
 
-// Path helpers
+// Export the base dir getter for recovery operations
+export { getHistoryBaseDir };
+
+type SnapshotType = Snapshot["type"];
+
+// Steps — single-document work that assumes it already holds its turn in the
+// queue. Never exported: the queued operations below are the only way in.
 
 /**
- * Get the base history directory path (<app_data>/history/)
+ * Write one snapshot and its index entry, then prune.
  */
-async function getHistoryBaseDir(): Promise<string> {
-  const appDir = await appDataDir();
-  return join(appDir, HISTORY_FOLDER);
-}
-
-/**
- * Get the history directory for a specific document
- */
-async function getDocHistoryDir(documentPath: string): Promise<string> {
-  const baseDir = await getHistoryBaseDir();
-  const hash = await hashPath(documentPath);
-  return join(baseDir, hash);
-}
-
-/**
- * Ensure the history directory exists
- */
-async function ensureHistoryDir(documentPath: string): Promise<string> {
-  const historyDir = await getDocHistoryDir(documentPath);
-  if (!(await exists(historyDir))) {
-    await mkdir(historyDir, { recursive: true });
-  }
-  return historyDir;
-}
-
-// Index operations
-
-/**
- * Get or create the index for a document
- */
-export async function getHistoryIndex(
-  documentPath: string
-): Promise<HistoryIndex | null> {
-  try {
-    const historyDir = await getDocHistoryDir(documentPath);
-    const indexPath = await join(historyDir, INDEX_FILE);
-
-    if (!(await exists(indexPath))) {
-      return null;
-    }
-
-    const content = await readTextFile(indexPath);
-    const index = parseHistoryIndex(JSON.parse(content));
-    if (!index) {
-      historyError("Invalid index file format");
-      return null;
-    }
-    return index;
-  } catch (error) {
-    historyError("Failed to read index:", error);
-    return null;
-  }
-}
-
-/**
- * Save the history index
- */
-async function saveHistoryIndex(
-  documentPath: string,
-  index: HistoryIndex
-): Promise<void> {
-  const historyDir = await ensureHistoryDir(documentPath);
-  const indexPath = await join(historyDir, INDEX_FILE);
-  await writeTextFile(indexPath, JSON.stringify(index, null, 2));
-}
-
-// Snapshot operations
-
-/**
- * Create a new snapshot of the document
- */
-export async function createSnapshot(
+async function createSnapshotStep(
   documentPath: string,
   content: string,
-  type: "manual" | "auto" | "revert",
+  type: SnapshotType,
   settings: HistorySettings
 ): Promise<void> {
   try {
-    // File size guard — only for auto-saves; manual/revert always create a safety snapshot
-    if (type === "auto" && settings.maxFileSizeKB > 0) {
-      const sizeKB = getByteSize(content) / 1024;
-      if (sizeKB > settings.maxFileSizeKB) {
-        historyLog(
-          "Skipping snapshot — file size",
-          Math.round(sizeKB),
-          "KB exceeds limit",
-          settings.maxFileSizeKB,
-          "KB"
-        );
-        return;
-      }
-    }
-
     // Compute hash and ensure dir in one pass (avoids double hashPath)
     const baseDir = await getHistoryBaseDir();
     const hash = await hashPath(documentPath);
@@ -154,18 +85,9 @@ export async function createSnapshot(
     }
 
     // Get or create index
-    let index = await getHistoryIndex(documentPath);
-    if (!index) {
-      index = {
-        documentPath,
-        documentName: getDocumentName(documentPath),
-        pathHash: hash,
-        status: "active",
-        deletedAt: null,
-        snapshots: [],
-        settings,
-      };
-    }
+    const index =
+      (await readHistoryIndex(documentPath)) ??
+      createHistoryIndex(documentPath, hash, settings, i18n.t("common:untitled"));
 
     const timestamp = Date.now();
 
@@ -221,7 +143,7 @@ export async function createSnapshot(
     await saveHistoryIndex(documentPath, index);
 
     // Prune old snapshots
-    await pruneSnapshots(documentPath);
+    await pruneSnapshotsStep(documentPath);
 
     historyLog(`Created ${type} snapshot:`, snapshotId);
   } catch (error) {
@@ -231,64 +153,11 @@ export async function createSnapshot(
 }
 
 /**
- * Get list of snapshots for a document
+ * Remove snapshots past the age limit, then all but the newest `maxSnapshots`.
  */
-export async function getSnapshots(documentPath: string): Promise<Snapshot[]> {
-  const index = await getHistoryIndex(documentPath);
-  if (!index) return [];
-  // Return sorted by timestamp descending (newest first)
-  return [...index.snapshots].sort((a, b) => b.timestamp - a.timestamp);
-}
-
-/**
- * Load a specific snapshot's content
- */
-export async function loadSnapshot(
-  documentPath: string,
-  snapshotId: string
-): Promise<string | null> {
+async function pruneSnapshotsStep(documentPath: string): Promise<void> {
   try {
-    const historyDir = await getDocHistoryDir(documentPath);
-    const snapshotPath = await join(historyDir, `${snapshotId}.md`);
-
-    if (!(await exists(snapshotPath))) {
-      historyError("Snapshot not found:", snapshotId);
-      return null;
-    }
-
-    return await readTextFile(snapshotPath);
-  } catch (error) {
-    historyError("Failed to load snapshot:", error);
-    return null;
-  }
-}
-
-/**
- * Revert to a snapshot (creates a new snapshot of current state first)
- */
-export async function revertToSnapshot(
-  documentPath: string,
-  snapshotId: string,
-  currentContent: string,
-  settings: HistorySettings
-): Promise<string | null> {
-  // Save current state before reverting
-  await createSnapshot(documentPath, currentContent, "revert", settings);
-
-  // Load the target snapshot
-  return await loadSnapshot(documentPath, snapshotId);
-}
-
-/**
- * Clean up old snapshots based on settings
- *
- * Pruning strategy:
- * 1. Remove snapshots older than maxAgeDays
- * 2. Keep only the newest maxSnapshots from what remains
- */
-export async function pruneSnapshots(documentPath: string): Promise<void> {
-  try {
-    const index = await getHistoryIndex(documentPath);
+    const index = await readHistoryIndex(documentPath);
     if (!index || index.snapshots.length === 0) return;
 
     const { maxSnapshots, maxAgeDays } = index.settings;
@@ -332,14 +201,11 @@ export async function pruneSnapshots(documentPath: string): Promise<void> {
 }
 
 /**
- * Delete a single snapshot from a document's history
+ * Remove one snapshot's file and its index entry.
  */
-export async function deleteSnapshot(
-  documentPath: string,
-  snapshotId: string
-): Promise<void> {
+async function deleteSnapshotStep(documentPath: string, snapshotId: string): Promise<void> {
   try {
-    const index = await getHistoryIndex(documentPath);
+    const index = await readHistoryIndex(documentPath);
     if (!index) return;
 
     const snapshotIndex = index.snapshots.findIndex((s) => s.id === snapshotId);
@@ -365,5 +231,95 @@ export async function deleteSnapshot(
   }
 }
 
-// Export the base dir getter for recovery operations
-export { getHistoryBaseDir };
+// Queued operations — the public surface.
+
+/**
+ * Get the index for a document, or null if it has no readable history
+ */
+export function getHistoryIndex(documentPath: string): Promise<HistoryIndex | null> {
+  return serializeHistory(documentPath, () => readHistoryIndex(documentPath));
+}
+
+/**
+ * Create a new snapshot of the document
+ */
+export async function createSnapshot(
+  documentPath: string,
+  content: string,
+  type: SnapshotType,
+  settings: HistorySettings
+): Promise<void> {
+  // File size guard — only for auto-saves; manual/revert always create a safety snapshot
+  if (type === "auto" && settings.maxFileSizeKB > 0) {
+    const sizeKB = getByteSize(content) / 1024;
+    if (sizeKB > settings.maxFileSizeKB) {
+      historyLog(
+        "Skipping snapshot — file size",
+        Math.round(sizeKB),
+        "KB exceeds limit",
+        settings.maxFileSizeKB,
+        "KB"
+      );
+      return;
+    }
+  }
+
+  await serializeHistory(documentPath, () =>
+    createSnapshotStep(documentPath, content, type, settings)
+  );
+}
+
+/**
+ * Get list of snapshots for a document
+ */
+export function getSnapshots(documentPath: string): Promise<Snapshot[]> {
+  return serializeHistory(documentPath, async () => {
+    const index = await readHistoryIndex(documentPath);
+    if (!index) return [];
+    // Return sorted by timestamp descending (newest first)
+    return [...index.snapshots].sort((a, b) => b.timestamp - a.timestamp);
+  });
+}
+
+/**
+ * Load a specific snapshot's content
+ */
+export function loadSnapshot(documentPath: string, snapshotId: string): Promise<string | null> {
+  return serializeHistory(documentPath, () => readSnapshot(documentPath, snapshotId));
+}
+
+/**
+ * Revert to a snapshot: read it, snapshot the current state as a safety copy,
+ * and return the content to restore — or null when the target does not exist.
+ */
+export function revertToSnapshot(
+  documentPath: string,
+  snapshotId: string,
+  currentContent: string,
+  settings: HistorySettings
+): Promise<string | null> {
+  return serializeHistory(documentPath, async () => {
+    // Read first — see the header for why the order matters.
+    const restored = await readSnapshot(documentPath, snapshotId);
+    await createSnapshotStep(documentPath, currentContent, "revert", settings);
+    return restored;
+  });
+}
+
+/**
+ * Clean up old snapshots based on settings
+ *
+ * Pruning strategy:
+ * 1. Remove snapshots older than maxAgeDays
+ * 2. Keep only the newest maxSnapshots from what remains
+ */
+export function pruneSnapshots(documentPath: string): Promise<void> {
+  return serializeHistory(documentPath, () => pruneSnapshotsStep(documentPath));
+}
+
+/**
+ * Delete a single snapshot from a document's history
+ */
+export function deleteSnapshot(documentPath: string, snapshotId: string): Promise<void> {
+  return serializeHistory(documentPath, () => deleteSnapshotStep(documentPath, snapshotId));
+}

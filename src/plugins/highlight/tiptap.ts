@@ -1,3 +1,10 @@
+/**
+ * Highlight mark — the Tiptap extension that parses and renders highlighted
+ * text as `<mark>`.
+ *
+ * @module plugins/highlight/tiptap
+ */
+
 import { Mark, mergeAttributes } from "@tiptap/core";
 import "./highlight.css";
 

@@ -2,16 +2,27 @@
  * Group 4 — Dash and quote conversion / spacing rules.
  *
  * @coordinates-with quotePairing — stack-based contextual quote conversion
+ * @coordinates-with quoteClassification — the quote characters
+ * @coordinates-with paragraphBreaks — quotes pair inside one paragraph
  * @module lib/cjkFormatter/rules/dashesQuotes
  */
 
 import type { QuoteStyle } from "@/stores/settingsStore";
+import { CURLY_SINGLE_CLOSE, CURLY_SINGLE_OPEN } from "../quoteClassification";
+import { perParagraph } from "../paragraphBreaks";
 import {
-  CJK_NO_KOREAN,
+  CJK_LETTER_CLASS,
   CJK_CHARS_PATTERN,
   CJK_CLOSING_BRACKETS,
   CJK_OPENING_BRACKETS,
   CJK_TERMINAL_PUNCTUATION,
+  HAN_CLASS,
+  LATIN_ALNUM,
+  codePointAt,
+  codePointBefore,
+  isCJKLetter,
+  isHangulLetter,
+  replaceDelimited,
 } from "./shared";
 
 /**
@@ -25,17 +36,17 @@ export function convertDashes(text: string): string {
   // CJK on both sides
   const cjkBothPattern = new RegExp(
     `(${CJK_CHARS_PATTERN})[ \\t]*-{2,}[ \\t]*(${CJK_CHARS_PATTERN})`,
-    "g"
+    "gu"
   );
   // CJK on left, alphanumeric on right
   const cjkLeftPattern = new RegExp(
-    `(${CJK_CHARS_PATTERN})[ \\t]*-{2,}[ \\t]*([A-Za-z0-9])`,
-    "g"
+    `(${CJK_CHARS_PATTERN})[ \\t]*-{2,}[ \\t]*(${LATIN_ALNUM})`,
+    "gu"
   );
   // Alphanumeric on left, CJK on right
   const cjkRightPattern = new RegExp(
-    `([A-Za-z0-9])[ \\t]*-{2,}[ \\t]*(${CJK_CHARS_PATTERN})`,
-    "g"
+    `(${LATIN_ALNUM})[ \\t]*-{2,}[ \\t]*(${CJK_CHARS_PATTERN})`,
+    "gu"
   );
 
   const replacer = (_: string, before: string, after: string) => {
@@ -59,7 +70,7 @@ export function convertDashes(text: string): string {
  * the next line up.
  */
 export function fixEmdashSpacing(text: string): string {
-  return text.replace(/([^\s])[ \t]*——[ \t]*([^\s])/g, (_, before, after) => {
+  return text.replace(/([^\s])[ \t]*——[ \t]*([^\s])/gu, (_, before, after) => {
     // No space between closing brackets/quotes and ——
     const leftSpace = CJK_CLOSING_BRACKETS.includes(before) ? "" : " ";
     // No space between —— and opening brackets/quotes
@@ -71,32 +82,31 @@ export function fixEmdashSpacing(text: string): string {
 /**
  * Fix spacing around quotation marks (generic).
  *
- * A CJK letter is in BOTH no-space sets (WI-CJKF3.3). `“ ”` are fullwidth in
+ * A CJK letter is in BOTH no-space sets. `“ ”` are fullwidth in
  * CJK context — GB/T 15834 and JLREQ both give them their own sidebearing, and
  * the W3C's *Spacing between scripts inline* makes the same point structurally:
  * the gap belongs to the glyph, not to a character in the content. Without
  * this, `他说"你好"然后走了` came back as `他说 “你好” 然后走了`.
  *
  * Latin↔quote spacing is unaffected, which is the whole point of the rule.
- * Korean is excluded from `CJK_NO_KOREAN` and so was never spaced.
+ * Korean is not in `CJK_LETTER_CLASS` and so was never spaced.
  */
 function fixQuoteSpacing(
   text: string,
   openingQuote: string,
   closingQuote: string
 ): string {
-  const isCJKChar = new RegExp(`[${CJK_NO_KOREAN}]`);
   const noSpaceBefore = CJK_CLOSING_BRACKETS + CJK_TERMINAL_PUNCTUATION;
   const noSpaceAfter = CJK_OPENING_BRACKETS + CJK_TERMINAL_PUNCTUATION;
 
   // Add space before opening quote if preceded by alphanumeric/CJK
   text = text.replace(
     new RegExp(
-      `([A-Za-z0-9${CJK_NO_KOREAN}${CJK_CLOSING_BRACKETS}${CJK_TERMINAL_PUNCTUATION}]|——)${openingQuote}`,
-      "g"
+      `(${LATIN_ALNUM}|[${CJK_LETTER_CLASS}${CJK_CLOSING_BRACKETS}${CJK_TERMINAL_PUNCTUATION}]|——)${openingQuote}`,
+      "gu"
     ),
     (_, before) => {
-      if (noSpaceBefore.includes(before) || isCJKChar.test(before)) {
+      if (noSpaceBefore.includes(before) || isCJKLetter(before)) {
         return `${before}${openingQuote}`;
       }
       return `${before} ${openingQuote}`;
@@ -106,11 +116,11 @@ function fixQuoteSpacing(
   // Add space after closing quote if followed by alphanumeric/CJK
   text = text.replace(
     new RegExp(
-      `${closingQuote}([A-Za-z0-9${CJK_NO_KOREAN}${CJK_OPENING_BRACKETS}${CJK_TERMINAL_PUNCTUATION}]|——)`,
-      "g"
+      `${closingQuote}(${LATIN_ALNUM}|[${CJK_LETTER_CLASS}${CJK_OPENING_BRACKETS}${CJK_TERMINAL_PUNCTUATION}]|——)`,
+      "gu"
     ),
     (_, after) => {
-      if (noSpaceAfter.includes(after) || isCJKChar.test(after)) {
+      if (noSpaceAfter.includes(after) || isCJKLetter(after)) {
         return `${closingQuote}${after}`;
       }
       return `${closingQuote} ${after}`;
@@ -160,11 +170,19 @@ const QUOTE_STYLES: Record<QuoteStyle, {
  * - "text" → "text" (or 「text」 or «text»)
  * - 'text' → 'text' (or 『text』 or ‹text›)
  * - Preserves apostrophes in contractions (don't, it's)
+ *
+ * Each paragraph is converted on its own: a pair never spans a paragraph
+ * break, and the open/close parity next to CJK restarts in each one.
  */
 export function convertStraightToSmartQuotes(text: string, style: QuoteStyle): string {
+  return perParagraph(text, (paragraph) => convertParagraphQuotes(paragraph, style));
+}
+
+/** `convertStraightToSmartQuotes` within one paragraph. */
+function convertParagraphQuotes(text: string, style: QuoteStyle): string {
   const quotes = QUOTE_STYLES[style];
-  // CJK character pattern for context checks
-  const CJK_CHAR = /[\u4e00-\u9fff\u3400-\u4dbf\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/;
+  // Quote parity is tracked next to any CJK script, Korean included.
+  const isCJKContext = (ch: string): boolean => isCJKLetter(ch) || isHangulLetter(ch);
 
   // Track quote parity for CJK context (odd=opening, even=closing)
   let cjkQuoteCount = 0;
@@ -173,19 +191,20 @@ export function convertStraightToSmartQuotes(text: string, style: QuoteStyle): s
   // Opening: after whitespace, start of line/string, or opening brackets
   // Closing: after word characters, punctuation, or before whitespace/end
   text = text.replace(/"/g, (_, offset) => {
-    const before = offset > 0 ? text[offset - 1] : "";
-    const after = offset < text.length - 1 ? text[offset + 1] : "";
+    // Whole code points: a supplementary-plane Han neighbour is one character.
+    const before = codePointBefore(text, offset);
+    const after = codePointAt(text, offset + 1);
 
     // Opening quote: at start, after whitespace, or after opening brackets
     if (offset === 0 || /[\s([{「『《【〈]/.test(before)) {
       return quotes.doubleOpen;
     }
     // CJK before quote: use parity tracking and context hints
-    if (CJK_CHAR.test(before)) {
+    if (isCJKContext(before)) {
       cjkQuoteCount++;
       // Odd count = opening, even count = closing
       // But also check context: if followed by punctuation/end, definitely closing
-      if (!/[\s\w]/.test(after) && !CJK_CHAR.test(after)) {
+      if (!/[\s\w]/.test(after) && !isCJKContext(after)) {
         // Followed by punctuation or end - closing quote
         return quotes.doubleClose;
       }
@@ -209,7 +228,7 @@ export function convertStraightToSmartQuotes(text: string, style: QuoteStyle): s
 
   // Also handle single quotes after CJK characters
   text = text.replace(
-    new RegExp(`([${CJK_NO_KOREAN}])'([^']*?)'`, "g"),
+    new RegExp(`([${CJK_LETTER_CLASS}])'([^']*?)'`, "gu"),
     (_, before, content) => `${before}${quotes.singleOpen}${content}${quotes.singleClose}`
   );
 
@@ -221,27 +240,30 @@ export function convertStraightToSmartQuotes(text: string, style: QuoteStyle): s
 
 /**
  * Convert curly double quotes to CJK corner quotes when quoting CJK text.
- * "中文内容" → 「中文内容」
+ * "中文内容" → 「中文内容」. A pair never spans a paragraph break.
  */
 export function convertToCJKCornerQuotes(text: string): string {
   // Match "content" where content contains CJK
-  return text.replace(
-    /\u201c([^\u201d]*[\u4e00-\u9fff][^\u201d]*)\u201d/g,
+  return perParagraph(text, (paragraph) => paragraph.replace(
+    new RegExp(`\u201c([^\u201d]*[${HAN_CLASS}][^\u201d]*)\u201d`, "gu"),
     "「$1」"
-  );
+  ));
 }
 
 /**
  * Convert nested single quotes to corner brackets inside corner quotes.
- * 「text 'nested' text」 → 「text『nested』text」
+ * 「text 'nested' text」 → 「text『nested』text」. Neither pair spans a
+ * paragraph break.
  */
 export function convertNestedCornerQuotes(text: string): string {
   // Only convert single quotes inside corner quotes
-  return text.replace(/「([^」]*)」/g, (_, content) => {
-    const converted = content.replace(
-      /\u2018([^\u2019]*)\u2019/g,
-      "『$1』"
-    );
-    return `「${converted}」`;
-  });
+  return perParagraph(text, (paragraph) =>
+    replaceDelimited(
+      paragraph,
+      "「",
+      "」",
+      (content) =>
+        `「${replaceDelimited(content, CURLY_SINGLE_OPEN, CURLY_SINGLE_CLOSE, (inner) => `『${inner}』`)}」`
+    )
+  );
 }

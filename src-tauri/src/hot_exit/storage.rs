@@ -7,7 +7,7 @@ use super::session::SessionData;
 use super::validation::validate_and_repair;
 use std::fs::File;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::Manager;
 use tempfile::NamedTempFile;
 
@@ -74,76 +74,88 @@ pub async fn write_session_atomic(
     }
 
     // Perform all blocking I/O in spawn_blocking to avoid blocking async executor
-    tokio::task::spawn_blocking(move || {
-        // Write to temporary file in same directory (ensures same filesystem)
-        let tmp_dir = session_path.parent().ok_or("Session path has no parent")?;
-        let mut tmp_file = NamedTempFile::new_in(tmp_dir)
-            .map_err(|e| format!("Failed to create temp file: {}", e))?;
-
-        tmp_file
-            .write_all(json.as_bytes())
-            .map_err(|e| format!("Failed to write temp file: {}", e))?;
-
-        // Flush to disk (critical for durability)
-        tmp_file
-            .flush()
-            .map_err(|e| format!("Failed to flush temp file: {}", e))?;
-
-        tmp_file
-            .as_file()
-            .sync_all()
-            .map_err(|e| format!("Failed to sync temp file: {}", e))?;
-
-        // Backup existing session atomically (tmp + rename) to prevent
-        // a corrupt backup if the app crashes mid-write.
-        // Ignore NotFound errors — no existing session to backup is fine.
-        match std::fs::read(&session_path) {
-            Ok(existing_data) => {
-                let backup_dir = backup_path.parent().ok_or("Backup path has no parent")?;
-                let mut backup_tmp = NamedTempFile::new_in(backup_dir)
-                    .map_err(|e| format!("Failed to create backup temp file: {}", e))?;
-                backup_tmp
-                    .write_all(&existing_data)
-                    .map_err(|e| format!("Failed to write backup temp file: {}", e))?;
-                backup_tmp
-                    .flush()
-                    .map_err(|e| format!("Failed to flush backup temp file: {}", e))?;
-                backup_tmp
-                    .as_file()
-                    .sync_all()
-                    .map_err(|e| format!("Failed to sync backup temp file: {}", e))?;
-                backup_tmp
-                    .persist(&backup_path)
-                    .map_err(|e| format!("Failed to persist backup: {}", e))?;
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                // No existing session to backup - this is fine
-            }
-            Err(e) => return Err(format!("Failed to read session for backup: {}", e)),
-        }
-
-        // Atomic rename (overwrites existing session.json)
-        tmp_file
-            .persist(&session_path)
-            .map_err(|e| format!("Failed to persist session: {}", e))?;
-
-        // Sync parent directory to ensure directory entry is persisted
-        // Critical for crash safety - ensures the file appears in directory after crash
-        if let Some(parent) = session_path.parent() {
-            if let Ok(dir) = File::open(parent) {
-                let _ = dir.sync_all(); // Best effort - ignore errors on non-Unix systems
-            }
-        }
-
-        Ok(())
-    })
-    .await
-    .map_err(|e| format!("Task join error: {}", e))??;
+    tokio::task::spawn_blocking(move || write_session_files(&session_path, &backup_path, &json))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))??;
 
     // Record only after the spawn_blocking write succeeded — otherwise a real
     // change could be silently lost if the next call sees the same content
     // as a partially-failed earlier attempt.
     dedup::record_written(payload_hash);
+    Ok(())
+}
+
+/// The blocking core of [`write_session_atomic`], over plain paths: write
+/// `json` to a temp file beside `session_path` and sync it, rotate the current
+/// session (if any) into `backup_path` the same way, then rename the temp file
+/// over the session. Every failure returns before the rename, and a
+/// `NamedTempFile` that is not persisted removes itself, so a failed write
+/// leaves the previous session in place and no temp file behind.
+pub(super) fn write_session_files(
+    session_path: &Path,
+    backup_path: &Path,
+    json: &str,
+) -> Result<(), String> {
+    // Write to temporary file in same directory (ensures same filesystem)
+    let tmp_dir = session_path.parent().ok_or("Session path has no parent")?;
+    let mut tmp_file =
+        NamedTempFile::new_in(tmp_dir).map_err(|e| format!("Failed to create temp file: {}", e))?;
+
+    tmp_file
+        .write_all(json.as_bytes())
+        .map_err(|e| format!("Failed to write temp file: {}", e))?;
+
+    // Flush to disk (critical for durability)
+    tmp_file
+        .flush()
+        .map_err(|e| format!("Failed to flush temp file: {}", e))?;
+
+    tmp_file
+        .as_file()
+        .sync_all()
+        .map_err(|e| format!("Failed to sync temp file: {}", e))?;
+
+    // Backup existing session atomically (tmp + rename) to prevent
+    // a corrupt backup if the app crashes mid-write.
+    // Ignore NotFound errors — no existing session to backup is fine.
+    match std::fs::read(session_path) {
+        Ok(existing_data) => {
+            let backup_dir = backup_path.parent().ok_or("Backup path has no parent")?;
+            let mut backup_tmp = NamedTempFile::new_in(backup_dir)
+                .map_err(|e| format!("Failed to create backup temp file: {}", e))?;
+            backup_tmp
+                .write_all(&existing_data)
+                .map_err(|e| format!("Failed to write backup temp file: {}", e))?;
+            backup_tmp
+                .flush()
+                .map_err(|e| format!("Failed to flush backup temp file: {}", e))?;
+            backup_tmp
+                .as_file()
+                .sync_all()
+                .map_err(|e| format!("Failed to sync backup temp file: {}", e))?;
+            backup_tmp
+                .persist(backup_path)
+                .map_err(|e| format!("Failed to persist backup: {}", e))?;
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // No existing session to backup - this is fine
+        }
+        Err(e) => return Err(format!("Failed to read session for backup: {}", e)),
+    }
+
+    // Atomic rename (overwrites existing session.json)
+    tmp_file
+        .persist(session_path)
+        .map_err(|e| format!("Failed to persist session: {}", e))?;
+
+    // Sync parent directory to ensure directory entry is persisted
+    // Critical for crash safety - ensures the file appears in directory after crash
+    if let Some(parent) = session_path.parent() {
+        if let Ok(dir) = File::open(parent) {
+            let _ = dir.sync_all(); // Best effort - ignore errors on non-Unix systems
+        }
+    }
+
     Ok(())
 }
 
@@ -168,7 +180,10 @@ pub(super) fn finalize_session(mut session: SessionData) -> Result<Option<Sessio
     }
     let warnings = validate_and_repair(&mut session);
     for warning in &warnings {
-        log::warn!("[HotExit] Session repair: {}", warning);
+        log::warn!(
+            "[HotExit] Session repair: {}",
+            crate::peer_text::peer_message(warning)
+        );
     }
     Ok(Some(session))
 }
@@ -216,7 +231,6 @@ pub(super) async fn delete_session_files(
     Ok(())
 }
 
-// No sibling test file: every test that lived here followed the read ladder
-// into `read_session.rs` when this file was split for the size gate. What
-// remains — path resolution, the atomic write, deletion — is covered through
-// `read_session.test.rs`, which drives them end to end.
+#[cfg(test)]
+#[path = "storage.test.rs"]
+mod tests;

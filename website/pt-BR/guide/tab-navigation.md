@@ -2,6 +2,8 @@
 
 As teclas Tab e Shift+Tab do VMark são sensíveis ao contexto — elas ajudam você a navegar eficientemente por texto formatado, parênteses e links sem precisar das teclas de seta.
 
+> Com o [trilho de workspaces](/pt-BR/guide/workspace-rail) experimental, a alternância entre abas e a faixa de abas abrangem apenas as abas do workspace ativo.
+
 ## Visão Geral Rápida
 
 | Contexto | Ação do Tab | Ação do Shift+Tab |
@@ -12,7 +14,7 @@ As teclas Tab e Shift+Tab do VMark são sensíveis ao contexto — elas ajudam v
 | Dentro de **negrito**, *itálico*, `código`, ~~tachado~~ | Pular após a formatação | Pular antes da formatação |
 | Dentro de um link | Pular após o link | Pular antes do link |
 | Em uma célula de tabela | Mover para a próxima célula | Mover para a célula anterior |
-| Em um item de lista | Indentar o item | Desindentar o item |
+| Em um item de lista | Indentar o item | Desindentar o item (para no nível mais externo) |
 
 ## Escape de Parênteses e Aspas
 
@@ -227,7 +229,7 @@ This is **bold**| text
 ```
 
 ::: info
-O modo Fonte não tem escape Shift+Tab para caracteres markdown — Shift+Tab apenas desindentar (remove espaços iniciais).
+O modo Fonte não tem escape Shift+Tab para caracteres markdown — Shift+Tab apenas desindenta (remove espaços iniciais).
 :::
 
 ## Modo Fonte: Auto-Emparelhamento
@@ -267,6 +269,10 @@ Quando o cursor estiver em um item de lista:
 |------|-------|
 | Indentar item | Tab |
 | Desindentar item | Shift + Tab |
+
+Desindentar remove um nível de aninhamento e **para no nível mais externo** — o
+item não é tirado da lista. Para sair de uma lista por completo, use **Remover
+lista** ou pressione o botão de lista novamente para desativá-la.
 
 ## Configurações
 
@@ -368,6 +374,114 @@ A inserção de auto-emparelhamento também é desabilitada dentro de blocos de 
 
 3. **Estruturas aninhadas** — Tab escapa um nível por vez. Para `((aninhado))`, você precisa de dois Tabs para sair completamente.
 
-4. **Shift + Tab** — O espelho do Tab. Escapa para trás das marcas, links e parênteses de abertura. Em tabelas, move para a célula anterior. Em listas, desindentar o item.
+4. **Shift + Tab** — O espelho do Tab. Escapa para trás das marcas, links e parênteses de abertura. Em tabelas, move para a célula anterior. Em listas, desindenta o item.
 
 5. **Múltiplos cursores** — O escape do Tab funciona com todos os seus cursores simultaneamente, tornando as edições em massa ainda mais rápidas.
+
+## Alternando entre abas abertas
+
+As abas ficam na barra de status, na parte inferior da janela. Há três formas de
+se mover entre elas:
+
+| Ação | Atalho | Observações |
+|---|---|---|
+| Última aba usada | `Ctrl + Tab` | Vai para a aba em que você estava antes desta. Pressione de novo para voltar direto. |
+| Próxima aba / Aba anterior | `Mod + Shift + ]` / `Mod + Shift + [` | Percorre a faixa em ordem, independentemente do que você usou recentemente. |
+| Abertura rápida | `Mod + O` | Digite para filtrar. As abas abertas são listadas primeiro, com as usadas mais recentemente no topo. |
+
+**Última aba usada é uma alternância, não um ciclo.** Ela leva você ao documento
+em que esteve mais recentemente, e pressioná-la uma segunda vez devolve você ao
+ponto de partida — a forma rápida de trabalhar entre dois arquivos. Próxima aba e
+Aba anterior percorrem a faixa por posição, que é o que você quer quando está
+procurando algo, e não voltando a ele.
+
+Ela é um item de menu além de um atalho (**Visualizar → Última aba usada**), e é
+isso que permite que continue funcionando enquanto o navegador embutido está com
+o foco do teclado.
+
+### Quando há mais abas do que cabem
+
+A faixa de abas rola. Quando há abas além de uma das bordas, a faixa esmaece
+nessa borda e aparece uma pequena seta — clique nela para rolar uma tela. Trocar
+de aba por qualquer meio também rola a nova aba para a área visível, então a aba
+destacada nunca fica escondida fora da tela.
+
+A própria faixa é acessível pelo teclado: chegue até ela com Tab e use as teclas
+de seta.
+
+## Dois documentos lado a lado
+
+**Visualizar → Dividir editor — dois documentos** (`Alt + Mod + \`) coloca um
+segundo documento ao lado do atual. Para escolher qual documento, clique com o
+botão direito em qualquer aba e escolha **Abrir ao lado**.
+
+| Ação | Atalho |
+|---|---|
+| Dividir editor — dois documentos | `Alt + Mod + \` |
+| Fechar painel | `Alt + Mod + Shift + \` |
+| Focar o outro painel | `Alt + Mod + Shift + O` |
+| Sincronizar rolagem | *(sem padrão)* |
+
+Como ela se comporta:
+
+- A aba exibida no **outro** painel é marcada na faixa de abas com um sublinhado
+  discreto, para que você sempre saiba quais dois documentos estão na tela e em
+  qual deles sua digitação vai entrar.
+- **Fechar um dos dois recolhe a divisão para o outro**, em vez de levar você a
+  uma aba sem relação. O documento restante continua onde está.
+- **Sincronizar rolagem** une proporcionalmente a rolagem dos dois painéis. Fica
+  desativada por padrão e vale por divisão.
+- Dividir requer dois documentos abertos. Abas do navegador não são documentos,
+  então a divisão não se aplica a elas.
+
+## O menu de contexto da aba
+
+Clique com o botão direito em uma aba para abrir seu menu. As teclas de seta, Home e End percorrem o menu; Enter ou Espaço executa um item; Escape o fecha.
+
+| Item | O que faz | Disponível quando |
+|---|---|---|
+| Mover para nova janela | Move a aba para uma nova janela, com um **Desfazer** na confirmação. Uma janela secundária que fica vazia é fechada. | O documento está carregado e não é a única aba da janela principal |
+| Fixar / Desafixar | Fixa ou desafixa a aba — veja [Abas fixadas](#abas-fixadas). | Sempre |
+| Abrir ao lado | Mostra a aba no outro painel da divisão — veja [Dois documentos lado a lado](#dois-documentos-lado-a-lado). | Esta aba e a ativa são documentos, e esta não é a aba ativa (não aparece para abas do navegador) |
+| Renomear | Renomeia o arquivo diretamente na aba — veja [Renomeando um arquivo](#renomeando-um-arquivo). | O documento já foi salvo |
+| Copiar caminho | Copia o caminho absoluto do arquivo. | O documento já foi salvo |
+| Copiar caminho relativo | Copia o caminho relativo à pasta do workspace. | Há um workspace aberto e o arquivo está dentro dele |
+| Mostrar no Finder | Mostra o arquivo no Finder (**Mostrar no Explorador** no Windows, **Mostrar no gerenciador de arquivos** no Linux). | O documento já foi salvo |
+| Restaurar no disco | Grava o conteúdo da aba de volta no seu caminho. | O arquivo foi excluído do disco enquanto estava aberto |
+| Reverter para a versão salva | Após uma confirmação, descarta suas alterações e recarrega o arquivo do disco. | A aba tem alterações não salvas e seu arquivo ainda existe |
+| Fechar | Fecha a aba (pergunta se deseja salvar antes, se houver alterações não salvas). | A aba não está fixada |
+| Fechar outras | Fecha todas as outras abas não fixadas. | Existe outra aba não fixada |
+| Fechar guias à direita | Fecha as abas não fixadas à sua direita. | Existe alguma |
+| Fechar guias não fixadas | Fecha todas as abas não fixadas, inclusive esta. | Existe uma aba não fixada |
+| Fechar todas | Fecha todas as abas, inclusive as fixadas. Se alguma aba fixada for ser fechada, primeiro pede confirmação e informa quantas são; cancelar não fecha nada. | Sempre |
+
+Os fechamentos em massa atuam sobre as abas do workspace atual e as fecham uma de cada vez. Cada aba com alterações não salvas pergunta antes, e cancelar qualquer uma dessas perguntas interrompe o restante.
+
+## Abas fixadas
+
+Fixe uma aba pelo menu de contexto para mantê-la à mão:
+
+- Ela vai para o grupo de abas fixadas à esquerda da faixa, mostra um ícone de alfinete e perde o botão de fechar. Abas não podem ser arrastadas pela fronteira entre abas fixadas e não fixadas (*"As abas fixadas permanecem à esquerda. Soltura bloqueada."*), e uma aba fixada não pode ser arrastada para fora da sua janela.
+- Ela não pode ser fechada por nenhum meio — `Mod + W`, clique do meio, **Fechar** ou um fechamento em massa — até que você a desafixe; tentar mostra *"Desafixe antes de fechar"*. Dois fechamentos deliberados são a exceção: **Fechar todas** também fecha as abas fixadas depois que você confirma, e fechar um espaço de trabalho pela barra fecha as abas fixadas dele junto com as demais.
+- Fechar uma janela que contém abas fixadas pede confirmação — *"Esta janela tem N abas fixadas. Fechar mesmo assim?"* — a menos que uma caixa de diálogo de salvamento já tenha sido exibida.
+- A fixação sobrevive a mover a aba para outra janela ou workspace e a uma reinicialização de atualização, mas não a sair do VMark: as abas reabertas na próxima inicialização ficam desafixadas.
+
+Não há atalho de teclado para fixar.
+
+## Renomeando um arquivo
+
+Escolha **Renomear** no menu de contexto de uma aba. O nome fica editável na aba, com a parte antes da extensão selecionada. Enter ou clicar fora confirma; Escape cancela. O arquivo é renomeado no disco e todas as abas abertas que apontam para ele acompanham. O VMark nunca sobrescreve: se o nome já estiver em uso, uma caixa de diálogo diz *Já existe um arquivo chamado "X".* Um nome vazio, inalterado, `.` ou `..`, ou que contenha `/` ou `\` é recusado ou ignorado. O que você digita é o nome inteiro — apague a extensão e o arquivo fica sem ela.
+
+No **macOS**, com **Configurações → Aparência → Mostrar nome do arquivo na barra de título** ativado, você também pode dar um clique duplo no nome do arquivo na barra de título para renomeá-lo. As mesmas regras e mensagens se aplicam; depois de uma colisão ou de um erro o nome continua editável para você tentar outro. Se **Mostrar extensões de arquivo** estiver desativado, a extensão original é mantida quando você digita um nome sem extensão. Um clique duplo no título de um documento não salvo abre **Salvar** em vez disso.
+
+## Fechando abas e janelas
+
+Nada com alterações não salvas é fechado sem perguntar.
+
+- **Fechar uma aba** com alterações não salvas (`Mod + W`, o × da aba ou **Fechar**) pergunta *"Deseja salvar as alterações em …?"* com **Salvar**, **Não salvar** e **Cancelar**. **Salvar** em um documento nunca salvo abre uma caixa de diálogo de salvamento na sua pasta padrão de salvamento, com o título da aba como nome sugerido. Cancelar essa caixa de diálogo, ou uma falha ao salvar, mantém a aba aberta.
+- **Fechar uma janela** com um documento não salvo faz a mesma pergunta. Com dois ou mais, uma única caixa de diálogo lista todos — documentos nunca salvos são marcados como *(novo)* — com **Salvar tudo**, **Não salvar** e **Cancelar**.
+- **Salvar tudo** salva todos os documentos que têm um arquivo. Para documentos nunca salvos, pede um local: uma caixa de diálogo de salvamento se houver um, ou **um seletor de pasta** para vários (*"Escolher pasta para N novos documentos"*). Cada um é então salvo nessa pasta com o seu título, e um nome que já esteja em uso recebe um número (`Untitled 2.md`), então nada é sobrescrito.
+- **Sair** (`Mod + Q`) executa a mesma verificação em todas as janelas, uma janela por vez; cancelar em qualquer janela cancela a saída. Com **Configurações → Arquivos e imagens → Confirmar ao sair** ativado (o padrão), o primeiro toque apenas mostra *"Pressione ⌘Q novamente para sair"* — pressione de novo em até dois segundos. Uma saída vinda do sistema operacional (um desligamento, por exemplo) dispensa o toque duplo.
+- **Salvar tudo e sair** salva os documentos não salvos de todas as janelas sem a caixa de diálogo — ainda perguntando onde colocar os nunca salvos (uma caixa de salvar, ou um seletor de pasta para vários, na janela que os contém) — e então sai. Se um documento não puder ser salvo, ou se você cancelar essa caixa de diálogo, a saída é interrompida: essa janela continua aberta e um salvamento que falhou informa o motivo.
+
+No macOS, o VMark continua em execução depois que sua última janela é fechada; no Windows e no Linux, fechar a última janela sai do aplicativo — a menos que, no Windows, **Configurações → Arquivos e imagens → Minimizar para a bandeja ao fechar** esteja ativado: nesse caso, a última janela é ocultada na bandeja do sistema, sem fechar nada e sem pedir para salvar (veja [Configurações](/pt-BR/guide/settings)).

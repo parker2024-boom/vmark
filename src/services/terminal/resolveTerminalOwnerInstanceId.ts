@@ -17,7 +17,7 @@
  * Returns undefined in every carve-out ⇒ the session is window-scoped and
  * gets ADOPTED by the active instance on the next switch/hydrate.
  *
- * @coordinates-with stores/uiStore/terminalSlice.ts — terminalCreateSession consumer
+ * @coordinates-with stores/terminalStore/sessionActions.ts — terminalCreateSession consumer
  * @module services/terminal/resolveTerminalOwnerInstanceId
  */
 import { isWorkspaceRailEnabled } from "@/services/featureFlags/workspaceRailFeatureFlag";

@@ -598,3 +598,136 @@ describe("handleSemanticBatch", () => {
     expect(ctx.applyRename).toHaveBeenCalledTimes(1);
   });
 });
+
+// WI-RA7C.7 — a `rescan` says the watcher lost track of the tree: any file
+// under the root may have changed with no event of its own. The handler used
+// to look the ROOT up in the open-file map, find nothing, and do nothing, so
+// an open document edited or deleted during the burst kept showing stale
+// content until something else touched it.
+describe("handleSemanticBatch — rescan", () => {
+  const rescan = (rootPath = "/ws") => evt({ kind: "rescan", path: rootPath, rootPath });
+
+  it("re-reads every open text document under the root and applies the modify policy", async () => {
+    const disk: Record<string, string> = { "/ws/a.md": "a on disk", "/ws/sub/b.md": "b on disk" };
+    const ctx = makeContext({ readTextFile: vi.fn(async (p: string) => disk[p]) });
+    const map = new Map([
+      ["/ws/a.md", "tab-a"],
+      ["/ws/sub/b.md", "tab-b"],
+    ]);
+
+    await handleSemanticBatch(ctx, [rescan()], () => map);
+
+    expect(ctx.handleModifyEvent).toHaveBeenCalledWith("tab-a", "/ws/a.md", "a on disk");
+    expect(ctx.handleModifyEvent).toHaveBeenCalledWith("tab-b", "/ws/sub/b.md", "b on disk");
+    expect(ctx.handleModifyEvent).toHaveBeenCalledTimes(2);
+  });
+
+  it("marks an open document missing when its file went away during the burst", async () => {
+    const ctx = makeContext({
+      readTextFile: vi.fn(async () => { throw new Error("ENOENT"); }),
+      fileExists: vi.fn(async () => false),
+    });
+
+    await handleSemanticBatch(ctx, [rescan()], () => new Map([["/ws/a.md", "tab-a"]]));
+
+    expect(ctx.handleDeletion).toHaveBeenCalledWith("tab-a");
+    expect(ctx.handleModifyEvent).not.toHaveBeenCalled();
+  });
+
+  it("leaves a document alone when the probe is ambiguous", async () => {
+    const ctx = makeContext({
+      readTextFile: vi.fn(async () => { throw new Error("EACCES"); }),
+      fileExists: vi.fn(async () => { throw new Error("EACCES"); }),
+    });
+
+    await handleSemanticBatch(ctx, [rescan()], () => new Map([["/ws/a.md", "tab-a"]]));
+
+    expect(ctx.handleDeletion).not.toHaveBeenCalled();
+    expect(ctx.handleModifyEvent).not.toHaveBeenCalled();
+  });
+
+  it("touches only documents under the rescanned root", async () => {
+    const ctx = makeContext();
+    const map = new Map([
+      ["/ws/a.md", "tab-in"],
+      ["/ws-other/b.md", "tab-sibling"],
+      ["/elsewhere/c.md", "tab-out"],
+    ]);
+
+    await handleSemanticBatch(ctx, [rescan()], () => map);
+
+    expect(ctx.readTextFile).toHaveBeenCalledTimes(1);
+    expect(ctx.readTextFile).toHaveBeenCalledWith("/ws/a.md");
+  });
+
+  it("does not treat our own in-flight save as an external change", async () => {
+    const ctx = makeContext({ hasPendingSave: vi.fn((p: string) => p === "/ws/a.md") });
+
+    await handleSemanticBatch(ctx, [rescan()], () => new Map([["/ws/a.md", "tab-a"]]));
+
+    expect(ctx.readTextFile).not.toHaveBeenCalled();
+    expect(ctx.handleModifyEvent).not.toHaveBeenCalled();
+    expect(ctx.handleDeletion).not.toHaveBeenCalled();
+  });
+
+  it("never reads a media file: it probes, announces new bytes, and clears a stale missing flag", async () => {
+    const ctx = makeContext({
+      isMedia: (p: string) => p.endsWith(".png"),
+      isMissing: vi.fn((tabId: string) => tabId === "tab-back"),
+      fileExists: vi.fn(async (p: string) => p !== "/ws/gone.png"),
+    });
+    const map = new Map([
+      ["/ws/pic.png", "tab-pic"],
+      ["/ws/back.png", "tab-back"],
+      ["/ws/gone.png", "tab-gone"],
+    ]);
+
+    await handleSemanticBatch(ctx, [rescan()], () => map);
+
+    expect(ctx.readTextFile).not.toHaveBeenCalled();
+    expect(ctx.markBinaryFileChanged).toHaveBeenCalledWith("tab-pic");
+    expect(ctx.markBinaryFileChanged).toHaveBeenCalledWith("tab-back");
+    expect(ctx.clearMissing).toHaveBeenCalledWith("tab-back");
+    expect(ctx.clearMissing).toHaveBeenCalledTimes(1);
+    expect(ctx.handleDeletion).toHaveBeenCalledWith("tab-gone");
+    expect(ctx.handleDeletion).toHaveBeenCalledTimes(1);
+  });
+
+  it("does nothing when no document is open", async () => {
+    const ctx = makeContext();
+
+    await handleSemanticBatch(ctx, [rescan()], () => new Map());
+
+    expect(ctx.readTextFile).not.toHaveBeenCalled();
+    expect(ctx.fileExists).not.toHaveBeenCalled();
+  });
+
+  it("checks each document once when a batch carries several rescans of one root", async () => {
+    const ctx = makeContext();
+
+    await handleSemanticBatch(ctx, [rescan(), rescan()], () => new Map([["/ws/a.md", "tab-a"]]));
+
+    expect(ctx.readTextFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("sees a tab a rename in the same batch re-pointed", async () => {
+    // The rename is applied first and mutates the store, so the re-check must
+    // read the map afterwards.
+    let renamed = false;
+    const ctx = makeContext({
+      applyRename: vi.fn(() => { renamed = true; }),
+      readTextFile: vi.fn(async () => "moved content"),
+    });
+    const getOpenPaths = () =>
+      new Map([[renamed ? "/ws/new.md" : "/ws/old.md", "tab-r"]]);
+
+    await handleSemanticBatch(
+      ctx,
+      [evt({ kind: "renamed", path: "/ws/new.md", previousPath: "/ws/old.md" }), rescan()],
+      getOpenPaths,
+    );
+
+    expect(ctx.readTextFile).toHaveBeenCalledWith("/ws/new.md");
+    expect(ctx.handleModifyEvent).toHaveBeenCalledWith("tab-r", "/ws/new.md", "moved content");
+  });
+});

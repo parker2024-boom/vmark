@@ -1,7 +1,9 @@
-// @vitest-environment node
 /**
  * Tests for sourcePeekActions — canUseSourcePeek, getMarkdownOptions,
  * openSourcePeekInline, commitSourcePeek, revertAndCloseSourcePeek.
+ *
+ * The real peek editor module runs: closing the peek is asserted by the
+ * mounted CodeMirror editor actually being torn down (jsdom needed for it).
  */
 
 const mockOpen = vi.fn();
@@ -52,10 +54,6 @@ vi.mock("@/utils/linebreaks", () => ({
   resolveHardBreakStyle: vi.fn(() => "twoSpaces"),
 }));
 
-vi.mock("./sourcePeekEditor", () => ({
-  cleanupCMView: vi.fn(),
-}));
-
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { Schema } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
@@ -68,12 +66,26 @@ import {
   commitSourcePeek,
   revertAndCloseSourcePeek,
 } from "./sourcePeekActions";
-import { cleanupCMView } from "./sourcePeekEditor";
+import { createCodeMirrorEditor } from "./sourcePeekEditor";
 import { applySourcePeekMarkdown, getExpandedSourcePeekRange } from "@/services/editor/sourcePeek";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** Mount a real peek editor and wait until CodeMirror is live inside it. */
+async function openPeekEditor(): Promise<HTMLElement> {
+  const noop = () => undefined;
+  const container = createCodeMirrorEditor("# Hello", noop, noop, noop);
+  document.body.appendChild(container);
+  await vi.waitFor(() => expect(container.querySelector(".cm-editor")).not.toBeNull(), {
+    timeout: 5000,
+  });
+  return container;
+}
+
+/** Whether the peek's CodeMirror editor is still mounted in its container. */
+const peekEditorMounted = (container: HTMLElement) => container.querySelector(".cm-editor") !== null;
 
 const testSchema = new Schema({
   nodes: {
@@ -294,14 +306,15 @@ describe("commitSourcePeek", () => {
     expect(view.focus).not.toHaveBeenCalled();
   });
 
-  it("calls cleanupCMView on commit when range exists", () => {
+  it("tears down the peek editor on commit when range exists", async () => {
+    const peek = await openPeekEditor();
     mockStoreState.range = { from: 0, to: 10 };
     mockStoreState.markdown = "changed";
     mockStoreState.originalMarkdown = "original";
 
     const view = createMockView("Hello");
     commitSourcePeek(view);
-    expect(cleanupCMView).toHaveBeenCalled();
+    expect(peekEditorMounted(peek)).toBe(false);
   });
 
   it("calls view.focus after commit when range exists", () => {
@@ -334,7 +347,8 @@ describe("commitSourcePeek", () => {
     expect(view.dispatch).toHaveBeenCalled();
   });
 
-  it("replaces with empty paragraph when markdown is empty/whitespace", () => {
+  it("replaces with empty paragraph when markdown is empty/whitespace", async () => {
+    const peek = await openPeekEditor();
     // "Hello world" doc: <doc><paragraph>"Hello world"</paragraph></doc>
     // paragraph spans positions 0 to 13 (0=before paragraph, 1=start text, 12=end text, 13=after paragraph)
     const view = createMockView("Hello world");
@@ -346,11 +360,12 @@ describe("commitSourcePeek", () => {
     // Should dispatch, close, cleanup, and focus
     expect(view.dispatch).toHaveBeenCalled();
     expect(mockClose).toHaveBeenCalled();
-    expect(cleanupCMView).toHaveBeenCalled();
+    expect(peekEditorMounted(peek)).toBe(false);
     expect(view.focus).toHaveBeenCalled();
   });
 
-  it("skips empty paragraph replacement when schema has no paragraph type (line 128)", () => {
+  it("skips empty paragraph replacement when schema has no paragraph type (line 128)", async () => {
+    const peek = await openPeekEditor();
     // Create a schema without a "paragraph" node
     const noParagraphSchema = new Schema({
       nodes: {
@@ -373,7 +388,7 @@ describe("commitSourcePeek", () => {
     commitSourcePeek(view);
     // Should still close and cleanup even without paragraph type
     expect(mockClose).toHaveBeenCalled();
-    expect(cleanupCMView).toHaveBeenCalled();
+    expect(peekEditorMounted(peek)).toBe(false);
     expect(view.focus).toHaveBeenCalled();
   });
 
@@ -414,10 +429,11 @@ describe("revertAndCloseSourcePeek", () => {
     expect(mockClose).toHaveBeenCalled();
   });
 
-  it("calls cleanupCMView", () => {
+  it("tears down the peek editor", async () => {
+    const peek = await openPeekEditor();
     const view = createMockView("Hello");
     revertAndCloseSourcePeek(view);
-    expect(cleanupCMView).toHaveBeenCalled();
+    expect(peekEditorMounted(peek)).toBe(false);
   });
 
   it("dispatches transaction with EDITING_STATE_CHANGED meta", () => {

@@ -1,6 +1,6 @@
 //! Partial-capture session merging — pure logic extracted from
 //! `hot_exit_capture` so the data-loss-critical branches are table-testable
-//! (audit 20260612 H12: this path had zero tests).
+//! (this path had zero tests).
 //!
 //! When a capture is partial (some windows timed out during the IPC
 //! broadcast), windows that were expected-but-missing are resurrected from
@@ -65,7 +65,7 @@ pub fn merge_partial_capture(
                 && !present_labels.contains(&prev_window.window_label)
             {
                 log::debug!(
-                    "[HotExit] Merging previous state for timed-out window '{}' ({:?}s old)",
+                    "[HotExit] Merging previous state for timed-out window {:?} ({:?}s old)",
                     prev_window.window_label,
                     prev_age_secs
                 );

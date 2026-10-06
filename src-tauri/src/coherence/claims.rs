@@ -1,4 +1,4 @@
-//! Claim lifecycle (WI-2b.2; spec §5.4.5 revision 1, design-2a.md D2/D4).
+//! Claim lifecycle (spec §5.4.5 revision 1, design-2a.md D2/D4).
 //! Pure (ADR-C4 kernel tier): parses `claim` ledger entries into a
 //! per-claim view with deterministic current-entry resolution, the D4
 //! feed matrix, and the D5.6 claims fingerprint. Malformed entries are

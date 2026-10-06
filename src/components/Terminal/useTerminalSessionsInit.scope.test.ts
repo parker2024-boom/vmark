@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useTerminalSessionsInit } from "./useTerminalSessionsInit";
-import { resetTerminalSessionStore, useUIStore } from "@/stores/uiStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
@@ -72,7 +72,7 @@ describe("useTerminalSessionsInit — gated mount-time creator (WI-TS3.2)", () =
 
     const callbacks = mount();
 
-    expect(useUIStore.getState().terminal.sessions).toHaveLength(0);
+    expect(useTerminalStore.getState().sessions).toHaveLength(0);
     expect(callbacks.createSession).not.toHaveBeenCalled();
     expect(callbacks.switchToVisible).not.toHaveBeenCalled();
   });
@@ -83,7 +83,7 @@ describe("useTerminalSessionsInit — gated mount-time creator (WI-TS3.2)", () =
 
     const callbacks = mount();
 
-    const sessions = useUIStore.getState().terminal.sessions;
+    const sessions = useTerminalStore.getState().sessions;
     expect(sessions).toHaveLength(1);
     expect(sessions[0]?.workspaceInstanceId).toBe("wsi-a");
     expect(callbacks.createSession).toHaveBeenCalledWith(sessions[0]?.id);
@@ -93,12 +93,12 @@ describe("useTerminalSessionsInit — gated mount-time creator (WI-TS3.2)", () =
   it("existing sessions (hot-exit shape): instances built for each, no extra create", () => {
     addWorkspace("wsi-a", "/repo-a");
     useWorkspaceInstancesStore.getState().activateWorkspaceInstance(W, "wsi-a");
-    const s1 = useUIStore.getState().terminalCreateSession()!;
-    const s2 = useUIStore.getState().terminalCreateSession()!;
+    const s1 = useTerminalStore.getState().terminalCreateSession()!;
+    const s2 = useTerminalStore.getState().terminalCreateSession()!;
 
     const callbacks = mount();
 
-    expect(useUIStore.getState().terminal.sessions).toHaveLength(2);
+    expect(useTerminalStore.getState().sessions).toHaveLength(2);
     expect(callbacks.createSession).toHaveBeenCalledTimes(2);
     expect(callbacks.createSession).toHaveBeenCalledWith(s1.id);
     expect(callbacks.createSession).toHaveBeenCalledWith(s2.id);

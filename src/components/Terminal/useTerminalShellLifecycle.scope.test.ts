@@ -12,7 +12,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useTerminalShellLifecycle } from "./useTerminalShellLifecycle";
-import { useUIStore, resetTerminalSessionStore } from "@/stores/uiStore";
+import { useUIStore } from "@/stores/uiStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { spawnPty, resolveTerminalWorkspaceRoot } from "./spawnPty";
 import type { SessionEntry } from "./terminalSessionTypes";
@@ -88,7 +89,7 @@ afterEach(() => {
 
 describe("WI-TS2.1 — post-spawn catch-up cd is owner-guarded", () => {
   it("does NOT cd a scoped session when the workspace changed mid-spawn", async () => {
-    const id = useUIStore
+    const id = useTerminalStore
       .getState()
       .terminalCreateSession({ ownerInstanceId: "wsi-a" })!.id;
 
@@ -98,7 +99,7 @@ describe("WI-TS2.1 — post-spawn catch-up cd is owner-guarded", () => {
   });
 
   it("still cd's a window-scoped session (behavior unchanged)", async () => {
-    const id = useUIStore.getState().terminalCreateSession()!.id;
+    const id = useTerminalStore.getState().terminalCreateSession()!.id;
 
     const pty = await spawnAcrossRootChange(id);
 
@@ -106,7 +107,7 @@ describe("WI-TS2.1 — post-spawn catch-up cd is owner-guarded", () => {
   });
 
   it("rail OFF: a stamped session is followable again (D-T15 inert stamps)", async () => {
-    const id = useUIStore
+    const id = useTerminalStore
       .getState()
       .terminalCreateSession({ ownerInstanceId: "wsi-a" })!.id;
     setRail(false);
@@ -136,14 +137,14 @@ describe("WI-TS3.3 — clean exit computes last-ness on the VISIBLE population",
   }
 
   it("last VISIBLE session exits cleanly → panel hides while a hidden scope keeps its sessions", async () => {
-    const sa = useUIStore
+    const sa = useTerminalStore
       .getState()
       .terminalCreateSession({ ownerInstanceId: "wsi-a" })!;
-    const sb = useUIStore
+    const sb = useTerminalStore
       .getState()
       .terminalCreateSession({ ownerInstanceId: "wsi-b" })!;
     useUIStore.setState({ terminalVisible: true });
-    useUIStore.getState().terminalSetActiveSession(sa.id);
+    useTerminalStore.getState().terminalSetActiveSession(sa.id);
     // Active scope is wsi-a (no instances store in this harness — the
     // resolver sees no active instance, so visible = window-scoped ∪ null).
     // Force determinism: activate wsi-a's scope via the instances store.
@@ -170,10 +171,10 @@ describe("WI-TS3.3 — clean exit computes last-ness on the VISIBLE population",
     // sa closed; panel hidden (it was the last VISIBLE session)…
     expect(useUIStore.getState().terminalVisible).toBe(false);
     // …while the hidden scope's session survives untouched.
-    expect(useUIStore.getState().terminal.sessions.map((s) => s.id)).toEqual([
+    expect(useTerminalStore.getState().sessions.map((s) => s.id)).toEqual([
       sb.id,
     ]);
-    expect(useUIStore.getState().terminal.activeSessionId).toBeNull();
+    expect(useTerminalStore.getState().activeSessionId).toBeNull();
   });
 
   it("non-last visible session exits → panel stays; fallback stays visible", async () => {
@@ -194,23 +195,23 @@ describe("WI-TS3.3 — clean exit computes last-ness on the VISIBLE population",
       }),
     );
     useWorkspaceInstancesStore.getState().activateWorkspaceInstance("main", "wsi-a");
-    const sa1 = useUIStore
+    const sa1 = useTerminalStore
       .getState()
       .terminalCreateSession({ ownerInstanceId: "wsi-a" })!;
-    const sa2 = useUIStore
+    const sa2 = useTerminalStore
       .getState()
       .terminalCreateSession({ ownerInstanceId: "wsi-a" })!;
-    useUIStore
+    useTerminalStore
       .getState()
       .terminalCreateSession({ ownerInstanceId: "wsi-b" });
     useUIStore.setState({ terminalVisible: true });
-    useUIStore.getState().terminalSetActiveSession(sa1.id);
+    useTerminalStore.getState().terminalSetActiveSession(sa1.id);
 
     await startAndExitCleanly(sa1.id);
 
     expect(useUIStore.getState().terminalVisible).toBe(true);
     // Fallback active is the remaining VISIBLE session, not wsi-b's.
-    expect(useUIStore.getState().terminal.activeSessionId).toBe(sa2.id);
+    expect(useTerminalStore.getState().activeSessionId).toBe(sa2.id);
   });
 });
 
@@ -237,7 +238,7 @@ describe("WI-TS4.1 — spawn env root is resolved ONCE, from the owner, pre-awai
     add("wsi-a", "/repo-a");
     add("wsi-b", "/repo-b");
     useWorkspaceInstancesStore.getState().activateWorkspaceInstance("main", "wsi-a");
-    const s = useUIStore
+    const s = useTerminalStore
       .getState()
       .terminalCreateSession({ ownerInstanceId: "wsi-a" })!;
 

@@ -5,7 +5,7 @@
  * Two controls over the active deck, both routed through the content server:
  * PREVIEW opens the deck in the user's browser via the proxied Slidev dev
  * server — Slidev watches the file on disk, so a saved editor edit hot-reloads
- * the preview (WI-6.3, "editing reflects" on save) — and EXPORT writes it to a
+ * the preview on save — and EXPORT writes it to a
  * chosen path.
  *
  * Both are fire-and-forget from the UI's point of view, so every failure is
@@ -13,7 +13,7 @@
  * inside that boundary too: a permission denial or a platform dialog failure is
  * reported, not an unhandled rejection.
  *
- * ONE envelope, written once (audit #757). Preview and export had the same
+ * ONE envelope, written once. Preview and export had the same
  * five-line preamble and the same catch/finally copied out: in-flight guard,
  * active-deck resolution, the `noDeck` toast, `toast.error(commandErrorMessage)`,
  * guard release. Two copies of one recovery policy is how the two controls come
@@ -21,7 +21,7 @@
  * control is now only its own backend call.
  *
  * A deck failure is reported as a TOAST, never through the store's
- * `setError` (audit #758). `setError` moves the SERVER's lifecycle status to
+ * `setError`. `setError` moves the SERVER's lifecycle status to
  * `"error"`, so "no deck is open" — or a cancelled export, or an unsupported
  * extension — replaced a perfectly healthy running server with an error card,
  * and stopped `useContentServerWorkspaceSync` (which acts only on `"running"`)
@@ -29,7 +29,7 @@
  * failures; the toast is the surface that says so without lying about the
  * server.
  *
- * Each control is SINGLE-FLIGHT (audit #756). Both are behind buttons: a second
+ * Each control is SINGLE-FLIGHT. Both are behind buttons: a second
  * preview while the first is still resolving could publish the older deck last,
  * and two exports can be pointed at one output path and race the write.
  *
@@ -112,7 +112,7 @@ async function promptAndExportDeck(
   });
   if (!output) return; // user cancelled the save dialog
   const format = slidevFormatFromPath(output);
-  // Any extension reads as PDF: refuse rather than write PDF bytes into `deck.docx` (#361).
+  // Any extension reads as PDF: refuse rather than write PDF bytes into `deck.docx`.
   if (!output.toLowerCase().endsWith(`.${format}`)) {
     toast.error(t("contentServer.slidev.unsupportedFormat"));
     return;
@@ -121,7 +121,7 @@ async function promptAndExportDeck(
 }
 
 export function useSlidevControls(t: TFunction): SlidevControls {
-  // In-flight guards (#756) — one per operation, so a preview does not block an
+  // In-flight guards — one per operation, so a preview does not block an
   // export. Refs, not state: nothing renders from them.
   const previewing = useRef(false);
   const exporting = useRef(false);

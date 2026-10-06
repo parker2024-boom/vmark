@@ -3,6 +3,8 @@
  *
  * Detects if cursor is inside inline elements like links, images, math, footnotes.
  * Returns the range of the element for auto-selection.
+ *
+ * @module plugins/sourceContextDetection/inlineDetection
  */
 
 import type { EditorView } from "@codemirror/view";

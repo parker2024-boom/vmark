@@ -11,6 +11,7 @@
  * @coordinates-with editorPlugins.tiptap.ts (main keymap builder)
  * @coordinates-with stores/settingsStore/shortcutDefinitions.ts (shortcut key format)
  * @coordinates-with multiSelectionPolicy.ts (multi-selection guard)
+ * @module plugins/editorPlugins/keymapUtils
  */
 
 import { Selection, TextSelection, type Command } from "@tiptap/pm/state";

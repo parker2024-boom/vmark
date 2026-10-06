@@ -6,7 +6,7 @@
  * both directions: an event may arrive before the waiter is registered, or a
  * waiter may be registered before the webview finishes loading.
  *
- * The broker does not decode payloads (round 3, #80): it subscribes to
+ * The broker does not decode payloads: it subscribes to
  * `browserNativeEvents`, the one hub that validates every native event and fans
  * the typed result out to it and to the UI handlers alike. Its own copy of the
  * decoding had drifted — a missing `generation` became 0 and a missing `url`
@@ -16,7 +16,10 @@
  *
  * @coordinates-with services/browser/browserNativeEvents — the typed-event source
  * @coordinates-with services/mcpBridge/v2/browserNavigationShared — waits on tickets
+ *
+ * @module services/browser/browserEventBroker
  */
+
 import {
   browserNativeEvents,
   type BrowserNativeEvent,

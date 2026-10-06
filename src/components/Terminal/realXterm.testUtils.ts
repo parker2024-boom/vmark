@@ -1,5 +1,5 @@
 /**
- * Real-xterm probes for terminal-STATE tests (#1471).
+ * Real-xterm probes for terminal-STATE tests.
  *
  * `src/test/setup.ts` mocks `@xterm/xterm` for the whole app tier, so a test
  * that needs to know what the terminal will actually DO — which bytes a mouse
@@ -9,7 +9,10 @@
  * State is read back through the terminal's own report sequences (DECRQM for
  * modes, DECRQSS for SGR and scroll margins), i.e. the public protocol any
  * program could use — never through xterm internals.
+ *
+ * @module components/Terminal/realXterm.testUtils
  */
+
 import { vi } from "vitest";
 import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xterm/xterm";
 

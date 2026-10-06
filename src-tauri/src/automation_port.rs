@@ -1,9 +1,9 @@
-//! The debug automation bridge's port, and the probe that pins it (#157).
+//! The debug automation bridge's port, and the probe that pins it.
 //!
 //! `tauri-plugin-mcp-bridge` 0.12 takes a BASE port and scans up to 100
 //! ports above it when the base is busy (`discovery::find_available_port`);
 //! there is no fail-closed option. The harness that drives it
-//! (`tauri_driver_session`, see `dev-docs/e2e-testing.md`) is pinned to
+//! (`tauri_driver_session`, see `e2e/README.md`) is pinned to
 //! 9323, so a scan that lands on 9324 does not fail — it leaves a bridge
 //! nobody can find, while the driver talks to whatever holds 9323.
 //!
@@ -37,7 +37,7 @@ mod tests {
     ///
     /// Each step can lose the port to an unrelated binder — this suite shares a
     /// process with tests that bind loopback sockets of their own — and a lost
-    /// race is indistinguishable from the defect in a SINGLE attempt (#247).
+    /// race is indistinguishable from the defect in a SINGLE attempt.
     /// It is distinguishable across attempts: a probe that kept the port fails
     /// every time, a competing binder does not, so the caller retries with a
     /// fresh port rather than reporting either as the other.

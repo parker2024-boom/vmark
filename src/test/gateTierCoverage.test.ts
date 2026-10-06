@@ -129,10 +129,13 @@ describe("tier timeouts are liveness bounds", () => {
 
   // The server packages are separate vitest projects that copied the same
   // rationale and the same 20_000. They import the constant now; this asserts
-  // they did not go back to a literal.
+  // they did not go back to a literal. The WebKit tier had no bound at all
+  // (vitest's 5000ms default) until WI-RA26.7; it is checked the same way
+  // because importing its config here would load the browser provider.
   it.each([
     "server/content/vitest.config.ts",
     "server/mcp/vitest.config.ts",
+    "vitest.browser.config.ts",
   ])("%s references the shared constant rather than a literal", (relative) => {
     const source = readFileSync(path.join(REPO, relative), "utf8");
     expect(source).toContain("LIVENESS_TIMEOUT_MS");

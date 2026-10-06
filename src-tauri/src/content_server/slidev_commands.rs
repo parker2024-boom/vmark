@@ -3,14 +3,14 @@
 //! deck; export shells out to `slidev export` via the content server.
 //!
 //! The HTTP half is two plain async functions over a `client::ServerClient`,
-//! so `slidev_commands.test.rs` can drive them against a loopback mock server
-//! (#132). The client is the one every loopback command shares (#129): BOUNDED
-//! (#130 — an accepted connection that never answers used to leave the Tauri
-//! command pending forever), built from ONE manager read (#128 — a restart
+//! so `slidev_commands.test.rs` can drive them against a loopback mock server.
+//! The client is the one every loopback command shares: BOUNDED
+//! (an accepted connection that never answers used to leave the Tauri
+//! command pending forever), built from ONE manager read (a restart
 //! between two reads paired the old port with the new token), and refusing
-//! with the status read before the body (#131).
+//! with the status read before the body.
 //!
-//! Errors are `CommandError` (#127), classed by what failed: no server for
+//! Errors are `CommandError`, classed by what failed: no server for
 //! the workspace is `not-found`; a request the bounded client gave up on is
 //! `timeout` and any other transport failure `network`; a non-2xx answer is
 //! `network` carrying the status in `detail`; a mint reply that is not the
@@ -32,7 +32,7 @@ const EXPORT_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 /// Slidev export formats — the live half of what used to be `slidev.rs`. The
 /// Rust-side `slidev export` argument builder that lived beside it had no
 /// caller (the export runs through the Node content server, which shells out
-/// itself) and was deleted by WI-FL3.6; the format model is what the command
+/// itself) and was deleted; the format model is what the command
 /// below still deserializes and forwards.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -74,7 +74,7 @@ struct ExportDone {
 
 /// Ask the content server to export `deck` (it shells out to `slidev export`).
 ///
-/// The path returned is the SERVER'S, not the one asked for (#309). Echoing
+/// The path returned is the SERVER'S, not the one asked for. Echoing
 /// the request read every 2xx as a successful export to a file nothing had
 /// confirmed — including an answer that was not the export contract at all —
 /// and named a destination the caller then tried to open. A reply that is not

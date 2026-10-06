@@ -2,12 +2,12 @@
 //! (file-size baseline). All file I/O stays behind
 //! `sandbox::validate_path`.
 //!
-//! Reads go through `bounded_read` (#253, #254): the file is opened FIRST,
+//! Reads go through `bounded_read`: the file is opened FIRST,
 //! its type and size are read from the open handle, and the limit holds on
 //! the bytes consumed — so a file swapped for a FIFO between a check and
 //! the read cannot block the step (the open does not wait), and a file that
 //! grows cannot pass a size it was checked at. Folder reads live in
-//! `actions_folder.rs`. Saves are committed by `commit.rs` (#258, #257):
+//! `actions_folder.rs`. Saves are committed by `commit.rs`:
 //! atomically, and into a directory DESCRIPTOR the sandbox proved is inside
 //! the workspace, so an ancestor swapped for a symlink after the check has
 //! no path left to redirect. The parents a save has to CREATE first are
@@ -27,7 +27,7 @@ pub(super) const MAX_FILE_SIZE_BYTES: u64 = 10 * 1024 * 1024; // 10MB
 /// The parameters each built-in action refuses to run without. One table,
 /// read by the executor (`require`) AND by `examples.rs`, so the bundled
 /// sample is checked against the contract the runner enforces rather than
-/// against a copy scraped from this file's error strings (#270).
+/// against a copy scraped from this file's error strings.
 pub(super) fn required_params(action: &str) -> &'static [&'static str] {
     match action {
         "read-file" | "read-folder" => &["path"],
@@ -64,7 +64,7 @@ pub(super) async fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, Bou
 }
 
 /// Execute a built-in action step: one routing table, one function per
-/// action (#252) — the dispatcher decides WHICH, never HOW.
+/// action — the dispatcher decides WHICH, never HOW.
 pub(super) async fn execute_action(
     uses: &str,
     params: &HashMap<String, String>,
@@ -96,7 +96,10 @@ pub(super) async fn execute_action(
         }
         "notify" => {
             let message = params.get("message").cloned().unwrap_or_default();
-            log::info!("Workflow notification: {}", message);
+            log::info!(
+                "Workflow notification: {}",
+                crate::peer_text::peer_message(&message)
+            );
             Ok(message)
         }
         "copy" => Ok(params.get("input").cloned().unwrap_or_default()),
@@ -145,8 +148,8 @@ where
     }
 }
 
-/// `action/save-file`: `input` replaces the file at `path_str` atomically
-/// (#258), creating missing parents inside the workspace.
+/// `action/save-file`: `input` replaces the file at `path_str` atomically,
+/// creating missing parents inside the workspace.
 async fn save_file(path_str: &str, input: &str, workspace_root: &Path) -> Result<String, String> {
     let path = validate_path(path_str, workspace_root)?;
     let parent = path
@@ -156,7 +159,7 @@ async fn save_file(path_str: &str, input: &str, workspace_root: &Path) -> Result
     // Anchored, like the commit below it: a `create_dir_all` here resolves the
     // path a second time, so an ancestor swapped since `validate_path` was
     // built into — outside the workspace — even though the write that followed
-    // was then refused (#257, `ensure_dir.rs`).
+    // was then refused (`ensure_dir.rs`).
     let (dirs, dirs_root) = (parent.clone(), workspace_root.to_path_buf());
     blocking_io(
         format!("Failed to create directory for '{path_str}'"),
@@ -178,7 +181,7 @@ async fn save_file(path_str: &str, input: &str, workspace_root: &Path) -> Result
 /// Check if a filename matches an accept pattern. Supports `*`, a single
 /// suffix pattern (`*.md` / `.md`), or a comma-separated list (`*.md,*.txt`).
 ///
-/// ASCII case-INSENSITIVE (#505). Everywhere else in VMark an extension is
+/// ASCII case-INSENSITIVE. Everywhere else in VMark an extension is
 /// matched case-insensitively — `supported_files`, `genies::classify`, the
 /// slidev export's own output check — so `*.md` silently excluded `README.MD`
 /// from a folder read while the same file opened fine in the editor. Only the

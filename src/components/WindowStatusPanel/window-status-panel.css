@@ -16,7 +16,7 @@
   box-shadow: var(--popup-shadow-dark);
 }
 
-/* `.vm-panel__header` (WI-UI3.4). */
+/* Header chrome comes from the shared `.vm-panel__header`. */
 .window-status-panel__header {
   justify-content: space-between;
 }

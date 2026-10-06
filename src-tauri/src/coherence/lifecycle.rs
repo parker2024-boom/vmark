@@ -5,7 +5,7 @@
 //! because it is a statement about what was true *then*. Flagging edges into it
 //! is pure interruption.
 //!
-//! This exists because it was measured, not guessed. In the 2026-07-20 session
+//! This exists because it was measured, not guessed. In the dogfooding session
 //! M2 read **0 relevant / 5 noise**, and every one of the five had the same
 //! cause: the downstream was finished. 11 of 28 edges had reopened (several 4×),
 //! largely re-ratifying dependencies into documents that will never change again.

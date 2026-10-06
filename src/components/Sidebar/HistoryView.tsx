@@ -1,37 +1,56 @@
 /**
  * History View Component
  *
- * Displays document version history with revert functionality.
+ * Purpose: Displays the active document's version history, with revert and
+ *   delete.
+ *
+ * Key decisions:
+ *   - A revert is addressed to the tab and file it was started for. The handler
+ *     spans a confirmation dialog and several awaits, and "the active tab" can
+ *     be another one by the time each finishes; resolving it afresh loaded the
+ *     restored text into whichever tab was focused then.
+ *   - The write half of a revert is `restoreSnapshotToFile`, which goes through
+ *     the save pipeline. This component only loads what that reports it wrote:
+ *     the load is an ingress into the document store, and this is one of its
+ *     listed callers.
+ *   - The list is refetched after a revert rather than set from the handler, so
+ *     a result for a file the sidebar no longer shows is dropped by the same
+ *     request check as any other fetch.
+ *
+ * @coordinates-with services/history/restoreSnapshot.ts — the write half of a revert
+ * @coordinates-with services/history/historyOperations.ts — list and delete
+ * @module components/Sidebar/HistoryView
  */
 
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { RotateCcw, Trash2 } from "lucide-react";
-import { writeTextFile } from "@tauri-apps/plugin-fs";
-import { registerPendingSave, clearPendingSave } from "@/utils/pendingSaves";
 import { useSettingsStore } from "@/stores/settingsStore";
 import {
+  useActiveTabId,
   useDocumentFilePath,
   useDocumentActions,
 } from "@/hooks/useDocumentState";
 import {
   getSnapshots,
-  revertToSnapshot,
   deleteSnapshot,
   type Snapshot,
 } from "@/services/history/historyOperations";
-import { buildHistorySettings, HISTORY_CLEARED_EVENT } from "@/utils/historyTypes";
+import { restoreSnapshotToFile } from "@/services/history/restoreSnapshot";
+import { HISTORY_CLEARED_EVENT } from "@/utils/historyTypes";
 import { formatSnapshotTime, groupByDay } from "@/utils/dateUtils";
 import { historyError } from "@/utils/debug";
-import { captureWrite } from "@/services/coherence/captureFunnel";
 import { confirmAction } from "@/services/dialogs/confirmAction";
 import i18n from "@/i18n";
 
 /** Renders the document version history sidebar with revert and delete actions. */
 export function HistoryView() {
   const { t } = useTranslation("sidebar");
+  const tabId = useActiveTabId();
   const filePath = useDocumentFilePath();
-  const { getContent, loadContent } = useDocumentActions();
+  // Pinned to the tab rendered for, so a load issued by a handler that outlives
+  // a tab switch still lands in the tab it was started for.
+  const { loadContent } = useDocumentActions(tabId);
   const historyEnabled = useSettingsStore((state) => state.general.historyEnabled);
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [loading, setLoading] = useState(false);
@@ -47,7 +66,7 @@ export function HistoryView() {
     if (!filePath || !historyEnabled) {
       // Legitimate: clears the list as part of a cancellable async fetch keyed on
       // filePath, not derivable during render (#1063).
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clears the list inside a cancellable fetch keyed on filePath; not derivable during render
       setSnapshots([]);
       return;
     }
@@ -96,7 +115,7 @@ export function HistoryView() {
   };
 
   const handleRevert = async (snapshot: Snapshot) => {
-    if (!filePath || isMutatingRef.current) return;
+    if (!tabId || !filePath || isMutatingRef.current) return;
     isMutatingRef.current = true;
 
     try {
@@ -109,34 +128,14 @@ export function HistoryView() {
 
       if (!confirmed) return;
 
-      // Get fresh content to capture any edits made while dialog was open
-      const currentContent = getContent();
-      const { general } = useSettingsStore.getState();
-      const restoredContent = await revertToSnapshot(
-        filePath,
-        snapshot.id,
-        currentContent,
-        buildHistorySettings(general)
-      );
-
-      if (restoredContent !== null) {
-        // Write to file
-        const saveToken = registerPendingSave(filePath, restoredContent);
-        setTimeout(() => clearPendingSave(filePath, saveToken), 1000);
-        await writeTextFile(filePath, restoredContent);
-        // Coherence (WI-1.6): a snapshot restore is a human transformation.
-        void captureWrite({
-          absolutePath: filePath,
-          content: restoredContent,
-          agent: { type: "human" },
-          intent: { kind: "history-revert", summary: "restore version snapshot" },
-        }).catch(() => {});
-        // Update editor
-        loadContent(restoredContent, filePath);
-        // Refresh snapshots
-        const snaps = await getSnapshots(filePath);
-        setSnapshots(snaps);
+      const outcome = await restoreSnapshotToFile(tabId, filePath, snapshot.id);
+      if (outcome.status === "restored") {
+        // The file holds the version now: load what was written as the
+        // document's new baseline, into the tab this revert was started for.
+        loadContent(outcome.written, filePath);
       }
+      // Every outcome that got this far took a safety copy, so the list changed.
+      setRefreshKey((k) => k + 1);
     } catch (error) {
       historyError("Failed to revert:", error);
     } finally {

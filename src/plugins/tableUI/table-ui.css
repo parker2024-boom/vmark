@@ -7,7 +7,7 @@
  * Context Menu Styles
  * =========================================== */
 
-/* Surface chrome comes from `.vm-menu` (overlay-shared.css, WI-UI3.1); the
+/* Surface chrome comes from `.vm-menu` (overlay-shared.css); the
    table menu keeps its OWN stacking layer — it must beat inline popups. */
 .table-context-menu {
   z-index: var(--z-table-context);
@@ -41,7 +41,7 @@
   color: var(--text-color);
   font-size: var(--font-size-base);
   text-align: left;
-  cursor: var(--cursor-interactive, default); /* D7, platform-scoped (WI-UA15) */
+  cursor: var(--cursor-interactive, default); /* D7, platform-scoped */
   user-select: none;
   transition: background var(--duration-fast);
 }

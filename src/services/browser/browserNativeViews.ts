@@ -1,6 +1,6 @@
 /**
- * browserNativeViews — the per-window registry of native browser views (WI-1.3 /
- * WI-S0.10 / audit 2026-09-03 L-01).
+ * browserNativeViews — the per-window registry of native browser views
+ * (audit 2026-09-03 L-01).
  *
  * Purpose: one place knows which tabs own a live WKWebView, creates a view once per
  * tab, hides/shows it as its surface leaves and re-enters the screen, and destroys
@@ -17,7 +17,7 @@
  * switching tabs must not reload it. So an unmounted tab is merely occluded
  * (`OCCLUDER.background`), its view alive and driveable in the background.
  *
- * Teardown is shared and retried (audit round 2, #78/#79): concurrent destroys of
+ * Teardown is shared and retried: concurrent destroys of
  * one tab join a single in-flight promise, and `browser_destroy` is attempted three
  * times with backoff before the failure is reported — bookkeeping is dropped either
  * way, because the tab is gone from the store either way. A view whose teardown
@@ -63,7 +63,7 @@ export function ensureBrowserNativeView(
   tabId: string,
   url: string,
   automationMode: BrowserAutomationMode,
-  /** Named profile (WI-P6.1): AI-sandbox only — a persistent isolated store so a
+  /** Named profile: AI-sandbox only — a persistent isolated store so a
    *  login persists for later reuse. Ignored for the human create path. */
   profile?: string,
 ): Promise<void> {
@@ -145,7 +145,7 @@ export async function destroyBrowserNativeView(tabId: string): Promise<void> {
 const DESTROY_RETRY_MS = [100, 300];
 /** Views whose teardown failed every immediate attempt: tracked here and swept
  *  in the background until the driver confirms, so a live view is never simply
- *  forgotten (round 3, #79). */
+ *  forgotten. */
 const leakedViews = new Set<string>();
 const LEAK_SWEEP_MS = 10_000;
 const LEAK_SWEEP_ATTEMPTS = 6;

@@ -5,6 +5,7 @@
  *
  * @coordinates-with sourcePeekEditor.ts (cleanupCMView)
  * @coordinates-with tiptap.ts (EDITING_STATE_CHANGED meta key)
+ * @module plugins/sourcePeekInline/sourcePeekActions
  */
 
 import { TextSelection } from "@tiptap/pm/state";

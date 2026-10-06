@@ -11,8 +11,8 @@
 # (52,81,131) body). The glass — squircle mask, drop shadow, background gradient,
 # per-layer specular — is applied at composite time only for a layered `.icon`
 # document compiled into an asset catalogue, so the layers are drawn edge to
-# edge and the system owns the shape. This is Paper's recipe (paper-one,
-# dev-docs/icons.md), applied to VMark.
+# edge and the system owns the shape. This is Paper's recipe (from
+# paper-one), applied to VMark.
 #
 # The output is committed on purpose: compiling needs Xcode (`actool` is not in
 # the Command Line Tools) and `cargo build` must not. Re-run this whenever

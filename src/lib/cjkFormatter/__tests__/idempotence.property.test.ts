@@ -36,9 +36,12 @@ import fc from "fast-check";
 import { formatMarkdown } from "../formatter";
 import { DEFAULT_CJK_FORMATTING, type CJKFormattingSettings } from "../types";
 
-/** Same rationale as roundtrip.property.test.ts: CPU-bound properties on a
- *  loaded box need wall-clock headroom; real failures assert in milliseconds. */
-const PROPERTY_TEST_TIMEOUT_MS = 30_000;
+// These properties pass no timeout of their own: they run under the suite's
+// liveness bound (`LIVENESS_TIMEOUT_MS`, vitest.shared.ts), set from what is
+// unambiguously a hang. A per-test bound below it is a performance assertion
+// in disguise: CPU-bound properties overran 30 s and 120 s on a loaded box
+// while correct, and a real regression fails on an assertion, not by running
+// long.
 
 // ---- configs under test -----------------------------------------------------
 // The app default, plus the two widest deviations: every rule on (fullwidth
@@ -125,7 +128,7 @@ describe("cjkFormatter — idempotence properties", () => {
         }),
         { numRuns: 200 },
       );
-    }, PROPERTY_TEST_TIMEOUT_MS);
+    });
   }
 
   // WI-CJKF1.1 — was `formatSelection`, deleted. The selection path calls
@@ -141,7 +144,7 @@ describe("cjkFormatter — idempotence properties", () => {
       }),
       { numRuns: 200 },
     );
-  }, PROPERTY_TEST_TIMEOUT_MS);
+  });
 
   // ---- (4) determinism: same input, same output, every call ------------------
   it("formatMarkdown is deterministic across repeated calls", () => {
@@ -153,7 +156,7 @@ describe("cjkFormatter — idempotence properties", () => {
       }),
       { numRuns: 100 },
     );
-  }, PROPERTY_TEST_TIMEOUT_MS);
+  });
 });
 
 // ---- (2) boundary corpus ------------------------------------------------------
@@ -277,6 +280,78 @@ describe("cjkFormatter — house-style fixed points", () => {
     const houseStyleTable = "| 名称 | 值 |\n| --- | --- |\n| 条目 one | 数字 1 |";
     expect(formatMarkdown(houseStyleTable, DEFAULT_CJK_FORMATTING)).toBe(
       houseStyleTable,
+    );
+  });
+});
+
+// ---- (5) line structure: no rule deletes or moves a line break ---------------
+// WI-RA3.1 — a rule whose gap pattern can match a line terminator joins two
+// lines (or two paragraphs) when its trigger happens to sit on both sides of
+// the boundary. The token pool above almost never produces that shape, so this
+// one is built from the halves of every two-part trigger the rules have:
+// currency and its number, a number and its unit, the dots of a spaced
+// ellipsis, the two sides of a slash, a dash, a parenthesis, a quote.
+const TRIGGER_HALVES = [
+  "$", "¥", "€", "USD", "RMB", "%", "‰", "℃", "°C", "°",
+  ".", "..", "...", "/", "-", "--", "——", "(", ")", '"', "'", "“", "”",
+  "100", "5", "中", "中文", "abc", "，", "。",
+  // WI-RA3.2 — letters outside ASCII and outside the BMP, and link syntax
+  // whose closing `)` begins a segment.
+  "café", "é", "\u{20bb7}", "コーヒー", "[链接](u)", "[Hub](u)",
+];
+const triggerToken = fc.constantFrom(...TRIGGER_HALVES);
+const triggerLine = fc
+  .array(fc.tuple(triggerToken, fc.constantFrom("", " ", "  ")), { minLength: 1, maxLength: 4 })
+  .map((pairs) => pairs.map(([t, s]) => t + s).join("").trim());
+const triggerParagraph = fc
+  .array(triggerLine, { minLength: 1, maxLength: 3 })
+  .map((ls) => ls.join("\n"));
+const triggerDocument = fc
+  .tuple(
+    fc.array(triggerParagraph, { minLength: 1, maxLength: 5 }),
+    fc.constantFrom("\n", "\r\n"),
+  )
+  .map(([paragraphs, eol]) => paragraphs.join("\n\n").replace(/\n/g, eol));
+
+/** Paragraphs: runs of non-blank lines, separated by one or more blank lines. */
+const paragraphCount = (text: string): number =>
+  text.split(/\r?\n(?:[ \t]*\r?\n)+/).filter((p) => p.trim() !== "").length;
+const lineCount = (text: string): number => text.split("\n").length;
+
+describe("cjkFormatter — line structure properties", () => {
+  for (const [name, config] of CONFIGS) {
+    it(`formatMarkdown never changes the number of paragraphs (${name})`, () => {
+      fc.assert(
+        fc.property(fc.oneof(triggerDocument, document), (doc) => {
+          expect(paragraphCount(formatMarkdown(doc, config))).toBe(paragraphCount(doc));
+        }),
+        { numRuns: 300 },
+      );
+    });
+
+    it(`formatMarkdown is idempotent over trigger-dense documents (${name})`, () => {
+      fc.assert(
+        fc.property(triggerDocument, (doc) => {
+          const once = formatMarkdown(doc, config);
+          expect(formatMarkdown(once, config)).toBe(once);
+        }),
+        { numRuns: 300 },
+      );
+    });
+  }
+
+  // Stricter than the paragraph count, and true whenever newline collapsing —
+  // the one rule whose job is to remove line breaks — is off: the generated
+  // documents neither start nor end with a blank line, so every line that goes
+  // in comes out.
+  it("formatMarkdown never changes the number of lines (newline collapsing off)", () => {
+    fc.assert(
+      fc.property(fc.oneof(triggerDocument, document), (doc) => {
+        for (const config of [DEFAULT_CJK_FORMATTING, CORNER_QUOTES]) {
+          expect(lineCount(formatMarkdown(doc, config))).toBe(lineCount(doc));
+        }
+      }),
+      { numRuns: 300 },
     );
   });
 });

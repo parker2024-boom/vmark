@@ -39,6 +39,10 @@ import { sanitizeExportHtml } from "./htmlSanitizer";
 import { captureThemeCSS } from "./themeSnapshot";
 import { warnMissingResources } from "./exportResourceWarnings";
 import { contentHasMath } from "./fontEmbedder";
+// Static: htmlExport already pulls both into the same lazy export chunk, so
+// dynamic imports here deferred nothing (Rolldown INEFFECTIVE_DYNAMIC_IMPORT).
+import { resolveResources } from "./resourceResolver";
+import { getDocumentBaseDir, getExportContainmentRoot } from "./resourcePaths";
 
 /**
  * Turn editor HTML into an export BODY: editor artifacts out, local images in
@@ -46,15 +50,13 @@ import { contentHasMath } from "./fontEmbedder";
  *
  * The sanitize step is here because this is the one function every non-folder
  * export path goes through — print, native PDF and copy-as-HTML — and all
- * three shipped raw ProseMirror markup (audit R2, #690/#703): separators,
+ * three shipped raw ProseMirror markup: separators,
  * trailing breaks, hidden `.html-preview-*` placeholders, `contenteditable`.
  * The folder export has always sanitized; nothing else did. It runs BEFORE
  * resolution so a hidden placeholder's image is not fetched, and not warned
  * about, on its way to being deleted.
  */
 export async function prepareExportBody(html: string, sourceFilePath: string | null): Promise<string> {
-  const { resolveResources } = await import("./resourceResolver");
-  const { getDocumentBaseDir, getExportContainmentRoot } = await import("./resourcePaths");
   const baseDir = await getDocumentBaseDir(sourceFilePath);
   // Relative paths resolve from the document's folder; the WORKSPACE bounds
   // how far they may reach, so a shared assets folder beside the notes folder
@@ -109,7 +111,7 @@ export async function buildPrintHtml(bodyHtml: string): Promise<string> {
   // the single largest thing this document can contain — and every print paid
   // for it, including the overwhelming majority with no math in them. The
   // folder export already decides this the same way (`includeKaTeX: hasMath`);
-  // `contentHasMath` is that predicate, not a second one (audit round 3, #694).
+  // `contentHasMath` is that predicate, not a second one.
   const katexCSS = contentHasMath(printableBody) ? getKatexCSS() : "";
   return `<!DOCTYPE html>
 <html lang="en">

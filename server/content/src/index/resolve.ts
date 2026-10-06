@@ -1,5 +1,5 @@
 /**
- * Wiki-link → file resolution (Phase 2, WI-2.3) — implements the plan's §3bis
+ * Wiki-link → file resolution (Phase 2) — implements the plan's §3bis
  * resolution spec table.
  *
  * Forms handled: `[[Page]]`, `[[dir/Page]]`, `[[Page#Heading]]`, `[[Page|Alias]]`

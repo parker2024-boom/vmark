@@ -7,13 +7,16 @@
  * Focus follows `autoFocus`: a click-opened popup leaves the caret in the
  * markdown so typing and Ctrl+C/V keep editing the document (#1448); an
  * explicit edit (Cmd+K) focuses the URL field, including while it is open.
+ *
+ * @module plugins/sourceLinkPopup/SourceLinkPopupView
  */
 
 import type { EditorView } from "@codemirror/view";
 import i18n from "@/i18n";
-import { SourcePopupView, type StoreApi } from "@/plugins/sourcePopup";
+import { SourcePopupView, type StoreApi } from "@/plugins/shared/SourcePopupView";
 import type { LinkPopupState } from "@/plugins/shared/popupPorts";
 import { buildPopupIconButton, popupIcons } from "@/utils/popupComponents";
+import { isImeKeyEvent } from "@/utils/imeGuard";
 import { copyLinkHref, openLink, removeLink, saveLinkChanges } from "./sourceLinkActions";
 import { sourceActionError } from "@/utils/debug";
 
@@ -36,7 +39,7 @@ export class SourceLinkPopupView extends SourcePopupView<LinkPopupState> {
 
   constructor(view: EditorView, store: StoreApi<LinkPopupState>) {
     super(view, store);
-    // shouldReshow port (WI-1 / D1, from WYSIWYG commit c89c1656): an open
+    // shouldReshow port (D1, from WYSIWYG commit c89c1656): an open
     // popup retargeted at a different link range must refresh its fields, or
     // the input keeps the previous link's URL while the store already points
     // at the new range — saving would write URL A over link B. The base
@@ -105,7 +108,7 @@ export class SourceLinkPopupView extends SourcePopupView<LinkPopupState> {
   }
 
   /** Apply store state to the input and bookmark-mode chrome. Shared by the
-   *  fresh-open path (onShow) and the retarget refresh (WI-1). */
+   *  fresh-open path (onShow) and the retarget refresh. */
   private applyState(state: LinkPopupState): void {
     this.isBookmark = state.href.startsWith("#");
 
@@ -172,6 +175,8 @@ export class SourceLinkPopupView extends SourcePopupView<LinkPopupState> {
   }
 
   private handleInputKeydown(e: KeyboardEvent): void {
+    // The Enter that confirms an IME candidate is not a save.
+    if (isImeKeyEvent(e)) return;
     /* v8 ignore next -- @preserve reason: non-Enter keydown in link popup input not tested */
     if (e.key === "Enter") {
       e.preventDefault();

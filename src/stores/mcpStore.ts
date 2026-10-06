@@ -18,6 +18,7 @@
 
 import { create } from "zustand";
 import type { Update } from "@tauri-apps/plugin-updater";
+import { publishDevGlobal } from "@/utils/devDebugHandle";
 
 /* ─────────────────────────── checkpoint slice ─────────────────────────── */
 
@@ -316,9 +317,5 @@ export const useMcpStore = create<McpStore>((set, get) => ({
   resetUpdate: () => set({ update: initialUpdate }),
 }));
 
-/* Dev helper retained from legacy updateStore */
-/* v8 ignore next 3 -- @preserve false branch is production-only; tests always run in DEV mode */
-if (import.meta.env.DEV) {
-  (window as unknown as { __mcpStore: typeof useMcpStore }).__mcpStore =
-    useMcpStore;
-}
+/* Dev helper retained from legacy updateStore (DEV-gated inside publishDevGlobal). */
+publishDevGlobal("__mcpStore", useMcpStore);

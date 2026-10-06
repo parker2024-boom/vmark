@@ -25,7 +25,7 @@ import type { Editor as TiptapEditor } from "@tiptap/core";
 import type { EditorView } from "@tiptap/pm/view";
 import type { Node as PMNode, Mark as PMMark } from "@tiptap/pm/model";
 import { handleRemoveBlockquote } from "@/plugins/formatToolbar/nodeActions.tiptap";
-import { MultiSelection } from "@/plugins/multiCursor";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 import { toUpperCase, toLowerCase, toTitleCase, toggleCase } from "@/utils/textTransformations";
 import { computeQuoteToggle } from "@/lib/cjkFormatter/quoteToggle";
 import { hostSettings } from "@/plugins/shared/hostSettings";

@@ -1,4 +1,4 @@
-//! Hot exit's Tauri-managed state (WI-20).
+//! Hot exit's Tauri-managed state.
 //!
 //! The pending-restore map every restoring window pulls from, plus the
 //! capture serialization lock. Both were process-global statics
@@ -98,7 +98,7 @@ pub struct HotExitState {
     /// independently, and clobber each other's result.
     capture: tokio::sync::Mutex<()>,
     /// The live restore-timeout task, so a superseded or finished round can
-    /// stop paying for it (audit 20260803 §9).
+    /// stop paying for it.
     ///
     /// `RestoreRound` already makes an obsolete timeout a NO-OP, which is a
     /// correctness property and was mistaken for the whole story: the task
@@ -215,7 +215,7 @@ impl HotExitState {
         } else {
             log::warn!(
                 "[HotExit] Ignoring completion from unexpected window: {}",
-                window_label
+                crate::peer_text::peer_text(window_label)
             );
         }
 
@@ -235,7 +235,7 @@ impl HotExitState {
     /// still current and windows are still outstanding. Returns the labels it
     /// gave up on, for the caller to log — `None` when it did nothing.
     ///
-    /// **The stand-down check happens UNDER the lock** (audit 20260803 §2).
+    /// **The stand-down check happens UNDER the lock**.
     /// Reading it first looked equivalent and was not: an obsolete timeout
     /// could pass the check, lose the lock to the restore that was taking over,
     /// and then clear the NEW round's windows — leaving that restore with

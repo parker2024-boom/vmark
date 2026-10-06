@@ -9,12 +9,14 @@
  * rebuild, input wiring, validation, and save/cancel flow. This view only
  * supplies the Source mode commit strategy: inserting `[text](url)` markdown,
  * using the repo's angle-bracket convention for destinations with whitespace.
+ *
+ * @module plugins/sourceLinkCreatePopup/SourceLinkCreatePopupView
  */
 
 import type { EditorView } from "@codemirror/view";
 import { sourceActionError } from "@/utils/debug";
 import { encodeMarkdownUrl, urlNeedsBrackets } from "@/utils/markdownUrl";
-import { SourcePopupView, type PopupStoreBase } from "@/plugins/sourcePopup/SourcePopupView";
+import { SourcePopupView, type PopupStoreBase } from "@/plugins/shared/SourcePopupView";
 import type { StoreApi } from "@/plugins/shared/types";
 import {
   LinkCreateFlow,

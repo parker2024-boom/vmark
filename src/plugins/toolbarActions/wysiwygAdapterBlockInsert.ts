@@ -103,7 +103,7 @@ export function insertMarkmapBlock(context: WysiwygToolbarContext): boolean {
 }
 
 /**
- * Insert a `[TOC]` block AFTER the current block (WI-FL3.10). An atom node, so
+ * Insert a `[TOC]` block AFTER the current block. An atom node, so
  * there is nothing to seed and no selection to fold in; it serialises to the
  * `[TOC]` line the typing path produces, which is what Source inserts.
  */

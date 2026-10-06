@@ -183,6 +183,31 @@ fn bundled_cli_resource_is_joined_to_the_manifest() {
     }
 }
 
+/// WI-RA15B.2 — the notices file Settings → About opens is bundled, and exists
+/// on disk to be bundled. Same two halves as the content-server join: a
+/// manifest entry with no file behind it fails `tauri-build`, and a file with no
+/// entry ships an About button that opens nothing.
+#[test]
+fn third_party_notices_resource_is_joined_to_the_manifest() {
+    let rel = crate::third_party_notices::NOTICES_RESOURCE;
+    let entries = entries(&bundle_resources());
+    let sources: Vec<PathBuf> = entries.iter().filter_map(|e| source_for(e, rel)).collect();
+    assert!(
+        !sources.is_empty(),
+        "NOTICES_RESOURCE {rel:?} is not bundled by any bundle.resources entry: {:?}",
+        entries.iter().map(ResourceEntry::text).collect::<Vec<_>>()
+    );
+    for source in &sources {
+        let path = manifest_dir().join(source);
+        assert!(
+            path.is_file(),
+            "bundle.resources bundles {rel:?} from {} but no file is there — run \
+             `node scripts/gen-third-party-licenses.mjs`",
+            path.display()
+        );
+    }
+}
+
 #[test]
 fn glob_double_star_spans_any_depth_including_none() {
     assert!(glob_matches(

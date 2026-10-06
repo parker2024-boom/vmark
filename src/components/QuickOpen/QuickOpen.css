@@ -1,7 +1,7 @@
 /* Quick Open — Spotlight-style overlay */
 
 /* Backdrop / panel / input / rows / footer come from the shared overlay
-   shell (`overlay-shared.css`, WI-UI3.1). */
+   shell (`overlay-shared.css`). */
 
 /* Search input */
 .quick-open-header {

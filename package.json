@@ -1,7 +1,7 @@
 {
   "name": "vmark",
   "private": true,
-  "version": "0.9.91",
+  "version": "0.9.93",
   "license": "ISC",
   "description": "The plain-text workspace where humans and AI collaborate",
   "type": "module",
@@ -65,8 +65,8 @@
     "dup": "jscpd",
     "mutation:ts": "stryker run stryker.config.json",
     "test:sidecar": "pnpm --dir server/mcp lint && pnpm --dir server/mcp build && pnpm --dir server/mcp test:coverage",
-    "test:content-server": "pnpm --dir server/content build && pnpm --dir server/content smoke && pnpm --dir server/content test:coverage",
-    "check:static": "pnpm lint && pnpm lint:console && pnpm lint:ui-consistency && pnpm lint:design-tokens && pnpm lint:emdash && pnpm lint:cjk-demo-parity && pnpm lint:no-nul-bytes && pnpm lint:deps && pnpm lint:hooks-purity && pnpm lint:extension-budget && pnpm lint:store-coupling && pnpm lint:mock-boundaries && pnpm lint:command-errors && pnpm lint:ipc-contract && pnpm lint:trusted-html && pnpm lint:type-aware && pnpm lint:test-types && pnpm lint:mutants-config && pnpm lint:deleted-names && pnpm lint:mcp-contracts && pnpm lint:mcp-docs && pnpm lint:tauri-versions && pnpm lint:singleton-deps && pnpm lint:webview-floor && pnpm lint:window-thread && pnpm lint:i18n && pnpm lint:themes && pnpm lint:theme-contrast && pnpm lint:keybinding-manifest && pnpm lint:merge-drops && pnpm lint:file-size && pnpm lint:timer-isolation && pnpm lint:barrels && pnpm lint:shell-slots && pnpm lint:bespoke-buttons && pnpm knip && pnpm lint:knip-baseline && pnpm lint:test-only-modules && pnpm lint:header-refs && pnpm lint:doc-joins && pnpm lint:feature-map && pnpm lint:review-schedule && pnpm test:gates",
+    "test:content-server": "pnpm --dir server/content lint && pnpm --dir server/content typecheck && pnpm --dir server/content build && pnpm --dir server/content smoke && pnpm --dir server/content test:coverage",
+    "check:static": "pnpm lint && pnpm lint:console && pnpm lint:ui-consistency && pnpm lint:design-tokens && pnpm lint:emdash && pnpm lint:cjk-demo-parity && pnpm lint:no-nul-bytes && pnpm lint:deps && pnpm lint:hooks-purity && pnpm lint:extension-budget && pnpm lint:store-coupling && pnpm lint:mock-boundaries && pnpm lint:command-errors && pnpm lint:ipc-contract && pnpm lint:trusted-html && pnpm lint:type-aware && pnpm lint:test-types && pnpm lint:mutants-config && pnpm lint:deleted-names && pnpm lint:mcp-contracts && pnpm lint:mcp-docs && pnpm lint:tauri-versions && pnpm lint:singleton-deps && pnpm lint:webview-floor && pnpm lint:window-thread && pnpm lint:i18n && pnpm lint:themes && pnpm lint:theme-contrast && pnpm lint:keybinding-manifest && pnpm lint:merge-drops && pnpm lint:file-size && pnpm lint:timer-isolation && pnpm lint:barrels && pnpm lint:shell-slots && pnpm lint:bespoke-buttons && pnpm knip && pnpm lint:knip-baseline && pnpm lint:test-only-modules && pnpm lint:header-refs && pnpm lint:file-headers && pnpm lint:provenance-ids && pnpm lint:doc-joins && pnpm lint:adr-refs && pnpm lint:feature-map && pnpm lint:review-schedule && pnpm test:gates",
     "check:servers": "pnpm test:sidecar && pnpm test:content-server",
     "check:build": "pnpm build && pnpm lint:eager && pnpm size",
     "check:all": "pnpm check:static && pnpm test:coverage && pnpm check:servers && pnpm check:build",
@@ -96,6 +96,9 @@
     "lint:test-only-modules": "node scripts/check-test-only-modules.mjs",
     "lint:doc-joins": "node scripts/check-doc-joins.mjs",
     "lint:header-refs": "node scripts/check-header-references.mjs",
+    "lint:file-headers": "node scripts/check-file-headers.mjs",
+    "lint:provenance-ids": "node scripts/check-provenance-ids.mjs",
+    "lint:adr-refs": "node scripts/check-adr-refs.mjs",
     "lint:feature-map": "node scripts/check-feature-map.mjs",
     "gen:feature-ledger": "node scripts/gen-feature-ledger.mjs"
   },
@@ -214,6 +217,7 @@
       "express-rate-limit": ">=8.2.2 <9",
       "lodash": ">=4.18.0 <5",
       "lodash-es": ">=4.18.0 <5",
+      "source-map-js": ">=1.2.2 <2",
       "typescript-eslint>minimatch": ">=9.0.7 <11",
       "rollup": ">=4.59.0 <5",
       "flatted": ">=3.4.2 <4",
@@ -228,7 +232,8 @@
       "js-yaml@4": ">=4.3.2 <5",
       "baseline-browser-mapping": ">=2.11.0 <3",
       "smol-toml": ">=1.7.1 <2",
-      "@lezer/common": ">=1.5.3 <2"
+      "@lezer/common": ">=1.5.3 <2",
+      "image-size": ">=2.0.3 <3"
     },
     "patchedDependencies": {
       "micromark@4.0.2": "patches/micromark@4.0.2.patch",

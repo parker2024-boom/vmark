@@ -1,25 +1,104 @@
 /**
- * Multi-cursor input handling for ProseMirror
- *
- * Handles typing, backspace, and delete operations across multiple cursors.
- * Edits are applied in reverse document order to preserve position validity.
+ * Multi-cursor input handling for ProseMirror — typing, backspace, and delete
+ * across multiple cursors. The three share one frame (editEachRange): edits
+ * are applied in reverse document order by rangeEdits.ts, then the selection
+ * is rebuilt.
+ * @module plugins/multiCursor/inputHandling
  */
 import { Selection, SelectionRange } from "@tiptap/pm/state";
 import type { EditorState, Transaction } from "@tiptap/pm/state";
+import type { Node } from "@tiptap/pm/model";
 import type { EditorView } from "@tiptap/pm/view";
-import { MultiSelection } from "./MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 import { isImeKeyEvent } from "@/utils/imeGuard";
 import {
   normalizeRangesWithPrimary,
   remapBackwardFlags,
-  sortRangesDescending,
-} from "./rangeUtils";
+} from "@/plugins/shared/rangeUtils";
 import {
   handleMultiCursorHorizontal,
   type HorizontalUnit,
 } from "./horizontalMovement";
 import { handleMultiCursorEnter } from "./enterHandling";
+import { editRangesFromEnd, type RangeEdit } from "./rangeEdits";
 
+/** The range rebuilt in the edited document from its ends, each mapped through every edit. */
+type RangeRemap = (doc: Node, from: number, to: number) => SelectionRange;
+
+/**
+ * The frame every per-cursor edit shares: merge overlapping ranges so each
+ * edit targets a disjoint span, apply the edit from the end of the document
+ * to the start so earlier positions stay valid, then rebuild the selection
+ * from the remapped ranges, merging any that the edits made touch.
+ *
+ * @returns Transaction or null if not a MultiSelection
+ */
+function editEachRange(
+  state: EditorState,
+  edit: RangeEdit,
+  remap: RangeRemap
+): Transaction | null {
+  const { selection } = state;
+
+  if (!(selection instanceof MultiSelection)) {
+    return null;
+  }
+
+  const preMerged = normalizeRangesWithPrimary(
+    selection.ranges, state.doc, selection.primaryIndex, true
+  );
+  const edits = editRangesFromEnd(state, preMerged.ranges, edit);
+  let { tr } = edits;
+
+  const newRanges = preMerged.ranges.map((range, index) =>
+    remap(tr.doc, edits.map(index, range.$from.pos), edits.map(index, range.$to.pos))
+  );
+  const merged = normalizeRangesWithPrimary(newRanges, tr.doc, preMerged.primaryIndex, true);
+  tr = tr.setSelection(new MultiSelection(merged.ranges, merged.primaryIndex));
+  tr = tr.setMeta("addToHistory", true);
+
+  return tr;
+}
+
+/** Both ends of the range, mapped through the edits. */
+const remapBothEnds: RangeRemap = (doc, from, to) =>
+  new SelectionRange(doc.resolve(from), doc.resolve(to));
+
+/** A cursor where the range started, mapped through the edits. */
+const remapToCursor: RangeRemap = (doc, from) => {
+  const $pos = doc.resolve(from);
+  return new SelectionRange($pos, $pos);
+};
+
+/**
+ * Delete a range's selection, or — for a cursor — the one character before
+ * (`dir` -1) or after (`dir` 1) it within its textblock. Characters are
+ * measured by Unicode code point, so a surrogate pair (emoji) goes as a whole.
+ */
+function deleteAtRange(state: EditorState, dir: -1 | 1): RangeEdit {
+  return (tr, range) => {
+    const from = range.$from.pos;
+    const to = range.$to.pos;
+    if (from !== to) {
+      return tr.delete(from, to);
+    }
+
+    // Resolved in the pre-edit document: edits run end to start, so nothing
+    // at or before this position has moved yet.
+    const $pos = state.doc.resolve(from);
+    const size = $pos.parent.content.size;
+    if (dir < 0 ? $pos.parentOffset === 0 : $pos.parentOffset >= size) {
+      return tr;
+    }
+    const neighbour =
+      dir < 0
+        ? [...$pos.parent.textBetween(0, $pos.parentOffset)].at(-1)
+        : [...$pos.parent.textBetween($pos.parentOffset, size)].at(0);
+    /* v8 ignore next -- @preserve reason: a neighbouring character always exists inside the textblock bounds checked above; defensive guard */
+    const charLen = neighbour ? neighbour.length : 1;
+    return dir < 0 ? tr.delete(from - charLen, from) : tr.delete(from, from + charLen);
+  };
+}
 
 /**
  * Handle text input at all cursor positions.
@@ -34,44 +113,14 @@ export function handleMultiCursorInput(
   text: string,
   options?: { isComposing?: boolean }
 ): Transaction | null {
-  const { selection } = state;
-
-  if (!(selection instanceof MultiSelection)) {
-    return null;
-  }
   if (options?.isComposing) {
     return null;
   }
-
-  // Pre-merge overlapping ranges so each edit targets a disjoint span
-  const preMerged = normalizeRangesWithPrimary(
-    selection.ranges, state.doc, selection.primaryIndex, true
+  return editEachRange(
+    state,
+    (tr, range) => tr.insertText(text, range.$from.pos, range.$to.pos),
+    remapBothEnds
   );
-  const sortedRanges = sortRangesDescending(preMerged.ranges);
-  let tr = state.tr;
-
-  // Apply insertions from end to start
-  for (const range of sortedRanges) {
-    const from = range.$from.pos;
-    const to = range.$to.pos;
-    tr = tr.insertText(text, from, to);
-  }
-
-  // Remap selection through the changes, merging any overlaps caused by edits
-  const newRanges = preMerged.ranges.map((range) => {
-    const newFrom = tr.mapping.map(range.$from.pos);
-    const newTo = tr.mapping.map(range.$to.pos);
-    const $from = tr.doc.resolve(newFrom);
-    const $to = tr.doc.resolve(newTo);
-    return new SelectionRange($from, $to);
-  });
-
-  const merged = normalizeRangesWithPrimary(newRanges, tr.doc, preMerged.primaryIndex, true);
-  const newSel = new MultiSelection(merged.ranges, merged.primaryIndex);
-  tr = tr.setSelection(newSel);
-  tr = tr.setMeta("addToHistory", true);
-
-  return tr;
 }
 
 /**
@@ -84,55 +133,7 @@ export function handleMultiCursorInput(
 export function handleMultiCursorBackspace(
   state: EditorState
 ): Transaction | null {
-  const { selection } = state;
-
-  if (!(selection instanceof MultiSelection)) {
-    return null;
-  }
-
-  // Pre-merge overlapping ranges so each edit targets a disjoint span
-  const preMerged = normalizeRangesWithPrimary(
-    selection.ranges, state.doc, selection.primaryIndex, true
-  );
-  const sortedRanges = sortRangesDescending(preMerged.ranges);
-  let tr = state.tr;
-
-  // Apply deletions from end to start
-  for (const range of sortedRanges) {
-    const from = range.$from.pos;
-    const to = range.$to.pos;
-
-    if (from !== to) {
-      // Selection - delete selected text
-      tr = tr.delete(from, to);
-    } else {
-      const $pos = state.doc.resolve(from);
-      if ($pos.parentOffset > 0) {
-        // Use Unicode-aware iteration to find the proper character boundary,
-        // so surrogate pairs (emoji) are deleted as a whole unit.
-        const textBefore = $pos.parent.textBetween(0, $pos.parentOffset);
-        const lastChar = [...textBefore].at(-1);
-        /* v8 ignore next -- @preserve reason: lastChar is always defined when parentOffset > 0; defensive guard */
-        const charLen = lastChar ? lastChar.length : 1;
-        tr = tr.delete(from - charLen, from);
-      }
-    }
-  }
-
-  // Remap selection through the changes, merging any overlaps caused by edits
-  const newRanges: SelectionRange[] = [];
-  for (const range of preMerged.ranges) {
-    const newPos = tr.mapping.map(range.$from.pos);
-    const $pos = tr.doc.resolve(newPos);
-    newRanges.push(new SelectionRange($pos, $pos));
-  }
-
-  const merged = normalizeRangesWithPrimary(newRanges, tr.doc, preMerged.primaryIndex, true);
-  const newSel = new MultiSelection(merged.ranges, merged.primaryIndex);
-  tr = tr.setSelection(newSel);
-  tr = tr.setMeta("addToHistory", true);
-
-  return tr;
+  return editEachRange(state, deleteAtRange(state, -1), remapToCursor);
 }
 
 /**
@@ -145,55 +146,7 @@ export function handleMultiCursorBackspace(
 export function handleMultiCursorDelete(
   state: EditorState
 ): Transaction | null {
-  const { selection } = state;
-
-  if (!(selection instanceof MultiSelection)) {
-    return null;
-  }
-
-  // Pre-merge overlapping ranges so each edit targets a disjoint span
-  const preMerged = normalizeRangesWithPrimary(
-    selection.ranges, state.doc, selection.primaryIndex, true
-  );
-  const sortedRanges = sortRangesDescending(preMerged.ranges);
-  let tr = state.tr;
-
-  // Apply deletions from end to start
-  for (const range of sortedRanges) {
-    const from = range.$from.pos;
-    const to = range.$to.pos;
-
-    if (from !== to) {
-      // Selection - delete selected text
-      tr = tr.delete(from, to);
-    } else {
-      const $pos = state.doc.resolve(from);
-      if ($pos.parentOffset < $pos.parent.content.size) {
-        // Use Unicode-aware iteration to find the proper character boundary,
-        // so surrogate pairs (emoji) are deleted as a whole unit.
-        const textAfter = $pos.parent.textBetween($pos.parentOffset, $pos.parent.content.size);
-        const firstChar = [...textAfter].at(0);
-        /* v8 ignore next -- @preserve reason: firstChar is always defined when parentOffset < content.size; defensive guard */
-        const charLen = firstChar ? firstChar.length : 1;
-        tr = tr.delete(from, from + charLen);
-      }
-    }
-  }
-
-  // Remap selection through the changes, merging any overlaps caused by edits
-  const newRanges: SelectionRange[] = [];
-  for (const range of preMerged.ranges) {
-    const newPos = tr.mapping.map(range.$from.pos);
-    const $pos = tr.doc.resolve(newPos);
-    newRanges.push(new SelectionRange($pos, $pos));
-  }
-
-  const merged = normalizeRangesWithPrimary(newRanges, tr.doc, preMerged.primaryIndex, true);
-  const newSel = new MultiSelection(merged.ranges, merged.primaryIndex);
-  tr = tr.setSelection(newSel);
-  tr = tr.setMeta("addToHistory", true);
-
-  return tr;
+  return editEachRange(state, deleteAtRange(state, 1), remapToCursor);
 }
 
 /**

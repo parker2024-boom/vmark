@@ -1,5 +1,5 @@
 /**
- * Rehydration normalization for the workspace store (audit #1017).
+ * Rehydration normalization for the workspace store.
  *
  * Purpose: persisted state re-enters the store through zustand's `merge`, which
  * by default is a SHALLOW object merge — so a config written by an older build,

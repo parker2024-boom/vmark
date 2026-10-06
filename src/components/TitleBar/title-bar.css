@@ -109,7 +109,7 @@
 }
 
 .dirty-indicator {
-  /* WI-UA9 (audit 20260901): a real dot with a soft accent halo, matching
+  /* A real dot with a soft accent halo, matching
      .tab-dirty-dot — the text bullet it replaces was easy to miss. */
   display: inline-block;
   width: 6px;
@@ -130,7 +130,7 @@
   line-height: 1;
 }
 
-/* `.vm-input` (WI-UI3.3); the soft rest-state border is local. */
+/* `.vm-input`; the soft rest-state border is local. */
 .title-bar-input {
   font-size: var(--font-size-base);
   border-bottom-color: color-mix(in srgb, var(--text-secondary) 40%, transparent);

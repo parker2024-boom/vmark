@@ -36,7 +36,7 @@ import { useBrowserApprovalStore } from "@/stores/browserApprovalStore";
 import { grantPatternFor } from "@/stores/browserApprovalStore.helpers";
 import type { ActionTarget } from "@/stores/browserApprovalStore.types";
 import { mintOneShotConfirmed, revokeOneShot } from "@/services/browser/grantSync";
-import { useBrowserLeaseStore } from "@/services/browser/lease";
+import { browserLease } from "@/services/browser/lease";
 import { originForAgent } from "@/lib/browser/url";
 import { WorkflowPause } from "@/lib/browser/workflow/engine";
 import type { RunClock } from "./runClock";
@@ -60,13 +60,13 @@ export interface ApprovalWaitContext {
 export interface ApprovalRequest {
   /** For a page operation: the page the caller believes it is on (the tab's
    *  current url wins). For `navigate`: the DESTINATION — the origin the
-   *  authorization is about (round 3, #184). */
+   *  authorization is about. */
   url: string;
   operation: string;
   target?: ActionTarget;
   /** A standing grant does not settle this request: a prompt is raised (or an
    *  identity-bound one-shot spent) even on a granted origin. Set for a HEALED
-   *  write, whose locator is no longer the one the workflow author wrote (#162). */
+   *  write, whose locator is no longer the one the workflow author wrote. */
   requireFreshApproval?: boolean;
   /** The BUILT script, for the payload-binding ops (`type`, `key`, `scroll`). */
   script?: string;
@@ -131,7 +131,7 @@ async function consumeAndMint(ctx: ApprovalWaitContext, req: ApprovalRequest, pa
   // Raced against the run's signal: a cancellation or lease loss must settle the
   // run even while the driver's mint is pending. The frontend copy is withdrawn with
   // the run's other one-shots (withdrawByRun); the DRIVER's copy, minted after the
-  // run was gone, is revoked when the late mint confirms (round 3, #124) — nothing
+  // run was gone, is revoked when the late mint confirms — nothing
   // is left for a later request to spend by accident.
   const shot = {
     originPattern: pattern,
@@ -161,7 +161,7 @@ type PollOutcome = "authorized" | "dropped";
 async function pollPrompt(ctx: ApprovalWaitContext, req: ApprovalRequest, reqId: string, page: AuthorizedPage): Promise<PollOutcome> {
   for (;;) {
     throwIfAborted(ctx.signal);
-    if (useBrowserLeaseStore.getState().epochOf(ctx.tabId) !== ctx.leaseEpoch) {
+    if (browserLease.epochOf(ctx.tabId) !== ctx.leaseEpoch) {
       throw new WorkflowPause("lease-lost", "automation lease lost while waiting for approval — a human took control");
     }
     const store = useBrowserApprovalStore.getState();

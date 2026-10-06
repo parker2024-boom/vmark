@@ -1,17 +1,16 @@
-// @vitest-environment node
-//
 // Audit 20260907 round 3 (#697/#699). Two defects in one function's tail:
 // the resource-warning toast counted warning CATEGORIES, so three missing
 // images reported "1 resource could not be included"; and the empty-content
 // guard was copied into all four public operations, which is how `copyAsHtml`
 // came to have none at all until a fourth copy was added for it.
+// The markdown goes through the real off-screen render (jsdom), so the HTML
+// handed to the folder writer is the document's, not a canned string.
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { mockExportHtml, mockSave, mockToast, mockRender, mockWriteText } = vi.hoisted(() => ({
+const { mockExportHtml, mockSave, mockToast, mockWriteText } = vi.hoisted(() => ({
   mockExportHtml: vi.fn(),
   mockSave: vi.fn(),
   mockToast: { error: vi.fn(), warning: vi.fn(), success: vi.fn(), errorDetail: vi.fn() },
-  mockRender: vi.fn(),
   mockWriteText: vi.fn(),
 }));
 
@@ -21,13 +20,6 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: (...a: unkno
 vi.mock("@/services/ime/imeToast", () => ({ imeToast: mockToast }));
 vi.mock("@/i18n", () => ({
   default: { t: (key: string, params?: Record<string, unknown>) => (params ? `${key}:${JSON.stringify(params)}` : key) },
-}));
-vi.mock("../renderMarkdownToHtml", () => ({ renderMarkdownToHtml: (...a: unknown[]) => mockRender(...a) }));
-vi.mock("../printDocument", () => ({
-  buildPrintHtml: vi.fn(async () => "<html></html>"),
-  prepareExportBody: vi.fn(async (html: string) => html),
-  liveEditorElement: vi.fn(() => null),
-  renderPrintableHtml: vi.fn(async () => "<p>rendered</p>"),
 }));
 
 import { copyAsHtml, exportToHtml, exportToPdf, exportToPdfNative } from "../useExportOperations";
@@ -44,7 +36,6 @@ const result = (over: Record<string, unknown> = {}) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mockSave.mockResolvedValue("/out/Doc.html");
-  mockRender.mockResolvedValue("<p>x</p>");
   mockExportHtml.mockResolvedValue(result());
 });
 
@@ -70,6 +61,7 @@ describe("exportToHtml — what the resource warning counts", () => {
 
   it("says nothing when there is nothing to say", async () => {
     await exportToHtml({ markdown: "# hi" });
+    expect(mockExportHtml.mock.calls[0][0]).toMatch(/<h1[^>]*>hi<\/h1>/);
     expect(mockToast.warning).not.toHaveBeenCalled();
     expect(mockToast.success).toHaveBeenCalled();
   });

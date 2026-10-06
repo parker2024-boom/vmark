@@ -1,13 +1,16 @@
 // @vitest-environment node
-import { describe, it, expect, vi, beforeEach } from "vitest";
-
-const mockCleanupWarn = vi.fn();
-
-vi.mock("@/utils/debug", () => ({
-  cleanupWarn: (...args: unknown[]) => mockCleanupWarn(...args),
-}));
-
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
 import { safeUnlisten, safeUnlistenAsync, safeUnlistenAll } from "./safeUnlisten";
+
+// The real cleanup logger writes to the console, the boundary watched here.
+let consoleWarn: MockInstance<typeof console.warn>;
+beforeEach(() => {
+  consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+});
+afterEach(() => {
+  consoleWarn.mockRestore();
+});
+const cleanupWarned = (...args: unknown[]) => expect(consoleWarn).toHaveBeenCalledWith("[Cleanup]", ...args);
 
 describe("safeUnlisten", () => {
   it("calls the unlisten function", () => {
@@ -30,10 +33,6 @@ describe("safeUnlisten", () => {
 });
 
 describe("safeUnlistenAsync", () => {
-  beforeEach(() => {
-    mockCleanupWarn.mockClear();
-  });
-
   it("resolves the promise and calls the unlisten function", async () => {
     const fn = vi.fn();
     const promise = Promise.resolve(fn);
@@ -55,20 +54,14 @@ describe("safeUnlistenAsync", () => {
     safeUnlistenAsync(promise);
     // Allow microtask to complete
     await new Promise((r) => setTimeout(r, 0));
-    expect(mockCleanupWarn).toHaveBeenCalledWith(
-      "Listener cleanup failed:",
-      "listen failed"
-    );
+    cleanupWarned("Listener cleanup failed:", "listen failed");
   });
 
   it("logs stringified error for non-Error rejections", async () => {
     const promise = Promise.reject("string error");
     safeUnlistenAsync(promise);
     await new Promise((r) => setTimeout(r, 0));
-    expect(mockCleanupWarn).toHaveBeenCalledWith(
-      "Listener cleanup failed:",
-      "string error"
-    );
+    cleanupWarned("Listener cleanup failed:", "string error");
   });
 });
 
@@ -154,25 +147,21 @@ describe("safeUnlisten — rejected promises from unlisten()", () => {
 // The module contract says cleanup failures are logged. Swallowing them
 // silently hides a genuinely inconsistent listener registry.
 describe("safeUnlisten — failures are reported", () => {
-  beforeEach(() => {
-    mockCleanupWarn.mockClear();
-  });
-
   it("logs a synchronous throw", () => {
     safeUnlisten(() => {
       throw new Error("already cleaned up");
     });
-    expect(mockCleanupWarn).toHaveBeenCalledWith("Listener cleanup failed:", "already cleaned up");
+    cleanupWarned("Listener cleanup failed:", "already cleaned up");
   });
 
   it("logs a rejected promise", async () => {
     safeUnlisten((() => Promise.reject(new Error("registry inconsistent"))) as unknown as () => void);
     await new Promise((r) => setTimeout(r, 0));
-    expect(mockCleanupWarn).toHaveBeenCalledWith("Listener cleanup failed:", "registry inconsistent");
+    cleanupWarned("Listener cleanup failed:", "registry inconsistent");
   });
 
   it("stays silent on success", () => {
     safeUnlisten(vi.fn());
-    expect(mockCleanupWarn).not.toHaveBeenCalled();
+    expect(consoleWarn).not.toHaveBeenCalled();
   });
 });

@@ -13,12 +13,12 @@
  * Naming them here lets both the property tests and any future example test
  * assert the same contract, instead of each re-deciding what "valid" means.
  *
- * @coordinates-with ../MultiSelection.ts — the structure under contract
- * @coordinates-with ../rangeUtils.ts — normalizeRangesWithPrimary enforces these
+ * @coordinates-with shared/MultiSelection.ts — the structure under contract
+ * @coordinates-with shared/rangeUtils.ts — normalizeRangesWithPrimary enforces these
  * @module plugins/multiCursor/__tests__/multiSelectionInvariants
  */
 import type { Node } from "@tiptap/pm/model";
-import type { MultiSelection } from "../MultiSelection";
+import type { MultiSelection } from "@/plugins/shared/MultiSelection";
 
 /** A violated invariant, described well enough to debug from the message alone. */
 export interface Violation {

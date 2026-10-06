@@ -8,7 +8,7 @@
  * Key decisions:
  *   - Only paths that look like real files (contain a slash and have an
  *     extension) are linked, reducing false positives on random output.
- *   - Relative paths resolve against the shell's live cwd (OSC 7, WI-2.3) when
+ *   - Relative paths resolve against the shell's live cwd (OSC 7) when
  *     available, falling back to useWorkspaceStore.rootPath — so clicking
  *     "src/main.ts" opens the correct file even after the user `cd`s around.
  *   - Implements xterm's ILinkProvider interface for native hover + click
@@ -51,13 +51,13 @@ export function normalizeBase(base: string): string {
 }
 
 /** Resolve a possibly-relative path against a base directory.
- * Prefers the shell's live cwd (OSC 7, WI-2.3); falls back to the workspace
+ * Prefers the shell's live cwd (OSC 7); falls back to the workspace
  * root. Returns null for a relative path with no base, or one that escapes the
  * base via `..` — so terminal output like `../../../etc/passwd` is NOT turned
  * into a clickable link (path-traversal guard).
  *
  * Resolution is plain segment arithmetic rather than `new URL(…, 'file://…')`
- * for two reasons (WI-1.5 / T6):
+ * for two reasons (T6):
  *   - URL-based resolution produced a containment check of
  *     `resolved.startsWith(base + '/')`, which for `base === "/"` demanded a
  *     leading `//` and therefore rejected EVERY relative path once the shell
@@ -133,7 +133,7 @@ export function createFileLinkProvider(
         const resolved = resolvePath(rawPath, getCwd);
         // Skip paths we can't safely anchor or that escape the base (traversal).
         if (!resolved) continue;
-        // Carry the parsed :line:col through so the editor can jump there (WI-4.1).
+        // Carry the parsed :line:col through so the editor can jump there.
         const line = match[2] ? parseInt(match[2], 10) : undefined;
         const col = match[3] ? parseInt(match[3], 10) : undefined;
 

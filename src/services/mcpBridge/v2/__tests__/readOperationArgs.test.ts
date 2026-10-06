@@ -10,7 +10,7 @@
  * Ledger D5: an undeclared field is logged loudly, never silently dropped.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { readOperationArgs } from "@/services/mcpBridge/v2/readOperationArgs";
+import { readOperationArgs, readOperationArgsChecked } from "@/services/mcpBridge/v2/readOperationArgs";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -101,5 +101,48 @@ describe("readOperationArgs", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     readOperationArgs("vmark.workspace.open", { filePath: "/w/a.md", windowLabel: "doc-1" });
     expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+// WI-RA18.8 — the checked read: the same parse, plus the declared fields that
+// arrived with the wrong runtime shape, for a handler that must refuse one
+// rather than read it as absent.
+describe("readOperationArgsChecked", () => {
+  it("parses exactly as readOperationArgs does", () => {
+    const args = { tabId: 42, content: "# hi", save: "yes", expected_revision: "r1" };
+    expect(readOperationArgsChecked("vmark.document.write", args).wire).toEqual(
+      readOperationArgs("vmark.document.write", args),
+    );
+  });
+
+  it("names the declared fields that were present with the wrong shape", () => {
+    const { malformed } = readOperationArgsChecked("vmark.browser.style", {
+      tabId: "",
+      set: ["color", "red"],
+      addClasses: "big",
+      injectCss: 7,
+      selector: "p",
+    });
+    expect([...malformed].sort()).toEqual(["addClasses", "injectCss", "set"]);
+  });
+
+  it.each([
+    ["null", null],
+    ["a number", 5],
+    ["an object", { id: "t1" }],
+  ])("reports a tab id given as %s", (_label, tabId) => {
+    expect(readOperationArgsChecked("vmark.browser.read", { tabId }).malformed.has("tabId")).toBe(true);
+  });
+
+  it("reports nothing for an absent field, and a non-finite number as malformed", () => {
+    expect(readOperationArgsChecked("vmark.browser.wait_for", {}).malformed.size).toBe(0);
+    expect(
+      readOperationArgsChecked("vmark.browser.wait_for", { timeoutMs: Number.NaN }).malformed.has("timeoutMs"),
+    ).toBe(true);
+  });
+
+  it("does not report an undeclared field as malformed — that is logged, not refused", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(readOperationArgsChecked("vmark.browser.read", { clientId: 1 }).malformed.size).toBe(0);
   });
 });

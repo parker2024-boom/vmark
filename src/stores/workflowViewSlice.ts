@@ -1,8 +1,8 @@
 /**
  * The canvas view slice's transitions — pure functions over `ViewSlice`.
  *
- * Split from `workflowStore.ts` for the same reason as the preview slice
- * (audit #1001): the store file is the wiring, and a 156-line initializer
+ * Split from `workflowStore.ts` for the same reason as the preview slice:
+ * the store file is the wiring, and a 156-line initializer
  * carrying five domains had pushed it past the ~300-line cap.
  *
  * Two kinds of state live here and reset differently: the SELECTION belongs

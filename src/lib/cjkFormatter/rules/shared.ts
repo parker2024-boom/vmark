@@ -8,28 +8,95 @@
  * @module lib/cjkFormatter/rules/shared
  */
 
-// Character ranges - Extended CJK coverage
-const HAN_BASIC = "\u4e00-\u9fff"; // CJK Unified Ideographs (basic block)
-const HAN_EXT_A = "\u3400-\u4dbf"; // CJK Extension A (rare characters)
-// Note: Extensions B-G (U+20000-U+2CEAF) are beyond BMP, require surrogate pairs
-const BOPOMOFO = "\u3100-\u312f"; // Bopomofo (Zhuyin)
-const BOPOMOFO_EXT = "\u31a0-\u31bf"; // Bopomofo Extended
-const HIRAGANA = "\u3040-\u309f";
-const KATAKANA = "\u30a0-\u30ff";
-const KATAKANA_EXT = "\u31f0-\u31ff"; // Katakana Phonetic Extensions
-// Combined ranges
-const HAN = `${HAN_BASIC}${HAN_EXT_A}`;
-// Korean excluded from spacing rules: Korean uses native word spacing and
-// particles attach directly to preceding words (e.g., "VMark에는").
-export const CJK_NO_KOREAN = `${HAN}${BOPOMOFO}${BOPOMOFO_EXT}${HIRAGANA}${KATAKANA}${KATAKANA_EXT}`;
+/**
+ * THE definition of a Han ideograph, as a character-class BODY (needs `u`):
+ * by script, so Extension A, the supplementary-plane extensions, the
+ * compatibility ideographs, `々` and `〇` are all in it.
+ */
+export const HAN_CLASS = "\\p{Script=Han}";
+
+/**
+ * THE definition of a CJK letter, as a character-class BODY: Han, Hiragana,
+ * Katakana and Bopomofo by Unicode script, plus the kana marks that Unicode
+ * files under Common/Inherited but that are part of a word — the prolonged
+ * sound mark (`ー`, and its halfwidth form) and the voicing marks.
+ *
+ * Every rule builds its pattern from this, and `isCJKLetter` tests against it.
+ * There used to be two definitions — BMP block ranges for the spacing rules,
+ * script properties for the punctuation rule — and they disagreed: a
+ * supplementary-plane Han character got fullwidth punctuation but no spacing,
+ * and `ー` got spacing but no fullwidth punctuation.
+ *
+ * Script properties match whole code points, so every `RegExp` built from this
+ * MUST carry the `u` flag; without it the pattern does not compile to what it
+ * says.
+ *
+ * Korean is deliberately absent: it uses native word spacing and particles
+ * attach directly to the preceding word (`VMark에는`). The katakana middle dot
+ * (`・`) is absent too — it is punctuation with its own spacing.
+ */
+export const CJK_LETTER_CLASS =
+  // The combining voicing marks lead the class: after another member they
+  // would read as a base character plus its mark, which is not what a class
+  // member is. Then the prolonged sound mark, full and half width.
+  "\\u{3099}-\\u{309c}\\u{ff9e}\\u{ff9f}\\u{30fc}\\u{ff70}" +
+  `${HAN_CLASS}\\p{Script=Hiragana}\\p{Script=Katakana}\\p{Script=Bopomofo}`;
+
+const CJK_LETTER_REGEX = new RegExp(`[${CJK_LETTER_CLASS}]`, "u");
+const HANGUL_REGEX = /\p{Script=Hangul}/u;
+
+/**
+ * Whether `char` is (or contains) a CJK letter — see `CJK_LETTER_CLASS`.
+ * Accepts a single UTF-16 code unit or a whole code point.
+ */
+export function isCJKLetter(char: string): boolean {
+  return CJK_LETTER_REGEX.test(char);
+}
+
+/** Whether `char` is (or contains) a Hangul letter. */
+export function isHangulLetter(char: string): boolean {
+  return HANGUL_REGEX.test(char);
+}
+
+/**
+ * THE definition of a Latin letter, as a character-class BODY (needs `u`).
+ *
+ * Latin by script, not by ASCII range: with `[A-Za-z]` the run in
+ * `中文café中文` began at `c` and so was spaced on the left, but ended at `é`
+ * and so was not spaced on the right.
+ *
+ * Fullwidth Latin (`Ａ`–`ｚ`) is Latin by script and is excluded wherever this
+ * is used, via `NOT_FULLWIDTH_LATIN`: a fullwidth form carries its own
+ * sidebearing, exactly as fullwidth punctuation does, so it is never spaced.
+ */
+const LATIN_LETTER_CLASS = "\\p{Script=Latin}";
+const NOT_FULLWIDTH_LATIN = "(?![\\u{ff21}-\\u{ff3a}\\u{ff41}-\\u{ff5a}])";
+
+const LATIN_LETTER_REGEX = new RegExp(`^${NOT_FULLWIDTH_LATIN}[${LATIN_LETTER_CLASS}]`, "u");
+
+/** Whether `char` starts with a Latin letter — see `LATIN_LETTER_CLASS`. */
+export function isLatinLetter(char: string): boolean {
+  if (char === "") return false;
+  const code = char.charCodeAt(0);
+  // ASCII decides itself; the script lookup is only worth paying beyond it.
+  if (code < 0x80) return (code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a);
+  return LATIN_LETTER_REGEX.test(char);
+}
+
+/**
+ * ONE Latin letter or ASCII digit, as a pattern FRAGMENT (needs `u`), with any
+ * combining marks that follow it — so a decomposed `é` (`e` + U+0301) is one
+ * unit and the mark cannot sit between the letter and a CJK neighbour.
+ */
+export const LATIN_ALNUM = `(?:${NOT_FULLWIDTH_LATIN}[${LATIN_LETTER_CLASS}0-9]\\p{M}*)`;
 
 // CJK punctuation
 export const CJK_TERMINAL_PUNCTUATION = "，。！？；：、";
 export const CJK_CLOSING_BRACKETS = "》」』】）〉";
 export const CJK_OPENING_BRACKETS = "《「『【（〈";
 
-// Character class patterns
-export const CJK_CHARS_PATTERN = `[${HAN}${HIRAGANA}${KATAKANA}《》「」『』【】（）〈〉，。！？；：、]`;
+/** One CJK letter or CJK punctuation mark, as a pattern (needs `u`). */
+export const CJK_CHARS_PATTERN = `[${CJK_LETTER_CLASS}《》「」『』【】（）〈〉，。！？；：、]`;
 
 // Punctuation conversion map (half-width → full-width)
 export const PUNCTUATION_MAP: Record<string, string> = {
@@ -53,7 +120,7 @@ export type CharSequence = { readonly length: number; readonly [index: number]: 
 /**
  * Nearest non-space character to the left of `pos` (handles surrogate pairs).
  *
- * `skipSpaces` is FALSE for punctuation conversion (WI-CJKF3.1): a mark
+ * `skipSpaces` is FALSE for punctuation conversion: a mark
  * separated from the CJK character by a space must not become fullwidth,
  * because fullwidth punctuation carries its own sidebearing and is never
  * preceded by a space in any CJK orthography. Skipping produced
@@ -115,11 +182,57 @@ export function getRightNeighbor(
 }
 
 /**
- * Check if text contains CJK characters (Han, Kana, or Hangul).
- * Uses Unicode script property escapes for full coverage including supplementary planes.
+ * The whole code point that ENDS just before `index` — a supplementary-plane
+ * character is returned as one string, not as its low surrogate. Empty at the
+ * start of the text.
+ */
+export function codePointBefore(text: string, index: number): string {
+  if (index <= 0) return "";
+  const low = text.charCodeAt(index - 1);
+  if (low >= 0xdc00 && low <= 0xdfff && index >= 2) {
+    const high = text.charCodeAt(index - 2);
+    if (high >= 0xd800 && high <= 0xdbff) return text.slice(index - 2, index);
+  }
+  return text[index - 1];
+}
+
+/** The whole code point that STARTS at `index`; empty past the end. */
+export function codePointAt(text: string, index: number): string {
+  const code = text.codePointAt(index);
+  return code === undefined ? "" : String.fromCodePoint(code);
+}
+
+/**
+ * Check if text contains CJK characters (Han, Kana, Bopomofo, or Hangul),
+ * supplementary planes included. Hangul counts here — this gates whether the
+ * CJK rules run at all — even though it is not a CJK LETTER for spacing.
  */
 export function containsCJK(text: string): boolean {
-  return /\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana}|\p{Script=Hangul}|\p{Script=Bopomofo}/u.test(
-    text
-  );
+  return isCJKLetter(text) || isHangulLetter(text);
+}
+
+/**
+ * Replace every `open … close` pair, where the content holds no `close`, with
+ * `render(content)` — what `text.replace(/open([^close]*)close/g, …)` does,
+ * in one pass. The expression rescans to the end of the text from every
+ * `open` once the last `close` is behind it; this stops at the first `open`
+ * that has none.
+ */
+export function replaceDelimited(
+  text: string,
+  open: string,
+  close: string,
+  render: (content: string) => string
+): string {
+  let out = "";
+  let cursor = 0;
+  for (;;) {
+    const start = text.indexOf(open, cursor);
+    if (start === -1) break;
+    const end = text.indexOf(close, start + open.length);
+    if (end === -1) break;
+    out += text.slice(cursor, start) + render(text.slice(start + open.length, end));
+    cursor = end + close.length;
+  }
+  return cursor === 0 ? text : out + text.slice(cursor);
 }

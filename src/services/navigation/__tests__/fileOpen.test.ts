@@ -3,7 +3,16 @@
  * Unit tests for openFileInNewTabCore — dedup guard behavior.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { readTextFile } from "@tauri-apps/plugin-fs";
+import { fileBytes } from "@/test/fileBytes";
+
+// A document is read as BYTES (services/files/readDocumentText.ts); `fileText`
+// is the text the mocked file holds, served through plugin-fs `readFile`.
+const { fileText } = vi.hoisted(() => ({
+  fileText: vi.fn<(path: string) => Promise<string>>(async () => ""),
+}));
+vi.mock("@tauri-apps/plugin-fs", () => ({
+  readFile: (path: string) => fileBytes(fileText(path)),
+}));
 import { useTabStore } from "@/stores/tabStore";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useSettingsStore } from "@/stores/settingsStore";
@@ -37,7 +46,7 @@ describe("openFileInNewTabCore", () => {
   });
 
   it("creates tab and initializes document for a new file", async () => {
-    vi.mocked(readTextFile).mockResolvedValue("# Hello");
+    fileText.mockResolvedValue("# Hello");
 
     await openFileInNewTabCore(WINDOW, "/Users/test/file.md");
 
@@ -54,7 +63,7 @@ describe("openFileInNewTabCore", () => {
     });
     const existingId = useTabStore.getState().createTab("doc-1", "/Users/test/file.md");
     useDocumentStore.getState().initDocument(existingId, "# Existing", "/Users/test/file.md");
-    vi.mocked(readTextFile).mockResolvedValue("# Hello");
+    fileText.mockResolvedValue("# Hello");
 
     await openFileInNewTabCore(WINDOW, "/Users/test/file.md");
 
@@ -68,7 +77,7 @@ describe("openFileInNewTabCore", () => {
     const existingId = useTabStore.getState().createTab(WINDOW, "/Users/test/file.md");
     useDocumentStore.getState().initDocument(existingId, "# Original", "/Users/test/file.md");
 
-    vi.mocked(readTextFile).mockResolvedValue("# Overwritten");
+    fileText.mockResolvedValue("# Overwritten");
 
     // Call openFileInNewTabCore for the same path — should detect dedup
     await openFileInNewTabCore(WINDOW, "/Users/test/file.md");
@@ -76,15 +85,15 @@ describe("openFileInNewTabCore", () => {
     // Content must NOT be overwritten
     const doc = useDocumentStore.getState().getDocument(existingId);
     expect(doc!.content).toBe("# Original");
-    // readTextFile should not even be called when dedup is detected
-    expect(readTextFile).not.toHaveBeenCalled();
+    // The file should not even be read when dedup is detected
+    expect(fileText).not.toHaveBeenCalled();
   });
 
   it("does NOT detach existing tab on dedup", async () => {
     // Pre-create a tab
     useTabStore.getState().createTab(WINDOW, "/Users/test/file.md");
 
-    vi.mocked(readTextFile).mockRejectedValue(new Error("read failed"));
+    fileText.mockRejectedValue(new Error("read failed"));
 
     await openFileInNewTabCore(WINDOW, "/Users/test/file.md");
 

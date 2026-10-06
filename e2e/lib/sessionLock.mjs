@@ -5,7 +5,7 @@
  * `CGSessionCopyCurrentDictionary()` via `use framework "Foundation"` — a
  * CoreGraphics C function Foundation does not export. The call raised, a bare
  * `try` swallowed it, and the probe returned "unlocked" UNCONDITIONALLY.
- * Measured 2026-09-17 against a genuinely locked Mac: ground truth `<true/>`,
+ * Measured against a genuinely locked Mac: ground truth `<true/>`,
  * probe "unlocked".
  *
  * The same three lines carried a second, opposite bug: the test was

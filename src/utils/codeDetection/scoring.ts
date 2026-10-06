@@ -2,6 +2,8 @@
  * Code Detection Scoring
  *
  * Functions to calculate how "code-like" text appears to be.
+ *
+ * @module utils/codeDetection/scoring
  */
 
 import {

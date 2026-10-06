@@ -48,7 +48,7 @@
 
 use crate::command_error::CommandError;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use tauri::menu::{Menu, MenuItemKind, Submenu};
 use tauri::{AppHandle, Wry};
@@ -62,9 +62,14 @@ static ACCEL_CACHE: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 /// section builder fails, the previous baseline stays intact instead of
 /// being left half-repopulated for a menu that was never installed.
 pub fn commit_rebuild(snapshot: HashMap<String, String>) {
-    if let Ok(mut a) = ACCEL_CACHE.lock() {
-        *a = Some(snapshot);
-    }
+    *accel_cache() = Some(snapshot);
+}
+
+/// The accelerator baseline. A poisoned lock is recovered: the baseline only
+/// records what the menu was last told, so the worst a panic can leave behind
+/// is an entry that gets applied once more.
+fn accel_cache() -> MutexGuard<'static, Option<HashMap<String, String>>> {
+    ACCEL_CACHE.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// Pure diff of two accelerator maps.
@@ -120,9 +125,7 @@ pub fn apply_accelerator_diff(
     let mut items: HashMap<String, MenuItemKind<Wry>> = HashMap::new();
     collect_items_from_menu(&menu, &mut items).map_err(CommandError::internal)?;
 
-    let mut accel_guard = ACCEL_CACHE
-        .lock()
-        .map_err(|e| CommandError::internal(format!("accelerator cache poisoned: {e}")))?;
+    let mut accel_guard = accel_cache();
     let baseline = accel_guard.get_or_insert_with(HashMap::new);
     let changes = diff_accelerators(baseline, next);
 
@@ -200,14 +203,12 @@ fn collect_kind(
 
 #[cfg(test)]
 pub(crate) fn accel_cache_snapshot_for_test() -> Option<HashMap<String, String>> {
-    ACCEL_CACHE.lock().ok().and_then(|g| g.clone())
+    accel_cache().clone()
 }
 
 #[cfg(test)]
 pub(crate) fn clear_state_for_test() {
-    if let Ok(mut a) = ACCEL_CACHE.lock() {
-        *a = None;
-    }
+    *accel_cache() = None;
 }
 
 #[cfg(test)]

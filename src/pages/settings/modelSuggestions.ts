@@ -2,6 +2,8 @@
  * Curated model suggestions per REST AI provider.
  *
  * Ollama models are fetched dynamically — the static list is empty.
+ *
+ * @module pages/settings/modelSuggestions
  */
 
 import type { RestProviderType } from "@/types/aiGenies";

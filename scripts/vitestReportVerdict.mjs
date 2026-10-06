@@ -9,7 +9,7 @@
  * two of its branches ("no suite matches on disk", "suites failed to run")
  * were unreachable from any test because the shell harness could not construct
  * them. It is a module now, and `scripts/vitestReportVerdict.test.mjs` covers
- * every branch (audit R2 #94).
+ * every branch.
  *
  * It lives directly in `scripts/`, not in `scripts/lib/`, and that is LOAD
  * BEARING: `scripts/knip-production.json` makes `scripts/*.{ts,mjs}` a
@@ -22,10 +22,10 @@
  * The rules it encodes, each of which cost a round to learn:
  *   - vitest's EXIT STATUS counts. A run that wrote a green-looking report and
  *     then died (a reporter crash, a teardown failure, an unhandled rejection)
- *     was reported as successful (audit R2 #96).
+ *     was reported as successful.
  *   - Suites are compared BY NAME, never by count. `find`'s `-name` and
  *     vitest's substring filter are different matchers, so a filter that ran a
- *     different set of the same size passed (audit R2 #97).
+ *     different set of the same size passed.
  *   - A suite whose every case is skipped reports `status: "passed"` with only
  *     skipped assertions, and vanishes into a green total beside its siblings
  *     (audit 20260907 #66). Every suite must have a passing case and no

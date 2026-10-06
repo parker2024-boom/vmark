@@ -12,17 +12,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Schema } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
+import { createStore as createZustandStore } from "zustand/vanilla";
 
-// Mock CSS
 vi.mock("./link-popup.css", () => ({}));
-
-// Mock LinkPopupView
-vi.mock("./LinkPopupView", () => ({
-  LinkPopupView: class MockLinkPopupView {
-    update = vi.fn();
-    destroy = vi.fn();
-  },
-}));
 
 // Both popup states are PORTs — handed to the extension, so no module mocks.
 const mockLinkPopupState = {
@@ -30,26 +22,23 @@ const mockLinkPopupState = {
   openPopup: vi.fn(),
   closePopup: vi.fn(),
 };
-const mockLinkPopupStore = { getState: () => mockLinkPopupState };
+const mockLinkPopupStore = createZustandStore(() => mockLinkPopupState);
 
 const mockLinkCreatePopupState = {
   isOpen: false,
   closePopup: vi.fn(),
 };
-const mockLinkCreateStore = { getState: () => mockLinkCreatePopupState };
+const mockLinkCreateStore = createZustandStore(() => mockLinkCreatePopupState);
 
-// Mock headingSlug
 vi.mock("@/utils/headingSlug", () => ({
   findHeadingById: vi.fn(() => null),
   navigateToHeadingById: vi.fn(() => false),
 }));
 
-// Mock tauri opener
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openUrl: vi.fn(() => Promise.resolve()),
 }));
 
-// Mock cross-file open helper (hoisted so vi.mock factory can reference it)
 const { mockOpenFilepathLink } = vi.hoisted(() => ({
   mockOpenFilepathLink: vi.fn(() => Promise.resolve(true)),
 }));
@@ -58,10 +47,13 @@ vi.mock("@/services/navigation/linkOpen", async () => {
   return {
     ...actual,
     openFilepathLink: mockOpenFilepathLink,
+    // The real opener, observed: a test awaits the promise handleClick left un-awaited.
+    openExternalLink: vi.fn(actual.openExternalLink),
   };
 });
 
 import { openUrl as mockOpenUrl } from "@tauri-apps/plugin-opener";
+import { openExternalLink } from "@/services/navigation/linkOpen";
 import { findLinkMarkRange, linkPopupExtension } from "./tiptap";
 
 // Schema with link mark
@@ -130,6 +122,7 @@ describe("linkPopupExtension", () => {
     mockLinkCreatePopupState.closePopup.mockClear();
     mockOpenFilepathLink.mockClear();
     mockOpenFilepathLink.mockResolvedValue(true);
+    vi.mocked(openExternalLink).mockClear();
   });
 
   describe("extension creation", () => {
@@ -417,10 +410,10 @@ describe("linkPopupExtension", () => {
       expect(result).toBe(true);
       expect(preventDefault).toHaveBeenCalled();
 
-      // Wait deterministically for the dynamic openUrl import to resolve.
-      await vi.waitFor(() => {
-        expect(mockOpenUrl).toHaveBeenCalledWith("http://example.com");
-      }, { timeout: 5000 }); // budget: src/test/waitBudget.ts
+      // The open resolves true once the URL passed the scheme allowlist and reached the opener.
+      expect(openExternalLink).toHaveBeenCalledTimes(1);
+      await expect(vi.mocked(openExternalLink).mock.results[0].value).resolves.toBe(true);
+      expect(mockOpenUrl).toHaveBeenCalledWith("http://example.com");
     });
 
     it("Ctrl+click on external link opens in browser", async () => {

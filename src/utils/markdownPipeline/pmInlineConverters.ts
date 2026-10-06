@@ -198,7 +198,7 @@ export function wrapWithMark(content: PhrasingContent[], mark: Mark): PhrasingCo
             label: referenceId,
             referenceType: asReferenceType(mark.attrs.referenceType),
             children: content,
-          } satisfies LinkReference as unknown as Link,
+          } satisfies LinkReference,
         ];
       }
       return [

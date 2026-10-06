@@ -29,7 +29,7 @@ const LEGACY_MCP_SETTINGS_FILE: &str = "mcp-settings.json";
 
 /// Resolve the app data directory, mapping the Tauri path error to a `String`.
 /// Replaces the repeated `app.path().app_data_dir().map_err(|e| e.to_string())?`
-/// across the backend (WI-3.6 / D7).
+/// across the backend.
 pub fn app_data_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
     app.path().app_data_dir().map_err(|e| e.to_string())
 }
@@ -74,13 +74,14 @@ fn get_legacy_dir() -> Option<PathBuf> {
 }
 
 /// Write a file atomically using temp file + sync + rename pattern.
-/// This prevents partial reads by other processes.
+/// This prevents partial reads by other processes. The rename is made durable
+/// by a sync of the parent directory (Unix; see `atomic_persist`).
 ///
 /// Thin wrapper over `atomic_replace::atomic_replace` — the shared core also
-/// backs `file_write::atomic_write_file_sync`; only the error strings here
+/// backs `files::write::atomic_write_file_sync`; only the error strings here
 /// are caller-specific.
 ///
-/// NOTE: A separate async variant exists in `file_write.rs` as a Tauri
+/// NOTE: A separate async variant exists in `files/write.rs` as a Tauri
 /// command for frontend invocations. They are intentionally separate — this
 /// one is sync for internal Rust callers (workspace config, MCP port file).
 pub fn atomic_write_file(path: &Path, contents: &[u8]) -> Result<(), String> {
@@ -136,6 +137,24 @@ mod tests {
 
         let contents = fs::read_to_string(&path).unwrap();
         assert_eq!(contents, "new content");
+    }
+
+    /// The workspace config and the MCP port file are written through here. A
+    /// rename that is not followed by a sync of its directory can be undone by
+    /// a crash, which for a first write means no file at all.
+    #[cfg(unix)]
+    #[test]
+    fn test_atomic_write_syncs_the_parent_directory() {
+        use crate::atomic_persist::SYNCED_DIRECTORIES;
+
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("mcp-port");
+        SYNCED_DIRECTORIES.with(|synced| synced.borrow_mut().clear());
+
+        atomic_write_file(&path, b"49152").unwrap();
+
+        let synced = SYNCED_DIRECTORIES.with(|synced| synced.borrow().clone());
+        assert_eq!(synced, vec![dir.path().to_path_buf()]);
     }
 
     #[test]

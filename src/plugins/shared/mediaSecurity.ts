@@ -14,7 +14,7 @@
  *
  * What it deliberately does NOT refuse: a `..` segment (#1433).
  *
- * `..` was rejected as a "path traversal attack" until 2026-09-19. It is not
+ * `..` used to be rejected as a "path traversal attack". It is not
  * one here, and the check was costing the common authoring layout —
  * `notes/report.md` referencing `../images/photo.png` — while buying no
  * containment at all, for a checkable reason: every resolver converts an

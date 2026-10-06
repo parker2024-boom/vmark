@@ -1,7 +1,14 @@
+/**
+ * workspaceInstancesStore — Zustand store of workspace instances and, per
+ * window, their order, the active instance and each instance's tabs.
+ *
+ * @module stores/workspaceInstancesStore
+ */
+
 import { create } from "zustand";
 import { createWorkspaceInstance, generateUUID } from "@/utils/workspaceIdentity";
 import { notifyInstanceRekeyed } from "@/stores/instanceRekeyBus";
-import { useUIStore } from "@/stores/uiStore";
+import { useTerminalStore } from "@/stores/terminalStore";
 import { useWorkspaceInstanceUiStore } from "@/stores/workspaceInstanceUiStore";
 import { useWorkspacePaneLayoutsStore } from "@/stores/workspacePaneLayoutsStore";
 import {
@@ -117,7 +124,7 @@ export const useWorkspaceInstancesStore = create<WorkspaceInstancesState>()((set
     }),
 
   ensureLooseInstance: (windowLabel, instanceId) => {
-    // WI-13.1 (plan D6): STRUCTURAL — never yanks the visible context. A
+    // STRUCTURAL (plan D6): never yanks the visible context. A
     // valid activation is preserved; loose becomes active only as a fallback.
     let result: WorkspaceInstanceRecord | null = null;
     let rekeyedFrom: string | null = null;
@@ -215,14 +222,14 @@ export const useWorkspaceInstancesStore = create<WorkspaceInstancesState>()((set
       throw new Error(`Failed to create loose workspace instance for window '${windowLabel}'`);
     }
     // Parallel per-instance stores follow the identity re-key so no UI/pane
-    // state is orphaned (WI-9.1/10.2 lifecycle contract).
+    // state is orphaned (lifecycle contract).
     if (rekeyedFrom && instanceId) {
       useWorkspaceInstanceUiStore.getState().rekeyInstanceUiState(rekeyedFrom, instanceId);
       useWorkspacePaneLayoutsStore.getState().rekeyPaneLayout(rekeyedFrom, instanceId);
       // WI-TS2.3 (D-T6): terminal sessions follow the identity re-key too —
       // merge semantics (re-stamp, ordinal renumber, memory target-wins)
       // live in terminalRekeyScope.
-      useUIStore.getState().terminalRekeyScope(rekeyedFrom, instanceId);
+      useTerminalStore.getState().terminalRekeyScope(rekeyedFrom, instanceId);
       // Closed-tab reopen history follows via the bus (audit 20260831 #9 —
       // tabStoreClosedScopes imports this store, so a direct call back would
       // be an import cycle).

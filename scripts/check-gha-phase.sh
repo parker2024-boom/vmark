@@ -124,28 +124,28 @@ phase_0() {
 phase_1() {
   echo "Phase 1 — Foundation: parser + IR"
 
-  # WI-1.1 — IR types
+  # IR types
   assert_file "src/lib/ghaWorkflow/types.ts"            "WI-1.1 IR types"
 
-  # WI-1.2 — parser orchestrator (split per ADR-3 / module map)
+  # parser orchestrator (split per ADR-3 / module map)
   assert_file "src/lib/ghaWorkflow/parser/index.ts"     "WI-1.2 parser orchestrator"
 
-  # WI-1.3 — subparsers
+  # subparsers
   assert_file "src/lib/ghaWorkflow/parser/triggers.ts"  "WI-1.3 triggers subparser"
   assert_file "src/lib/ghaWorkflow/parser/jobs.ts"      "WI-1.3 jobs subparser"
   assert_file "src/lib/ghaWorkflow/parser/edges.ts"     "WI-1.3 edges subparser"
   assert_file "src/lib/ghaWorkflow/parser/matrix.ts"    "WI-1.3 matrix subparser"
   assert_file "src/lib/ghaWorkflow/parser/permissions.ts" "WI-1.3 permissions subparser"
 
-  # WI-1.4 — detection heuristic
+  # detection heuristic
   assert_file "src/lib/ghaWorkflow/detection.ts"        "WI-1.4 detection heuristic"
 
-  # WI-1.5 — workflow router. Originally a separate module under
+  # Workflow router. Originally a separate module under
   # src/lib/workflowRouting/, but production never imported it: the
   # routing decision is made directly by the .yml extension gate
   # (isYamlFileName, defined in src/utils/dropPaths.ts) + the
   # workflow-shape gate (isWorkflowYaml, in src/lib/ghaWorkflow/detection.ts).
-  # Removed as dead code in the Codex audit round 5; the gate now
+  # Removed as dead code by a later audit; the gate now
   # checks the actual decision points instead.
   assert_grep "isYamlFileName" \
     "src/utils/dropPaths.ts" "WI-1.5 routing — yaml extension gate"
@@ -153,7 +153,7 @@ phase_1() {
     "src/lib/ghaWorkflow/detection.ts" \
     "WI-1.5 routing — workflow-shape gate"
 
-  # WI-1.6 — fixture corpus (≥20 per plan)
+  # fixture corpus (≥20 per plan)
   if [[ -d "dev-docs/fixtures/gha-workflows" ]]; then
     local n
     n=$(find dev-docs/fixtures/gha-workflows -name "*.yml" -o -name "*.yaml" 2>/dev/null | wc -l | tr -d ' ')
@@ -197,7 +197,7 @@ phase_1() {
 phase_8() {
   echo "Phase 8 — CST round-trip"
 
-  # WI-8.1 — CST parser
+  # CST parser
   assert_file "src/lib/ghaWorkflow/save/cstParser.ts"                  "WI-8.1 CST parser"
   assert_file "src/lib/ghaWorkflow/save/__tests__/cstParser.test.ts"   "WI-8.1 CST parser tests"
   assert_grep "WORKFLOW_YAML_STRINGIFY_OPTIONS" \
@@ -205,7 +205,7 @@ phase_8() {
   assert_grep "semanticEqual" \
     "src/lib/ghaWorkflow/save/cstParser.ts" "WI-8.1 semanticEqual exported"
 
-  # WI-8.2 — Mutators
+  # Mutators
   assert_file "src/lib/ghaWorkflow/save/mutators.ts"                   "WI-8.2 mutators"
   assert_file "src/lib/ghaWorkflow/save/__tests__/mutators.test.ts"    "WI-8.2 mutator tests"
   for kind in workflow.set job.set step.set with.set with.remove needs.add needs.remove; do
@@ -216,7 +216,7 @@ phase_8() {
     fi
   done
 
-  # WI-8.3 — edit store + save pipeline. The standalone workflowEditStore
+  # edit store + save pipeline. The standalone workflowEditStore
   # was consolidated into the unified src/stores/workflowStore.ts (view +
   # edit slices); its edit-slice API (queuePatch/applyAndSerialize/...) is
   # unchanged. Tests live beside the source as workflowStore.test.ts.
@@ -234,13 +234,13 @@ phase_8() {
 phase_7() {
   echo "Phase 7 — Structured editor (forms)"
 
-  # WI-7.1 — JobForm, StepForm, TriggerForm
+  # JobForm, StepForm, TriggerForm
   assert_dir "src/components/Editor/WorkflowEditor"                    "WI-7.1 forms directory"
   assert_file "src/components/Editor/WorkflowEditor/JobForm.tsx"       "WI-7.1 JobForm"
   assert_file "src/components/Editor/WorkflowEditor/StepForm.tsx"      "WI-7.1 StepForm"
   assert_file "src/components/Editor/WorkflowEditor/TriggerForm.tsx"   "WI-7.1 TriggerForm"
 
-  # WI-7.2 — Edit pipeline (forms emit IRPatch via the unified workflowStore,
+  # Edit pipeline (forms emit IRPatch via the unified workflowStore,
   # which absorbed the former workflowEditStore edit slice).
   assert_grep "useWorkflowStore" \
     "src/components/Editor/WorkflowEditor/JobForm.tsx" "WI-7.2 JobForm uses edit store"

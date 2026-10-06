@@ -2,6 +2,8 @@
  * Source Image Popup
  *
  * Plugin for editing images in Source mode (CodeMirror 6).
+ *
+ * @module plugins/sourceImagePopup
  */
 
 import "./source-image-popup.css";

@@ -1,20 +1,24 @@
-// WI-5.2 — pyproject.toml schema detector + dependency-tree renderer.
-//
-// TOML adapter wires this. Filename match wins (ADR-5 path-first);
-// content fallback covers either PEP 621 ([project]) or Poetry
-// ([tool.poetry]) shapes.
-//
-// Two flavors handled:
-//   1. PEP 621 — `[project]` table with `dependencies = [ ... ]`
-//      array of PEP 508 strings. `[project.optional-dependencies]`
-//      sub-table groups extras.
-//   2. Poetry — `[tool.poetry.dependencies]` map of name → spec.
-//      Dev deps in either `[tool.poetry.dev-dependencies]` (legacy)
-//      or `[tool.poetry.group.<name>.dependencies]` (modern).
+/**
+ * pyproject.toml schema detector + dependency-tree renderer for the TOML preview.
+ *
+ * TOML adapter wires this. Filename match wins (ADR-5 path-first);
+ * content fallback covers either PEP 621 ([project]) or Poetry
+ * ([tool.poetry]) shapes.
+ *
+ * Two flavors handled:
+ *   1. PEP 621 — `[project]` table with `dependencies = [ ... ]`
+ *      array of PEP 508 strings. `[project.optional-dependencies]`
+ *      sub-table groups extras.
+ *   2. Poetry — `[tool.poetry.dependencies]` map of name → spec.
+ *      Dev deps in either `[tool.poetry.dev-dependencies]` (legacy)
+ *      or `[tool.poetry.group.<name>.dependencies]` (modern).
+ *
+ * @module lib/formats/adapters/pyprojectToml
+ */
 
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { parse as parseToml } from "smol-toml";
+import { tomlParser, useTomlParser, type TomlParse } from "./tomlParser";
 import type {
   PreviewRendererProps,
   SchemaDetector,
@@ -42,6 +46,9 @@ export const pyprojectTomlSchemaDetector: SchemaDetector = (
   ) {
     return null;
   }
+  // Not until the parser has loaded: the preview asks again when it has.
+  const parseToml = tomlParser();
+  if (!parseToml) return null;
   try {
     parseToml(content);
   } catch {
@@ -94,6 +101,7 @@ function parsePoetryMap(table: unknown): PythonDependency[] {
 
 export function collectPyprojectDependencies(
   content: string,
+  parseToml: TomlParse,
 ): PyprojectResult {
   let parsed: unknown;
   try {
@@ -165,10 +173,12 @@ export function PyprojectTomlSchemaRenderer({
   diagnostics,
 }: PreviewRendererProps) {
   const { t } = useTranslation("editor");
+  const parseToml = useTomlParser();
   const result = useMemo(
-    () => collectPyprojectDependencies(content),
-    [content],
+    () => (parseToml ? collectPyprojectDependencies(content, parseToml) : null),
+    [content, parseToml],
   );
+  if (!result) return null; // the parser is still loading
   const total =
     result.runtime.length +
     result.poetryRuntime.length +

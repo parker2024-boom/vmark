@@ -1,5 +1,5 @@
 /**
- * Slidev dev-server wrapper (Phase 6, WI-6.2).
+ * Slidev dev-server wrapper (Phase 6).
  *
  * Lazily loads `@slidev/cli` (provisioned separately per ADR-2 — NOT a hard
  * dependency of this package) and boots a Vite dev server against an arbitrary

@@ -2,7 +2,7 @@
 // Round 3, #54 — the stages of `open` on their own: profile parsing, profile
 // authorization (WI-P6.1 H1) against the real approval store, and the creation
 // transaction against a mocked native layer.
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn<(command: string, args?: Record<string, unknown>) => Promise<unknown>>(),
@@ -140,14 +140,26 @@ describe("authorizeProfileOpen", () => {
 });
 
 describe("createAiTab", () => {
-  const deadline = () => Date.now() + 1000;
+  /** The fixed "now" the creation runs at; the request deadline is a second later. */
+  const NOW = Date.UTC(2026, 0, 15, 12, 0, 0);
+  const deadline = () => NOW + 1000;
+
+  beforeEach(() => {
+    vi.setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it("creates the record, the native view (profile forwarded), records the profile use and answers the creation ticket", async () => {
     await createAiTab("c1", "main", URL, "ai-sandbox", "github_work", deadline());
     const [tab] = tabs();
     expect(tab).toMatchObject({ kind: "browser", automationMode: "ai-sandbox", url: URL });
     expect(mocks.ensureNative).toHaveBeenCalledWith(tab.id, URL, "ai-sandbox", "github_work");
-    expect(useBrowserSessionStore.getState().profiles.map((p) => p.name)).toEqual(["github_work"]);
+    expect(useBrowserSessionStore.getState().profiles).toEqual([{ name: "github_work", usedAt: NOW }]);
+    // The navigation wait gets the whole remaining budget of the request.
+    expect(mocks.wait).toHaveBeenCalledWith(tab.id, "nav-1", 1000);
     expect(lastResponse()).toMatchObject({ id: "c1", success: true, data: { tabId: tab.id, navigationId: "nav-1", loading: false } });
   });
 

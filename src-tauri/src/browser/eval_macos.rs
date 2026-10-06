@@ -4,7 +4,7 @@
 //! navigation — because evaluation is its own concern and the file outgrew the
 //! 300-line gate once the submit/await split landed.
 //!
-//! **The submit/await split is the WI-2 race fix, not a refactor.** Enqueuing a
+//! **The submit/await split is the check-then-dispatch race fix, not a refactor.** Enqueuing a
 //! script (`callAsyncJavaScript`) returns immediately and is safe to do while the
 //! registry guard is held; waiting for the result PUMPS the main run loop, and
 //! WebKit callbacks re-enter on that thread and take the same lock. So the two
@@ -19,7 +19,7 @@
 //! "did not affect the target" before retrying it. `eval_outcome.rs` owns the
 //! vocabulary; `view::js_result_to_outcome` classifies the native completion.
 //! A refusal by the gate inside the turn crosses the hop as the typed
-//! `CommandError` it is (`EvalError::Refused`, round 3 #17) — it used to be
+//! `CommandError` it is (`EvalError::Refused`) — it used to be
 //! flattened to a string and re-derived by prefix, which lost its details.
 //!
 //! @coordinates-with browser/authorize.rs — the guarded submit
@@ -54,6 +54,10 @@ fn submit_js(webview: &WKWebView, script: &str, world: &WKContentWorld) -> Sink 
     let handler = block2::RcBlock::new(move |value: *mut AnyObject, error: *mut NSError| {
         *sink.borrow_mut() = Some(js_result_to_outcome(value, error));
     });
+    // SAFETY: `webview`, `body` and `world` are live; the two `None`s (no
+    // arguments, the main frame) are permitted. WebKit copies the block and calls
+    // it once, on the main thread — the thread that owns the `Rc` sink it
+    // captures — with pointers `js_result_to_outcome` null-checks before use.
     unsafe {
         webview.callAsyncJavaScript_arguments_inFrame_inContentWorld_completionHandler(
             &body,
@@ -92,7 +96,7 @@ pub(super) fn eval_js(
 }
 
 /// Evaluate `script` in the driver's isolated world, re-verifying `expected_generation`
-/// **inside the main-thread closure** (WI-2.1/2.2).
+/// **inside the main-thread closure**.
 ///
 /// The command thread already authorized and re-checked freshness, but there is a real
 /// window between that check and this closure actually running: `run_on_main_thread`
@@ -111,7 +115,7 @@ pub(super) fn eval_js(
 /// here, because it puts a lock on the main thread's path with WebKit re-entrancy
 /// nearby, and that trade needs its own review rather than being smuggled into this fix.
 ///
-/// **Lock discipline (WI-2.2): no lock may be held across run-loop pumping.**
+/// **Lock discipline: no lock may be held across run-loop pumping.**
 /// `await_js` pumps the main run loop while it waits for `callAsyncJavaScript`'s
 /// completion handler, and WebKit callbacks re-enter on this same thread and take the
 /// registry lock themselves (the nav delegate does exactly that). Holding the registry
@@ -138,6 +142,8 @@ pub fn eval(
         // it was inline here, deleting the check left every test green.
         let webview = webview_for(&tab_id)?;
         let run_loop = NSRunLoop::mainRunLoop();
+        // SAFETY: a class method taking a live name string; `mtm` proves the main
+        // thread. WebKit returns the one world of that name, creating it if needed.
         let world =
             unsafe { WKContentWorld::worldWithName(&NSString::from_str("vmark-agent"), mtm) };
         // Check + enqueue happen together under the registry guard, so no other

@@ -4,7 +4,7 @@
 // by a one-shot approval: the handler requests approval and fails now; the user
 // approves (minting a one-shot bound to the CANONICAL path + window + client);
 // the AI retries and the retry consumes the one-shot. No standing grants.
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   useWorkspaceApprovalStore,
   MAX_PENDING_WORKSPACE_APPROVALS,
@@ -18,7 +18,16 @@ function reset() {
 
 const KEY = { canonicalPath: "/Users/x/proj", windowLabel: "main", clientId: "c1" };
 
-beforeEach(reset);
+/** The store stamps and expires one-shots against `Date.now()`; pin it. */
+const NOW = Date.UTC(2026, 0, 2, 3, 4, 5);
+
+beforeEach(() => {
+  vi.setSystemTime(NOW);
+  reset();
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("workspaceApprovalStore", () => {
   it("queues a pending approval and dedups by id", () => {
@@ -114,7 +123,7 @@ describe("workspaceApprovalStore", () => {
       oneShots: [
         {
           ...KEY,
-          createdAt: Date.now() - WORKSPACE_ONE_SHOT_TTL_MS - 1000,
+          createdAt: NOW - WORKSPACE_ONE_SHOT_TTL_MS - 1000,
         },
       ],
     });
@@ -128,7 +137,7 @@ describe("workspaceApprovalStore", () => {
   it("physically prunes expired one-shots on every action (not only consume/approve)", () => {
     const stale = () => ({
       ...KEY,
-      createdAt: Date.now() - WORKSPACE_ONE_SHOT_TTL_MS - 1000,
+      createdAt: NOW - WORKSPACE_ONE_SHOT_TTL_MS - 1000,
     });
     const s = useWorkspaceApprovalStore.getState();
 

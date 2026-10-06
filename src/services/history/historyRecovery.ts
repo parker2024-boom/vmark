@@ -7,8 +7,14 @@
  * Key decisions:
  *   - Permanent delete removes both index and all snapshot files
  *   - Workspace clearing uses normalizePath + isWithinRoot for path matching
+ *   - Every removal takes the WHOLE history store for its duration. These
+ *     entry points name a history by its hash or scan every one, so they
+ *     cannot join one document's queue; a removal that overlapped a snapshot
+ *     in flight left an index naming files that were gone, or left the
+ *     snapshot behind in a store the user had just cleared
  *
  * @coordinates-with historyOperations.ts — creates/manages active history
+ * @coordinates-with historyQueue.ts — serializeAllHistories, the whole-store turn
  * @coordinates-with historyTypes.ts — shared types and folder constants
  * @module services/history/historyRecovery
  */
@@ -30,6 +36,7 @@ import {
 } from "@/utils/historyTypes";
 import { normalizePath, isWithinRoot } from "@/utils/paths/paths";
 import { getHistoryBaseDir } from "@/services/history/historyOperations";
+import { serializeAllHistories } from "./historyQueue";
 
 /**
  * Permanently delete history for a document. Returns whether it succeeded.
@@ -39,37 +46,41 @@ import { getHistoryBaseDir } from "@/services/history/historyOperations";
  * the same as telling the caller, and a caller that cannot tell goes on to
  * announce a clear that never happened.
  */
-export async function deleteHistory(pathHash: string): Promise<boolean> {
-  try {
-    const baseDir = await getHistoryBaseDir();
-    const historyDir = await join(baseDir, pathHash);
+export function deleteHistory(pathHash: string): Promise<boolean> {
+  return serializeAllHistories(async () => {
+    try {
+      const baseDir = await getHistoryBaseDir();
+      const historyDir = await join(baseDir, pathHash);
 
-    if (await exists(historyDir)) {
-      await remove(historyDir, { recursive: true });
-      historyLog("Deleted history for:", pathHash);
+      if (await exists(historyDir)) {
+        await remove(historyDir, { recursive: true });
+        historyLog("Deleted history for:", pathHash);
+      }
+      toast.success(i18n.t("dialog:toast.historyDeleted"));
+      return true;
+    } catch (error) {
+      historyError("Failed to delete history:", error);
+      toast.error(i18n.t("dialog:toast.historyDeleteFailed"));
+      return false;
     }
-    toast.success(i18n.t("dialog:toast.historyDeleted"));
-    return true;
-  } catch (error) {
-    historyError("Failed to delete history:", error);
-    toast.error(i18n.t("dialog:toast.historyDeleteFailed"));
-    return false;
-  }
+  });
 }
 
 /** Clear all history */
-export async function clearAllHistory(): Promise<void> {
-  try {
-    const baseDir = await getHistoryBaseDir();
-    if (await exists(baseDir)) {
-      await remove(baseDir, { recursive: true });
-      historyLog("Cleared all history");
+export function clearAllHistory(): Promise<void> {
+  return serializeAllHistories(async () => {
+    try {
+      const baseDir = await getHistoryBaseDir();
+      if (await exists(baseDir)) {
+        await remove(baseDir, { recursive: true });
+        historyLog("Cleared all history");
+      }
+      toast.success(i18n.t("dialog:toast.historyClearedAll"));
+    } catch (error) {
+      historyError("Failed to clear all history:", error);
+      toast.error(i18n.t("dialog:toast.historyClearAllFailed"));
     }
-    toast.success(i18n.t("dialog:toast.historyClearedAll"));
-  } catch (error) {
-    historyError("Failed to clear all history:", error);
-    toast.error(i18n.t("dialog:toast.historyClearAllFailed"));
-  }
+  });
 }
 
 /**
@@ -97,9 +108,13 @@ export async function deleteDocumentHistory(
 export async function clearWorkspaceHistory(
   workspaceRootPath: string
 ): Promise<number> {
-  try {
-    if (!workspaceRootPath.trim()) return 0;
+  if (!workspaceRootPath.trim()) return 0;
+  return serializeAllHistories(() => clearWorkspaceHistoryStep(workspaceRootPath));
+}
 
+/** The scan-and-remove itself; runs with the whole history store to itself. */
+async function clearWorkspaceHistoryStep(workspaceRootPath: string): Promise<number> {
+  try {
     const baseDir = await getHistoryBaseDir();
     if (!(await exists(baseDir))) return 0;
 

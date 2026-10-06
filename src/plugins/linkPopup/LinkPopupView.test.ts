@@ -68,6 +68,9 @@ vi.mock("@/services/navigation/linkOpen", async () => {
   return {
     ...actual,
     openFilepathLink: mockOpenFilepathLink,
+    // The real opener, observed: a test awaits the promise handleOpen left
+    // un-awaited (it imports the settings store) instead of polling a clock.
+    openExternalLink: vi.fn(actual.openExternalLink),
   };
 });
 
@@ -80,7 +83,7 @@ import { Schema } from "@tiptap/pm/model";
 import { EditorState, type Transaction } from "@tiptap/pm/state";
 // isImeKeyEvent is mocked above — no direct import needed
 import { linkPopupError } from "@/utils/debug";
-import { ASYNC_IMPORT_WAIT } from "@/test/waitBudget";
+import { openExternalLink } from "@/services/navigation/linkOpen";
 
 // ---------------------------------------------------------------------------
 // Document fixture: <p><a href=HREF>link</a> tail</p> — the link spans 1..5,
@@ -472,9 +475,9 @@ describe("LinkPopupView", () => {
 
     (popup["openBtn"] as HTMLElement).click();
 
-    await vi.waitFor(() => {
-      expect(openUrl).toHaveBeenCalledWith(HREF);
-    }, ASYNC_IMPORT_WAIT);
+    // WI-RA26.7 — await the open the click started, not a wall-clock poll.
+    await expect(vi.mocked(openExternalLink).mock.results[0].value).resolves.toBe(true);
+    expect(openUrl).toHaveBeenCalledWith(HREF);
 
     popup.destroy();
   });
@@ -490,9 +493,8 @@ describe("LinkPopupView", () => {
     (popup["input"] as HTMLInputElement).value = "https://pasted.example";
     (popup["openBtn"] as HTMLElement).click();
 
-    await vi.waitFor(() => {
-      expect(openUrl).toHaveBeenCalledWith("https://pasted.example");
-    }, ASYNC_IMPORT_WAIT);
+    await expect(vi.mocked(openExternalLink).mock.results[0].value).resolves.toBe(true);
+    expect(openUrl).toHaveBeenCalledWith("https://pasted.example");
 
     popup.destroy();
   });
@@ -507,17 +509,14 @@ describe("LinkPopupView", () => {
 
     (popup["openBtn"] as HTMLElement).click();
 
-    await vi.waitFor(() => {
-      // Second arg is the source-doc path read from the tab store. The
-      // test setup doesn't seed an active tab with a filePath, so it
-      // resolves to null. Assertion focuses on routing — source-path
-      // resolution is covered in linkOpen.test.ts.
-      expect(mockOpenFilepathLink).toHaveBeenCalledWith(
-        "../appendix/cards.md#bern",
-        null,
-      );
-    }, ASYNC_IMPORT_WAIT);
-    await vi.waitFor(() => expect(mockClosePopup).toHaveBeenCalled(), ASYNC_IMPORT_WAIT);
+    // Second arg is the source-doc path read from the tab store. The test
+    // setup doesn't seed an active tab with a filePath, so it resolves to
+    // null. Assertion focuses on routing — source-path resolution is covered
+    // in linkOpen.test.ts.
+    expect(mockOpenFilepathLink).toHaveBeenCalledWith("../appendix/cards.md#bern", null);
+    // The click's continuation was queued on this promise before ours.
+    await mockOpenFilepathLink.mock.results[0].value;
+    expect(mockClosePopup).toHaveBeenCalled();
 
     const { openUrl } = await import("@tauri-apps/plugin-opener");
     expect(openUrl).not.toHaveBeenCalled();
@@ -538,9 +537,8 @@ describe("LinkPopupView", () => {
 
     (popup["openBtn"] as HTMLElement).click();
 
-    await vi.waitFor(() => {
-      expect(mockOpenFilepathLink).toHaveBeenCalled();
-    }, ASYNC_IMPORT_WAIT);
+    expect(mockOpenFilepathLink).toHaveBeenCalled();
+    await mockOpenFilepathLink.mock.results[0].value;
     expect(mockClosePopup).not.toHaveBeenCalled();
 
     popup.destroy();
@@ -562,7 +560,8 @@ describe("LinkPopupView", () => {
     mockClosePopup.mockClear();
 
     resolveOpen(true);
-    await vi.waitFor(() => expect(mockOpenFilepathLink).toHaveBeenCalled(), ASYNC_IMPORT_WAIT);
+    expect(mockOpenFilepathLink).toHaveBeenCalled();
+    await mockOpenFilepathLink.mock.results[0].value;
 
     // The completion belongs to the old popup — it must not close the new one.
     expect(mockClosePopup).not.toHaveBeenCalled();
@@ -599,9 +598,9 @@ describe("LinkPopupView", () => {
 
     (popup["copyBtn"] as HTMLElement).click();
 
-    await vi.waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("https://pasted.example");
-    }, ASYNC_IMPORT_WAIT);
+    // The copy handler calls writeText before its first await.
+    expect(writeText).toHaveBeenCalledWith("https://pasted.example");
+    await writeText.mock.results[0].value;
 
     popup.destroy();
   });
@@ -611,8 +610,9 @@ describe("LinkPopupView", () => {
 
     // jsdom doesn't provide navigator.clipboard — install a mock that rejects
     const origClipboard = navigator.clipboard;
+    const writeText = vi.fn().mockRejectedValue(new Error("clipboard denied"));
     Object.defineProperty(navigator, "clipboard", {
-      value: { writeText: vi.fn().mockRejectedValue(new Error("clipboard denied")) },
+      value: { writeText },
       writable: true,
       configurable: true,
     });
@@ -622,12 +622,9 @@ describe("LinkPopupView", () => {
 
     (popup["copyBtn"] as HTMLElement).click();
 
-    await vi.waitFor(() => {
-      expect(linkPopupError).toHaveBeenCalledWith(
-        "Failed to copy URL:",
-        expect.any(Error)
-      );
-    }, ASYNC_IMPORT_WAIT);
+    // The handler's catch was queued on this rejection before ours.
+    await expect(writeText.mock.results[0].value).rejects.toThrow("clipboard denied");
+    expect(linkPopupError).toHaveBeenCalledWith("Failed to copy URL:", expect.any(Error));
 
     popup.destroy();
 

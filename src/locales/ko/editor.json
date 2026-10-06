@@ -333,7 +333,6 @@
   "terminal.restarting": "셸을 다시 시작하는 중...",
   "media.cannotPreview": "이 형식은 미리 볼 수 없습니다",
   "media.openExternally": "기본 앱으로 열기",
-  "media.revealInFinder": "Finder에서 보기",
   "preview.surfaceFailed": "{{format}} 편집기가 중단되었습니다.",
   "splitPane.errorCount_one": "오류 {{count}}개",
   "splitPane.errorCount_other": "오류 {{count}}개",

@@ -1,6 +1,6 @@
 /**
- * Self-heal candidate scoring (WI-4.4 / W-03; split out of selfHeal.ts in audit
- * r3 #145) — how similar a snapshot node's accessible name is to a failed
+ * Self-heal candidate scoring (W-03; split out of selfHeal.ts)
+ * — how similar a snapshot node's accessible name is to a failed
  * locator's, and the confidence floor that candidate must clear.
  *
  * Confidence is a normalized edit-distance similarity on the accessible name.

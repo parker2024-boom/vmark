@@ -1,4 +1,4 @@
-/* ClaimPanel (WI-2b.6) — mirrors the breakdown panel surface (rule 32:
+/* ClaimPanel — mirrors the breakdown panel surface (rule 32:
    popup surface tokens; rule 33: focus stays visible via the shared
    button/input patterns). */
 .claim-overlay {
@@ -10,21 +10,21 @@
   z-index: var(--z-popup);
 }
 
-/* Panel chrome comes from `.vm-overlay__panel` (WI-UI3.1). */
+/* Panel chrome comes from `.vm-overlay__panel`. */
 .claim-panel {
   --vm-overlay-width: 380px;
   max-height: 70vh;
   overflow-y: auto;
 }
 
-/* `.vm-panel__header` (WI-UI3.4). */
+/* Header chrome comes from the shared `.vm-panel__header`. */
 .claim-panel__header {
   justify-content: space-between;
 }
 
 
 .claim-panel__title {
-  /* WI-UI3.4: panel titles read at --font-size-md (see .vm-panel__title). */
+  /* Panel titles read at --font-size-md (see .vm-panel__title). */
   font-size: var(--font-size-md);
   font-weight: 600;
   color: var(--text-color);
@@ -35,7 +35,7 @@
   gap: var(--spacing-1);
 }
 
-/* Header buttons are canonical `.vm-icon-btn--sm` (WI-UI2.3). */
+/* Header buttons are canonical `.vm-icon-btn--sm`. */
 
 .claim-panel__error {
   padding: var(--spacing-2) var(--spacing-3);
@@ -70,7 +70,7 @@
   font-family: var(--font-mono);
 }
 
-/* `.vm-input` (WI-UI3.3). */
+/* Base input styling comes from the shared `.vm-input` primitive. */
 .claim-panel__create-input {
   font-size: var(--font-size-base);
 }
@@ -190,7 +190,7 @@
   gap: var(--spacing-2);
 }
 
-/* `.vm-input` (WI-UI3.3). */
+/* Base input styling comes from the shared `.vm-input` primitive. */
 .claim-row__correct-input {
   flex: 1;
 }

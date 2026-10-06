@@ -65,7 +65,7 @@ vi.mock("sonner", () => ({
 }));
 
 let mockPopupHost: HTMLElement | null = null;
-vi.mock("@/plugins/sourcePopup", () => ({
+vi.mock("@/plugins/shared/sourcePopupUtils", () => ({
   getPopupHost: () => mockPopupHost,
   toHostCoords: (_h: HTMLElement, pos: { top: number; left: number }) => pos,
 }));
@@ -488,6 +488,29 @@ describe("SourceTableContextMenu", () => {
     await new Promise<void>((r) => requestAnimationFrame(() => r()));
     expect(menu.style.left).toBe("50px");
     expect(menu.style.top).toBe("50px");
+  });
+
+  // WI-RA18.6 — placement goes through the shared clamp: a menu that cannot
+  // fit lands on the near margin instead of a negative offset off screen.
+  it.each([
+    ["wider than the editor", { x: 750, y: 50, width: 900, height: 100 }, { left: "10px", top: "50px" }],
+    ["taller than the editor", { x: 50, y: 500, width: 200, height: 700 }, { left: "50px", top: "10px" }],
+    ["larger both ways", { x: 790, y: 590, width: 1000, height: 1000 }, { left: "10px", top: "10px" }],
+    ["past the right edge", { x: 750, y: 50, width: 200, height: 100 }, { left: "590px", top: "50px" }],
+    ["past the bottom edge", { x: 50, y: 500, width: 200, height: 300 }, { left: "50px", top: "290px" }],
+  ])("keeps a menu %s inside the editor", async (_label, at, expected) => {
+    mockGetSourceTableInfo.mockReturnValue(mkInfo());
+    const view = createLiveView(host);
+
+    fireContextMenu(view.contentDOM, at.x, at.y);
+    const menu = host.querySelector(".table-context-menu") as HTMLElement;
+    menu.getBoundingClientRect = () => ({
+      top: at.y, left: at.x, bottom: at.y + at.height, right: at.x + at.width,
+      width: at.width, height: at.height, x: at.x, y: at.y, toJSON: () => ({}),
+    });
+
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    expect({ left: menu.style.left, top: menu.style.top }).toEqual(expected);
   });
 
   // ── Destroy ────────────────────────────────────────────────────

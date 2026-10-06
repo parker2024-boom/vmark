@@ -1,5 +1,5 @@
 /**
- * Motion policy — ONE owner for "should this animate?" (R10, WI-UI1.7).
+ * Motion policy — ONE owner for the "should this animate?" decision.
  *
  * Purpose: CSS motion collapses globally under `prefers-reduced-motion`
  * (see index.css), but JS-driven smooth scrolling bypasses CSS entirely —

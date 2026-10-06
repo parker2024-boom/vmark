@@ -95,9 +95,9 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
   // Workspace-only: no inferred root from file path
   const rootPath = isWorkspaceMode ? workspaceRootPath : null;
 
-  // WI-9.2: with the rail on, folder/scroll state is per workspace instance.
+  // With the rail on, folder/scroll state is per workspace instance.
   const workspaceInstanceId = useExplorerWorkspaceInstance(windowLabel);
-  // The context menu belongs to the workspace it was opened in (#323).
+  // The context menu belongs to the workspace it was opened in.
   const { contextMenu, handleContextMenu, closeContextMenu } = useExplorerContextMenu(
     `${workspaceInstanceId ?? ""}|${rootPath ?? ""}`,
     treeRef,
@@ -118,8 +118,8 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
     watchId: windowLabel,
   });
 
-  // WI-9.2: restore the incoming instance's saved scroll once tree data is in
-  // — ONCE per instance, not on every watcher refresh (audit R2, #635; see the
+  // Restore the incoming instance's saved scroll once tree data is in
+  // — ONCE per instance, not on every watcher refresh (see the
   // hook's header for why "rows are in" is not the same as "not loading").
   useRestoredScroll(workspaceInstanceId, !isLoading && tree.length > 0, treeElRef, restoreScroll);
   // Every action the tree and the context menu dispatch — see the hook's header.
@@ -136,7 +136,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
   // Expose methods to parent via ref. The two create flows are ASYNC and the
   // handle declares `void`, so their promise is discarded at every call site
   // (the Sidebar's header buttons) — a rejected create was an unhandled
-  // rejection with nothing on screen (audit R3 #636). Caught and logged here,
+  // rejection with nothing on screen. Caught and logged here,
   // the same shape the context-menu dispatch below already uses.
   useImperativeHandle(ref, () => ({
     createNewFile: () => {
@@ -173,7 +173,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(
         // CAPTURE sees every descendant's scroll, and this persists the offset
         // to restore later: a scrolling rename input — or any nested scroller —
         // wrote ITS `scrollTop` (usually 0) over the tree's, so switching
-        // workspaces restored the tree to the top (audit R3 #637). react-window's
+        // workspaces restored the tree to the top. react-window's
         // outer div is the ONE scroller, and it is the one carrying this class.
         onScrollCapture={(e) => {
           const target = e.target;

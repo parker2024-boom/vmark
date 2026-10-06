@@ -51,7 +51,7 @@ AI clients opening documents through MCP never yank your visible workspace: `wor
 | Reorder | Drag a glyph over another |
 | Move to its own window | Drag a glyph out of the window |
 | Duplicate to a new window | The **⧉** button on hover |
-| Close a workspace | Right-click → Close (prompts per dirty tab) |
+| Close a workspace | Right-click → Close. All its tabs close with it, pinned ones included; each tab with unsaved changes asks first, and cancelling keeps the workspace |
 
 ## Terminal sessions
 

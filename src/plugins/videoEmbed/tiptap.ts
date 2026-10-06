@@ -80,7 +80,7 @@ export const videoEmbedExtension = Node.create({
       ...sourceLineAttr,
       provider: { default: "youtube" },
       videoId: { default: "" },
-      // Vimeo unlisted-video privacy hash (WI-6) — required for those embeds
+      // Vimeo unlisted-video privacy hash — required for those embeds
       // to play; recovered from the iframe src's `h=` param on parse.
       privacyHash: { default: null },
       width: { default: 560 },

@@ -1,6 +1,6 @@
 /**
  * Workflow recorder — recorded action trace → a value-free, replayable workflow
- * (WI-NB7.2 / P-2). The TRUSTED host-side conversion half: it runs in VMark's own
+ * (P-2). The TRUSTED host-side conversion half: it runs in VMark's own
  * webview over events drained from the page-world capture shim, and it is where
  * P-2 redaction is DECIDED — not in the page, which is untrusted.
  *
@@ -191,7 +191,7 @@ export function recordingToWorkflow(
       }
       case "click": {
         // A role-less click is a dead production for the replayer: `role:""` never
-        // matches an element and heal never crosses roles (audit S-02). Hand it to the
+        // matches an element and heal never crosses roles. Hand it to the
         // human instead of recording a step that fails on every replay.
         if (safeRole(ev.role) === "") {
           stepLines.push(

@@ -1,4 +1,4 @@
-//! Untrusted-content fencing for genie prompts (audit 20260612 H13).
+//! Untrusted-content fencing for genie prompts.
 //!
 //! Document text, selections, file contents, and prior step outputs flow
 //! into genie templates as `with:` values and from there into autonomous

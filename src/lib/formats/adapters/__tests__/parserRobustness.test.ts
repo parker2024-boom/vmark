@@ -28,12 +28,19 @@
 //
 // @coordinates-with ../toml.tsx — tomlValidator (smol-toml)
 // @coordinates-with ../json.tsx — jsonValidator (JSON.parse)
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { tomlValidator } from "../toml";
 import { jsonValidator } from "../json";
+import { loadTomlParser } from "../tomlParser";
+
+// The parser loads on first use (tomlParser.ts); the validator answers
+// synchronously, so load it first.
+beforeAll(async () => {
+  await loadTomlParser();
+});
 
 const here = dirname(fileURLToPath(import.meta.url));
 

@@ -2,7 +2,7 @@
  * Tab Context Menu Styles - macOS system menu style
  */
 
-/* Surface chrome comes from `.vm-menu` (overlay-shared.css, WI-UI3.1). */
+/* Surface chrome comes from `.vm-menu` (overlay-shared.css). */
 .tab-context-menu {
   min-width: 220px;
   max-width: 280px;
@@ -25,7 +25,7 @@
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  cursor: var(--cursor-interactive, default); /* D7, platform-scoped (WI-UA15) */
+  cursor: var(--cursor-interactive, default); /* D7, platform-scoped */
   color: var(--text-color);
   text-align: left;
   user-select: none;

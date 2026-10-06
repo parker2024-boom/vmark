@@ -38,7 +38,8 @@
  * @module hooks/useExternalFileChanges
  */
 import { useEffect, useRef, useCallback } from "react";
-import { readTextFile, exists } from "@tauri-apps/plugin-fs";
+import { exists } from "@tauri-apps/plugin-fs";
+import { readDocumentText } from "@/services/files/readDocumentText";
 import { useWindowLabel } from "@/contexts/WindowContext";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useTabStore } from "@/stores/tabStore";
@@ -100,7 +101,7 @@ export function useExternalFileChanges(): void {
     useDocumentStore.getState().markMissing(targetTabId);
   }, []);
 
-  // Re-point a renamed tab + document; ownership follows the path (WI-13.4).
+  // Re-point a renamed tab + document; ownership follows the path.
   const applyRename = useCallback(
     (tabId: string, newPath: string) => applyExternalRename(windowLabel, tabId, newPath),
     [windowLabel],
@@ -138,7 +139,7 @@ export function useExternalFileChanges(): void {
     // no-ops. This hook owns only the per-tab reaction policy. The routing
     // context's collaborators are stable useCallbacks + store reads.
     const ctx: FsChangeContext = {
-      readTextFile,
+      readTextFile: readDocumentText,
       fileExists: exists,
       normalizePath,
       hasPendingSave,

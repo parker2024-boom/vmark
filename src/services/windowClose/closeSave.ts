@@ -22,7 +22,7 @@ import { message, save } from "@tauri-apps/plugin-dialog";
 import i18n from "@/i18n";
 import { getDefaultSaveFolderWithFallback } from "@/services/files/defaultSaveFolder";
 import { saveToPath } from "@/services/persistence/saveToPath";
-import { joinPath, getDirectory } from "@/utils/pathUtils";
+import { joinPath, getDirectory, getFileName } from "@/utils/pathUtils";
 import { persistDocumentBatch } from "./closeSaveBatch";
 
 
@@ -38,8 +38,8 @@ import {
   saveFiltersForFilePath,
   toSafeFilename,
   ensureFormatExtension,
-  CLOSE_SAVE_BUTTONS,
-  MULTI_SAVE_BUTTONS,
+  closeSaveButtons,
+  multiSaveButtons,
   type CloseSaveContext,
   type CloseSaveResult,
   type MultiSaveResult,
@@ -58,30 +58,27 @@ export async function promptSaveForDirtyDocument(
   // Use message() with 3-button dialog for proper cancel handling.
   // ask() only returns boolean, so dismiss/escape = "Don't Save" which loses work.
   // message() with yes/no/cancel buttons returns distinct values for each action.
+  const buttons = closeSaveButtons();
   const result = await message(
     i18n.t(divergent ? "dialog:divergentChanges.single" : "dialog:unsavedChanges.single", { title }),
     {
       title: i18n.t(divergent ? "dialog:divergentChanges.title" : "dialog:unsavedChanges.title"),
       kind: "warning",
-      buttons: {
-        yes: CLOSE_SAVE_BUTTONS.save,
-        no: CLOSE_SAVE_BUTTONS.dontSave,
-        cancel: CLOSE_SAVE_BUTTONS.cancel,
-      },
+      buttons: { yes: buttons.save, no: buttons.dontSave, cancel: buttons.cancel },
     }
   );
 
   // Explicitly handle each expected result to avoid falling through on unexpected values
-  if (result === "Cancel" || result === CLOSE_SAVE_BUTTONS.cancel) {
+  if (result === "Cancel" || result === buttons.cancel) {
     return { action: "cancelled" };
   }
 
-  if (result === "No" || result === CLOSE_SAVE_BUTTONS.dontSave) {
+  if (result === "No" || result === buttons.dontSave) {
     return { action: "discarded" };
   }
 
   // Only proceed with save if user explicitly chose Save
-  if (result !== "Yes" && result !== CLOSE_SAVE_BUTTONS.save) {
+  if (result !== "Yes" && result !== buttons.save) {
     // Unexpected dialog result - treat as cancelled for safety
     return { action: "cancelled" };
   }
@@ -112,20 +109,23 @@ export async function promptSaveForDirtyDocument(
 }
 
 /**
- * Format a document entry for display in the summary dialog.
- * Shows path for saved docs, "(new)" for untitled docs.
+ * Format a document entry for display in the summary dialog: the title with
+ * its parent folder for a saved document, a translated "(new)" marker for an
+ * untitled one.
+ *
+ * The elided form `…/parent/title` is used only when there IS something to
+ * elide — a named parent folder with a named folder above it. A file in the
+ * filesystem or drive root, or one folder below it, is shown whole: eliding
+ * there produced a doubled separator (`…//notes.md`).
  */
 function formatDocEntry(context: CloseSaveContext): string {
-  if (context.filePath) {
-    // Show filename with parent directory for context
-    const dir = getDirectory(context.filePath);
-    const parentDir = getDirectory(dir);
-    const shortPath = parentDir
-      ? `…/${dir.split(/[/\\]/).pop()}/${context.title}`
-      : context.filePath;
-    return shortPath;
-  }
-  return `${context.title} (new)`;
+  const { filePath, title } = context;
+  if (!filePath) return i18n.t("dialog:unsavedChanges.newDocEntry", { title });
+  const dir = getDirectory(filePath);
+  const parentName = getFileName(dir);
+  if (!parentName || !getFileName(getDirectory(dir))) return filePath;
+  const sep = filePath.includes("\\") ? "\\" : "/";
+  return `…${sep}${parentName}${sep}${title}`;
 }
 
 /**
@@ -163,26 +163,23 @@ export async function promptSaveForMultipleDocuments(
     msg += `\n\n${i18n.t("dialog:unsavedChanges.newDocsHint", { count: untitledDocs.length })}`;
   }
 
+  const buttons = multiSaveButtons();
   const result = await message(msg, {
     title: i18n.t("dialog:unsavedChanges.title"),
     kind: "warning",
-    buttons: {
-      yes: MULTI_SAVE_BUTTONS.saveAll,
-      no: MULTI_SAVE_BUTTONS.dontSave,
-      cancel: MULTI_SAVE_BUTTONS.cancel,
-    },
+    buttons: { yes: buttons.saveAll, no: buttons.dontSave, cancel: buttons.cancel },
   });
 
-  if (result === "Cancel" || result === MULTI_SAVE_BUTTONS.cancel) {
+  if (result === "Cancel" || result === buttons.cancel) {
     return { action: "cancelled" };
   }
 
-  if (result === "No" || result === MULTI_SAVE_BUTTONS.dontSave) {
+  if (result === "No" || result === buttons.dontSave) {
     return { action: "discarded-all" };
   }
 
   // Only proceed with save if user explicitly chose Save All
-  if (result !== "Yes" && result !== MULTI_SAVE_BUTTONS.saveAll) {
+  if (result !== "Yes" && result !== buttons.saveAll) {
     return { action: "cancelled" };
   }
 

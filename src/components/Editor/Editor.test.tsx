@@ -7,7 +7,8 @@ import {
   __resetBootstrap,
 } from "@/lib/formats";
 import { __resetRegistry } from "@/lib/formats/registry";
-import { SURFACE_IMPORT_WAIT, SURFACE_IMPORT_TEST_TIMEOUT_MS } from "@/test/waitBudget";
+import { useDocumentStore } from "@/stores/documentStore";
+import { SURFACE_IMPORT_WAIT } from "@/test/waitBudget";
 
 beforeEach(() => {
   __resetRegistry();
@@ -45,7 +46,12 @@ function createZustandMock<T extends object>(state: T) {
   return store;
 }
 
-// Mock Tauri APIs
+// Mock Tauri APIs. `convertFileSrc` is the asset-protocol boundary the real
+// media surface turns a path into an <img> src through.
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(() => Promise.resolve()),
+  convertFileSrc: (path: string) => `asset://localhost${path}`,
+}));
 vi.mock("@tauri-apps/api/webviewWindow", () => ({
   getCurrentWebviewWindow: () => ({
     label: "main",
@@ -54,7 +60,7 @@ vi.mock("@tauri-apps/api/webviewWindow", () => ({
   }),
 }));
 
-// Mock useUIStore (includes merged search/contentSearch/terminal slices for T09 consolidation)
+// Mock useUIStore (includes merged search/contentSearch slices for T09 consolidation)
 vi.mock("@/stores/uiStore", () => {
   const state = {
     content: "",
@@ -90,10 +96,6 @@ vi.mock("@/stores/uiStore", () => {
       error: null,
       totalMatches: 0,
       totalFiles: 0,
-    },
-    terminal: {
-      sessions: [],
-      activeSessionId: null,
     },
     searchSetMatches: vi.fn(),
   };
@@ -173,16 +175,10 @@ const { mockTabStore } = vi.hoisted(() => ({
 
 vi.mock("@/stores/tabStore", () => ({ useTabStore: createZustandMock(mockTabStore) }));
 
-// Stub the media surface so the dispatch test asserts routing, not rendering.
-vi.mock("./MediaViewer/MediaViewer", () => ({
-  MediaViewer: ({ tabId }: { tabId: string }) => (
-    <div data-testid="media-viewer">{tabId}</div>
-  ),
-}));
-
-// Stub the generic split-pane + browser surfaces for the same reason: these
-// tests assert which surface the dispatcher picks and what it hands it, not
-// how those surfaces render (CodeMirror / native webview).
+// Stub the generic split-pane + browser surfaces: these tests assert which
+// surface the dispatcher picks and what it hands it, not how those surfaces
+// render (CodeMirror / native webview). The media surface is real — it renders
+// an <img> from the tab's document path, which jsdom can host.
 vi.mock("./SplitPaneEditor/SplitPaneEditor", () => ({
   SplitPaneEditor: ({
     tabId,
@@ -258,7 +254,7 @@ vi.mock("@/stores/settingsStore", () => {
  *  headroom, it is a coin flip once anything else is running.
  *
  *  The budget now lives in `src/test/waitBudget.ts` as one definition for the
- *  class, paired with the per-test timeout it has to sit inside. */
+ *  class; the tests run under the tier's liveness bound, which it sits below. */
 const SURFACE_LOAD_TIMEOUT_MS = SURFACE_IMPORT_WAIT.timeout;
 
 function renderWithProvider(ui: React.ReactElement) {
@@ -282,7 +278,7 @@ describe("Editor", () => {
       // under a loaded worker the default 1s is not enough to transform it.
       { timeout: SURFACE_LOAD_TIMEOUT_MS },
     );
-  }, SURFACE_IMPORT_TEST_TIMEOUT_MS);
+  });
 
   it("renders the editor content area", async () => {
     renderWithProvider(<Editor />);
@@ -293,7 +289,7 @@ describe("Editor", () => {
       },
       { timeout: SURFACE_LOAD_TIMEOUT_MS },
     );
-  }, SURFACE_IMPORT_TEST_TIMEOUT_MS);
+  });
 
   it("renders the Welcome screen when activeTabId points at a tab that no longer exists", () => {
     // A stale activeTabId (tab transfer, hot-exit restore, workspace switch) used
@@ -337,7 +333,7 @@ describe("Editor", () => {
       expect(cfg.kind).not.toBe("wysiwyg");
     });
 
-    it("mounts MediaViewer (not SplitPaneEditor) for a kind:'media' tab", () => {
+    it("mounts MediaViewer (not SplitPaneEditor) for a kind:'media' tab", async () => {
       // The active tab points at an image file → dispatchEditor resolves the
       // media format, and Editor.tsx must route it to MediaViewer so no
       // CodeMirror source pane mounts.
@@ -345,11 +341,24 @@ describe("Editor", () => {
         id === "tab-1"
           ? { kind: "document", id: "tab-1", filePath: "/pics/hero.png", title: "hero.png", isPinned: false }
           : null;
+      // The media surface reads the path from the tab's DOCUMENT, not the tab.
+      const doc: { filePath: string | null } = useDocumentStore.getState().documents["tab-1"];
+      doc.filePath = "/pics/hero.png";
 
-      renderWithProvider(<Editor />);
+      try {
+        renderWithProvider(<Editor />);
 
-      expect(screen.getByTestId("media-viewer")).toHaveTextContent("tab-1");
-      expect(screen.queryByTestId("split-pane-editor")).not.toBeInTheDocument();
+        const viewer = document.querySelector(".media-viewer");
+        expect(viewer).not.toBeNull();
+        // The <img> mounts once the asset grant settles.
+        await waitFor(() =>
+          expect(viewer!.querySelector("img")).toHaveAttribute("src", expect.stringContaining("/pics/hero.png")),
+        );
+        expect(screen.queryByTestId("split-pane-editor")).not.toBeInTheDocument();
+        expect(document.querySelector(".editor-content")).not.toBeInTheDocument();
+      } finally {
+        doc.filePath = null;
+      }
     });
 
     it("mounts SplitPaneEditor with the resolved format for a .txt tab", () => {
@@ -381,7 +390,7 @@ describe("Editor", () => {
 
       expect(screen.getByTestId("browser-workspace-surface")).toBeInTheDocument();
       expect(screen.queryByTestId("split-pane-editor")).not.toBeInTheDocument();
-      expect(screen.queryByTestId("media-viewer")).not.toBeInTheDocument();
+      expect(document.querySelector(".media-viewer")).not.toBeInTheDocument();
       expect(document.querySelector(".editor-content")).not.toBeInTheDocument();
     });
 
@@ -416,6 +425,6 @@ describe("Editor", () => {
         { timeout: SURFACE_LOAD_TIMEOUT_MS },
       );
       expect(screen.queryByTestId("split-pane-editor")).not.toBeInTheDocument();
-    }, SURFACE_IMPORT_TEST_TIMEOUT_MS);
+    });
   });
 });

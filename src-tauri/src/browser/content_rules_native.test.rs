@@ -76,6 +76,7 @@ fn temp_store(dir: &Path, mtm: MainThreadMarker) -> Retained<WKContentRuleListSt
     std::fs::create_dir_all(dir).expect("create the store directory");
     let path = NSString::from_str(dir.to_str().expect("utf-8 temp path"));
     let url = NSURL::fileURLWithPath_isDirectory(&path, true);
+    // SAFETY: a class method taking a live file URL; `mtm` proves the main thread.
     unsafe { WKContentRuleListStore::storeWithURL(Some(&url), mtm) }
         .expect("WebKit opens a store in a temporary directory")
 }
@@ -89,6 +90,9 @@ fn look_up(store: &WKContentRuleListStore, identifier: &str) -> bool {
         block2::RcBlock::new(move |list: *mut WKContentRuleList, _error: *mut NSError| {
             *sink.borrow_mut() = Some(!list.is_null());
         });
+    // SAFETY: `store` and `id` are live. WebKit copies the block and calls it
+    // once, on this (main) thread, which owns the `Rc` it captures; the block
+    // only null-checks the pointers it is given.
     unsafe {
         store.lookUpContentRuleListForIdentifier_completionHandler(Some(&id), Some(&handler))
     };
@@ -107,8 +111,11 @@ fn run_probe(store_dir: &Path, mtm: MainThreadMarker) -> ProbeReport {
             let compiled = compile(&store, allow_loopback)
                 .map(|list| {
                     // The attach half, on a real configuration.
+                    // SAFETY: `new` on a main-thread-only class; `mtm` proves the
+                    // main thread.
                     let config = unsafe { WKWebViewConfiguration::new(mtm) };
                     attach(&config, &list);
+                    // SAFETY: a property read on the live list WebKit just compiled.
                     unsafe { list.identifier() }.to_string()
                 })
                 .map_err(|error| error.to_string());
@@ -142,7 +149,8 @@ fn probe() -> &'static ProbeReport {
     REPORT.get_or_init(|| {
         let dir = tempfile::tempdir().expect("temp dir for the store and the report");
         let report_path = dir.path().join("report.json");
-        let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+        let probe = std::env::current_exe().expect("test binary");
+        let output = crate::ai_provider::build_command(&probe.to_string_lossy(), &[])
             .env(REPORT_ENV, &report_path)
             .env(STORE_ENV, dir.path().join("store"))
             .output()

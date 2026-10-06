@@ -27,8 +27,7 @@ pub(crate) struct RestorePlan {
 /// The rule is a single choice by INDEX, then everything else. Two independent
 /// queries (`find(is_main_window)` with a `first()` fallback, plus a separate
 /// `filter(!is_main_window)`) used to overlap whenever no window carried the
-/// flag: the first survivor answered both, and came back twice (audit
-/// 20260906, B4).
+/// flag: the first survivor answered both, and came back twice.
 ///
 /// A session with no main-flagged window is ORDINARY, not corrupt: capture
 /// flags only the literal `main` label, so closing the original window and

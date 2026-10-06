@@ -2,6 +2,8 @@
  * Block Math Detection for Source Mode
  *
  * Detects if cursor is inside a block math region ($$...$$).
+ *
+ * @module plugins/sourceContextDetection/blockMathDetection
  */
 
 import type { EditorView } from "@codemirror/view";

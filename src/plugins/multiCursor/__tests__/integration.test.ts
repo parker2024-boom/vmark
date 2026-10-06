@@ -5,7 +5,7 @@ import { EditorState, TextSelection } from "@tiptap/pm/state";
 import { multiCursorPlugin } from "../multiCursorPlugin";
 import { selectNextOccurrence } from "../commands";
 import { handleMultiCursorInput } from "../inputHandling";
-import { MultiSelection } from "../MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 
 const schema = new Schema({
   nodes: {

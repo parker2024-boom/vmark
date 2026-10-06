@@ -14,7 +14,7 @@ type Step = Job["steps"][number];
 
 /** Every field is `readonly`: `NONE` below is ONE object shared by every empty
  *  result, so a consumer writing to what it was handed would rewrite the answer
- *  every later caller gets (audit R3 #582). The type says so, and `NONE` is
+ *  every later caller gets. The type says so, and `NONE` is
  *  frozen so an untyped caller finds out too. */
 export interface StepSelectionContext {
   readonly selectedJob: Job | null;

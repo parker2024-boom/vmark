@@ -243,7 +243,7 @@ describe("useWindowClose — nothing is destroyed until the native close succeed
       await listeners.get("window:close-requested")!({ payload: WINDOW });
     });
 
-    expect(invoke).not.toHaveBeenCalledWith("close_window", expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith("close_window");
     expect(useTabStore.getState().tabs[WINDOW]).toHaveLength(1);
     expect(useDocumentStore.getState().getDocument(tabId)).toBeDefined();
     errorSpy.mockRestore();

@@ -2,7 +2,7 @@
 // The comparator turns two `vitest bench --outputJson` payloads into a
 // regression verdict; these tests pin the comparison semantics.
 import { describe, expect, it } from "vitest";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment -- the imported .mjs module ships no type declarations
 // @ts-ignore — plain .mjs module without type declarations
 import {
   compareBenchResults,

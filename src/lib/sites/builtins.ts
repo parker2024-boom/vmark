@@ -1,5 +1,5 @@
 /**
- * Built-in site plugin registration (WI-NB4.3) — the production call site for
+ * Built-in site plugin registration — the production call site for
  * `registerSite`. Idempotent: the extract path calls it on every request, the
  * registry is a module singleton, and re-registering would throw on the
  * duplicate id — so registration happens exactly once, lazily, with no init

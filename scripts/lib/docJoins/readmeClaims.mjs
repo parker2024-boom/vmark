@@ -1,6 +1,6 @@
 /**
  * Purpose: join README.md's feature claims to the registries they restate, so
- *   the README cannot drift from the code without a gate going red (WI-FL0.5).
+ *   the README cannot drift from the code without a gate going red.
  *
  * Four claims, four registries:
  *

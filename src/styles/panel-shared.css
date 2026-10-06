@@ -1,5 +1,5 @@
 /**
- * Shared panel & small-control primitives (WI-UI3.4).
+ * Shared panel & small-control primitives.
  *
  *   .vm-panel__header / __title / __row   the one header rhythm (8/12, 14px)
  *   .vm-chip (+ --toggle, --kbd)          pills, filter toggles, key hints
@@ -51,7 +51,7 @@
 
 .vm-chip--toggle {
   border-radius: var(--radius-sm);
-  cursor: var(--cursor-interactive, default); /* D7, platform-scoped (WI-UA15) */
+  cursor: var(--cursor-interactive, default); /* D7, platform-scoped */
 }
 
 /* Pressed: accent fill and border as the indicator; the label keeps its ink
@@ -70,7 +70,7 @@
   font-size: var(--font-size-xs);
 }
 
-/* The switch: a borderless 36×20 track (maintainer direction 2026-09-02,
+/* The switch: a borderless 36×20 track (maintainer direction,
    superseding the D8 control-border ring here) — the off state is the
    hover-strong fill, the on state the solid accent, and the page-colour
    knob supplies the shape contrast on both. A fixed white knob vanished

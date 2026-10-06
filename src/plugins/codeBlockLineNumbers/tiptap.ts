@@ -18,6 +18,9 @@
  *   - Language selector is a floating chip positioned inside the code block wrapper
  *   - Language dropdown uses fixed positioning (popup-host aware) to avoid clipping
  *   - Copy button uses navigator.clipboard API with success/error feedback
+ *   - `meta` holds the fence info after the language (```` ```js {1,3} ````) so
+ *     a document round-trips it. It is markdown-only: never rendered to HTML,
+ *     and never read from pasted HTML.
  *
  * Known limitations:
  *   - Line numbers are recounted on every DOM mutation (no incremental update)
@@ -40,6 +43,12 @@ import "./hljs-syntax.css";
  * on empty-language blocks and frequently mis-detects English prose as VB.NET.
  */
 export const CodeBlockWithLineNumbers = CodeBlockLowlight.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      meta: { default: null, rendered: false, parseHTML: () => null },
+    };
+  },
   addNodeView() {
     return ({ node, editor, getPos }) =>
       new CodeBlockNodeView(node, editor, getPos as () => number | undefined);

@@ -523,7 +523,6 @@ describe("local links and media (audit 20260906)", () => {
         reload: () => {},
       };
       const windowStub = {};
-      // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
       new Function(
         "document",
         "location",

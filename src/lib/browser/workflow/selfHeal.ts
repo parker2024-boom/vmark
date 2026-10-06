@@ -1,6 +1,6 @@
 /**
  * Workflow self-healing — propose a locator fix when a step's target moves
- * (WI-4.4 / R8a / WI-NB6.4 / P-3).
+ * (R8a / P-3).
  *
  * WIRED: `services/workflow/runExecutor.ts` calls this after a not-found act and
  * re-enters the approval gate with the healed descriptor (P-3): a standing grant
@@ -15,7 +15,7 @@
  * The role must match exactly (a locator never heals across roles — a button is
  * not repaired to a link). How a candidate is SCORED — the edit-distance
  * similarity, the confidence floors, the write-step strictness and the antonym
- * refusal (W-03) — lives in `selfHealScore.ts` (split out in audit r3 #145); this
+ * refusal (W-03) — lives in `selfHealScore.ts`; this
  * module composes those scores over the snapshot and decides AMBIGUITY.
  *
  * A proposal must be UNAMBIGUOUS, because the executor resolves a role+name locator

@@ -5,7 +5,7 @@
  * Tests for cross-mode undo/redo checkpoint management.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { useUnifiedHistoryStore } from "./documentStore";
 
 const TAB_A = "tab-a";
@@ -23,15 +23,22 @@ function createCheckpointData(
 }
 
 describe("documentStore", () => {
+  /** Checkpoints are stamped with `Date.now()`; pin it so the stamp is exact. */
+  const NOW = Date.UTC(2026, 0, 2, 3, 4, 5);
+
   beforeEach(() => {
+    vi.setSystemTime(NOW);
     // Reset store state before each test
     useUnifiedHistoryStore.getState().clearAll();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe("createCheckpoint", () => {
     it("creates a checkpoint with timestamp", () => {
       const store = useUnifiedHistoryStore.getState();
-      const before = Date.now();
 
       store.createCheckpoint(TAB_A, createCheckpointData("# Hello"));
 
@@ -39,8 +46,7 @@ describe("documentStore", () => {
       expect(checkpoint).not.toBeNull();
       expect(checkpoint!.markdown).toBe("# Hello");
       expect(checkpoint!.mode).toBe("wysiwyg");
-      expect(checkpoint!.timestamp).toBeGreaterThanOrEqual(before);
-      expect(checkpoint!.timestamp).toBeLessThanOrEqual(Date.now());
+      expect(checkpoint!.timestamp).toBe(NOW);
     });
 
     it("does not create checkpoint when isRestoring is true", () => {
@@ -172,14 +178,13 @@ describe("documentStore", () => {
   describe("pushRedo", () => {
     it("adds checkpoint with timestamp", () => {
       const store = useUnifiedHistoryStore.getState();
-      const before = Date.now();
 
       store.pushRedo(TAB_A, createCheckpointData("Redo content"));
 
       const checkpoint = store.popRedo(TAB_A);
       expect(checkpoint).not.toBeNull();
       expect(checkpoint!.markdown).toBe("Redo content");
-      expect(checkpoint!.timestamp).toBeGreaterThanOrEqual(before);
+      expect(checkpoint!.timestamp).toBe(NOW);
     });
 
     it("trims redo stack when exceeding maxCheckpoints", () => {
@@ -326,14 +331,13 @@ describe("documentStore", () => {
 
     it("adds checkpoint with timestamp", () => {
       const store = useUnifiedHistoryStore.getState();
-      const before = Date.now();
 
       store.pushUndo(TAB_A, createCheckpointData("Content"));
 
       const checkpoint = store.popUndo(TAB_A);
       expect(checkpoint).not.toBeNull();
       expect(checkpoint!.markdown).toBe("Content");
-      expect(checkpoint!.timestamp).toBeGreaterThanOrEqual(before);
+      expect(checkpoint!.timestamp).toBe(NOW);
     });
 
     it("trims undo stack when exceeding maxCheckpoints", () => {

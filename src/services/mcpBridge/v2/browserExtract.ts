@@ -1,5 +1,5 @@
 /**
- * MCP v2 `vmark.browser.extract` handler (WI-NB4.1) — reader-mode extraction.
+ * MCP v2 `vmark.browser.extract` handler — reader-mode extraction.
  *
  * Purpose: give the model the page as clean Markdown — title, byline, article
  * prose — instead of an accessibility snapshot, for pages it wants to READ
@@ -24,6 +24,7 @@ import { wrapHandler } from "./wrapHandler";
 import { buildExtractHtmlScript } from "@/lib/browser/agent/extractScript";
 import { urlForAgent } from "@/lib/browser/url";
 import { runReadClass, parseEvalResult } from "./browserReadClass";
+import { readOperationArgsChecked } from "./readOperationArgs";
 
 // Lazy-loaded: the reader-mode extractor pulls in the site registry, the
 // Readability-style reader and the site plugins — only needed when the AI calls
@@ -48,7 +49,7 @@ export async function handleBrowserExtract(id: string, args: Record<string, unkn
       sitesRegistry(),
     ]);
     ensureBuiltinSitesRegistered();
-    await runReadClass(id, args, {
+    await runReadClass(id, readOperationArgsChecked("vmark.browser.extract", args), {
       invoke: async (tab) => {
         const raw = await invoke<string>("browser_eval", {
           tabId: tab.tabId,

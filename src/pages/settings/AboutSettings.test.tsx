@@ -1,8 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
 const confirmActionMock = vi.hoisted(() => vi.fn());
 vi.mock("@/services/dialogs/confirmAction", () => ({
   confirmAction: confirmActionMock,
+}));
+const toastErrorMock = vi.hoisted(() => vi.fn());
+vi.mock("@/services/ime/imeToast", () => ({
+  imeToast: { error: toastErrorMock, success: vi.fn(), info: vi.fn() },
 }));
 
 import { AboutSettings } from "./AboutSettings";
@@ -102,6 +107,33 @@ describe("AboutSettings — reset to defaults (WI-6 / D3)", () => {
     fireEvent.click(screen.getByText("Reset to Defaults"));
     await vi.waitFor(() => {
       expect(useSettingsStore.getState().appearance.fontSize).toBe(18);
+    });
+  });
+});
+
+describe("AboutSettings — third-party notices (WI-RA15B.2)", () => {
+  afterEach(() => {
+    vi.mocked(invoke).mockReset();
+    vi.mocked(invoke).mockImplementation(() => Promise.resolve());
+    toastErrorMock.mockReset();
+  });
+
+  it("asks Rust to open the bundled notices — the webview never names a path", async () => {
+    render(<AboutSettings />);
+    fireEvent.click(screen.getByRole("button", { name: "Third-party notices" }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("open_third_party_notices"));
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  it("reports a failure to open them instead of doing nothing", async () => {
+    vi.mocked(invoke).mockImplementation(() =>
+      Promise.reject({ code: "not-found", message: "third-party notices are missing from the app bundle" }),
+    );
+    render(<AboutSettings />);
+    fireEvent.click(screen.getByRole("button", { name: "Third-party notices" }));
+    await vi.waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
+    expect(toastErrorMock).toHaveBeenCalledWith("Could not open the third-party notices", {
+      description: "third-party notices are missing from the app bundle",
     });
   });
 });

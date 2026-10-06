@@ -6,7 +6,17 @@
  *
  * Key decisions:
  *   - High priority (1200) to intercept events before other plugins process them
- *   - Tracks composition state (start position, data) to correctly handle composition end
+ *   - Tracks composition state (anchor, data) to correctly handle composition end
+ *   - Where the composition began is an ANCHOR that follows the document, not a
+ *     number read once. filterTransaction has to admit document changes during
+ *     composition (below), so text can move under a raw position; the cleanup
+ *     then deleted the user's own words in front of the composed text. Every
+ *     applied transaction is handed to the anchor, and every reader asks it for
+ *     the position in the document it is looking at — see compositionAnchor.ts
+ *   - The plugin state field stores nothing. It exists for `apply`, the one
+ *     hook ProseMirror calls with each transaction that is actually applied
+ *   - The anchor is forgotten once the post-composition frame has run, so
+ *     nothing keeps acting on a composition that is over
  *   - filterTransaction allows doc-changing transactions during composition because
  *     ProseMirror may omit "composition" meta when storedMarks are present (#66)
  *   - Safari fix: ProseMirror's fixUpBadSafariComposition displaces cursor in table headers;
@@ -19,18 +29,21 @@
  *
  * Known limitations:
  *   - Safari table header fix uses heuristic position detection, may not cover all edge cases
+ *   - A document write that arrives mid-composition is survived, not prevented:
+ *     the anchor moves or retires, but the browser's composition may still be
+ *     disturbed by the redraw. Writers should hold back until it has ended
  *
  * @coordinates-with utils/imeGuard.ts — IME state tracking and action queuing utilities
+ * @coordinates-with plugins/compositionGuard/compositionAnchor.ts — where the composition began
+ * @coordinates-with plugins/compositionGuard/imeCleanup.ts — the post-composition repair
  * @coordinates-with plugins/compositionGuard/splitBlockFix.ts — split-block repair for headings
  * @module plugins/compositionGuard/tiptap
  */
 
 import { Extension } from "@tiptap/core";
 import { Plugin, TextSelection } from "@tiptap/pm/state";
-import type { EditorView } from "@tiptap/pm/view";
 import {
   flushProseMirrorCompositionQueue,
-  getImeCleanupPrefixLength,
   HANGUL_RE,
   IME_GRACE_PERIOD_MS,
   isProseMirrorInCompositionGrace,
@@ -39,6 +52,8 @@ import {
 import { splitBlock } from "@tiptap/pm/commands";
 import { fixCompositionSplitBlock } from "./splitBlockFix";
 import { shouldGuardKeyEvent } from "./compositionKeys";
+import { createCompositionAnchor } from "./compositionAnchor";
+import { cleanUpAfterComposition, findTableCellDepth } from "./imeCleanup";
 
 /** Tiptap extension that guards against IME composition artifacts in ProseMirror. */
 export const compositionGuardExtension = Extension.create({
@@ -46,7 +61,7 @@ export const compositionGuardExtension = Extension.create({
   priority: 1200,
   addProseMirrorPlugins() {
     let isComposing = false;
-    let compositionStartPos: number | null = null;
+    const anchor = createCompositionAnchor();
     let compositionData = "";
     let compositionPinyin = "";
 
@@ -68,76 +83,27 @@ export const compositionGuardExtension = Extension.create({
     // ProseMirror's fixUpBadSafariComposition displaces it.
     let pendingHeaderCursorFix: { data: string } | null = null;
 
-    const findTableCellDepth = (view: EditorView, pos: number): number | null => {
-      const { doc } = view.state;
-      const $pos = doc.resolve(pos);
-      for (let depth = $pos.depth; depth > 0; depth -= 1) {
-        const node = $pos.node(depth);
-        if (node.type.name === "tableCell" || node.type.name === "tableHeader") {
-          return depth;
-        }
-      }
-      return null;
-    };
-
-    const scheduleImeCleanup = (view: EditorView) => {
-      if (!compositionData || compositionStartPos === null) return;
-
-      const { state } = view;
-      let $start;
-      try {
-        $start = state.doc.resolve(compositionStartPos);
-      } catch {
-        return;
-      }
-
-      // Try split-block fix (paragraph now has composed text)
-      const splitFix = fixCompositionSplitBlock(
-        state, compositionStartPos, compositionData, compositionPinyin,
-      );
-      if (splitFix) {
-        view.dispatch(splitFix);
-        return;
-      }
-
-      let cleanupEnd = $start.end();
-      let allowNewlines = false;
-
-      // Table cells can contain multiple paragraphs, so use the
-      // cell boundary and allow newlines in the cleanup range.
-      // For every other block (paragraph, heading, code block,
-      // list item, blockquote, etc.) $start.end() is correct.
-      const tableDepth = findTableCellDepth(view, compositionStartPos);
-      if (tableDepth !== null) {
-        cleanupEnd = $start.end(tableDepth);
-        allowNewlines = true;
-      }
-
-      if (compositionStartPos > cleanupEnd) return;
-
-      const textBetween = state.doc.textBetween(compositionStartPos, cleanupEnd, "\n");
-      const prefixLen = getImeCleanupPrefixLength(textBetween, compositionData, { allowNewlines });
-      if (!prefixLen) return;
-
-      const deleteFrom = compositionStartPos;
-      const deleteTo = compositionStartPos + prefixLen;
-      view.dispatch(state.tr.delete(deleteFrom, deleteTo).setMeta("uiEvent", "composition-cleanup"));
-    };
-
     return [
       new Plugin({
+        state: {
+          init: () => null,
+          apply(tr) {
+            anchor.follow(tr);
+            return null;
+          },
+        },
         appendTransaction(_transactions, _oldState, newState) {
           // 1. Split-block detection: during/after composition, watch for the
           //    heading being split into heading + paragraph. The browser does
           //    this ~4ms BEFORE compositionend fires, so we can't fix it here
           //    (the composed text isn't in the paragraph yet). We flag it so
           //    the rAF cleanup knows to attempt the fix.
-          if ((isComposing || compositionStartPos !== null) &&
-              _transactions.some((tr) => tr.docChanged) &&
-              compositionStartPos !== null &&
-              !splitDetected) {
+          const startPos = anchor.at(newState.doc);
+          if (startPos !== null &&
+              !splitDetected &&
+              _transactions.some((tr) => tr.docChanged)) {
             try {
-              const $start = newState.doc.resolve(compositionStartPos);
+              const $start = newState.doc.resolve(startPos);
               if ($start.parent.type.name === "heading" &&
                   _oldState.doc.childCount < newState.doc.childCount) {
                 splitDetected = true;
@@ -201,10 +167,11 @@ export const compositionGuardExtension = Extension.create({
           // incorrectly splits headings when accepting IME candidates;
           // by rejecting the transaction, we prevent the split entirely.
           if (tr.docChanged) {
-            if (compositionStartPos !== null &&
+            const startPos = anchor.at(tr.before);
+            if (startPos !== null &&
                 tr.before.childCount < tr.doc.childCount) {
               try {
-                const $start = tr.before.resolve(compositionStartPos);
+                const $start = tr.before.resolve(startPos);
                 if ($start.parent.type.name === "heading") {
                   // Verify a paragraph appeared immediately after the heading
                   const afterPos = $start.after($start.depth);
@@ -283,7 +250,7 @@ export const compositionGuardExtension = Extension.create({
                   }
                 } catch { /* pos out of range — skip pre-deletion */ }
               }
-              compositionStartPos = view.state.selection.from;
+              anchor.begin(view.state.doc, view.state.selection.from);
 
               return false;
             },
@@ -304,11 +271,12 @@ export const compositionGuardExtension = Extension.create({
               // Flag cursor fix for tableHeader cells (Safari moves
               // composed text to TR level, ProseMirror shoves it back
               // but collapses cursor to cell start).
-              if (compositionStartPos !== null && compositionData) {
-                const depth = findTableCellDepth(view, compositionStartPos);
+              const startPos = anchor.at(view.state.doc);
+              if (startPos !== null && compositionData) {
+                const depth = findTableCellDepth(view, startPos);
                 if (depth !== null) {
                   try {
-                    const cellNode = view.state.doc.resolve(compositionStartPos).node(depth);
+                    const cellNode = view.state.doc.resolve(startPos).node(depth);
                     if (cellNode.type.name === "tableHeader") {
                       pendingHeaderCursorFix = { data: compositionData };
                     }
@@ -320,39 +288,45 @@ export const compositionGuardExtension = Extension.create({
               // session could start before the callback fires, corrupting
               // the mutable closure variables.
               const snapshotData = compositionData;
-              const snapshotStartPos = compositionStartPos;
               const snapshotPinyin = compositionPinyin;
               const snapshotSplit = splitDetected;
+              const composition = anchor.current();
 
               // Schedule cleanup via rAF as fallback for non-heading cases.
               // The filterTransaction prevention handles heading splits
               // synchronously, but normal pinyin cleanup still needs rAF.
               requestAnimationFrame(() => {
                 // Stale callback — a new composition started before this fired
-                if (compositionStartPos !== snapshotStartPos) return;
+                if (anchor.current() !== composition) return;
 
                 /* v8 ignore start -- @preserve reason: IME composition split fallback; requires real ProseMirror + IME interaction not reproducible in unit tests */
                 if (snapshotSplit) {
                   // Heading was split but filterTransaction didn't prevent it
                   // (shouldn't happen, but defensive fallback)
                   splitDetected = false;
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- domObserver is ProseMirror-internal and absent from EditorView's public types
                   (view as any).domObserver?.flush?.();
                   const { state } = view;
-                  if (snapshotData && snapshotStartPos !== null) {
+                  const splitPos = anchor.at(state.doc);
+                  if (snapshotData && splitPos !== null) {
                     const fix = fixCompositionSplitBlock(
-                      state, snapshotStartPos, snapshotData, snapshotPinyin,
+                      state, splitPos, snapshotData, snapshotPinyin,
                     );
                     if (fix) {
                       view.dispatch(fix);
+                      anchor.end();
                       flushProseMirrorCompositionQueue(view);
                       return;
                     }
                   }
                 }
                 /* v8 ignore stop */
-                // Normal pinyin cleanup
-                scheduleImeCleanup(view);
+                // Normal pinyin cleanup, then the composition is over: nothing
+                // may act on its anchor again.
+                cleanUpAfterComposition(
+                  view, anchor.at(view.state.doc), snapshotData, snapshotPinyin,
+                );
+                anchor.end();
                 flushProseMirrorCompositionQueue(view);
 
                 // Korean Hangul deferred Enter: dispatch splitBlock after
@@ -385,7 +359,7 @@ export const compositionGuardExtension = Extension.create({
               }
               if (!isComposing) return false;
               isComposing = false;
-              compositionStartPos = null;
+              anchor.end();
               compositionData = "";
               compositionPinyin = "";
               splitDetected = false;

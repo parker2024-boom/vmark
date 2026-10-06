@@ -1,6 +1,5 @@
 /**
- * One OPEN of the genie picker, as state an invocation can be checked against
- * (audit R2, #610/#611).
+ * One OPEN of the genie picker, as state an invocation can be checked against.
  *
  * Two things the picker could not previously say:
  *
@@ -84,14 +83,14 @@ export interface ResponseActions {
 /**
  * What every exit from a response mode has to do besides changing the mode.
  *
- * Accept applies THIS session's suggestion (audit R2, #611); Retry, Reject and
+ * Accept applies THIS session's suggestion; Retry, Reject and
  * an outside-click dismissal drop it, since leaving it behind kept a
- * "rejected" edit live in the editor where it could still be accepted later
- * (#612/#622); and dismissing during processing cancels the invocation, which
- * otherwise kept streaming and produced a suggestion after the picker was gone
- * (#618). `cancelInvocation` is the HOOK's cancel — it unregisters the stream
+ * "rejected" edit live in the editor where it could still be accepted later;
+ * and dismissing during processing cancels the invocation, which
+ * otherwise kept streaming and produced a suggestion after the picker was gone.
+ * `cancelInvocation` is the HOOK's cancel — it unregisters the stream
  * listener and asks Rust to stop the provider, neither of which the invocation
- * store's own state reset does (#613).
+ * store's own state reset does.
  */
 export function useResponseActions(
   mode: PickerMode,

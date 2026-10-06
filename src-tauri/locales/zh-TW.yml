@@ -307,7 +307,7 @@ errors:
   workflow.restoreWhileRunning: "有工作流程正在執行。請等待完成或取消後再還原檔案。"
   workflow.restoreSuperseded: "此快照之後又執行了其他工作流程，還原它可能會撤銷該次執行的變更。未還原任何內容。"
 
-  # === 儲存路徑（file_write.rs，WI-14 CommandError）===
+  # === 儲存路徑（files/write.rs，WI-14 CommandError）===
   save.parentMissing: "該檔案所在的資料夾已不存在：%{dir}"
   save.noParentDirectory: "檔案路徑沒有上層資料夾"
   save.symlinkLoop: "此檔案的替身指向形成循環，因此找不到真正的檔案"
@@ -357,7 +357,13 @@ errors:
 
   # === CLI install ===
   cli.noFile: "安裝似乎成功，但檔案未能建立。"
-  cli.mismatch: "安裝完成，但檔案內容與預期指令稿不符。"
+  cli.mismatch: "已安裝的指令與預期指令稿不符，已將其移除。"
+  cli.mismatchNotRemoved: "「%{path}」的檔案與預期指令稿不符，且無法移除。請手動刪除該檔案。"
+
+  # === External editor ===
+  externalEditor.unknownName: "VMark 無法依名稱辨識編輯器「%{name}」，請改為填寫該編輯器的完整路徑"
+  externalEditor.notAnEditor: "「%{name}」會直接執行傳給它的檔案，而不是開啟檔案，因此不能用作外部編輯器"
+  externalEditor.notPlainPath: "外部編輯器必須是編輯器名稱或完整路徑，路徑中不能包含「..」，也不能以斜線結尾"
 
   # === Genies ===
   genie.pathBlocked: "Genie 路徑位於允許的目錄之外"
@@ -412,7 +418,7 @@ errors:
   # === Secure store (secure_store.rs) ===
   secureStore.keychainDenied: "鑰匙圈存取遭到拒絕。請在鑰匙圈提示中允許 VMark，或在「鑰匙圈存取」中授予存取權限，然後再試一次。"
 
-  # === 工作區存取授權 (workspace_grants/commands.rs, WI-LX1.1) ===
+  # === 工作區存取授權 (workspace/grants/commands.rs, WI-LX1.1) ===
   workspaceAccess.notGranted: "VMark 尚未獲得存取「%{path}」的權限。請透過 檔案 → 開啟工作區... 選擇該資料夾以授予權限。"
   workspaceAccess.pickerBusy: "已有一個資料夾對話框處於開啟狀態"
   workspaceAccess.checkBusy: "VMark 仍在檢查對該資料夾的存取權限，請稍後再試"

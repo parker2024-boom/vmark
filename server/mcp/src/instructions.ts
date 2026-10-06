@@ -1,10 +1,10 @@
 /**
- * The server-level `initialize.instructions` primer (WI-NB2.1).
+ * The server-level `initialize.instructions` primer.
  *
  * Purpose: the one piece of text every MCP client hands its model BEFORE any
  * tool is called. Written as operational guidance — the core loop, each failure
  * mode, and the tool that answers it — not as marketing (the NeoBrowser primer
- * lesson, prior-art report 20260819). Tool-level detail stays in the tool
+ * lesson from prior-art research). Tool-level detail stays in the tool
  * descriptions; this orients across them.
  *
  * Kept as a standalone module so its claims are unit-pinned the same way the

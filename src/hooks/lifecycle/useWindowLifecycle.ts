@@ -33,5 +33,5 @@ export function useWindowLifecycle(): void {
   useWindowFileWatcher();
   useDocumentResilience(); // T07: capture + restore + snapshot writer + cleanup
   useMcpBridge();
-  useLiveDocsResponder(); // WI-9: answer other windows' cleanup queries
+  useLiveDocsResponder(); // answer other windows' cleanup queries
 }

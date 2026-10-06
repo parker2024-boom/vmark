@@ -133,14 +133,14 @@ fn mock_app_with_manager() -> tauri::App<tauri::test::MockRuntime> {
 /// spelling).
 #[cfg(not(target_os = "windows"))]
 fn spawn_exiting() -> std::process::Child {
-    std::process::Command::new("true")
+    crate::ai_provider::build_command("true", &[])
         .spawn()
         .expect("spawn exiting child")
 }
 
 #[cfg(not(target_os = "windows"))]
 fn spawn_sleeping() -> std::process::Child {
-    std::process::Command::new("sleep")
+    crate::ai_provider::build_command("sleep", &[])
         .arg("30")
         .spawn()
         .expect("spawn sleeping child")

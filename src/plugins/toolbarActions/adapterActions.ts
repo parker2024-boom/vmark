@@ -1,5 +1,5 @@
 /**
- * Adapter action vocabulary (WI-4, audit-followups 20260729).
+ * Adapter action vocabulary.
  *
  * The ONE list of every action id the WYSIWYG and Source toolbar adapters
  * route (their switches stay the documented giant-switch style; this union

@@ -131,18 +131,14 @@ describe("mdastToProseMirror inline", () => {
     expect(doc.firstChild?.type.name).toBe("alertBlock");
   });
 
-  it("serializeInlineHtmlNode: merges html containing a hard break (line 369 — break case)", () => {
-    // <span>text\<br/>more</span> — the break node inside the merged span should be serialized as <br>
+  it("does not merge an inline HTML pair that holds a hard break", () => {
+    // Merged, the break would have to be written as `<br>`, which reads back
+    // as a tag and not as a break. The pair stays three nodes and the break
+    // stays a break (inlineHtmlMerge.test.ts follows it across two saves).
     const doc = parseDoc("Text <span>line1\\\nline2</span> end");
-    const para = doc.firstChild;
-    expect(para?.childCount).toBeGreaterThan(0);
-    // The merged html_inline should include a <br>
-    const htmlNode = para?.content.content.find((child) => child.type.name === "html_inline");
-    if (htmlNode) {
-      expect(htmlNode.attrs.value).toContain("<br>");
-    }
-    // Even if the merge doesn't happen (canSafelyMerge may reject), the doc is defined
-    expect(doc).toBeDefined();
+    const names = doc.firstChild?.content.content.map((child) => child.type.name) ?? [];
+    expect(names).toContain("hardBreak");
+    expect(names.filter((name) => name === "html_inline")).toHaveLength(2);
   });
 
   it("convertAlert called inline via convertNode (line 241 — alert case)", () => {

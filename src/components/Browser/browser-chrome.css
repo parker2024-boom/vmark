@@ -120,7 +120,7 @@
   display: none;
 }
 
-/* New/close are TabStripButton (WI-UI2.3): `.vm-icon-btn--sm` and
+/* New/close are TabStripButton: `.vm-icon-btn--sm` and
    `.tab-strip-close` own paint, hover, focus and the D2 hit box. The class
    names remain in the DOM as residual hooks only. */
 
@@ -166,7 +166,7 @@
 
 .browser-page-tab.active {
   /* ui-ok(state): active tab shares the page surface (browser-tab idiom). */
-  /* Same idiom as .tab-pill.active (WI-UI3.6): the boundary is the control
+  /* Same idiom as .tab-pill.active: the boundary is the control
      border, not the divider tint. */
   border-color: var(--control-border);
   color: var(--text-color);
@@ -226,7 +226,7 @@
   }
 }
 
-/* WI-NB5.1 — the "AI is controlling" takeover control. The button SHAPE comes
+/* The "AI is controlling" takeover control. The button SHAPE comes
    from the canonical `.vm-btn` primitive (rule 32); this class only retints it
    to the active-state accent tokens (rule 31 selection/active state), so it
    carries no padding/border of its own and is not a bespoke button. */

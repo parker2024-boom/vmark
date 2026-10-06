@@ -2,9 +2,18 @@ import js from "@eslint/js";
 import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
+import { requireDisableReason } from "./scripts/lib/eslintRequireDisableReason.mjs";
 
 export default tseslint.config(
   { ignores: ["dist", "src-tauri"] },
+  // Suppressions are claims that a rule is wrong at one site, so each must
+  // state why (`-- <reason>`) and must still be suppressing something.
+  {
+    files: ["**/*.{ts,tsx,js}"],
+    linterOptions: { reportUnusedDisableDirectives: "error" },
+    plugins: { vmark: { rules: { "require-disable-reason": requireDisableReason } } },
+    rules: { "vmark/require-disable-reason": "error" },
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -44,6 +53,36 @@ export default tseslint.config(
           selector: 'Property[key.name="behavior"] > Literal[value="smooth"]',
           message:
             'Use scrollBehavior() from "@/utils/motion" — a literal "smooth" ignores prefers-reduced-motion (R10).',
+        },
+      ],
+    },
+  },
+  // The exported reader ships verbatim inside every exported document: a
+  // classic browser script with no imports, so it cannot use the TypeScript
+  // block above. Without a block of its own ESLint matched the file and
+  // applied no rules at all. Types come from `// @ts-check` + JSDoc;
+  // `readerStaticChecks.test.ts` pins both this block and the type-check.
+  {
+    files: ["src/export/reader/vmark-reader.js"],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2020,
+      sourceType: "script",
+      globals: globals.browser,
+    },
+    rules: {
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+      "prefer-const": "error",
+      eqeqeq: "error",
+      "no-implicit-globals": "error",
+      // The reader cannot import @/utils/motion, so it carries its own
+      // scrollBehavior(); a literal "smooth" would skip it (R10).
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: 'Property[key.name="behavior"] > Literal[value="smooth"]',
+          message:
+            'Use the reader\'s scrollBehavior() — a literal "smooth" ignores prefers-reduced-motion (R10).',
         },
       ],
     },

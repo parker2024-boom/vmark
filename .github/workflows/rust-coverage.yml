@@ -1,14 +1,31 @@
 name: Rust Coverage
 
 # Weekly Rust line-coverage measurement (cargo-llvm-cov). PR CI deliberately
-# does NOT carry this: the instrumented rebuild costs ~10 runner-minutes per
-# run, and the frontend coverage gate already guards per-PR test discipline.
-# This job is the ratchet's measuring stick: it fails (visibly, but blocks
-# nothing — scheduled runs gate no PRs) if line coverage drops below the
-# recorded floor. Baseline 57.35% measured 2026-07-02 (floor set with ~2 pp
-# buffer for platform/toolchain variance). Raise the floor as coverage rises;
-# never lower it without written justification.
-# See dev-docs/testing-hardening.md (Rust coverage section).
+# does NOT carry this: the instrumented rebuild is too slow to sit in front of
+# every merge, and the frontend coverage gate already guards per-PR test
+# discipline. This job is the ratchet's measuring stick.
+#
+# The floor is NOT in this file. It lives in scripts/rust-coverage-baseline.json,
+# which the baseline ratchet refuses to loosen, and scripts/check-rust-coverage.mjs
+# compares the measurement with it in BOTH directions: coverage under the floor
+# fails, and coverage well over it fails as a stale floor, naming the number to
+# commit. A floor typed into this workflow was checked one way only and ended
+# up tens of points under the real figure.
+#
+# macOS, because that is where the baseline was measured and where the app
+# primarily ships: the macOS-only modules (the embedded browser surface, the
+# native PDF renderer) are compiled nowhere else, so a Linux figure would leave
+# them out of the denominator and could not be compared with the baseline.
+#
+# A scheduled job gates no pull request, so a red run has to go somewhere a
+# person will see it: the `report` job opens or updates one rolling issue and
+# `resolve` closes it on the next green run.
+#
+# liveness-gate: true
+# cadence-days: 8
+# on-failure: rolling-issue
+#   ^ read by scripts/check-gate-liveness.mjs: a measurement that quietly stops
+#     running looks exactly like one that keeps passing.
 
 on:
   workflow_dispatch:
@@ -16,6 +33,9 @@ on:
     # Weekly cadence: Monday 06:30 UTC (offset from mutation.yml's 06:00).
     - cron: "30 6 * * 1"
 
+# The measuring job compiles and runs the whole crate, so it gets read access
+# only. `issues: write` is held by the two reporting jobs, which check out
+# nothing and run no project code.
 permissions:
   contents: read
 
@@ -25,7 +45,7 @@ concurrency:
 
 jobs:
   coverage:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
@@ -37,6 +57,10 @@ jobs:
           toolchain: stable
           components: llvm-tools-preview
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
       - uses: actions/cache@v6
         with:
           path: |
@@ -46,23 +70,92 @@ jobs:
           restore-keys: rust-llvm-cov-${{ runner.os }}-
 
       - name: Create sidecar stub for Tauri build script
-        run: touch "src-tauri/binaries/vmark-mcp-server-x86_64-unknown-linux-gnu"
+        run: touch "src-tauri/binaries/vmark-mcp-server-aarch64-apple-darwin"
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with:
           tool: cargo-llvm-cov
 
-      - name: Measure coverage (floor 55% lines)
+      - name: Measure coverage
         working-directory: src-tauri
+        # The test run fails this step on a red test; the verdict on the
+        # percentage is the next step's. `report` re-reads the profile data
+        # this run wrote, so nothing is compiled or executed twice.
         run: |
-          cargo llvm-cov --lcov --output-path lcov.info --fail-under-lines 55
+          cargo llvm-cov --lcov --output-path lcov.info
+          cargo llvm-cov report --json --summary-only --output-path coverage-summary.json
           cargo llvm-cov report --summary-only
+
+      - name: Compare with the baseline floor
+        run: node scripts/check-rust-coverage.mjs src-tauri/coverage-summary.json
 
       - name: Upload lcov report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: rust-lcov
-          path: src-tauri/lcov.info
+          path: |
+            src-tauri/lcov.info
+            src-tauri/coverage-summary.json
           if-no-files-found: ignore
+
+  # The ONLY jobs with `issues: write`. `if: failure()` on a job with `needs`
+  # fires exactly when `coverage` failed, so a cancelled run reports nothing.
+  report:
+    name: Report failures in the tracking issue
+    needs: coverage
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Create or update the rolling issue
+        env:
+          # No checkout here, so gh is told the repository explicitly rather
+          # than inferring it from a git remote.
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          TITLE="Rust coverage check failed"
+          BODY="Job \`coverage\` failed on $(date -u +%Y-%m-%d): $RUN_URL (commit ${GITHUB_SHA}). Either a test failed, line coverage fell below the floor in scripts/rust-coverage-baseline.json, or it rose far enough above it that the floor is stale; the job log says which."
+          NUMBER=$(gh issue list --state open --search "\"$TITLE\" in:title" \
+            --json number,title --jq ".[] | select(.title == \"$TITLE\") | .number" | head -n1)
+          if [ -n "$NUMBER" ]; then
+            gh issue comment "$NUMBER" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --body "$BODY"
+          fi
+
+  resolve:
+    # A rolling issue needs both edges: without this one a fixed failure stays
+    # open and the next reader re-investigates a solved problem.
+    name: Close the tracking issue once coverage passes
+    needs: coverage
+    if: success()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Close the rolling issue
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          TITLE="Rust coverage check failed"
+          NUMBER=$(gh issue list --state open --search "\"$TITLE\" in:title" \
+            --json number,title --jq ".[] | select(.title == \"$TITLE\") | .number" | head -n1)
+          if [ -z "$NUMBER" ]; then
+            echo "No open tracking issue — nothing to close."
+            exit 0
+          fi
+          gh issue close "$NUMBER" --reason completed --comment \
+            "Coverage check passed on $(date -u +%Y-%m-%d): $RUN_URL (commit ${GITHUB_SHA}). Closing automatically; a later failure opens a fresh issue."

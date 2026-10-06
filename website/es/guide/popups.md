@@ -24,7 +24,7 @@ Un clic deja el teclado en el documento; haz clic en el campo URL para editar el
 
 **Campos:**
 - **URL** — Editar el destino del enlace
-- **Abrir** — Abre el enlace en el navegador
+- **Abrir destino** — Abre una URL externa en el navegador, salta al encabezado en los enlaces `#bookmark` o abre un archivo local en una nueva pestaña en los enlaces entre archivos
 - **Copiar** — Copia la URL al portapapeles
 - **Eliminar** — Elimina el enlace, conserva el texto
 
@@ -43,8 +43,8 @@ Un clic deja el teclado en el documento; haz clic en el campo URL para editar el
 
 ### Modo Fuente
 
-- **`Cmd + Clic`** (`Ctrl + Clic` en Windows/Linux) en un enlace → las URL externas se abren en el navegador, los enlaces `#marcador` saltan al encabezado y las rutas de archivos locales abren el archivo en una nueva pestaña
-- **Clic** en la sintaxis `[texto](url)` → muestra el popup de edición; el cursor se queda en el markdown para que puedas seguir escribiendo
+- **`Cmd + Clic`** (`Ctrl + Clic` en Windows/Linux) en un enlace → las URL externas se abren en el navegador, los enlaces `#bookmark` saltan al encabezado y las rutas de archivos locales abren el archivo en una nueva pestaña
+- **Clic** en la sintaxis `[text](url)` → muestra el popup de edición; el cursor se queda en el markdown para que puedas seguir escribiendo
 - **`Mod + K`** dentro de un enlace → muestra el popup de edición con el foco en el campo URL
 
 ::: tip Enlace Marcador
@@ -54,6 +54,17 @@ Los enlaces que comienzan con `#` se tratan como marcadores (enlaces internos de
 ::: tip Enlaces entre Archivos
 Los enlaces que apuntan a archivos locales abren el archivo de destino en una nueva pestaña, situándose en el encabezado cuando el enlace lleva un `#fragment`. Las rutas relativas como `../appendix/cards.md` o `./notes.md` se resuelven respecto al directorio del documento actual. Las rutas absolutas — `/Users/me/notes/a.md` en macOS/Linux, `C:\notes\a.md` en Windows — abren exactamente el archivo que indican. Las rutas de red (`\\server\share\…`) no se abren desde los enlaces. Si el documento no tiene título, solo se pueden abrir rutas absolutas.
 :::
+
+## Selector de Encabezados (Enlaces Marcador)
+
+**Activación:** `Alt + Mod + B` (Enlace de marcador), **Insertar → Enlaces → Marcador** o el grupo de enlaces de la Barra de herramientas universal
+
+Un enlace marcador apunta a un encabezado del mismo documento (`[text](#heading-id)`). En lugar de escribir el ancla, el selector enumera todos los encabezados del documento, sangrados según su nivel, con un campo de filtro en la parte superior.
+
+**Comportamiento:**
+- `↑`/`↓` recorren la lista, `Enter` inserta el enlace, `Escape` cierra
+- Con texto seleccionado, la selección se convierte en el texto del enlace; sin selección, se inserta como enlace el propio texto del encabezado
+- El popup lo indica cuando el documento no tiene encabezados, o cuando nada coincide con el filtro
 
 ## Popup de Medios (Imágenes, Vídeo, Audio)
 
@@ -88,7 +99,9 @@ Un popup unificado para editar todos los tipos de medios — imágenes, vídeo y
 
 ### Modo Fuente
 
-En el modo Fuente, hacer clic en la sintaxis de imagen `![alt](ruta)` abre el mismo popup de medios. Los archivos multimedia (extensiones de vídeo/audio) muestran una vista previa flotante con controles de reproducción nativos al pasar el ratón.
+En el modo Fuente, hacer clic en la sintaxis de imagen `![alt](path)` abre el mismo popup de medios.
+
+El modo Fuente también muestra una **vista previa** flotante del medio — una imagen, o un reproductor de vídeo o audio con controles de reproducción nativos. Aparece mientras el cursor está dentro de `![alt](path)` (sin texto seleccionado), y cuando el ratón pasa por encima de la sintaxis; la vista previa del cursor tiene prioridad sobre la del ratón. La ruta debe terminar en una extensión reconocida de imagen, vídeo o audio (o ser una URL `data:image/`). La vista previa se oculta mientras el popup de medios está abierto.
 
 ## Menú Contextual de Imagen
 
@@ -112,7 +125,7 @@ Edita expresiones matemáticas LaTeX con vista previa en tiempo real.
 
 **Activación:**
 - **WYSIWYG:** Haz clic en la matemática en línea `$...$`
-- **Fuente:** Coloca el cursor dentro de `$...$`, `$$...$$` o bloques ` ```latex `
+- **Fuente:** Coloca el cursor dentro de un `$...$` no vacío, un bloque `$$...$$` o un bloque ` ```latex ` / ` ```math `
 
 **Campos:**
 - **Entrada LaTeX** — Edita la expresión matemática
@@ -121,7 +134,8 @@ Edita expresiones matemáticas LaTeX con vista previa en tiempo real.
 
 **Atajos:**
 - `Mod + Enter` — Guardar y cerrar
-- `Escape` — Cancelar y cerrar
+- `Click outside` — Guardar y cerrar (confirma tus ediciones)
+- `Escape` — Cancelar y cerrar (descarta tus ediciones)
 - `Shift + Retroceso` — Eliminar matemática en línea (funciona incluso cuando no está vacía, solo WYSIWYG)
 - `Alt + Mod + M` — Insertar nueva matemática en línea
 
@@ -130,7 +144,7 @@ Cuando tienes un error de sintaxis LaTeX, el popup muestra sugerencias útiles c
 :::
 
 ::: info Modo Fuente
-El modo Fuente ofrece el mismo popup editable de matemáticas que el modo WYSIWYG — un área de texto para la entrada LaTeX con una vista previa KaTeX en vivo debajo. El popup se abre automáticamente cuando el cursor entra en una sintaxis matemática (`$...$`, `$$...$$` o ` ```latex `). Pulsa `Mod + Enter` para guardar o `Escape` para cancelar.
+El modo Fuente ofrece el mismo popup editable de matemáticas que el modo WYSIWYG — un área de texto para la entrada LaTeX con una vista previa KaTeX en vivo debajo. El popup se abre automáticamente cuando el cursor entra en cualquier sintaxis matemática (un `$...$` no vacío, `$$...$$` o ` ```latex ` / ` ```math `). Pulsa `Mod + Enter` para guardar o `Escape` para cancelar. Un `$$` vacío escrito al final de una línea se trata como texto normal — probablemente un delimitador de bloque matemático a medio escribir — y no abre el popup.
 :::
 
 ## Popup de Nota al Pie
@@ -139,6 +153,7 @@ Edita el contenido de las notas al pie en línea.
 
 **Activación:**
 - **WYSIWYG:** Pasa el ratón sobre la referencia de nota al pie `[^1]`
+- **Fuente:** Pasa el ratón sobre una referencia o definición de nota al pie, o haz clic en ella
 
 **Campos:**
 - **Contenido** — Texto de nota al pie de múltiples líneas (se redimensiona automáticamente)
@@ -154,7 +169,7 @@ Edita el contenido de las notas al pie en línea.
 Edita los enlaces estilo wiki para conexiones internas de documentos.
 
 **Activación:**
-- **WYSIWYG:** Pasa el ratón sobre `[[destino]]` (retraso de 300ms)
+- **WYSIWYG:** Pasa el ratón sobre `[[target]]` (retraso de 300ms)
 - **Fuente:** Haz clic en la sintaxis del wiki link
 
 **Campos:**
@@ -196,12 +211,16 @@ Corrige errores ortográficos con sugerencias.
 - **Sugerencias** — Haz clic para reemplazar con la sugerencia
 - **Añadir al Diccionario** — Deja de marcarla como mal escrita
 
+## Mover Texto Arrastrando
+
+En el modo WYSIWYG puedes mover una selección con el ratón: pulsa sobre el texto seleccionado, arrastra — un cursor de soltar muestra dónde caerá — y suelta. El movimiento es un único paso que se puede deshacer (`Mod + Z` lo devuelve a su sitio). Pulsa `Escape` mientras arrastras, o deja que la ventana pierda el foco, para cancelar. VMark lo implementa por su cuenta porque el shell de escritorio intercepta los eventos de arrastre nativos del navegador, por lo que es un gesto del ratón y no un arrastrar y soltar del sistema.
+
 ## Comparación de Modos
 
 | Elemento | Edición WYSIWYG | Fuente |
 |----------|-----------------|--------|
 | Enlace | Clic / `Mod+K` / `Cmd+Clic` para abrir | Clic / `Mod+K` / `Cmd+Clic` para abrir |
-| Imagen | Doble clic | Clic en `![](ruta)` |
+| Imagen | Doble clic | Clic en `![](path)` |
 | Vídeo | Doble clic | — |
 | Audio | Doble clic | — |
 | Matemáticas | Clic | Cursor en matemáticas → popup |
@@ -224,7 +243,9 @@ Corrige errores ortográficos con sugerencias.
 - Para contenido de múltiples líneas (notas al pie, matemáticas): usa `Mod + Enter` para guardar
 
 ### Comportamiento del Ratón
-- Haz clic fuera del popup para cerrarlo (los cambios se descartan)
+- Haz clic fuera del popup para cerrarlo. El comportamiento predeterminado es **descartar** los cambios
+  no guardados; el popup de matemáticas es una excepción y **confirma** la edición al
+  hacer clic fuera (consulta la sección [Popup de Matemáticas](#popup-de-matematicas)).
 - Los popups al pasar el ratón (nota al pie, wiki) tienen un retraso de 300ms antes de mostrarse
 - Mover el ratón de vuelta al popup lo mantiene abierto
 

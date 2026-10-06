@@ -2,7 +2,10 @@
  * English locale namespaces for the test i18n mock (split from setup.ts
  * for the file-size gate). Add new namespaces here when a component
  * starts using a new `useTranslation("<ns>")`.
+ *
+ * @module test/i18nNamespaces
  */
+
 import commonEn from "../locales/en/common.json";
 import commandsEn from "../locales/en/commands.json";
 import menuEn from "../locales/en/menu.json";

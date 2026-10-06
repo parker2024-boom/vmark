@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * MCP docs-drift gate (WI-NB9.1) — every action the sidecar tools ship must be
+ * MCP docs-drift gate — every action the sidecar tools ship must be
  * documented on the public MCP reference page.
  *
  * The website page `website/guide/mcp-tools.md` is hand-written. A new tool
@@ -22,19 +22,31 @@
  * still prose and drift legitimately; the entry is what must exist. Measured
  * 41/41 on adoption, so it ships zero-tolerance with no allowlist.
  *
- * Self-tested by `scripts/check-mcp-docs.test.mjs`.
+ * The sidecar's own `server/mcp/README.md` restates the same surface as
+ * tables and totals, and is joined too — in both directions, counts included —
+ * by `scripts/lib/mcpReadmeJoin.mjs`, whose header says what that join holds.
+ *
+ * Self-tested by `scripts/check-mcp-docs.test.mjs` and
+ * `scripts/check-mcp-docs.readme.test.mjs`.
  *
  * @coordinates-with server/mcp/src/tools/*.ts — the action enums
  * @coordinates-with website/guide/mcp-tools.md — the reference page
+ * @coordinates-with scripts/lib/mcpReferencePage.mjs — the reference-page join
+ * @coordinates-with scripts/lib/mcpReadmeJoin.mjs — the README join
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { isMainModule } from "./lib/isMainModule.mjs";
+import { readmeFindings } from "./lib/mcpReadmeJoin.mjs";
+import { toolSections, undocumented } from "./lib/mcpReferencePage.mjs";
+
+export { toolSections, undocumented };
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const TOOLS_DIR = join(ROOT, "server/mcp/src/tools");
 const DOC = join(ROOT, "website/guide/mcp-tools.md");
+const README = join(ROOT, "server/mcp/README.md");
 
 /** Every `action: z.enum([...])` / `action: z.enum(CONST)` site in a tool source. */
 const ACTION_SITE = /action:\s*z\s*\n?\s*\.enum\(\s*(\[([\s\S]*?)\]|([A-Za-z_$][\w$]*))\s*\)/g;
@@ -92,7 +104,7 @@ export function declaredActionSchemas(source) {
  * A spread (`z.enum([...BROWSER_ACTIONS, 'wait'])`), an identifier or a call
  * used to be ignored as long as ONE literal was present, so every action the
  * spread contributed shipped without a docs check — the third form the header
- * promises cannot hide (audit R2 #73). The residue after the literals are
+ * promises cannot hide. The residue after the literals are
  * removed must be separators only, or the gate fails closed.
  */
 function stringLiterals(body, where) {
@@ -140,7 +152,7 @@ function stringLiterals(body, where) {
  * The DECLARATION is located in CODE (`codeOnly`, which preserves offsets), so
  * a commented-out or string-quoted declaration cannot shadow the real one —
  * and the closing bracket is found in code too, so a `]` inside a string
- * cannot end the array early (audit R2 #75). The BODY is then sliced from the
+ * cannot end the array early. The BODY is then sliced from the
  * raw source, because the literals are what this reads.
  */
 const declaredArray = (source, name) => {
@@ -195,8 +207,8 @@ export function extractActions(source, readSibling = () => null) {
 export function toolName(source) {
   // Located in CODE, so a `registerTool({ name: 'x'` inside a comment or a
   // description string is not a registration; and a file with TWO of them is
-  // refused rather than silently attributing every action to the first
-  // (audit R2 #77). `codeOnly` preserves offsets, so the literal is read back
+  // refused rather than silently attributing every action to the first.
+  // `codeOnly` preserves offsets, so the literal is read back
   // out of the raw source at the position code says it starts.
   const code = codeOnly(source);
   const sites = [...code.matchAll(/registerTool\(\s*\{\s*name:\s*/g)];
@@ -233,54 +245,6 @@ export function shippedActions(toolsDir = TOOLS_DIR) {
   return out;
 }
 
-/**
- * The reference page's `## \`<tool>\`` sections: tool name → the section's
- * lines. A tool documented under TWO headings contributes both: `set` on a
- * repeat replaced the earlier section's lines, so an action documented there
- * was reported as missing — a false failure with the entry sitting on the page
- * (audit R2 #78).
- */
-export function toolSections(docText) {
-  const sections = new Map();
-  let current = null;
-  for (const line of docText.split("\n")) {
-    const m = /^## `([a-z_]+)`\s*$/.exec(line);
-    if (m) {
-      current = m[1];
-      if (!sections.has(current)) sections.set(current, []);
-    } else if (/^## /.test(line)) {
-      current = null;
-    } else if (current !== null) {
-      sections.get(current).push(line);
-    }
-  }
-  return sections;
-}
-
-/**
- * Entry text that WITHDRAWS the action instead of documenting it. An entry
- * led by the code span used to pass however it continued, so
- * `- \`claims\` — no longer supported` documented `claims` (audit 20260907
- * #50). Vocabulary, not sentiment: a word here on the entry line makes it a
- * removal notice, and the action still needs an entry of its own.
- */
-const NEGATED =
-  /\b(?:no longer|not (?:yet )?(?:supported|available|implemented|shipped)|unsupported|deprecated|removed|retired|dropped|withdrawn|discontinued|obsolete)\b/i;
-
-/** An affirmative entry: a heading naming the action, or a list item / table row led by its code span, and not withdrawn on the same line. */
-function isEntryFor(line, action) {
-  const span = `\`${action}\``;
-  const led =
-    (/^#{3,4} /.test(line) && line.includes(span)) || line.startsWith(`- ${span}`) || line.startsWith(`* ${span}`) || line.startsWith(`| ${span} |`);
-  return led && !NEGATED.test(line);
-}
-
-/** Actions with no affirmative entry inside their own tool's section of the reference page. */
-export function undocumented(actions, docText) {
-  const sections = toolSections(docText);
-  return actions.filter(({ tool, action }) => !(sections.get(tool) ?? []).some((line) => isEntryFor(line, action)));
-}
-
 function main() {
   const actions = shippedActions();
   if (actions.length === 0) {
@@ -295,7 +259,14 @@ function main() {
     console.error("\nDocument each under its tool's `## `tool`` section: a `### `action`` heading, or a list item / table row led by its code span (a line that withdraws the action — deprecated, removed, no longer supported — is not an entry).");
     process.exit(1);
   }
-  console.error(`✅ MCP docs gate: all ${actions.length} sidecar tool actions are documented.`);
+  const readme = readmeFindings(actions, readFileSync(README, "utf8"));
+  if (readme.length > 0) {
+    console.error("❌ server/mcp/README.md disagrees with the tools the sidecar registers:");
+    for (const finding of readme) console.error(`  ${finding}`);
+    console.error("\nCorrect the README's \"Available tools\" section (and its --health-check sample) from server/mcp/src/tools/.");
+    process.exit(1);
+  }
+  console.error(`✅ MCP docs gate: all ${actions.length} sidecar tool actions are documented, and the sidecar README matches them.`);
 }
 
 if (isMainModule(import.meta.url)) main();

@@ -8,7 +8,7 @@
 ## MCP server code (Rust side)
 - `src-tauri/src/mcp_bridge/` (bridge handlers)
 - `src-tauri/src/mcp_config/` (client config loader)
-- `src-tauri/src/mcp_server.rs` (server entry)
+- `src-tauri/src/mcp_bridge/control.rs` (server entry)
 
 ## MCP frontend bridge
 - `src/hooks/mcpBridge/` (central dispatcher + handlers)

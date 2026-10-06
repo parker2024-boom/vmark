@@ -102,7 +102,7 @@ run rm -rf node_modules/.vite dist src-tauri/gen/schemas coverage reports
 
 # Spike probes (60-ai-governance.md §7) live under dev-docs/grills/<feature>/ as
 # SEPARATE cargo/npm projects, so `cargo clean` above cannot see them and Cargo
-# never GCs them. Measured 2026-08-08: 818 MB across three, every one of them
+# never GCs them. Measured: 818 MB across three, every one of them
 # orphaned — the probe sources were already gone, leaving only the artifacts.
 # Sweep the artifact directories and nothing else: the spike reports and any
 # surviving probe source are the evidence §7 exists to keep.

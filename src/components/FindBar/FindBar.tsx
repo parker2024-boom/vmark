@@ -93,7 +93,7 @@ export function FindBar() {
   if (!isOpen) return null;
 
   // A count without a current index is the previous query's, still being
-  // recounted — the same predicate the keyboard consults before Enter (#302).
+  // recounted — the same predicate the keyboard consults before Enter.
   const hasMatches = hasCurrentMatch({ matchCount, currentIndex });
   const matchDisplay = hasMatches
     ? t("findbar.matchCount", { current: currentIndex + 1, total: matchCount })

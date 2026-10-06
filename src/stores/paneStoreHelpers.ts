@@ -1,7 +1,7 @@
 /**
  * Pure helpers for `paneStore` (#1081).
  *
- * Split out in WI-DSPL1.6, which pushed `paneStore.ts` past the 300-line limit
+ * Split out when a change pushed `paneStore.ts` past the 300-line limit
  * (it sat at exactly 300, so any addition failed the gate).
  *
  * Deliberately SIDE-EFFECT FREE, and that choice is the point. The obvious
@@ -30,7 +30,7 @@ export function clampFraction(fraction: number): number {
 }
 
 /**
- * WI-10.1 — validate an incoming split against the window's live DOCUMENT tabs.
+ * Validate an incoming split against the window's live DOCUMENT tabs.
  * Both panes survive ⇒ the split; one ⇒ single pane on it; none ⇒ single pane on
  * the caller's fallback. A duplicate pane id is NOT a split (D9).
  */

@@ -87,12 +87,10 @@ fn empty_section_still_yields_a_matchable_route() {
 // synchronous command builds the window on the main thread and deadlocks
 // WebView2 on Windows. That removed the accidental serialization the blocking
 // IPC loop used to provide: two clicks can now both see "no settings window"
-// before either builds. Exactly one `build()` can win — labels are registered
-// on the main thread — so the loser must focus the winner's window instead of
-// returning `WindowLabelAlreadyExists` to the user as a failed Settings open.
-//
-// `MockRuntime` reproduces the losing call exactly: a second `build()` with a
-// live label fails the same way it does under Wry.
+// before either builds. Tauri does not stop both from building — it checks the
+// label on the calling thread and registers it unconditionally afterwards — so
+// the check and the build go through `ensure_window` as one step (WI-RA7.1),
+// and a caller that arrives second focuses the window the first one built.
 
 // tauri::test::MockRuntime crashes the test binary at startup on
 // windows-latest (STATUS_ENTRYPOINT_NOT_FOUND). The `test` feature of tauri is
@@ -101,10 +99,67 @@ fn empty_section_still_yields_a_matchable_route() {
 // the same treatment `fs_scope.test.rs` and `mcp_bridge/*.test.rs` already use.
 // macOS/Linux still exercise the real runtime path.
 #[cfg(not(target_os = "windows"))]
+use tauri::Manager;
+
+#[cfg(not(target_os = "windows"))]
 fn mock_app() -> tauri::App<tauri::test::MockRuntime> {
     tauri::test::mock_builder()
         .build(tauri::test::mock_context(tauri::test::noop_assets()))
         .expect("build mock app")
+}
+
+/// WI-RA7.1 — the race itself, not a stand-in for its loser. Tauri emits
+/// `tauri://window-created` once per successful `build()`, so the count is the
+/// number of native Settings windows the callers produced between them.
+#[cfg(not(target_os = "windows"))]
+#[test]
+fn concurrent_opens_build_exactly_one_settings_window() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Barrier};
+    use tauri::Listener;
+
+    const CALLERS: usize = 16;
+    // A race is a matter of schedule: one round can pass by luck, fifty in a
+    // row cannot.
+    for round in 0..50 {
+        let app = mock_app();
+        let built = Arc::new(AtomicUsize::new(0));
+        let seen = Arc::clone(&built);
+        app.listen_any("tauri://window-created", move |event| {
+            let payload: serde_json::Value =
+                serde_json::from_str(event.payload()).expect("a JSON payload");
+            if payload["label"] == SETTINGS_LABEL {
+                seen.fetch_add(1, Ordering::SeqCst);
+            }
+        });
+        let start = Arc::new(Barrier::new(CALLERS));
+
+        let callers: Vec<_> = (0..CALLERS)
+            .map(|caller| {
+                let handle = app.handle().clone();
+                let start = Arc::clone(&start);
+                std::thread::spawn(move || {
+                    start.wait();
+                    let section = (caller % 2 == 0).then_some("about");
+                    show_settings_window_section(&handle, section).map_err(|e| e.to_string())
+                })
+            })
+            .collect();
+        for caller in callers {
+            let opened = caller.join().expect("an open must not panic");
+            assert_eq!(
+                opened.as_deref(),
+                Ok(SETTINGS_LABEL),
+                "round {round}: losing the race is not a failed open"
+            );
+        }
+
+        assert_eq!(
+            built.load(Ordering::SeqCst),
+            1,
+            "round {round}: Settings must be built once"
+        );
+    }
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -161,12 +216,28 @@ fn a_build_that_loses_the_race_reports_success_rather_than_label_already_exists(
 
 #[cfg(not(target_os = "windows"))]
 #[test]
-fn focus_existing_reports_absence_rather_than_pretending_it_focused() {
+fn an_open_on_a_live_window_navigates_it_and_a_first_open_does_not() {
+    use std::sync::{Arc, Mutex};
+    use tauri::Listener;
+
     let app = mock_app();
-    assert!(
-        !focus_existing(app.handle(), None),
-        "no settings window yet — must report false so the caller builds one"
-    );
-    show_settings_window_section(app.handle(), None).expect("open settings");
-    assert!(focus_existing(app.handle(), Some("about")));
+    let navigated = Arc::new(Mutex::new(Vec::new()));
+    let seen = Arc::clone(&navigated);
+    app.listen_any("settings:navigate", move |event| {
+        seen.lock()
+            .expect("capture")
+            .push(event.payload().to_string());
+    });
+
+    // The first open carries its section in the URL, so there is nothing to
+    // navigate; the second finds the window and has to tell it where to go.
+    show_settings_window_section(app.handle(), Some("editor")).expect("first open");
+    assert!(navigated.lock().expect("capture").is_empty());
+
+    show_settings_window_section(app.handle(), Some("about")).expect("second open");
+    assert_eq!(*navigated.lock().expect("capture"), vec!["\"about\""]);
+
+    // No section asked for: reveal only.
+    show_settings_window_section(app.handle(), None).expect("third open");
+    assert_eq!(navigated.lock().expect("capture").len(), 1);
 }

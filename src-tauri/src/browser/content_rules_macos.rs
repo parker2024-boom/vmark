@@ -15,7 +15,7 @@
 //! **Fail closed.** Compilation is asynchronous, so the run loop is pumped (as
 //! `browser_store::forget_profile` does) until the handler fires, bounded at five
 //! seconds. A compile error or a timeout fails the creation with the typed
-//! `ContentRulesFailed` (round 4, #31): an AI webview is never created without its
+//! `ContentRulesFailed`: an AI webview is never created without its
 //! rules. Human tabs get nothing — a human's page is not reshaped by the AI's
 //! policy.
 //!
@@ -27,7 +27,7 @@
 //! compiled list. A posture change bumps the policy epoch, which makes existing AI
 //! tabs stale for driving; their webviews keep the list they were created with.
 //!
-//! **Tested against the real store** (round 4, #16). The store and the run loop
+//! **Tested against the real store**. The store and the run loop
 //! are parameters of the compile step — `compile_list` pumps the CURRENT thread's
 //! run loop, which on the main thread (`configure`'s `mtm` proves it) is the main
 //! run loop, and under `cargo test` is the thread WebKit answers on. So
@@ -79,8 +79,7 @@ pub(super) fn configure(
 /// Install a compiled list on `config`'s user content controller — the half of
 /// `configure` that touches the configuration.
 fn attach(config: &WKWebViewConfiguration, list: &WKContentRuleList) {
-    let controller = unsafe { config.userContentController() };
-    unsafe { controller.addContentRuleList(list) };
+    super::webkit_calls::add_content_rule_list(config, list);
 }
 
 /// The compiled rule list for `allow_loopback`, compiling it on first use.
@@ -101,6 +100,8 @@ fn compiled_rules(
 fn default_store(
     mtm: MainThreadMarker,
 ) -> Result<Retained<WKContentRuleListStore>, NativeSurfaceError> {
+    // SAFETY: a class method on a main-thread-only class; `mtm` proves the main
+    // thread. A nil store comes back as `None` and is reported below.
     unsafe { WKContentRuleListStore::defaultStore(mtm) }.ok_or_else(|| {
         NativeSurfaceError::ContentRulesFailed("no default rule-list store".to_string())
     })
@@ -141,6 +142,10 @@ fn compile_list(
         };
         *sink.borrow_mut() = Some(outcome);
     });
+    // SAFETY: `store` is live and on the main thread (a main-thread-only type);
+    // the identifier and the rules are live strings. WebKit copies the block and
+    // calls it once, on the main thread — the thread that owns the `Rc` it
+    // captures — with pointers the block null-checks before use.
     unsafe {
         store.compileContentRuleListForIdentifier_encodedContentRuleList_completionHandler(
             Some(&id),

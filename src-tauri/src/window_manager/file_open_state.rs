@@ -1,13 +1,34 @@
-//! Finder/CLI file-open decision state: readiness flag, pending queue,
+//! Finder/CLI file-open decision state: the queue's owner, the pending queue,
 //! workspace grouping, and the atomic queue-vs-emit decision.
 //!
 //! Key decision: file opens from Finder are grouped by workspace root so
 //! multiple files in the same directory open as tabs in a single window.
+//!
+//! Key decision: "queue and wait" is tied to the LIFE of the window that will
+//! drain the queue ([`QueueOwner`]). Only `main` drains it, once, when its
+//! frontend mounts; a bare "not ready yet" flag kept saying "wait" after that
+//! window had been destroyed, and every later open was queued behind a window
+//! that no longer existed.
 
 use std::collections::HashMap;
 use std::path::Path;
 
 use crate::{quit::is_document_window_label, PendingFileOpen};
+
+/// The window that owns the cold-start queue — see `document_windows`.
+const QUEUE_OWNER_LABEL: &str = "main";
+
+/// Where the cold-start queue's owner is in its life.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueueOwner {
+    /// A `main` window is up, or being built, and has not drained the queue
+    /// yet: queued opens will be picked up when its frontend mounts.
+    Booting,
+    /// Nothing is on its way to drain the queue: `main` has drained it, or
+    /// `main` is gone. An open is emitted to a listening window, or brings a
+    /// new `main` up.
+    Settled,
+}
 
 /// Compute workspace root from a file path (parent directory).
 /// Returns None if the file is at root level or path is invalid.
@@ -26,23 +47,20 @@ pub fn get_workspace_root_for_file(file_path: &str) -> Option<String> {
 /// What to do when files are opened from the system (Finder, CLI, etc.)
 #[derive(Debug, PartialEq)]
 pub enum FileOpenAction {
-    /// Frontend is ready and a document window exists — emit directly
+    /// A listening document window exists — emit directly
     EmitToDocumentWindow,
-    /// Frontend is ready but no document window exists — queue and create one
+    /// No listening document window, and none booting — queue and create one
     QueueAndCreateWindow,
-    /// Frontend not ready (cold start) — just queue files
+    /// A `main` window is booting (cold start) — just queue files for it
     QueueOnly,
 }
 
 /// Decide how to handle file opens based on app state.
-pub fn determine_file_open_action(
-    frontend_ready: bool,
-    has_document_window: bool,
-) -> FileOpenAction {
-    match (frontend_ready, has_document_window) {
-        (true, true) => FileOpenAction::EmitToDocumentWindow,
-        (true, false) => FileOpenAction::QueueAndCreateWindow,
-        (false, _) => FileOpenAction::QueueOnly,
+pub fn determine_file_open_action(owner: QueueOwner, has_document_window: bool) -> FileOpenAction {
+    match (owner, has_document_window) {
+        (QueueOwner::Settled, true) => FileOpenAction::EmitToDocumentWindow,
+        (QueueOwner::Settled, false) => FileOpenAction::QueueAndCreateWindow,
+        (QueueOwner::Booting, _) => FileOpenAction::QueueOnly,
     }
 }
 
@@ -73,26 +91,29 @@ pub fn queue_pending_file_opens(
     }
 }
 
-/// Combined Finder file-open state, guarded by a single mutex in `file_open.rs`.
+/// Combined Finder file-open state, guarded by a single mutex
+/// (`FileOpenStore`).
 ///
-/// Keeping the readiness flag and the pending queue together lets the
+/// Keeping the owner's state and the pending queue together lets the
 /// readiness *check* and the queue *insertion* happen in one critical
-/// section. That closes the TOCTOU (WI-0.8, C3) where
-/// `get_pending_file_opens` flips `frontend_ready` and drains the queue
+/// section. That closes the TOCTOU where
+/// `get_pending_file_opens` settles the owner and drains the queue
 /// between an emit-side check and its queue insertion — which could otherwise
 /// drop or double-deliver a Finder open. Mirrors the single-lock discipline of
-/// `menu_events::check_ready_or_queue`.
+/// `menu::events::check_ready_or_queue`.
 pub struct FileOpenState {
-    pub frontend_ready: bool,
+    pub owner: QueueOwner,
     pub pending: Vec<PendingFileOpen>,
     last_focused_document_window: Option<String>,
     ready_document_windows: Vec<String>,
 }
 
 impl FileOpenState {
+    /// The state at launch: Tauri builds `main` from the config, so the
+    /// queue's owner is booting.
     pub const fn new() -> Self {
         Self {
-            frontend_ready: false,
+            owner: QueueOwner::Booting,
             pending: Vec::new(),
             last_focused_document_window: None,
             ready_document_windows: Vec::new(),
@@ -119,11 +140,16 @@ impl FileOpenState {
         }
     }
 
-    /// Remove a destroyed window from the focus history.
+    /// Remove a destroyed window from the focus history. When it was the
+    /// queue's owner, nothing is booting any more: the next open must bring a
+    /// new `main` up rather than wait for this one.
     pub fn remove_window(&mut self, label: &str) {
         self.ready_document_windows.retain(|ready| ready != label);
         if self.last_focused_document_window.as_deref() == Some(label) {
             self.last_focused_document_window = None;
+        }
+        if label == QUEUE_OWNER_LABEL {
+            self.owner = QueueOwner::Settled;
         }
     }
 
@@ -183,7 +209,7 @@ pub fn decide_file_open_locked(
     paths: Vec<String>,
     workspace_root: Option<&str>,
 ) -> FileOpenOutcome {
-    match determine_file_open_action(state.frontend_ready, has_document_window) {
+    match determine_file_open_action(state.owner, has_document_window) {
         FileOpenAction::EmitToDocumentWindow => {
             let payloads = paths
                 .into_iter()
@@ -195,10 +221,10 @@ pub fn decide_file_open_locked(
             FileOpenOutcome::Emit(payloads)
         }
         FileOpenAction::QueueAndCreateWindow => {
-            // The new main window does not have a frontend listener yet. Reset
-            // readiness before releasing the lock so rapid follow-up opens join
+            // The new main window does not have a frontend listener yet. Mark
+            // it booting before releasing the lock so rapid follow-up opens join
             // the same cold-start queue instead of being emitted too early.
-            state.frontend_ready = false;
+            state.owner = QueueOwner::Booting;
             queue_pending_file_opens(&mut state.pending, paths, workspace_root);
             FileOpenOutcome::Queued {
                 create_window: true,
@@ -213,14 +239,47 @@ pub fn decide_file_open_locked(
     }
 }
 
-/// Mark the frontend ready and drain the pending queue in one critical
+/// Settle the queue's owner and drain the pending queue in one critical
 /// section (caller passes the locked state). Returns the drained opens.
-pub fn mark_ready_and_drain(state: &mut FileOpenState) -> Vec<PendingFileOpen> {
-    state.frontend_ready = true;
+///
+/// `drained_by` is the window that asked. Its frontend registers its
+/// `app:open-file` listener before it drains, so from here on it can take a
+/// hot open — it is recorded as listening now, rather than when its separate
+/// `ready` event arrives. Without that, an open landing between the two found
+/// no target, was queued for a window that had already drained, and stayed
+/// queued.
+pub fn mark_ready_and_drain(state: &mut FileOpenState, drained_by: &str) -> Vec<PendingFileOpen> {
+    state.owner = QueueOwner::Settled;
+    state.record_window_focus(drained_by, false, true);
     // `take`, not `drain(..).collect()`: draining every element into a fresh
     // Vec of the same type allocates a second buffer and copies into it, when
     // the existing buffer can simply be handed over (`clippy::drain_collect`).
     std::mem::take(&mut state.pending)
+}
+
+/// Queue the openable files a cold launch was handed on its command line
+/// (Windows/Linux: an Explorer double-click starts `vmark <path>`), so the
+/// first window's frontend drains them once it mounts.
+///
+/// Takes the mutex rather than a guard so the poison rule lives here, beside
+/// the queueing: a panic elsewhere while the state was locked must not cost
+/// the user the file they launched the app to open.
+///
+/// Compiled where it runs — macOS receives its opens as `RunEvent::Opened`,
+/// never as argv — and in the tests.
+#[cfg(any(not(target_os = "macos"), test))]
+pub fn queue_launch_file_args(state: &std::sync::Mutex<FileOpenState>, file_args: Vec<String>) {
+    if file_args.is_empty() {
+        return;
+    }
+    let mut state = state.lock().unwrap_or_else(|p| p.into_inner());
+    for path in file_args {
+        let workspace_root = get_workspace_root_for_file(&path);
+        state.pending.push(PendingFileOpen {
+            path,
+            workspace_root,
+        });
+    }
 }
 
 #[cfg(test)]

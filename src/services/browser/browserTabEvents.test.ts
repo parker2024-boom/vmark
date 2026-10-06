@@ -4,14 +4,17 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 import type { TabNavHandlers } from "./browserNavEvents";
+import type { BrowserDialog, CrashAction } from "@/stores/browserUiStore";
 
-const handlers: { current: (() => TabNavHandlers) | null } = { current: null };
-vi.mock("./browserNavEvents", () => ({
-  subscribeBrowserNavEvents: (current: () => TabNavHandlers) => {
-    handlers.current = current;
-    return () => {
-      handlers.current = null;
-    };
+// The real decode → hub → handler chain runs; the native boundary is Tauri's
+// `listen`, whose callbacks are captured here so a test can emit raw payloads.
+const native = vi.hoisted(() => ({ listeners: new Map<string, (message: { payload: unknown }) => void>() }));
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: (event: string, callback: (message: { payload: unknown }) => void) => {
+    native.listeners.set(event, callback);
+    return Promise.resolve(() => {
+      if (native.listeners.get(event) === callback) native.listeners.delete(event);
+    });
   },
 }));
 vi.mock("@/services/persistence/workspaceStorage", () => ({
@@ -54,9 +57,36 @@ function browserTab(tabId: string) {
   return tab;
 }
 
-function h(): TabNavHandlers {
-  if (!handlers.current) throw new Error("service not started");
-  return handlers.current();
+/** Deliver one raw payload as the native driver would emit it. */
+function emit(event: string, payload: Record<string, unknown>): void {
+  const listener = native.listeners.get(event);
+  if (!listener) throw new Error(`no native listener for ${event} — service not started`);
+  listener({ payload });
+}
+
+/** Optional ticket: absent when the driver sent none. */
+const ticket = (navigationId?: string) => (navigationId === undefined ? {} : { navigationId });
+
+/**
+ * The handler-shaped test vocabulary, each call emitted as the raw native payload
+ * it stands for. History has no event of its own — it rides on `loaded`.
+ */
+function h(): Required<TabNavHandlers> {
+  return {
+    onNavigated: (tabId, url, generation, redirected, navigationId) =>
+      emit("browser://navigated", { tabId, url, generation, redirected, ...ticket(navigationId) }),
+    onLoaded: (tabId, url, title, generation, navigationId) =>
+      emit("browser://loaded", { tabId, url, title, generation, ...ticket(navigationId) }),
+    onHistoryChanged: (tabId, canGoBack, canGoForward, generation) => {
+      const url = useBrowserUiStore.getState().entries[tabId]?.urlInput ?? START;
+      emit("browser://loaded", { tabId, url, title: "", generation, canGoBack, canGoForward });
+    },
+    onFailed: (tabId, message, navigationId) =>
+      emit("browser://load-failed", { tabId, message, ...ticket(navigationId) }),
+    onCrashed: (tabId, action: CrashAction) => emit("browser://crashed", { tabId, action }),
+    onDialog: (tabId, dialog: BrowserDialog) => emit("browser://dialog", { tabId, ...dialog }),
+    onPopupBlocked: (tabId, url) => emit("browser://popup", { tabId, url }),
+  };
 }
 
 let stop: () => void = () => {};

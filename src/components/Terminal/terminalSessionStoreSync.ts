@@ -11,7 +11,7 @@
  *   - Theme or monoFont changes update each session's term.options.theme and/or
  *     fontFamily, resolving the mono stack straight from the monoFont setting
  *     (not the --font-mono CSS var, which useTheme writes only in a later
- *     effect, so it would lag a monoFont-only change) (G6/WI-4.1). A monoFont
+ *     effect, so it would lag a monoFont-only change) (G6). A monoFont
  *     change also re-fits and resizes the PTY, since cell width changes.
  *     The stack is MEASURED before it is applied: on WebKitGTK under a CJK
  *     locale the cascade stops at an unmatched family rather than falling
@@ -19,7 +19,7 @@
  *     (#1334). A proportional font here inflates every terminal cell.
  *   - Workspace-root changes inject a `cd` command into every alive PTY whose
  *     current cwd differs from the new root — the live OSC 7 cwd when known,
- *     else the spawn-time cwd (WI-2.2); PTY-less or exited sessions are skipped.
+ *     else the spawn-time cwd; PTY-less or exited sessions are skipped.
  *   - Terminal-setting changes update fontSize/lineHeight/cursorStyle/
  *     cursorBlink/macOptionIsMeta/screenReaderMode/scrollback/
  *     minimumContrastRatio on each xterm; a font change also re-fits the addon
@@ -114,7 +114,7 @@ export function useUIStoreSync(
       prevTheme = themeId;
       prevMono = monoFont;
       const newTheme = themeChanged ? buildXtermThemeForId(themeId) : null;
-      // Resolve the mono stack straight from the setting (G6/WI-4.1). This
+      // Resolve the mono stack straight from the setting (G6). This
       // subscriber fires synchronously inside the store `set`, before useTheme's
       // effect writes --font-mono, so reading that CSS var here would yield the
       // PREVIOUS font on a monoFont-only change.
@@ -124,7 +124,7 @@ export function useUIStoreSync(
       for (const [, entry] of sessions) {
         if (newTheme) {
           entry.instance.term.options.theme = newTheme;
-          // The bold repaint rule is per theme too (WI-UI1.4/D10) — switching
+          // The bold repaint rule is per theme too (D10) — switching
           // to solarized live must stop repainting bold as base-tone grey.
           entry.instance.term.options.drawBoldTextInBrightColors =
             drawBoldTextInBrightColorsForId(themeId);
@@ -207,7 +207,7 @@ export function useUIStoreSync(
         entry.pendingRoot = null;
         // Prefer the shell's live cwd (OSC 7) over the spawn-time cwd, so a
         // session the user already cd'd into newRoot isn't redundantly cd'd
-        // again (WI-2.2).
+        // again.
         const currentCwd = entry.instance.getCwd() ?? entry.spawnedCwd;
         if (entry.pty && !entry.shellExited && currentCwd !== newRoot) {
           entry.pty.write(cdCommand);

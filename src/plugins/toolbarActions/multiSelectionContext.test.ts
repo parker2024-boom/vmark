@@ -3,7 +3,7 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView as CodeMirrorView } from "@codemirror/view";
 import type { CursorContext as SourceContext } from "@/types/cursorContext";
 
-vi.mock("@/plugins/multiCursor", () => {
+vi.mock("@/plugins/shared/MultiSelection", () => {
   class MultiSelection {
     ranges: Array<{ $from: { depth: number; pos: number; node: () => { type: { name: string }; isTextblock: boolean; isBlock: boolean } }; $to: { depth: number; pos: number; node: () => { type: { name: string }; isTextblock: boolean; isBlock: boolean } } }>;
     constructor(ranges: unknown[]) {
@@ -17,7 +17,7 @@ import {
   getSourceMultiSelectionContext,
   getWysiwygMultiSelectionContext,
 } from "./multiSelectionContext";
-import { MultiSelection } from "@/plugins/multiCursor";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 
 function createCmView(doc: string, ranges: Array<{ from: number; to: number }>): CodeMirrorView {
   const parent = document.createElement("div");

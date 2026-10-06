@@ -16,7 +16,7 @@
  * out — an Azure Pipelines file has top-level `steps:` too, but its steps are
  * `script:`/`task:`, and a GitHub reference is `owner/repo@ref`.
  *
- * It reads the PARSED document, never text (audit 20260928): only a `uses:`
+ * It reads the PARSED document, never text: only a `uses:`
  * that is a step's own key counts — never one under another top-level key, a
  * step's `with:`, a flow value or a block scalar — and every sequence form the
  * workflow parser accepts (indented, indentationless, flow) is recognised.
@@ -24,7 +24,7 @@
  * YAML cannot tell a step's own `uses:` from a nested one, so claiming it
  * offered Run on a guess. The plain tree shows the parse error instead, and a
  * LIVE run whose file stops parsing keeps its Cancel through the yaml
- * adapter's generic preview (#124). This is the ONE engine-workflow rule:
+ * adapter's generic preview. This is the ONE engine-workflow rule:
  * `parser.ts:isWorkflowYaml` delegates here rather than keeping a second one.
  *
  * @coordinates-with lib/formats/adapters/yaml.tsx — the schema detector that calls it

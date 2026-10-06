@@ -3,7 +3,7 @@
  * Matches trigger-menu.css design
  */
 
-/* Surface chrome comes from `.vm-menu` (overlay-shared.css, WI-UI3.1). */
+/* Surface chrome comes from `.vm-menu` (overlay-shared.css). */
 .context-menu {
   max-width: 240px;
 }
@@ -24,7 +24,7 @@
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
-  cursor: var(--cursor-interactive, default); /* D7, platform-scoped (WI-UA15) */
+  cursor: var(--cursor-interactive, default); /* D7, platform-scoped */
   color: var(--text-color);
   font: inherit;
   text-align: left;

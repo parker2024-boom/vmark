@@ -24,7 +24,7 @@ import type { Text } from "@codemirror/state";
 import { safeUnlisten } from "@/utils/safeUnlisten";
 import { outlineSyncError } from "@/utils/debug";
 import { useUIStore } from "@/stores/uiStore";
-import { parseFenceDelimiter } from "@/components/Sidebar/outlineUtils";
+import { parseFenceDelimiter } from "@/utils/markdownOutline";
 
 type CMViewRef = React.RefObject<EditorView | null>;
 

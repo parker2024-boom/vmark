@@ -1,5 +1,5 @@
 /**
- * BrowserOverlays — everything that stands in for the native page (WI-S0.9 / WI-SOC.1b).
+ * BrowserOverlays — everything that stands in for the native page.
  *
  * The native `WKWebView` paints over all DOM in its rect, so whenever VMark needs to
  * show something *there* — a frozen placeholder, a load failure, a crash, a page dialog
@@ -19,7 +19,7 @@
  * to whatever had it when it closes (audit 2026-09-03 round 2, #161).
  *
  * A page dialog whose answer did not reach the page keeps standing, with the failure
- * painted inside it as a live alert and both buttons live (audit round 3, #164): the
+ * painted inside it as a live alert and both buttons live: the
  * surface owns the retry, this only shows why the last click went nowhere.
  *
  * @coordinates-with components/Browser/BrowserSurface — owns the state, passes it down
@@ -31,18 +31,18 @@ import type { BrowserDialog, CrashAction } from "@/stores/browserUiStore";
 import { urlForAgent } from "@/lib/browser/url";
 
 export interface BrowserOverlaysProps {
-  /** The native view is hidden by an occluder — paint the opaque floor (WI-SOC.1b). */
+  /** The native view is hidden by an occluder — paint the opaque floor. */
   frozen: boolean;
-  /** The last failure on this tab, or null (WI-S0.9). */
+  /** The last failure on this tab, or null. */
   error: string | null;
-  /** Non-null while the web content process is down (WI-1.8). */
+  /** Non-null while the web content process is down. */
   crash: { action: CrashAction } | null;
-  /** Non-null while a page JS dialog is open (WI-1.7). */
+  /** Non-null while a page JS dialog is open. */
   dialog: BrowserDialog | null;
   /** Why the last answer to `dialog` did not reach the page, or null. Shown inside
-   *  the dialog, which stays up so the user can answer again (audit round 3, #164). */
+   *  the dialog, which stays up so the user can answer again. */
   dialogError: string | null;
-  /** The last popup the page tried to open and VMark blocked (audit X-03), or null. */
+  /** The last popup the page tried to open and VMark blocked, or null. */
   popup: { url: string; at: number } | null;
   onRetry: () => void;
   onCloseDialog: (accepted: boolean) => void;

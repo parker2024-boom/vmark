@@ -1,4 +1,4 @@
-//! Genie step executor (WI-2.2).
+//! Genie step executor.
 //!
 //! Resolves a `uses: genie/<name>` step end-to-end:
 //!   1. Look up the markdown genie by name in the global genies directory.
@@ -308,7 +308,7 @@ pub async fn execute_genie(
 
     // 2. Fence untrusted with-values (document text, selections, file reads,
     //    prior step outputs) so they read as data, not instructions, in the
-    //    prompt handed to autonomous CLI agents (audit 20260612 H13).
+    //    prompt handed to autonomous CLI agents.
     let nonce = untrusted::fence_nonce();
     let (fenced_map, any_fenced) = untrusted::fence_untrusted(with_map, &nonce);
 
@@ -578,14 +578,14 @@ mod tests {
         }
     }
 
-    fn provider_echo() -> ProviderConfig {
-        // Force the dispatcher's "claude" branch but redirect cli_path to
-        // /bin/echo so the test doesn't depend on a real CLI tool.
+    /// The dispatcher's "claude" branch, with cli_path redirected to `cli` so
+    /// the test doesn't depend on a real CLI tool.
+    fn provider_at(cli: &str) -> ProviderConfig {
         ProviderConfig {
             provider: "claude".to_string(),
             api_key: None,
             endpoint: None,
-            cli_path: Some("/bin/echo".to_string()),
+            cli_path: Some(cli.to_string()),
         }
     }
 
@@ -598,18 +598,18 @@ mod tests {
             metadata: meta_v0(),
             template: "Edit this: {{content}}".to_string(),
         };
-        let cancel = CancellationToken::new();
+        let (_dir, cat) = crate::ai_provider::test_shim::sh_shim("exec cat");
         let res = execute_genie(
-            cancel,
+            CancellationToken::new(),
             &loaded,
             &map(&[("input", "hello-text")]),
             &step_config_with_model(None),
-            &provider_echo(),
+            &provider_at(&cat),
         )
         .await;
         assert!(res.is_ok(), "{:?}", res);
-        // /bin/echo echoes the (filled) prompt back; the genie output should
-        // contain the text we passed via with.input.
+        // The stand-in CLI sends its stdin — the filled prompt — back, so the
+        // genie output should contain the text we passed via with.input.
         let map = res.unwrap();
         let text = map.get("text").cloned().unwrap_or_default();
         assert!(
@@ -633,7 +633,7 @@ mod tests {
             &loaded,
             &HashMap::new(),
             &step_config_with_model(None),
-            &provider_echo(),
+            &provider_at("/bin/echo"),
         )
         .await;
         assert!(matches!(res, Err(GenieStepError::Template(_))));
@@ -651,7 +651,7 @@ mod tests {
             &loaded,
             &HashMap::new(), // missing required input
             &step_config_with_model(None),
-            &provider_echo(),
+            &provider_at("/bin/echo"),
         )
         .await;
         assert!(matches!(res, Err(GenieStepError::InvalidInput(_))));
@@ -662,20 +662,20 @@ mod tests {
     async fn execute_unsupported_output_type_errors_after_call() {
         // v1 output.type: file isn't supported. The provider runs (we get text)
         // but post-processing rejects.
-        // Unix-only: provider_echo() uses /bin/echo which isn't a Windows
-        // binary. The unsupported-output validation logic itself is platform-
-        // independent (process_output is exercised in non-async tests above).
+        // Unix-only: the stand-in CLI is a /bin/sh script. The unsupported-
+        // output validation logic itself is platform-independent
+        // (process_output is exercised in non-async tests above).
         let loaded = LoadedGenie {
             metadata: meta_v1("text", "file"),
             template: "produce {{input}}".to_string(),
         };
-        let cancel = CancellationToken::new();
+        let (_dir, cat) = crate::ai_provider::test_shim::sh_shim("exec cat");
         let res = execute_genie(
-            cancel,
+            CancellationToken::new(),
             &loaded,
             &map(&[("input", "x")]),
             &step_config_with_model(None),
-            &provider_echo(),
+            &provider_at(&cat),
         )
         .await;
         assert!(matches!(

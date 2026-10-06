@@ -4,9 +4,9 @@
  * Floating preview for mermaid diagram editing in Source mode.
  * Shows rendered diagram while user edits source.
  * Supports dragging, resizing, and zoom.
- *
  * @coordinates-with mermaidPreviewDOM.ts — DOM construction
  * @coordinates-with mermaidPreviewRender.ts — diagram rendering dispatch
+ * @module plugins/mermaidPreview/MermaidPreviewView
  */
 
 import { cleanupDescendants } from "@/plugins/shared/diagramCleanup";

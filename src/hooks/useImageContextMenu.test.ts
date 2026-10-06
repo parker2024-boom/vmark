@@ -6,6 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
 
 // --- Mocks (must be before imports) ---
 
@@ -36,23 +37,55 @@ vi.mock("@/services/media/imageOperations", () => ({
   copyImageToAssets: (...args: unknown[]) => mockCopyImageToAssets(...args),
 }));
 
-vi.mock("@/hooks/useDocumentState", () => ({
-  useDocumentFilePath: vi.fn(() => "/docs/test.md"),
-}));
-
-vi.mock("@/utils/debug", () => ({
+vi.mock("@/utils/debug", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/utils/debug")>()),
   imageContextMenuWarn: vi.fn(),
   imageContextMenuError: vi.fn(),
 }));
 
 import { useImageContextMenu } from "./useImageContextMenu";
 import { useImageContextMenuStore } from "@/stores/imageContextMenuStore";
-import { useDocumentFilePath } from "@/hooks/useDocumentState";
+import { useTabStore } from "@/stores/tabStore";
+import { useDocumentStore } from "@/stores/documentStore";
+import { WindowContext } from "@/contexts/WindowContext";
 
 // --- Helpers ---
 
+const WINDOW = "main";
+
+/**
+ * Make a document with `filePath` (null = never saved) the active one in
+ * WINDOW, through the real tab and document stores the hook reads.
+ */
+function openActiveDocument(filePath: string | null): void {
+  useTabStore.getState().removeWindow(WINDOW);
+  for (const id of Object.keys(useDocumentStore.getState().documents)) {
+    useDocumentStore.getState().removeDocument(id);
+  }
+  const tabId = useTabStore.getState().createTab(WINDOW, filePath);
+  useDocumentStore.getState().initDocument(tabId, "", filePath);
+}
+
+function inWindow({ children }: { children: ReactNode }) {
+  return createElement(
+    WindowContext.Provider,
+    { value: { windowLabel: WINDOW, isDocumentWindow: true } },
+    children,
+  );
+}
+
+function renderMenu(getView: Parameters<typeof useImageContextMenu>[0]) {
+  return renderHook(() => useImageContextMenu(getView), { wrapper: inWindow });
+}
+
+interface FakeNode {
+  type: { name: string };
+  attrs: Record<string, unknown>;
+  nodeSize: number;
+}
+
 function makeEditorView(overrides: Record<string, unknown> = {}) {
-  const imageNode = {
+  const imageNode: FakeNode = {
     type: { name: "image" },
     attrs: { src: "old.png", alt: "" },
     nodeSize: 1,
@@ -60,7 +93,7 @@ function makeEditorView(overrides: Record<string, unknown> = {}) {
   return {
     state: {
       doc: {
-        nodeAt: vi.fn(() => imageNode),
+        nodeAt: vi.fn<(pos: number) => FakeNode | null>(() => imageNode),
       },
       tr: {
         setNodeMarkup: vi.fn().mockReturnThis(),
@@ -75,8 +108,7 @@ function makeEditorView(overrides: Record<string, unknown> = {}) {
 describe("useImageContextMenu", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Restore mock return value after clearAllMocks
-    vi.mocked(useDocumentFilePath).mockReturnValue("/docs/test.md");
+    openActiveDocument("/docs/test.md");
     useImageContextMenuStore.setState({
       isOpen: true,
       position: { x: 100, y: 100 },
@@ -94,13 +126,13 @@ describe("useImageContextMenu", () => {
   it("returns a handleAction function", () => {
     const view = makeEditorView();
     const getView = () => view as never;
-    const { result } = renderHook(() => useImageContextMenu(getView));
+    const { result } = renderMenu(getView);
     expect(typeof result.current).toBe("function");
   });
 
   it("does nothing when no editor view is available", async () => {
     const getView = () => null;
-    const { result } = renderHook(() => useImageContextMenu(getView));
+    const { result } = renderMenu(getView);
 
     await act(async () => {
       await result.current("delete");
@@ -116,7 +148,7 @@ describe("useImageContextMenu", () => {
     it("deletes the image node at the stored position", async () => {
       const view = makeEditorView();
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       await act(async () => {
         await result.current("delete");
@@ -129,9 +161,9 @@ describe("useImageContextMenu", () => {
 
     it("does nothing if no image node at position", async () => {
       const view = makeEditorView();
-      view.state.doc.nodeAt = vi.fn(() => null);
+      view.state.doc.nodeAt.mockImplementation(() => null);
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       await act(async () => {
         await result.current("delete");
@@ -142,13 +174,13 @@ describe("useImageContextMenu", () => {
 
     it("does nothing if node at position is not an image", async () => {
       const view = makeEditorView();
-      view.state.doc.nodeAt = vi.fn(() => ({
+      view.state.doc.nodeAt.mockImplementation(() => ({
         type: { name: "paragraph" },
         attrs: {},
         nodeSize: 1,
       }));
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       await act(async () => {
         await result.current("delete");
@@ -167,7 +199,7 @@ describe("useImageContextMenu", () => {
 
       const view = makeEditorView();
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       await act(async () => {
         await result.current("change");
@@ -189,7 +221,7 @@ describe("useImageContextMenu", () => {
       mockOpen.mockResolvedValue(null);
       const view = makeEditorView();
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       await act(async () => {
         await result.current("change");
@@ -201,11 +233,11 @@ describe("useImageContextMenu", () => {
 
     it("shows warning when document is unsaved", async () => {
       mockOpen.mockResolvedValue("/new/image.png");
-      vi.mocked(useDocumentFilePath).mockReturnValue(null);
+      openActiveDocument(null);
 
       const view = makeEditorView();
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       await act(async () => {
         await result.current("change");
@@ -223,7 +255,7 @@ describe("useImageContextMenu", () => {
 
       const view = makeEditorView();
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       await act(async () => {
@@ -244,7 +276,7 @@ describe("useImageContextMenu", () => {
     it("copies absolute path to clipboard for relative src", async () => {
       const view = makeEditorView();
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       await act(async () => {
         await result.current("copyPath");
@@ -255,10 +287,10 @@ describe("useImageContextMenu", () => {
     });
 
     it("shows warning when document is unsaved", async () => {
-      vi.mocked(useDocumentFilePath).mockReturnValue(null);
+      openActiveDocument(null);
       const view = makeEditorView();
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       await act(async () => {
         await result.current("copyPath");
@@ -274,7 +306,7 @@ describe("useImageContextMenu", () => {
       useImageContextMenuStore.setState({ imageSrc: "https://example.com/img.png" });
       const view = makeEditorView();
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       await act(async () => {
         await result.current("copyPath");
@@ -287,7 +319,7 @@ describe("useImageContextMenu", () => {
       useImageContextMenuStore.setState({ imageSrc: "/absolute/path/img.png" });
       const view = makeEditorView();
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       await act(async () => {
         await result.current("copyPath");
@@ -303,7 +335,7 @@ describe("useImageContextMenu", () => {
 
       const view = makeEditorView();
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       await act(async () => {
@@ -324,7 +356,7 @@ describe("useImageContextMenu", () => {
     it("reveals image in Finder", async () => {
       const view = makeEditorView();
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       await act(async () => {
         await result.current("revealInFinder");
@@ -334,10 +366,10 @@ describe("useImageContextMenu", () => {
     });
 
     it("shows warning when document is unsaved", async () => {
-      vi.mocked(useDocumentFilePath).mockReturnValue(null);
+      openActiveDocument(null);
       const view = makeEditorView();
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       await act(async () => {
         await result.current("revealInFinder");
@@ -353,7 +385,7 @@ describe("useImageContextMenu", () => {
       mockRevealItemInDir.mockRejectedValue(new Error("no such file"));
       const view = makeEditorView();
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       await act(async () => {
@@ -361,7 +393,7 @@ describe("useImageContextMenu", () => {
       });
 
       expect(mockMessage).toHaveBeenCalledWith(
-        "Failed to reveal image in Finder.",
+        "Failed to reveal in Finder.",
         expect.objectContaining({ kind: "error" })
       );
       errorSpy.mockRestore();
@@ -378,7 +410,7 @@ describe("useImageContextMenu", () => {
       useImageContextMenuStore.setState({ imageSrc: "relative/path.png" });
       const view = makeEditorView();
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       await act(async () => {
@@ -399,13 +431,13 @@ describe("useImageContextMenu", () => {
       mockCopyImageToAssets.mockResolvedValue("assets/new.png");
 
       const view = makeEditorView();
-      view.state.doc.nodeAt = vi.fn(() => ({
+      view.state.doc.nodeAt.mockImplementation(() => ({
         type: { name: "paragraph" },
         attrs: {},
         nodeSize: 1,
       }));
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       await act(async () => {
         await result.current("change");
@@ -419,9 +451,9 @@ describe("useImageContextMenu", () => {
       mockCopyImageToAssets.mockResolvedValue("assets/new.png");
 
       const view = makeEditorView();
-      view.state.doc.nodeAt = vi.fn(() => null);
+      view.state.doc.nodeAt.mockImplementation(() => null);
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       await act(async () => {
         await result.current("change");
@@ -439,13 +471,13 @@ describe("useImageContextMenu", () => {
       mockCopyImageToAssets.mockResolvedValue("assets/new.png");
 
       const view = makeEditorView();
-      view.state.doc.nodeAt = vi.fn(() => ({
+      view.state.doc.nodeAt.mockImplementation(() => ({
         type: { name: "block_image" },
         attrs: { src: "old.png" },
         nodeSize: 1,
       }));
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       await act(async () => {
         await result.current("change");
@@ -466,7 +498,7 @@ describe("useImageContextMenu", () => {
 
       const view = makeEditorView();
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       // Start first call (do not await — it hangs at open())
       const firstPromise = result.current("change");
@@ -493,7 +525,7 @@ describe("useImageContextMenu", () => {
       useImageContextMenuStore.setState({ imageSrc: "relative/path.png" });
       const view = makeEditorView();
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       await act(async () => {
@@ -513,7 +545,7 @@ describe("useImageContextMenu", () => {
       useImageContextMenuStore.setState({ imageSrc: "./assets/photo.png" });
       const view = makeEditorView();
       const getView = () => view as never;
-      const { result } = renderHook(() => useImageContextMenu(getView));
+      const { result } = renderMenu(getView);
 
       await act(async () => {
         await result.current("copyPath");

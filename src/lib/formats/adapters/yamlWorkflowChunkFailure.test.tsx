@@ -10,66 +10,104 @@
  *     memoized the rejection — the pane could never come back without a
  *     window restart.
  *
- * Mock boundary: the workflow renderer MODULE (the chunk whose load is the
- * subject). Everything else — the adapter, the boundary, the retry — is real.
+ * Nothing is mocked. The failure cases drive the adapter's real renderer
+ * through its loader parameter (`ghaWorkflowRendererOver`) — the chunk fetch is
+ * the boundary, and a module registry cannot be made to re-fail a module that
+ * resolved once. The success case loads the REAL chunk through the registered
+ * production renderer.
  */
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ComponentType } from "react";
+import type { PreviewRendererProps } from "../types";
+import { ghaWorkflowRendererOver, yamlFormat } from "./yaml";
 
-const chunk = vi.hoisted(() => ({ failures: 0, loads: 0 }));
-
-vi.mock("./yamlWorkflowRenderer", () => {
-  chunk.loads += 1;
-  if (chunk.failures > 0) {
-    chunk.failures -= 1;
-    throw new Error("Failed to fetch dynamically imported module");
-  }
-  return {
-    GhaWorkflowSchemaRenderer: () => <div data-testid="workflow-workbench" />,
-  };
-});
-
-import { yamlFormat } from "./yaml";
-
-const Renderer = yamlFormat.schemaRenderers?.["gha-workflow"];
-
-function renderWorkflowPreview() {
-  if (!Renderer) throw new Error("yaml adapter registers no gha-workflow renderer");
-  render(<Renderer content="on: push\n" diagnostics={[]} tabId="tab-1" />);
+function Workbench() {
+  return <div data-testid="workflow-workbench" />;
 }
 
-// Test order is load-bearing: vitest caches a module once it has resolved, so
-// the failure cases must run BEFORE the chunk is allowed to succeed. A failed
-// factory is not cached (verified: the factory is re-invoked on the next
-// import), which is what makes the retry case observable at all.
+/** A chunk loader that rejects `failures` times, then resolves. */
+function flakyChunk(failures: number) {
+  const state = { failures, loads: 0 };
+  const load = async (): Promise<{ default: ComponentType<PreviewRendererProps> }> => {
+    state.loads += 1;
+    if (state.failures > 0) {
+      state.failures -= 1;
+      throw new Error("Failed to fetch dynamically imported module");
+    }
+    return { default: Workbench };
+  };
+  return { state, load };
+}
+
+function renderPreview(Renderer: ComponentType<PreviewRendererProps> | undefined) {
+  if (!Renderer) throw new Error("yaml adapter registers no gha-workflow renderer");
+  return render(<Renderer content={"on: push\n"} diagnostics={[]} tabId="tab-1" />);
+}
+
 describe("GHA workflow schema renderer — chunk failure is local and retryable", () => {
   it("shows an in-pane failure surface instead of rethrowing to the editor boundary", async () => {
-    chunk.failures = 1;
-    renderWorkflowPreview();
+    const chunk = flakyChunk(1);
+    renderPreview(ghaWorkflowRendererOver(chunk.load));
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(/failed to load/i);
     expect(screen.getByRole("button", { name: /try again/i })).toBeTruthy();
+    expect(screen.queryByTestId("workflow-workbench")).toBeNull();
   });
 
   it("recovers when the user retries — a FRESH lazy, not the cached rejection", async () => {
-    chunk.failures = 1;
-    const before = chunk.loads;
-    renderWorkflowPreview();
+    const chunk = flakyChunk(1);
+    renderPreview(ghaWorkflowRendererOver(chunk.load));
     await screen.findByRole("alert");
 
     await userEvent.click(screen.getByRole("button", { name: /try again/i }));
 
     expect(await screen.findByTestId("workflow-workbench")).toBeTruthy();
-    // Two evaluations: the failed one and the retry. A module-level lazy would
-    // have replayed the memoized rejection without touching the import.
-    expect(chunk.loads).toBe(before + 2);
+    // Two loads: the failed one and the retry. A memoized lazy would have
+    // replayed the rejection without calling the loader again.
+    expect(chunk.state.loads).toBe(2);
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("renders the workbench when the chunk loads", async () => {
-    chunk.failures = 0;
-    renderWorkflowPreview();
+  it("keeps failing in place while the chunk keeps failing, and recovers after", async () => {
+    const chunk = flakyChunk(2);
+    renderPreview(ghaWorkflowRendererOver(chunk.load));
+    await screen.findByRole("alert");
+
+    await userEvent.click(screen.getByRole("button", { name: /try again/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/failed to load/i);
+
+    await userEvent.click(screen.getByRole("button", { name: /try again/i }));
     expect(await screen.findByTestId("workflow-workbench")).toBeTruthy();
+    expect(chunk.state.loads).toBe(3);
+  });
+
+  it("the registered renderer loads the real workflow chunk", async () => {
+    // jsdom has no ResizeObserver, and the workbench's flow canvas measures
+    // with one: without it the canvas throws on mount and the boundary shows
+    // the failure surface. That happens AFTER the first paint, so checking
+    // for the alert at once raced the error and passed or failed by load.
+    const scope = globalThis as { ResizeObserver?: unknown };
+    const before = scope.ResizeObserver;
+    scope.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+    try {
+      const { container } = renderPreview(yamlFormat.schemaRenderers?.["gha-workflow"]);
+      // The canvas mounted, and its effects (where the measuring starts) ran.
+      await waitFor(() => expect(container.querySelector(".react-flow__renderer")).not.toBeNull());
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(container.querySelector('[data-schema="gha-workflow"]')).not.toBeNull();
+    } finally {
+      if (before === undefined) delete scope.ResizeObserver;
+      else scope.ResizeObserver = before;
+    }
   });
 });

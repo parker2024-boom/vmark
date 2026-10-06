@@ -14,6 +14,9 @@ import {
 } from './schemaMigration';
 import type { SessionData } from './types';
 
+/** A fixed capture time (seconds); migration never compares it with the clock. */
+const SESSION_TIMESTAMP = 1_768_478_400;
+
 describe('Schema Migration', () => {
   describe('canMigrate', () => {
     it('should return true for current version', () => {
@@ -52,7 +55,7 @@ describe('Schema Migration', () => {
     it('should return session unchanged if already at current version', () => {
       const session: SessionData = {
         version: SCHEMA_VERSION,
-        timestamp: Date.now() / 1000,
+        timestamp: SESSION_TIMESTAMP,
         vmark_version: '0.3.24',
         windows: [],
         workspace: null,
@@ -66,7 +69,7 @@ describe('Schema Migration', () => {
     it('should throw for future versions', () => {
       const futureSession = {
         version: SCHEMA_VERSION + 1,
-        timestamp: Date.now() / 1000,
+        timestamp: SESSION_TIMESTAMP,
         vmark_version: '1.0.0',
         windows: [],
         workspace: null,
@@ -78,7 +81,7 @@ describe('Schema Migration', () => {
     it('should throw for version 0', () => {
       const invalidSession = {
         version: 0,
-        timestamp: Date.now() / 1000,
+        timestamp: SESSION_TIMESTAMP,
         vmark_version: '0.0.1',
         windows: [],
         workspace: null,
@@ -92,7 +95,7 @@ describe('Schema Migration', () => {
       // For now with only version 1, this is a no-op
       const session: SessionData = {
         version: 1,
-        timestamp: Date.now() / 1000,
+        timestamp: SESSION_TIMESTAMP,
         vmark_version: '0.3.24',
         windows: [],
         workspace: null,
@@ -109,7 +112,7 @@ describe('Schema Migration', () => {
       // Cast away the v3-only fields; the migration backfills them.
       const v1Session = {
         version: 1,
-        timestamp: Date.now() / 1000,
+        timestamp: SESSION_TIMESTAMP,
         vmark_version: '0.3.24',
         windows: [
           {
@@ -168,7 +171,7 @@ describe('Schema Migration', () => {
       // Simulate an old session that might be missing newer optional fields
       const oldSession = {
         version: 1,
-        timestamp: Date.now() / 1000,
+        timestamp: SESSION_TIMESTAMP,
         vmark_version: '0.3.20',
         windows: [
           {
@@ -202,7 +205,7 @@ describe('Schema Migration', () => {
     it('should handle empty windows array', () => {
       const emptySession: SessionData = {
         version: 1,
-        timestamp: Date.now() / 1000,
+        timestamp: SESSION_TIMESTAMP,
         vmark_version: '0.3.24',
         windows: [],
         workspace: null,
@@ -215,7 +218,7 @@ describe('Schema Migration', () => {
     it('should preserve workspace state', () => {
       const sessionWithWorkspace: SessionData = {
         version: 1,
-        timestamp: Date.now() / 1000,
+        timestamp: SESSION_TIMESTAMP,
         vmark_version: '0.3.24',
         windows: [],
         workspace: {
@@ -230,7 +233,8 @@ describe('Schema Migration', () => {
     });
 
     it('should preserve timestamp during migration', () => {
-      const originalTimestamp = Date.now() / 1000 - 3600; // 1 hour ago
+      // Fractional, as a seconds value from the clock is: migration must not round it.
+      const originalTimestamp = SESSION_TIMESTAMP - 3600.5;
       const session: SessionData = {
         version: 1,
         timestamp: originalTimestamp,

@@ -37,6 +37,7 @@ vi.mock("@/stores/documentStore", async () => ({
 
 import { useTiptapFlush } from "./useTiptapFlush";
 import { useLargeFileSessionStore } from "@/stores/documentStore";
+import { hasPendingWysiwygEdit } from "@/utils/wysiwygEditPending";
 
 /** Minimal editor stand-in — the flush only reads schema/state.doc. */
 const editor = {
@@ -220,5 +221,62 @@ describe("flushToStore after the tab's document was refused", () => {
     result.current.flushToStore(editor);
 
     expect(setContent).not.toHaveBeenCalled();
+  });
+});
+
+// WI-RA10B.7 — auto-save reads this signal instead of flushing on every tick,
+// so it must be up exactly while an edit exists only in the editor.
+describe("the edit-pending signal auto-save reads", () => {
+  it("is down for an editor nobody has typed in", () => {
+    const { unmount } = setup(vi.fn());
+    expect(hasPendingWysiwygEdit()).toBe(false);
+    unmount();
+  });
+
+  it("goes up in the same call that schedules the flush, before any timer fires", () => {
+    const { result, unmount } = setup(vi.fn());
+    result.current.scheduleFlush(editor);
+    expect(hasPendingWysiwygEdit()).toBe(true);
+    unmount();
+  });
+
+  it("goes down when a flush writes the edit to the store", () => {
+    const setContent = vi.fn();
+    const { result, unmount } = setup(setContent);
+    result.current.scheduleFlush(editor);
+    result.current.flushToStore(editor);
+
+    expect(setContent).toHaveBeenCalledWith("SERIALIZED", { fromUserEdit: true });
+    expect(hasPendingWysiwygEdit()).toBe(false);
+    unmount();
+  });
+
+  it("goes down when the flush is refused for an unparseable document", () => {
+    const { result, unmount } = setup(vi.fn());
+    result.current.scheduleFlush(editor);
+    useLargeFileSessionStore.getState().markForcedSource("tab-1", "unparseable");
+    result.current.flushToStore(editor);
+
+    expect(hasPendingWysiwygEdit()).toBe(false);
+    unmount();
+  });
+
+  it("stays up for one editor while another flushes", () => {
+    const first = setup(vi.fn());
+    const second = setup(vi.fn(), "tab-2");
+    first.result.current.scheduleFlush(editor);
+    second.result.current.scheduleFlush(editor);
+    second.result.current.flushToStore(editor);
+
+    expect(hasPendingWysiwygEdit()).toBe(true);
+    first.unmount();
+    second.unmount();
+  });
+
+  it("goes down when the editor unmounts with its edit unflushed", () => {
+    const { result, unmount } = setup(vi.fn());
+    result.current.scheduleFlush(editor);
+    unmount();
+    expect(hasPendingWysiwygEdit()).toBe(false);
   });
 });

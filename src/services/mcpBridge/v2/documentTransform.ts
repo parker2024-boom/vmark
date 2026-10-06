@@ -23,8 +23,8 @@ import { HALF_TO_FULL } from "./cjkMaps";
 /**
  * Run `rewrite` over the formattable parts of `content` only.
  *
- * The narrow transforms used to run their regexes over the WHOLE document
- * (WI-CJKF4.3), so an AI assistant calling `cjk-spacing` or `cjk-punctuation`
+ * The narrow transforms used to run their regexes over the WHOLE document,
+ * so an AI assistant calling `cjk-spacing` or `cjk-punctuation`
  * rewrote fenced code, inline code, YAML frontmatter and link URLs — the same
  * corruption class as the Source-mode selection defect, reached through the
  * tool surface instead of the keyboard. `cjk-format` was never affected: it
@@ -98,7 +98,7 @@ export function applyTransform(
       const { text, refused } = formatMarkdownChecked(content, settings.cjkFormatting, {
         preserveTwoSpaceHardBreaks: settings.preserveTwoSpaceHardBreaks,
       });
-      // A refusal must not look like "nothing needed changing" (WI-CJKF6.2).
+      // A refusal must not look like "nothing needed changing".
       // Both return the input; only one of them is a defect the caller should
       // hear about. `wrapHandler` turns this into a failed response.
       if (refused) throw new Error("cjk-format refused: the result did not match the input");

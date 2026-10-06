@@ -201,6 +201,36 @@ describe("probe / assert_any", () => {
   });
 });
 
+// WI-RA28.1 — a Rust test that the directory-module file `<dir>.rs` mounts as
+// `#[path = "<dir>/x.test.rs"]` is compiled; `src-tauri/src/pty.rs` mounts its
+// commands, lifecycle and support tests that way.
+describe("assert_test_file — a test mounted from the directory-module file", () => {
+  function crate(ptyRs) {
+    const root = mkdtempSync(path.join(tmpdir(), "dod-assertions-mount-"));
+    made.push(root);
+    mkdirSync(path.join(root, "pty"));
+    writeFileSync(path.join(root, "lib.rs"), "mod pty;\n");
+    writeFileSync(path.join(root, "pty.rs"), ptyRs);
+    writeFileSync(path.join(root, "pty/commands.test.rs"), "#[test]\nfn runs() {}\n");
+    return root;
+  }
+
+  it("passes when <dir>.rs actively mounts <dir>/x.test.rs", () => {
+    const r = runBody("assert_test_file pty/commands.test.rs 'mounted test'", {
+      cwd: crate('#[cfg(test)]\n#[path = "pty/commands.test.rs"]\nmod commands_tests;\n'),
+    });
+    expect(r.out).toContain("✓ mounted test (included from pty.rs)");
+    expect(r.out).toContain("COUNTS pass=1 fail=0");
+  });
+
+  it("still fails when that mount is commented out", () => {
+    const r = runBody("assert_test_file pty/commands.test.rs 'mounted test'", {
+      cwd: crate('// #[path = "pty/commands.test.rs"]\n// mod commands_tests;\n'),
+    });
+    expect(r.out).toContain("COUNTS pass=0 fail=1");
+  });
+});
+
 // ---------------------------------------------------------------- the --serve transport (audit 2026-09-28)
 // `dod_syntax` answers from one long-lived server per shell. Every case below
 // is a way the transport could hand back a WRONG answer while looking fine —

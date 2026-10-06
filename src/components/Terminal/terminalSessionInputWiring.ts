@@ -3,7 +3,7 @@
  *
  * Purpose: Wires xterm input (onData) and IME composition commits onto a
  * session entry, forwarding clean text to the PTY. Under Channel Ownership
- * (WI-4b) there is exactly ONE writer per keystroke — ASCII arrives via xterm's
+ * there is exactly ONE writer per keystroke — ASCII arrives via xterm's
  * onData (keydown path), IME commits via onCompositionCommit — so the legacy
  * dual-writer dedup machinery (grace window, 150ms window, Path A/B, the
  * cross-path echo token) is gone; nothing here needs to reconcile a double write.
@@ -84,7 +84,7 @@ export function wireSessionInput({ sessionId, getEntry, startShell }: WireOption
     if (e.pty) {
       e.pty.write(data);
       // An ACCEPTED write — the gate keys insert ownership off this, so a
-      // suppressed onData (the composing check above) never counts (WI-13).
+      // suppressed onData (the composing check above) never counts.
       instance.noteExternalWrite(data);
     }
   });

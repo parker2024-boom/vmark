@@ -3,7 +3,7 @@
  *
  * Purpose: map the five `insertAlert*` toolbar actions onto GitHub-style alert
  * blocks and hand them to the shared selection-aware builder. Split out of
- * `sourceInsertActions.ts` when the `[TOC]` insert (WI-FL3.10) pushed that
+ * `sourceInsertActions.ts` when the `[TOC]` insert pushed that
  * file past the size limit; the alert vocabulary is the one self-contained
  * group there.
  *

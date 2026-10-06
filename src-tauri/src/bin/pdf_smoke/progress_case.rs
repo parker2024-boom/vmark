@@ -1,12 +1,12 @@
-//! WI-FL6.2 — the progress stages are emitted on THIS platform's real backend.
+//! The progress stages are emitted on THIS platform's real backend.
 //!
 //! Purpose: `progress.test.rs` pins the sequence under each platform's
 //! callback shape, but only against a capturing sink — nothing in `cargo
 //! test` runs a native webview. This case captures the shipped emission
 //! (`app.emit_to` the export window) through `listen_any`, which Tauri's
 //! listener registry delivers for any target, and asserts the sequence the
-//! dialog would have seen. Until WI-FL6.2 Windows and Linux would have
-//! produced an empty list here.
+//! dialog would have seen. Windows and Linux used to
+//! produce an empty list here.
 //!
 //! Three assertions, because each fails for a different reason:
 //!   - a RENDER emits `loading → rendering → finishing`, in order, once each;
@@ -17,7 +17,7 @@
 //!     nothing: no stage may leak from a render that never started.
 //!
 //! A payload the dialog could not parse counts as a failure of the case it
-//! arrived in (#109): the dialog would show the raw key, and dropping it from
+//! arrived in: the dialog would show the raw key, and dropping it from
 //! the captured list would let the sequence still read correct.
 //!
 //! @coordinates-with main.rs — the coordinator that calls this
@@ -71,7 +71,7 @@ impl Capture {
     }
 }
 
-/// Run `op` with a capture around it and return both (#110). The operation is
+/// Run `op` with a capture around it and return both. The operation is
 /// a future, so nothing runs before the listener is registered.
 async fn captured<T>(app: &tauri::AppHandle, op: impl Future<Output = T>) -> (T, Captured) {
     let capture = Capture::start(app);
@@ -165,7 +165,7 @@ pub async fn run(app: &tauri::AppHandle, out: &Path) -> usize {
 /// A refused path: validation happens before any stage, so nothing leaks.
 ///
 /// The fixture and the refusal rule are `missing_path`'s, shared with
-/// `scenarios::bad_path` (#111, audit 20260907 #251/#253) — the same
+/// `scenarios::bad_path` (audit 20260907 #251/#253) — the same
 /// destination and the same "must be `NotFound`, from the guard" verdict. What
 /// stays here is the assertion this case is FOR: that nothing was emitted.
 async fn refused(app: &tauri::AppHandle) -> usize {

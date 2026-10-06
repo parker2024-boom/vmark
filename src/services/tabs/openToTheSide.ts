@@ -1,5 +1,5 @@
 /**
- * "Open to the Side" — put a tab in the OTHER split pane (WI-DSPL1.5).
+ * "Open to the Side" — put a tab in the OTHER split pane.
  *
  * The #1081 plan deferred this alongside the native menu item, and its absence
  * is why the split has been hard to reach: `Alt+Mod+\` splits the CURRENT

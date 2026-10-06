@@ -21,6 +21,7 @@ import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { LIVENESS_TIMEOUT_MS } from "../vitest.shared.ts";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FIXTURE = path.join(REPO, "scripts", "fixtures", "stryker-canary");
@@ -38,11 +39,16 @@ const STRYKER_BIN = path.join(
  * a dev machine; the generous ceiling absorbs loaded-CI contention without
  * hiding a hang (a genuine break-gate regression fails on the assertions in
  * the same run, not by running long).
+ *
+ * The test itself runs under the tier's liveness bound, which must exceed this
+ * kill window so a hung Stryker is reported by the `error` check below, not by
+ * a bare test timeout. The first assertion pins that ordering.
  */
 const CANARY_TIMEOUT_MS = 240_000;
 
 describe("stryker break-threshold canary (real Stryker on a fixture project)", () => {
   it("fails the run (non-zero exit) when the mutation score is under `break`", () => {
+    expect(CANARY_TIMEOUT_MS).toBeLessThan(LIVENESS_TIMEOUT_MS);
     const res = spawnSync(
       process.execPath,
       [STRYKER_BIN, "run", "stryker.conf.json"],
@@ -63,5 +69,5 @@ describe("stryker break-threshold canary (real Stryker on a fixture project)", (
     expect(out).toMatch(/survived/i);
     expect(res.status).not.toBeNull(); // null = killed by our timeout
     expect(res.status).not.toBe(0);
-  }, CANARY_TIMEOUT_MS + 30_000);
+  });
 });

@@ -5,7 +5,7 @@
  * Uses delay-based approach to avoid collision with code fence (```).
  */
 
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 
@@ -15,6 +15,16 @@ vi.mock("@/utils/imeGuard", () => ({
 }));
 
 import { createMarkdownAutoPairPlugin, markdownPairBackspace } from "../markdownAutoPair";
+
+// The plugin decides single-vs-double on a timer (and inserts the closing
+// pair on a zero-delay one); the tests drive that clock instead of sleeping.
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 /**
  * Helper: simulate a single-character user input transaction.
@@ -62,7 +72,7 @@ describe("single backtick auto-pair (Source mode)", () => {
     expect(activeView.state.doc.toString()).toBe("`");
 
     // After delay: paired backticks with cursor between
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
 
     expect(activeView.state.doc.toString()).toBe("``");
     expect(activeView.state.selection.main.head).toBe(1);
@@ -74,7 +84,7 @@ describe("single backtick auto-pair (Source mode)", () => {
     simulateTyping(activeView, "`");
     simulateTyping(activeView, "`");
 
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
 
     // Two backticks, no extra pair
     expect(activeView.state.doc.toString()).toBe("``");
@@ -87,7 +97,7 @@ describe("single backtick auto-pair (Source mode)", () => {
     simulateTyping(activeView, "`");
     simulateTyping(activeView, "`");
 
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
 
     expect(activeView.state.doc.toString()).toBe("```\n\n```");
   });
@@ -99,7 +109,7 @@ describe("single backtick auto-pair (Source mode)", () => {
     simulateTyping(activeView, "`");
 
     // Wait for 150ms auto-pair timeout to fire (inserts closing backtick)
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
     expect(activeView.state.doc.toString()).toBe("``"); // auto-paired
     expect(activeView.state.selection.main.head).toBe(1); // cursor between paired backticks
 
@@ -108,14 +118,14 @@ describe("single backtick auto-pair (Source mode)", () => {
     expect(activeView.state.selection.main.head).toBe(2); // cursor after 2nd typed backtick
 
     // Wait for auto-pair timeout again
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
     expect(activeView.state.selection.main.head).toBe(2); // cursor stable after timeout
 
     // Keystroke 3
     simulateTyping(activeView, "`");
 
     // Wait for code fence insertion
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
 
     expect(activeView.state.doc.toString()).toBe("```\n\n```");
   });
@@ -125,7 +135,7 @@ describe("single backtick auto-pair (Source mode)", () => {
 
     simulateTyping(activeView, "`");
 
-    await new Promise((r) => setTimeout(r, 200));
+    await vi.advanceTimersByTimeAsync(200);
 
     expect(activeView.state.doc.toString()).toBe("hello ``");
     expect(activeView.state.selection.main.head).toBe(7);

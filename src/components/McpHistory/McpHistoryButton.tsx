@@ -136,8 +136,8 @@ export function McpHistoryButton(): React.ReactElement {
     if (!filter) return;
     useMcpStore.getState().checkpointClear(filter);
     // Targeted on-disk removal (not a rewrite-from-memory) so a clear in
-    // this window can't wipe checkpoints another window appended (audit
-    // 20260612 deferred / cross-model review).
+    // this window can't wipe checkpoints another window appended (deferred
+    // from an earlier audit; cross-model review).
     void clearCheckpointsOnDisk(filter);
     toast.success(t("mcpHistoryCleared"));
   }, [tabId, tabFilePath, t]);

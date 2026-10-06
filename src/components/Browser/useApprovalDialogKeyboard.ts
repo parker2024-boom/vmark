@@ -7,7 +7,7 @@
  *    and a keyboard user lost their place (audit 20260815-163607 #22).
  *  - Escape DENIES, exclusively: capture phase + stopImmediatePropagation, because a
  *    sibling overlay's window-level listener once saw the same keystroke and one
- *    Escape resolved two decisions (audit #23).
+ *    Escape resolved two decisions.
  *  - Tab is trapped inside the dialog: `aria-modal` informs assistive tech, it does
  *    not make the rest of the app inert for the Tab key.
  *
@@ -54,7 +54,7 @@ export function useApprovalDialogKeyboard(
         // EXCLUSIVE: while a security prompt is raised it is the only Escape
         // handler. There is no modal stack, so a sibling overlay's window-level
         // listener also saw this keystroke and one Escape resolved two separate
-        // decisions — one of them unseen by the user (audit #23). Capture phase
+        // decisions — one of them unseen by the user. Capture phase
         // plus stopImmediatePropagation makes this prompt win deterministically
         // instead of depending on listener registration order.
         e.stopPropagation();
@@ -65,7 +65,7 @@ export function useApprovalDialogKeyboard(
       // Trap Tab inside the dialog. `aria-modal` tells assistive tech the rest of
       // the app is inert; it does NOT make it inert for the Tab key, so focus
       // could walk out of a security prompt and into the background UI while the
-      // prompt was still open (audit #22).
+      // prompt was still open.
       if (e.key !== "Tab") return;
       const root = dialogRef.current;
       if (!root) return;

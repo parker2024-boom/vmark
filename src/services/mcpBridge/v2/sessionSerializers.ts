@@ -1,6 +1,6 @@
 /**
  * sessionSerializers — how one tab and one window become `session.get_state`
- * records (round 3, #76). Split from `session.ts`, whose `buildSessionState`
+ * records. Split from `session.ts`, whose `buildSessionState`
  * nested window projection, protocol gating, the human-tab privacy rule and both
  * tab serializers in one function; each is now a function with one job.
  *

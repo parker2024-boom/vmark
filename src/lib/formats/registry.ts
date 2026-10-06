@@ -1,13 +1,17 @@
-// WI-1A.2 — Format registry singleton.
-//
-// Plan reference: dev-docs/plans/20260506-multi-format-rebrand.md
-// § Format registry contract.
-//
-// dispatchEditor(filePath) is the single source of truth for "what does
-// this tab do." Markdown is the default for null paths (untitled);
-// plain-text is the fallback for unknown extensions — REQUIRED for a pathed
-// file, never markdown (#404). A registered config is frozen with its
-// extensions normalized in place, so the indexes cannot drift from it (#403).
+/**
+ * Format registry singleton — maps a file path to the format config that handles it.
+ *
+ * Contract: .claude/adr/plans/20260506-multi-format-rebrand.md
+ * § Format registry contract.
+ *
+ * dispatchEditor(filePath) is the single source of truth for "what does
+ * this tab do." Markdown is the default for null paths (untitled);
+ * plain-text is the fallback for unknown extensions — REQUIRED for a pathed
+ * file, never markdown. A registered config is frozen with its
+ * extensions normalized in place, so the indexes cannot drift from it.
+ *
+ * @module lib/formats/registry
+ */
 
 import { formatLookupKeys, formatExtensionKey, associationKey } from "./formatPathKeys";
 import { freezeFormatConfig, validateFormatConfig } from "./formatValidation";
@@ -19,7 +23,7 @@ import type { FormatConfig } from "./types";
  * `rebootstrapFormats` used to clear the live maps and then re-register into
  * them, so an adapter combination that only a settings toggle can produce —
  * two optional formats claiming one extension, say — left the registry half
- * built with no way back (audit R3 #801). `replaceRegistry` builds into a fresh
+ * built with no way back. `replaceRegistry` builds into a fresh
  * state and installs it only once the rebuild has completed.
  */
 interface RegistryState {
@@ -86,7 +90,7 @@ export function registerFormat(config: FormatConfig): void {
  * EMPTY registry, and its result is installed only if it completes. A throw
  * leaves the registry exactly as it was, still serving `dispatchEditor`.
  *
- * This is the PRODUCTION entry point for a rebuild (audit R3 #801/#802) —
+ * This is the PRODUCTION entry point for a rebuild —
  * `rebootstrapFormats` runs whenever the user flips a `formats.*` toggle.
  * `__resetRegistry` is once again what its name says: a test-only reset.
  */
@@ -151,7 +155,7 @@ export function dispatchEditor(filePath: string | null): FormatConfig {
   // 2. Built-in extension map, keyed by the REAL extension only. The lookup
   //    keys above include the full basename, which made an extensionless file
   //    named `md` or `html` resolve to that format — the "markdown is an
-  //    allowlist, not a default" contract broken by a filename (audit round 2).
+  //    allowlist, not a default" contract broken by a filename.
   const ext = formatExtensionKey(filePath);
   const hit = ext === null ? undefined : state.byExt.get(ext);
   if (hit) return hit;
@@ -159,7 +163,7 @@ export function dispatchEditor(filePath: string | null): FormatConfig {
   // 3. Plain-text fallback — never the markdown editor for a pathed file. The
   //    txt format missing is a bootstrap defect (`bootstrapFormats` registers
   //    markdown/txt/yaml unconditionally), and it fails loudly rather than
-  //    granting an unknown file the WYSIWYG markdown editor (#404).
+  //    granting an unknown file the WYSIWYG markdown editor.
   const plainText = state.byId.get(PLAIN_TEXT_FALLBACK_ID);
   if (!plainText) {
     throw new Error(
@@ -180,7 +184,7 @@ export function getFormatById(id: string): FormatConfig | undefined {
  *
  * A FROZEN snapshot, not the live array: `readonly` is a compile-time claim
  * only, so a caller could sort or splice the registry's own list and desync it
- * from `byId`/`byExt` (audit R2, #800). Cached until the next registration, so
+ * from `byId`/`byExt`. Cached until the next registration, so
  * repeat callers keep getting the same identity rather than a fresh array per
  * call.
  */

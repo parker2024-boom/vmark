@@ -393,7 +393,7 @@ mod tests {
         assert_eq!(cfg.max_tokens, Some(2000));
     }
 
-    // === parse_timeout: multibyte suffix must not panic (WI-0.4, P2) ===
+    // === parse_timeout: multibyte suffix must not panic (P2) ===
 
     #[test]
     fn timeout_multibyte_suffix_returns_none() {

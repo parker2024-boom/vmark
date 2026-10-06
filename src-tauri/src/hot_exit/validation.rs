@@ -57,8 +57,7 @@ pub fn validate_and_repair(session: &mut SessionData) -> Vec<String> {
         // flag or path. A corrupted or migration-produced session holding two
         // DIFFERENT unsaved buffers under one ID therefore lost the second one
         // before the frontend ever saw it, and a successful restore then
-        // deleted the session file, so it could not be recovered by hand
-        // (audit 20260906, B5).
+        // deleted the session file, so it could not be recovered by hand.
         //
         // The careful safe-duplicate rule that step 2 applies to duplicate
         // PATHS is the right rule here too: drop only what is provably

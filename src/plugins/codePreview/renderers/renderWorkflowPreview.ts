@@ -10,7 +10,7 @@
  * Visual parity with the side-panel canvas is structural: same nodes,
  * same badges, same layout. Replaces the previous Mermaid-based
  * inline render (lossy per ADR-9 of the GHA viewer plan); rationale
- * lives in dev-docs/plans/20260504-workflow-fence-snapshot.md.
+ * lives in .claude/adr/plans/20260504-workflow-fence-snapshot.md.
  *
  * @coordinates-with src/lib/ghaWorkflow/render/renderXyflowSnapshot.ts
  *   — render queue + cache

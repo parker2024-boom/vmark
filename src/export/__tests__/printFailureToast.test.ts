@@ -43,24 +43,6 @@ vi.mock("@/services/ime/imeToast", () => ({
   },
 }));
 
-vi.mock("../themeSnapshot", () => ({
-  captureThemeCSS: () => "",
-  isDarkTheme: () => false,
-}));
-
-vi.mock("../htmlExportStyles", () => ({
-  getEditorContentCSS: () => "",
-}));
-
-vi.mock("../pdfHtmlTemplate", () => ({
-  getKatexCSS: () => "",
-  getForceLightThemeCSS: () => "",
-  getSharedContentCSS: () => "",
-  // The print document forces every <details> open in the MARKUP, because the
-  // shared CSS above styles `details[open]` (see printDocument.test.ts).
-  expandDetails: (html: string) => html,
-}));
-
 vi.mock("@/i18n", () => ({
   default: { t: (key: string) => key },
 }));

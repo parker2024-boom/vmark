@@ -51,6 +51,12 @@ vi.mock("@/contexts/WindowContext", () => ({
   useWindowLabel: () => "main",
 }));
 
+/**
+ * A fixed instant: the hook only compares snapshot timestamps with each other,
+ * so the default needs no clock — and reading one made the fixture vary per run.
+ */
+const SNAPSHOT_TIMESTAMP = Date.UTC(2026, 0, 2, 3, 4, 5);
+
 function makeSnapshot(overrides: Record<string, unknown> = {}) {
   return {
     version: 1,
@@ -59,7 +65,7 @@ function makeSnapshot(overrides: Record<string, unknown> = {}) {
     content: "# Recovered content",
     filePath: null,
     title: "Untitled-1",
-    timestamp: Date.now(),
+    timestamp: SNAPSHOT_TIMESTAMP,
     ...overrides,
   };
 }

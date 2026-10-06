@@ -14,34 +14,27 @@
  *
  * @coordinates-with cursorSync/tiptap.ts — the WYSIWYG counterpart of these functions
  * @coordinates-with cursorSync/markdown.ts — provides markdown syntax stripping
+ * @coordinates-with cursorSync/fenceIndex.ts — which code block a line is in
+ * @coordinates-with cursorSync/pmHelpers.ts — the column matcher both editors share
  * @module utils/cursorSync/codemirror
  */
 
 import type { EditorView } from "@codemirror/view";
 import type { CursorInfo, BlockAnchor } from "@/types/cursorSync";
-import {
-  detectNodeType,
-  stripMarkdownSyntax,
-  isInsideCodeBlock,
-  findCodeFenceStartLine,
-} from "./markdown";
+import { detectNodeType, stripMarkdownSyntax } from "./markdown";
 import { extractCursorContext } from "./matching";
-import { MIN_CONTEXT_PATTERN_LENGTH } from "./pmHelpers";
+import { findColumnInLine } from "./pmHelpers";
 import { getTableAnchorForLine, restoreTableColumnFromAnchor } from "./table";
+import { fenceStartLineAt } from "./fenceIndex";
 
 /**
- * Extract code block anchor from source position.
- * Returns line number within the code block and column.
+ * Code block anchor for a line inside the block opened at `fenceLine`
+ * (both 1-indexed): the line within the block and the column.
  */
-function getCodeBlockAnchor(lines: string[], lineIndex: number, column: number): BlockAnchor | undefined {
-  const fenceStart = findCodeFenceStartLine(lines, lineIndex);
-  /* v8 ignore start -- null branch: caller only invokes this when lineIndex is inside a code block */
-  if (fenceStart === null) return undefined;
-  /* v8 ignore stop */
-
-  // Line within code block (0-based, first content line is 0)
-  // fenceStart is the ``` line, so content starts at fenceStart + 1
-  const rawLineInBlock = lineIndex - fenceStart - 1;
+function getCodeBlockAnchor(fenceLine: number, sourceLine: number, column: number): BlockAnchor {
+  // Line within code block (0-based, first content line is 0). The fence line
+  // itself is line -1, which anchors to the start of the first content line.
+  const rawLineInBlock = sourceLine - fenceLine - 1;
   const lineInBlock = Math.max(0, rawLineInBlock);
 
   return {
@@ -54,30 +47,33 @@ function getCodeBlockAnchor(lines: string[], lineIndex: number, column: number):
 /**
  * Extract cursor info from CodeMirror editor.
  * Uses actual source line number (1-indexed) for sync.
+ *
+ * Runs on every keystroke and cursor move, so it reads the cursor's line and
+ * its table neighbours through the document's line API and never joins the
+ * document into a string.
  */
 export function getCursorInfoFromCodeMirror(view: EditorView): CursorInfo {
+  const { doc } = view.state;
   const pos = view.state.selection.main.head;
-  const line = view.state.doc.lineAt(pos);
+  const line = doc.lineAt(pos);
   const column = pos - line.from;
   const lineText = line.text;
 
   // Source line number (1-indexed, matches remark parser)
   const sourceLine = line.number;
-  const lineIndex = line.number - 1; // 0-based for array access
-
-  const content = view.state.doc.toString();
-  const lines = content.split("\n");
 
   // Detect node type
   let nodeType = detectNodeType(lineText);
 
   // Check if inside code block and get block anchor
   let blockAnchor: BlockAnchor | undefined;
-  if (isInsideCodeBlock(lines, lineIndex)) {
+  const fenceLine = fenceStartLineAt(view.state, sourceLine);
+  if (fenceLine !== null) {
     nodeType = "code_block";
-    blockAnchor = getCodeBlockAnchor(lines, lineIndex, column);
+    blockAnchor = getCodeBlockAnchor(fenceLine, sourceLine, column);
   } else {
-    const tableAnchor = getTableAnchorForLine(lines, lineIndex, column);
+    const lines = { length: doc.lines, at: (index: number) => doc.line(index + 1).text };
+    const tableAnchor = getTableAnchorForLine(lines, sourceLine - 1, column);
     if (tableAnchor) {
       nodeType = "table_cell";
       blockAnchor = tableAnchor;
@@ -106,19 +102,6 @@ export function getCursorInfoFromCodeMirror(view: EditorView): CursorInfo {
 }
 
 /**
- * Find the start line of a code block containing the given source line.
- * Returns the 1-indexed line number of the opening fence.
- */
-function findCodeBlockStartLine(view: EditorView, targetLine: number): number | null {
-  const content = view.state.doc.toString();
-  const lines = content.split("\n");
-
-  const fenceStart = findCodeFenceStartLine(lines, targetLine - 1);
-  if (fenceStart === null) return null;
-  return fenceStart + 1; // Convert to 1-indexed
-}
-
-/**
  * Restore cursor in code block using block anchor coordinates.
  */
 function restoreCursorInCodeBlockSource(
@@ -127,7 +110,7 @@ function restoreCursorInCodeBlockSource(
   anchor: { lineInBlock: number; columnInLine: number }
 ): boolean {
   // Find the code block start
-  const fenceStartLine = findCodeBlockStartLine(view, sourceLine);
+  const fenceStartLine = fenceStartLineAt(view.state, sourceLine);
   if (fenceStartLine === null) return false;
 
   // Calculate target line: fence line + 1 (content start) + lineInBlock
@@ -208,7 +191,8 @@ export function restoreCursorInCodeMirror(view: EditorView, cursorInfo: CursorIn
   const lineText = docLine.text;
 
   // Find column within the line using word/context matching (in stripped space)
-  const strippedColumn = findColumnInLine(lineText, cursorInfo);
+  const { text: strippedText } = stripMarkdownSyntax(lineText, lineText.length);
+  const strippedColumn = findColumnInLine(strippedText, cursorInfo);
 
   // Map column from stripped text back to original line
   // Only leading markers (heading #, list -, blockquote >) affect position mapping
@@ -251,56 +235,4 @@ function getLeadingMarkerLength(lineText: string): number {
   }
 
   return total;
-}
-
-/**
- * Find the occurrence of `needle` in `haystack` closest to `expectedCol`.
- * Scans all occurrences and returns the index of the nearest one.
- * Returns -1 if `needle` is not found at all.
- */
-function findNearestIndexOf(haystack: string, needle: string, expectedCol: number): number {
-  let bestIdx = -1;
-  let bestDist = Infinity;
-  let from = 0;
-  while (from <= haystack.length) {
-    const idx = haystack.indexOf(needle, from);
-    if (idx === -1) break;
-    const dist = Math.abs(idx - expectedCol);
-    if (dist < bestDist) {
-      bestDist = dist;
-      bestIdx = idx;
-    }
-    from = idx + 1;
-  }
-  return bestIdx;
-}
-
-/**
- * Find the best column position in a line using word/context matching.
- * When multiple occurrences exist, picks the one closest to the expected
- * column (derived from percentInLine) to avoid jumping to the wrong repeat.
- */
-function findColumnInLine(lineText: string, cursorInfo: CursorInfo): number {
-  const { text: strippedText } = stripMarkdownSyntax(lineText, lineText.length);
-  const expectedCol = Math.round(cursorInfo.percentInLine * strippedText.length);
-
-  // Strategy 1: Context match
-  const pattern = cursorInfo.contextBefore + cursorInfo.contextAfter;
-  if (pattern.length >= MIN_CONTEXT_PATTERN_LENGTH) {
-    const idx = findNearestIndexOf(strippedText, pattern, expectedCol);
-    if (idx !== -1) {
-      return idx + cursorInfo.contextBefore.length;
-    }
-  }
-
-  // Strategy 2: Word match
-  if (cursorInfo.wordAtCursor) {
-    const idx = findNearestIndexOf(strippedText, cursorInfo.wordAtCursor, expectedCol);
-    if (idx !== -1) {
-      return idx + cursorInfo.offsetInWord;
-    }
-  }
-
-  // Strategy 3: Percentage fallback
-  return expectedCol;
 }

@@ -308,7 +308,7 @@ errors:
   workflow.restoreWhileRunning: "A workflow is running. Wait for it to finish, or cancel it, before restoring files."
   workflow.restoreSuperseded: "Another workflow has run since this snapshot was taken, so restoring it could undo that run's changes. Nothing was restored."
 
-  # === Save path (file_write.rs, WI-14 CommandError) ===
+  # === Save path (files/write.rs, WI-14 CommandError) ===
   save.parentMissing: "The folder for this file no longer exists: %{dir}"
   save.noParentDirectory: "The file path has no containing folder"
   save.symlinkLoop: "This file's alias points in a circle, so the real file could not be found"
@@ -358,7 +358,13 @@ errors:
 
   # === CLI install ===
   cli.noFile: "Installation appeared to succeed but the file was not created."
-  cli.mismatch: "Installation completed but file content does not match expected script."
+  cli.mismatch: "The installed command did not match the expected script, so it was removed."
+  cli.mismatchNotRemoved: "The file at “%{path}” does not match the expected script and could not be removed. Delete it manually."
+
+  # === External editor ===
+  externalEditor.unknownName: "“%{name}” is not an editor VMark knows by name — enter the full path to the editor instead"
+  externalEditor.notAnEditor: "“%{name}” runs the files it is given instead of opening them, so it cannot be the external editor"
+  externalEditor.notPlainPath: "The external editor must be an editor name or a full path, with no “..” and no trailing slash"
 
   # === Genies ===
   genie.pathBlocked: "Genie path is outside allowed directories"
@@ -413,7 +419,7 @@ errors:
   # === Secure store (secure_store.rs) ===
   secureStore.keychainDenied: "Keychain access was denied. Allow VMark in the keychain prompt, or grant it access in Keychain Access, then try again."
 
-  # === Workspace grants (workspace_grants/commands.rs, WI-LX1.1) ===
+  # === Workspace grants (workspace/grants/commands.rs, WI-LX1.1) ===
   workspaceAccess.notGranted: "VMark has not been given access to “%{path}”. Choose the folder with File → Open Workspace… to allow it."
   workspaceAccess.pickerBusy: "A folder dialog is already open"
   workspaceAccess.checkBusy: "VMark is still checking access to that folder. Try again in a moment"

@@ -1,16 +1,9 @@
 // @vitest-environment node
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { SelectionRange } from "@tiptap/pm/state";
-import { MultiSelection } from "../MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 import { handleMultiCursorKeyDown } from "../inputHandling";
 import { createState, createMultiCursorState } from "./testHelpers";
-
-// Store the real canSplit before vi.mock replaces it
-const { realCanSplit } = vi.hoisted(() => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = require("@tiptap/pm/transform");
-  return { realCanSplit: mod.canSplit as (...args: unknown[]) => boolean };
-});
 
 vi.mock("@tiptap/pm/transform", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tiptap/pm/transform")>();
@@ -19,6 +12,10 @@ vi.mock("@tiptap/pm/transform", async (importOriginal) => {
 
 import { canSplit } from "@tiptap/pm/transform";
 import { handleMultiCursorEnter } from "../enterHandling";
+
+// The real canSplit, which the mock above wraps; restored after overrides.
+const { canSplit: realCanSplit } =
+  await vi.importActual<typeof import("@tiptap/pm/transform")>("@tiptap/pm/transform");
 
 describe("handleMultiCursorEnter", () => {
   afterEach(() => {

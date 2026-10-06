@@ -5,7 +5,7 @@ use super::*;
 
 // Tests mutate shared statics, so they must run serially.
 // Use a global mutex to prevent parallel test interference.
-static TEST_LOCK: Mutex<()> = Mutex::new(());
+pub(super) static TEST_LOCK: Mutex<()> = Mutex::new(());
 
 /// Reset confirm-quit state. Must be called under TEST_LOCK.
 fn reset_confirm_quit() {

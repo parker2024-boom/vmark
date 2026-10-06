@@ -1,7 +1,8 @@
 /**
  * Task Toggle Extension
  *
- * Purpose: Extends the listItem node with a `checked` attribute and adds a checkbox
+ * Purpose: Extends the listItem node with a `checked` attribute (and the
+ * markdown-only `tightBefore` spacing attribute) and adds a checkbox
  * NodeView for task list items. Clicking the checkbox toggles checked state, and
  * Mod+Shift+Enter toggles the checkbox at cursor via keyboard shortcut (plain
  * Enter is `splitListItem`, so the toggle needs the Shift).
@@ -12,7 +13,7 @@
  *   - Keyboard shortcut finds the listItem at cursor depth-first, toggles its checked attr
  *
  * @coordinates-with tiptapTaskListUtils.ts — task list toggle/untoggle commands
- * @coordinates-with shared/sourceLineAttr.ts — source-line tracking on list items
+ * @coordinates-with shared/sourceLineAttr.ts — source-line and source-spacing attributes on list items
  * @module plugins/taskToggle/tiptap
  */
 import "./task-toggle.css";
@@ -20,7 +21,7 @@ import { mergeAttributes, Node } from "@tiptap/core";
 import type { EditorState } from "@tiptap/pm/state";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
-import { sourceLineAttr } from "../shared/sourceLineAttr";
+import { sourceLineAttr, tightBeforeAttr } from "../shared/sourceLineAttr";
 
 const taskCheckboxPluginKey = new PluginKey("taskCheckbox");
 
@@ -87,6 +88,7 @@ export const taskListItemExtension = Node.create({
   addAttributes() {
     return {
       ...sourceLineAttr,
+      ...tightBeforeAttr,
       checked: {
         default: null,
         parseHTML: (element) => {

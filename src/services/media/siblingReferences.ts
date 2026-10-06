@@ -12,7 +12,8 @@
  * @module services/media/siblingReferences
  */
 
-import { readDir, readTextFile } from "@tauri-apps/plugin-fs";
+import { readDir } from "@tauri-apps/plugin-fs";
+import { readDocumentText } from "@/services/files/readDocumentText";
 import { join } from "@tauri-apps/api/path";
 import { isMarkdownFileName } from "@/utils/dropPaths";
 import { extractImageReferenceKeys } from "@/utils/imageReferences";
@@ -102,7 +103,7 @@ export async function collectSiblingReferences(
   await mapWithConcurrency([...onDisk, ...buffered], SIBLING_READ_CONCURRENCY, async (fullPath) => {
     // The subject document's authoritative content is the caller's argument;
     // the on-disk copy may be stale (unsaved edits) and would resurrect the
-    // very images the user just removed. Compared canonically (WI-8c).
+    // very images the user just removed. Compared canonically.
     if (canonicalPathKey(fullPath) === subjectKey) return;
 
     const known = knownContents.get(canonicalPathKey(fullPath));
@@ -113,7 +114,7 @@ export async function collectSiblingReferences(
     // trusting only one side deletes what the other still references. A missing
     // file is fine when a buffer covered it; otherwise the scan is incomplete.
     try {
-      add(await readTextFile(fullPath));
+      add(await readDocumentText(fullPath));
     } catch (error) {
       if (known === undefined) {
         orphanCleanupError(` Failed to read sibling ${fullPath}:`, error);

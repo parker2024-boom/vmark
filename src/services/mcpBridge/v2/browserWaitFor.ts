@@ -1,15 +1,15 @@
 /**
- * MCP v2 `vmark.browser.wait_for` handler (WI-P3.1).
+ * MCP v2 `vmark.browser.wait_for` handler.
  *
  * Purpose: make a multi-step flow deterministic — "click → wait_for the
  * destination heading → read" — instead of "click → guess → re-read → retry".
  * Blocks until a page condition holds (an element by `ref`, by `role` +optional
  * `name`, a substring of visible `text`, or `urlContains` — a substring of the
- * tab URL, answered from the webview mirror with no eval round-trip, WI-NB1.4)
+ * tab URL, answered from the webview mirror with no eval round-trip)
  * or a bounded timeout elapses, reporting `matched: true|false` so the caller
  * can tell "found" from "timed out".
  *
- * Shape (round 3, #71): the shared envelope resolves the tab, `readWaitRequest`
+ * Shape: the shared envelope resolves the tab, `readWaitRequest`
  * validates the request, the attachment gates run, and the wait itself is one of
  * two polls in `browserWaitForPoll` — the URL poll against the mirror, or the
  * read-class eval poll raced against the deadline — whose outcome this handler
@@ -40,6 +40,7 @@ import { buildWaitConditionScript } from "@/lib/browser/agent/actScript";
 import { hasOnceAttachment, invokeAttached, resolveBrowserTarget } from "./browserAccess";
 import { requireHumanAttachment } from "./browserReadClass";
 import { pollScript, pollUrl, readWaitRequest, type PollContext, type WaitOutcome } from "./browserWaitForPoll";
+import { readOperationArgsChecked } from "./readOperationArgs";
 
 /** The response for a wait that ended — a guard that aborted has answered already. */
 async function respondOutcome(id: string, outcome: WaitOutcome): Promise<void> {
@@ -65,9 +66,10 @@ async function respondOutcome(id: string, outcome: WaitOutcome): Promise<void> {
 /** `vmark.browser.wait_for` — poll until a condition holds or the timeout elapses. */
 export async function handleBrowserWaitFor(id: string, args: Record<string, unknown>): Promise<void> {
   return wrapHandler(id, async () => {
-    const initial = await resolveBrowserTarget(id, args);
+    const read = readOperationArgsChecked("vmark.browser.wait_for", args);
+    const initial = await resolveBrowserTarget(id, read);
     if (!initial) return;
-    const parsed = readWaitRequest(args);
+    const parsed = readWaitRequest(read);
     if (!parsed.ok) {
       await respond({ id, success: false, error: parsed.error });
       return;

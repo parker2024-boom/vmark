@@ -9,14 +9,14 @@ VMark est conçu pour les flux de travail axés sur le clavier. La plupart des r
 
 ## Touches de fonction sur macOS
 
-VMark utilise les touches de fonction (F4–F10) pour des basculements de mode rapides. Sur macOS, ces touches sont mappées aux fonctions système (luminosité, volume, etc.) par défaut.
+VMark utilise les touches de fonction (F2–F10) pour des basculements de mode rapides. Sur macOS, ces touches sont mappées aux fonctions système (luminosité, volume, etc.) par défaut.
 
 **Pour utiliser les touches F directement sans maintenir Fn :**
 
-1. Ouvrez **Préférences Système** → **Clavier**
+1. Ouvrez **Réglages Système** → **Clavier**
 2. Activez **« Utiliser les touches F1, F2, etc. comme touches de fonction standard »**
 
-Vous pouvez également maintenir la touche **Fn** enfoncée en appuyant sur F4–F10 pour déclencher les raccourcis VMark.
+Vous pouvez également maintenir la touche **Fn** enfoncée en appuyant sur F2–F10 pour déclencher les raccourcis VMark.
 
 ::: tip
 Si vous préférez conserver les fonctions système sur les touches F, vous pouvez personnaliser les raccourcis VMark dans les Paramètres (`Mod + ,`) pour utiliser des combinaisons de touches différentes.
@@ -28,10 +28,12 @@ Si vous préférez conserver les fonctions système sur les touches F, vous pouv
 |--------|--------|
 | `F2` | Problème suivant |
 | `Shift + F2` | Problème précédent |
-| `F4` | Trier les lignes croissant |
-| `Shift + F4` | Trier les lignes décroissant |
+| `F3` | Afficher/masquer les caractères invisibles |
+| `F4` | Trier les lignes par ordre croissant _(mode Source uniquement ; sans effet en WYSIWYG)_ |
+| `Shift + F4` | Trier les lignes par ordre décroissant _(mode Source uniquement ; sans effet en WYSIWYG)_ |
 | `F5` | Aperçu source |
-| `F6` | Basculer le mode Source |
+| `F6` | Vue source (Markdown : WYSIWYG ⇄ Source ; autres formats : Source ⇄ Divisé) |
+| `Shift + F6` | Divisé / Aperçu (Markdown : vue divisée ; autres formats : Aperçu ⇄ Divisé) |
 | `F7` | Basculer la barre d'état |
 | `F8` | Mode focus |
 | `F9` | Mode machine à écrire |
@@ -52,17 +54,16 @@ Si vous préférez conserver les fonctions système sur les touches F, vous pouv
 | Italique | `Mod + I` |
 | Souligné | `Mod + U` |
 | Barré | `Mod + Shift + X` |
-| Code en ligne | `Mod + Shift +` `` ` `` |
+| Code en ligne | Mod + Shift + `` ` `` |
 | Surligné | `Mod + Shift + M` |
 | Indice | `Alt + Mod + =` |
 | Exposant | `Alt + Mod + Shift + =` |
 | Lien | `Mod + K` |
-| Ouvrir le lien (mode Source) | `Cmd + Clic` |
+| Ouvrir le lien (mode Source) | `Cmd + Click` |
 | Supprimer le lien | `Alt + Shift + K` |
 | Lien Wiki | `Alt + Mod + K` |
-| Lien favori | `Alt + Mod + B` |
+| Lien signet | `Alt + Mod + B` |
 | Supprimer la mise en forme | `Mod + \` |
-| Cycle de mise en évidence | `Mod + Alt + E` _(aucun → italique → gras → gras+italique)_ |
 
 ## Mise en forme des blocs
 
@@ -72,14 +73,12 @@ Si vous préférez conserver les fonctions système sur les touches F, vous pouv
 | Paragraphe | `Mod + Shift + 0` |
 | Augmenter le niveau de titre | `Alt + Mod + ]` |
 | Diminuer le niveau de titre | `Alt + Mod + [` |
-| Cycle de niveau de titre | `Mod + Alt + H` _(P → H1 → H2 → … → H6)_ |
 | Citation | `Alt + Mod + Q` |
 | Bloc de code | `Alt + Mod + C` |
 | Liste à puces | `Alt + Mod + U` |
 | Liste ordonnée | `Alt + Mod + O` |
 | Liste de tâches | `Alt + Mod + X` |
 | Basculer la case à cocher de tâche | `Mod + Shift + Enter` _(sensible au contexte&nbsp;; non personnalisable)_ |
-| Changer le type de liste | _(personnalisable)_ |
 | Indenter | `Mod + ]` |
 | Désindenter | `Mod + [` |
 | Ligne horizontale | `Alt + Mod + -` |
@@ -88,13 +87,13 @@ Si vous préférez conserver les fonctions système sur les touches F, vous pouv
 
 | Action | Raccourci |
 |--------|----------|
-| Monter la ligne | `Alt + Haut` |
-| Descendre la ligne | `Alt + Bas` |
-| Dupliquer la ligne | `Shift + Alt + Bas` |
+| Monter la ligne | `Alt + Up` |
+| Descendre la ligne | `Alt + Down` |
+| Dupliquer la ligne | `Shift + Alt + Down` |
 | Supprimer la ligne | `Mod + Shift + K` |
 | Joindre les lignes | `Mod + J` |
-| Trier les lignes croissant | `F4` _(mode Source uniquement)_ |
-| Trier les lignes décroissant | `Shift + F4` _(mode Source uniquement)_ |
+| Trier les lignes par ordre croissant | `F4` _(mode Source uniquement)_ |
+| Trier les lignes par ordre décroissant | `Shift + F4` _(mode Source uniquement)_ |
 
 ## Transformations de texte
 
@@ -115,6 +114,7 @@ Si vous préférez conserver les fonctions système sur les touches F, vous pouv
 | Insérer une vidéo | — |
 | Insérer un audio | — |
 | Insérer un tableau | `Mod + Shift + T` |
+| Table des matières | _(personnalisable)_ |
 | Mathématiques en ligne | `Alt + Mod + M` |
 | Bloc mathématique | `Alt + Mod + Shift + M` |
 | Insérer une note | `Alt + Mod + N` |
@@ -123,9 +123,9 @@ Si vous préférez conserver les fonctions système sur les touches F, vous pouv
 | Insérer un important | `Alt + Mod + Shift + I` |
 | Insérer une mise en garde | `Mod + Shift + U` |
 | Insérer un réductible | `Alt + Mod + D` |
-| Insérer un diagramme | `Alt + Shift + Mod + D` |
+| Insérer un diagramme | `Alt + Mod + Shift + D` |
 | Insérer un diagramme Graphviz | _(personnalisable)_ |
-| Insérer une carte mentale | `Alt + Shift + Mod + K` |
+| Insérer une carte mentale | `Alt + Mod + Shift + K` |
 | Basculer le commentaire | `Mod + /` |
 
 ## Sélection et multi-curseur
@@ -133,14 +133,15 @@ Si vous préférez conserver les fonctions système sur les touches F, vous pouv
 | Action | Raccourci |
 |--------|----------|
 | Sélectionner la ligne | `Mod + L` |
-| Étendre la sélection | `Ctrl + Shift + Haut` |
+| Sélectionner toutes les occurrences du bloc | `Alt + Mod + Shift + L` |
+| Étendre la sélection | `Ctrl + Shift + Up` |
 | Sélectionner l'occurrence suivante | `Mod + D` |
 | Ignorer l'occurrence | `Mod + Shift + D` |
 | Sélectionner toutes les occurrences | `Mod + Shift + L` |
 | Annuler doux du curseur | `Alt + Mod + Z` |
-| Ajouter un curseur au-dessus | `Mod + Alt + Haut` |
-| Ajouter un curseur en-dessous | `Mod + Alt + Bas` |
-| Réduire le multi-curseur | `Échap` |
+| Ajouter un curseur au-dessus | `Mod + Alt + Up` |
+| Ajouter un curseur en-dessous | `Mod + Alt + Down` |
+| Réduire le multi-curseur | `Escape` |
 
 ## Rechercher et remplacer
 
@@ -156,7 +157,9 @@ Si vous préférez conserver les fonctions système sur les touches F, vous pouv
 
 | Action | Raccourci |
 |--------|----------|
-| Basculer le mode Source | `F6` |
+| Vue source (Markdown ⇄ Source ; autres formats Source ⇄ Divisé) | `F6` |
+| Divisé / Aperçu (Markdown divisé ; autres formats Aperçu ⇄ Divisé) | `Shift + F6` |
+| Diviser l'éditeur — deux documents | `Alt + Mod + \` |
 | Basculer la barre d'état | `F7` |
 | Mode focus | `F8` |
 | Mode machine à écrire | `F9` |
@@ -165,18 +168,35 @@ Si vous préférez conserver les fonctions système sur les touches F, vous pouv
 | Zoom avant | `Mod + =` |
 | Zoom arrière | `Mod + -` |
 | Retour à la ligne | `Alt + Z` |
+| Dernier onglet utilisé | `Ctrl + Tab` |
+| Diviser l'éditeur — deux documents | `Alt + Mod + \` |
+| Fermer le volet | `Alt + Mod + Shift + \` |
+| Activer l'autre volet | `Alt + Mod + Shift + O` |
+| Basculer la barre latérale | `Ctrl + Shift + 0` |
 | Basculer le plan | `Ctrl + Shift + 1` |
 | Basculer l'explorateur de fichiers | `Ctrl + Shift + 2` |
 | Basculer l'historique | `Ctrl + Shift + 3` |
+| Afficher/masquer la base de connaissances | `Ctrl + Shift + 4` |
+| Afficher/masquer l'état des fenêtres | `Ctrl + Shift + 5` |
 | Basculer les numéros de ligne (blocs de code) | `Alt + Mod + L` |
 | Basculer le terminal | Ctrl + `` ` `` |
-| Basculer l'aperçu du diagramme | `Alt + Mod + P` |
+| Activer le terminal ou l'éditeur | Ctrl + Shift + `` ` `` (Alt + Shift + `` ` `` sous Windows/Linux) |
+| Afficher/masquer l'aperçu des diagrammes | `Alt + Mod + P` |
 | Ajuster les tableaux à la largeur | _(personnalisable)_ |
-| Barre d'outils universelle | `Mod + Shift + P` |
+| Ouvrir la barre d'outils universelle | `Mod + Shift + B` |
 | Aperçu source | `F5` |
 | Vérifier le Markdown | `Alt + Mod + V` |
 | Problème suivant | `F2` |
 | Problème précédent | `Shift + F2` |
+
+::: tip Afficher/masquer la base de connaissances
+`Ctrl + Shift + 4` est masqué par défaut, de même que l'élément de menu **Affichage → Base de
+connaissances** et la commande de la palette. Aucune version publiée, sur aucune plateforme,
+n'embarque le runtime de serveur de contenu dont la fonctionnalité a besoin ; ces points d'entrée
+n'apparaissent donc que lorsque **Paramètres → Avancé → Outils de développement** est activé — voir
+[Base de connaissances et Slidev](/fr/guide/knowledge-base#prerequis). Le raccourci
+reste listé et personnalisable dans **Paramètres → Raccourcis** dans tous les cas.
+:::
 
 ## Opérations sur les fichiers
 
@@ -184,6 +204,7 @@ Si vous préférez conserver les fonctions système sur les touches F, vous pouv
 |--------|----------|
 | Nouveau fichier | `Mod + N` |
 | Ouverture rapide | `Mod + O` _(navigateur de fichiers flou)_ |
+| Ouvrir la palette de commandes | `Mod + Shift + P` |
 | Ouvrir un fichier… | Menu seulement _(sélecteur de fichiers natif)_ |
 | Ouvrir un espace de travail | `Mod + Shift + O` |
 | Enregistrer | `Mod + S` |
@@ -209,11 +230,11 @@ Si vous préférez conserver les fonctions système sur les touches F, vous pouv
 |--------|----------|
 | Ouvrir les Génies IA | `Mod + Y` |
 | Accepter la suggestion | `Enter` |
-| Rejeter la suggestion | `Échap` |
+| Rejeter la suggestion | `Escape` |
 | Suggestion suivante | `Tab` |
 | Suggestion précédente | `Shift + Tab` |
 | Accepter toutes les suggestions | `Mod + Shift + Enter` |
-| Rejeter toutes les suggestions | `Mod + Shift + Échap` |
+| Rejeter toutes les suggestions | `Mod + Shift + Escape` |
 
 ## Mise en forme CJK
 
@@ -228,12 +249,33 @@ Si vous préférez conserver les fonctions système sur les touches F, vous pouv
 |--------|----------|
 | Nouvelle fenêtre | `Mod + Shift + N` |
 | Nouvel onglet | `Mod + T` |
+| Nouvel onglet de navigateur | `Alt + Mod + Shift + B` |
+| Onglet suivant | `Mod + Shift + ]` |
+| Onglet précédent | `Mod + Shift + [` |
 | Fermer l'onglet | `Mod + W` |
-| Basculer les fichiers cachés | `Mod + Shift + .` |
-| Basculer tous les fichiers | _(personnalisable)_ |
+| Rouvrir l'onglet fermé | _(personnalisable)_ |
+| Afficher/masquer les fichiers cachés | `Mod + Shift + .` |
+| Afficher/masquer tous les fichiers | `Mod + Shift + A` |
 
 ::: tip Note Windows/Linux
-Basculer les fichiers cachés utilise `Ctrl + H` sur Windows et Linux.
+Afficher/masquer les fichiers cachés utilise `Ctrl + H` sur Windows et Linux.
+
+Basculer la barre latérale utilise `Alt + Shift + 0` sur Windows et Linux, car `Mod` y est
+Ctrl — la combinaison macOS `Ctrl + Shift + 0` entrerait donc en conflit avec le
+`Mod + Shift + 0` de Paragraphe.
+:::
+
+::: tip Nouvel onglet de navigateur
+`Alt + Mod + Shift + B` ouvre un onglet de navigateur intégré, et apparaît aussi dans le menu
+**Fichier**. Le navigateur intégré est activé par défaut sur macOS ; si vous le désactivez
+dans **Paramètres → Avancé → Navigateur intégré**, l'élément de menu est masqué
+(et non grisé) jusqu'à ce que vous le réactiviez. Le navigateur est réservé à macOS ;
+l'élément n'apparaît donc jamais sous Windows ni sous Linux.
+
+Il s'agit d'un véritable élément de menu et pas seulement d'un raccourci clavier, et c'est important : dès qu'une
+page web a le focus clavier, le moteur du navigateur consomme les frappes avant que VMark
+ne les voie, de sorte qu'un raccourci interne à l'application ne peut pas se déclencher. Un accélérateur de menu est
+distribué par macOS lui-même ; il fonctionne donc toujours pendant que vous naviguez.
 :::
 
 ## Aide (macOS uniquement)
@@ -248,7 +290,7 @@ Il s'agit d'un raccourci système natif macOS qui recherche dans tous les élém
 
 ## Navigation intelligente par Tab
 
-Tab et Shift+Tab sont sensibles au contexte — ils vous permettent d'échapper aux crochets, guillemets, marques de mise en forme et liens sans utiliser les touches fléchées.
+Tab et Shift+Tab sont sensibles au contexte — ils permettent de sortir des crochets, guillemets, marques de mise en forme et liens.
 
 | Contexte | Action de Tab |
 |---------|--------------|
@@ -278,13 +320,7 @@ Quand le curseur est à l'intérieur d'un tableau :
 | Cellule précédente | `Shift + Tab` |
 | Ajouter une ligne en-dessous | `Mod + Enter` |
 | Ajouter une ligne au-dessus | `Mod + Shift + Enter` |
-| Supprimer la ligne | `Mod + Retour arrière` |
-| Ajouter une colonne à gauche | `Alt + Mod + Left` |
-| Ajouter une colonne à droite | `Alt + Mod + Right` |
-| Supprimer la colonne | `Alt + Mod + Retour arrière` |
-| Aligner la colonne à gauche | `Mod + Alt + Shift + L` |
-| Aligner la colonne à droite | `Mod + Shift + R` |
-| Centrer la colonne | _(personnalisable)_ |
+| Supprimer la ligne | `Mod + Backspace` |
 | Formater le tableau | `Alt + Mod + T` |
 | Quitter le tableau | Touches fléchées en bord de tableau |
 
@@ -294,7 +330,7 @@ Quand un popup est ouvert (lien, image, mathématiques, etc.) :
 
 | Action | Raccourci |
 |--------|----------|
-| Fermer le popup | `Échap` |
+| Fermer le popup | `Escape` |
 | Confirmer/Enregistrer | `Enter` |
 | Naviguer entre les champs | `Tab` / `Shift + Tab` |
 
@@ -305,7 +341,7 @@ Quand vous modifiez un bloc mathématique :
 | Action | Raccourci |
 |--------|----------|
 | Valider et quitter | `Mod + Enter` |
-| Annuler et quitter | `Échap` |
+| Annuler et quitter | `Escape` |
 
 ## Terminal
 
@@ -314,12 +350,12 @@ Quand le terminal intégré est focalisé :
 | Action | Raccourci |
 |--------|----------|
 | Basculer le terminal | `` Ctrl + ` `` |
-| Focaliser le terminal ou l'éditeur | `` Ctrl + Shift + ` `` |
-| Copier | `Mod + C` (avec sélection) |
-| Coller | `Mod + V` |
-| Tout sélectionner (sortie du terminal uniquement) | `Mod + A` |
-| Effacer | `Mod + K` |
-| Rechercher | `Mod + F` |
+| Activer le terminal ou l'éditeur | `` Ctrl + Shift + ` `` (`` Alt + Shift + ` `` sous Windows/Linux) |
+| Copier | `Mod + C` (avec sélection) ; sous Linux aussi `Ctrl + Shift + C` ou `Ctrl + Insert` |
+| Coller | `Mod + V` ; sous Linux aussi `Ctrl + Shift + V` ou `Shift + Insert` |
+| Tout sélectionner (sortie du terminal uniquement) | `Mod + A` (`Ctrl + Shift + A` sous Linux) |
+| Effacer | `Mod + K` (`Ctrl + Shift + K` sous Linux) |
+| Rechercher | `Mod + F` (`Ctrl + Shift + F` sous Linux) |
 | Passer à la session 1–5 | `Mod + 1` à `Mod + 5` |
 | Agrandir la police du terminal | `Mod + =` |
 | Réduire la police du terminal | `Mod + -` |
@@ -342,13 +378,15 @@ Sur macOS, le terminal traduit aussi pour le shell les combinaisons habituelles 
 
 Sur macOS, les combinaisons `Ctrl` comme `Ctrl + A`, `Ctrl + R` et `Ctrl + W` sont transmises directement au shell.
 
+Sous Linux, le terminal suit la convention habituelle des terminaux Linux : les combinaisons simples `Ctrl` + lettre vont au shell, si bien que les touches readline comme `Ctrl + A`, `Ctrl + E`, `Ctrl + K`, `Ctrl + F`, `Ctrl + U` et `Ctrl + W` fonctionnent comme dans tout autre terminal Linux, et les actions propres au terminal passent sur `Ctrl + Shift` : `Ctrl + Shift + A` sélectionne tout, `Ctrl + Shift + K` efface, `Ctrl + Shift + F` recherche, et `Ctrl + Shift + C` / `Ctrl + Shift + V` copient et collent. `Ctrl + Insert` et `Shift + Insert` copient et collent aussi. Le terminal garde deux combinaisons `Ctrl` simples : `Ctrl + C` copie une sélection (et envoie SIGINT quand rien n'est sélectionné), et `Ctrl + V` colle. `Ctrl + 1` à `Ctrl + 5` changent toujours de session.
+
 Quand la barre de recherche du terminal est ouverte :
 
 | Action | Raccourci |
 |--------|----------|
 | Occurrence suivante | `Enter` |
 | Occurrence précédente | `Shift + Enter` |
-| Fermer la recherche | `Échap` |
+| Fermer la recherche | `Escape` |
 
 ::: tip
 `Mod + C` sans sélection envoie SIGINT au processus en cours d'exécution. Consultez le [Terminal intégré](/fr/guide/terminal) pour le guide complet.
@@ -359,7 +397,7 @@ Quand la barre de recherche du terminal est ouverte :
 1. Ouvrez les Paramètres avec `Mod + ,`
 2. Naviguez vers l'onglet **Raccourcis** (tapez dans le champ de recherche pour filtrer par nom, catégorie, description ou touche)
 3. Cliquez sur la touche affichée à côté d'un raccourci — ou sur **Non attribué** pour un raccourci qui n'a pas encore de touche
-4. Appuyez sur la combinaison de touches souhaitée, puis cliquez sur **Assigner** (`Échap` annule)
+4. Appuyez sur la combinaison de touches souhaitée, puis cliquez sur **Assigner** (`Escape` annule)
 
 La boîte de dialogue vous avertit avant que vous n'attribuiez une combinaison :
 

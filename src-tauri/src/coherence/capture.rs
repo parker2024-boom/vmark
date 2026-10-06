@@ -1,4 +1,4 @@
-//! Capture (WI-1.6, ADR-C4 services tier) — the single write-side entry
+//! Capture (ADR-C4 services tier) — the single write-side entry
 //! point of the coherence layer. Implements the plan's capture IPC
 //! contract: the caller passes the EXACT content it wrote (never a disk
 //! re-read), the kernel assigns identity on first capture (rewriting the
@@ -11,7 +11,7 @@
 
 use uuid::Uuid;
 
-use super::canonical::text_content_hash;
+use super::canonical::mask_and_hash_canonical;
 use super::capture_input::resolve_inputs;
 use super::capture_output::{output_identity, record_disk_lag};
 use super::capture_policy::CapturePolicy;
@@ -104,22 +104,25 @@ pub(super) fn capture_locked(
     policy: CapturePolicy,
 ) -> Result<Option<CaptureReceipt>, String> {
     preflight(kernel, &req)?;
+    // Canonical form up front, and ONCE (spec §3.1): CRLF content
+    // from external clients parses and hashes identically to LF, any identity
+    // rewrite writes canonical bytes, and every step below — the policy gate,
+    // the identity read, the hash, the snapshot — works on this one copy.
+    let req = CaptureRequest {
+        content: super::canonical::canonicalize_text(&req.content),
+        ..req
+    };
     // Policy gate BEFORE the first side effect (WI-LX1.4). Re-checked under the
     // lock; `TrackedOnly` also declines a document the ledger does not track.
     if !policy.admits(kernel) || !super::capture_policy::admits_output(kernel, &req, policy)? {
         return Ok(None);
     }
     kernel.ensure_initialized()?;
-    // Canonical form up front (spec §3.1; audit R14): CRLF content from
-    // external clients parses and hashes identically to LF, and any
-    // identity rewrite writes canonical bytes.
-    let req = CaptureRequest {
-        content: super::canonical::canonicalize_text(&req.content),
-        ..req
-    };
+    // `content` is the canonical request content, or that content with an
+    // identity block joined in at line boundaries — canonical either way.
     let (content, identity, rewritten) = output_identity(kernel, &req, policy)?;
 
-    // Duplicate-ID capture hold (spec §2.1, audit R6): a held object is
+    // Duplicate-ID capture hold (spec §2.1): a held object is
     // read-only for capture until the human resolves the duplicate set.
     if kernel.index().is_held(&identity.id)? {
         return Err(format!(
@@ -129,11 +132,12 @@ pub(super) fn capture_locked(
     }
     register_if_needed(kernel, identity.id, &req.path, identity.schema.as_deref())?;
 
-    let content_hash = text_content_hash(&content);
+    let masked = mask_and_hash_canonical(&content);
+    let content_hash = masked.hash.clone();
     let parents = kernel.index().heads(&identity.id)?;
     // No-op: identical content at a single current head AND no inputs —
     // autosave replays. A capture WITH inputs is a distinct provenance
-    // event even when the content converges (audit R3): its edges matter.
+    // event even when the content converges: its edges matter.
     if let ([only], true) = (parents.as_slice(), req.inputs.is_empty()) {
         if kernel.index().content_hash_of(&identity.id, only)? == Some(content_hash.clone()) {
             // A real disk write of the head content ends any live-buffer lag,
@@ -155,7 +159,7 @@ pub(super) fn capture_locked(
         resolve_inputs(kernel, &req.inputs, policy.may_stamp(), req.confidence)?;
 
     let revision = RevisionId::compute(&content_hash, &parents);
-    kernel.snapshots().put_text(&content)?;
+    kernel.snapshots().put_masked(&masked)?;
     let t = Transformation {
         inputs,
         outputs: vec![OutputRef {
@@ -224,7 +228,7 @@ fn preflight(kernel: &WorkspaceKernel, req: &CaptureRequest) -> Result<(), Strin
             "capture agent id is {agent_bytes} bytes, over the {MAX_CAPTURE_INTENT_BYTES} cap"
         ));
     }
-    // IPC boundary guard (audit R1): reject traversal before any effect.
+    // IPC boundary guard: reject traversal before any effect.
     super::paths::resolve_workspace_rel(kernel.root(), &req.path)?;
     Ok(())
 }
@@ -236,3 +240,7 @@ pub use super::adopt::{adopt_from_disk, observed_external_entry, register_if_nee
 #[cfg(test)]
 #[path = "capture.test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "capture_hashing.test.rs"]
+mod hashing_tests;

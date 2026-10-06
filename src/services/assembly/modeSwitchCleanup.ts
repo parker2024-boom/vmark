@@ -5,8 +5,8 @@
  * toggling between source and WYSIWYG mode.
  *
  * Key decisions:
- *   - Every registered popup closes through ONE uniform per-store API
- *     (WI-9, plan-20260803-161713): `setState(getInitialState())` on the
+ *   - Every registered popup closes through ONE uniform per-store API:
+ *     `setState(getInitialState())` on the
  *     standalone Zustand store — native semantics, no per-popup close-action
  *     spelling. Registering a new popup for mode-switch cleanup is one
  *     `resetIfOpen(useXStore)` line.

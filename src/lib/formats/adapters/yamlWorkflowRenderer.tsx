@@ -6,7 +6,7 @@
  *   parse fails, fall back to a diagnostic line so the user still sees where
  *   the syntax broke.
  *
- *   Split out of `yaml.tsx` by WI-13. The yaml adapter is ALWAYS registered —
+ *   Split out of `yaml.tsx`. The yaml adapter is ALWAYS registered —
  *   the GHA workflow viewer shipped on by default — so `bootstrapFormats()`
  *   dragged the workbench and the workflow IR parser onto the cold start of
  *   every window, including the ones that never open a document. This module

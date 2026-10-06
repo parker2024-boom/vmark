@@ -296,3 +296,88 @@ describe("double-click maximize through the real DOM event sequence (WI-4.5)", (
     );
   });
 });
+
+// WI-RA9B.5 — the drag's document listeners must never outlive the drag.
+describe("listener lifetime", () => {
+  beforeEach(() => {
+    settingsState.terminal.panelRatio = 0.4;
+    settingsState.updateTerminalSetting.mockClear();
+    window.innerWidth = 1600;
+    window.innerHeight = 1000;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    useUIStore.setState({ sidebarVisible: false, sidebarWidth: 0 });
+    useUIStore.getState().setEffectiveTerminalPosition("bottom");
+    useUIStore.getState().setTerminalHeight(300);
+  });
+
+  function press(
+    result: { current: { handleResizeStart: (e: React.MouseEvent) => void } },
+    y: number,
+  ) {
+    result.current.handleResizeStart({
+      preventDefault() {},
+      clientX: 0,
+      clientY: y,
+    } as React.MouseEvent);
+  }
+
+  it("a second mousedown before mouseup does not leak the first drag's listeners", () => {
+    // A mouseup delivered outside the window never reaches the document, so
+    // the next press arrives with the previous drag still attached.
+    const onResize = vi.fn();
+    const { result } = renderHook(() => useTerminalResize("bottom", onResize));
+    press(result, 500);
+    press(result, 500);
+
+    document.dispatchEvent(mouseEvent("mousemove", 0, 450));
+    // One refit per pointer move — a leaked handler would double it.
+    expect(onResize).toHaveBeenCalledTimes(1);
+
+    document.dispatchEvent(mouseEvent("mouseup", 0, 450));
+    expect(settingsState.updateTerminalSetting).toHaveBeenCalledTimes(1);
+
+    // The drag is over: an unrelated click anywhere must not persist again.
+    settingsState.updateTerminalSetting.mockClear();
+    document.dispatchEvent(mouseEvent("mouseup", 0, 450));
+    document.dispatchEvent(mouseEvent("mousemove", 0, 100));
+    expect(settingsState.updateTerminalSetting).not.toHaveBeenCalled();
+    expect(onResize).toHaveBeenCalledTimes(1);
+    expect(useUIStore.getState().terminalHeight).toBe(350);
+  });
+
+  it("window blur ends the drag and restores the body styles", () => {
+    const onResize = vi.fn();
+    const { result } = renderHook(() => useTerminalResize("bottom", onResize));
+    press(result, 500);
+    expect(document.body.style.cursor).toBe("row-resize");
+    expect(document.body.style.userSelect).toBe("none");
+
+    window.dispatchEvent(new Event("blur"));
+
+    expect(document.body.style.cursor).toBe("");
+    expect(document.body.style.userSelect).toBe("");
+    document.dispatchEvent(mouseEvent("mousemove", 0, 100));
+    expect(onResize).not.toHaveBeenCalled();
+  });
+
+  it("unmount mid-drag removes the listeners and restores the body styles", () => {
+    const onResize = vi.fn();
+    const { result, unmount } = renderHook(() => useTerminalResize("right", onResize));
+    result.current.handleResizeStart({
+      preventDefault() {},
+      clientX: 800,
+      clientY: 0,
+    } as React.MouseEvent);
+    expect(document.body.style.cursor).toBe("col-resize");
+
+    unmount();
+
+    expect(document.body.style.cursor).toBe("");
+    expect(document.body.style.userSelect).toBe("");
+    document.dispatchEvent(mouseEvent("mousemove", 700, 0));
+    document.dispatchEvent(mouseEvent("mouseup", 700, 0));
+    expect(onResize).not.toHaveBeenCalled();
+    expect(settingsState.updateTerminalSetting).not.toHaveBeenCalled();
+  });
+});

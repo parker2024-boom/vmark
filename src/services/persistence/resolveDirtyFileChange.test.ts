@@ -12,20 +12,19 @@
  * @module services/persistence/resolveDirtyFileChange.test
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fileBytes } from "@/test/fileBytes";
 
 const {
   mockMessage,
   mockSave,
   mockReadTextFile,
   mockSaveToPath,
-  mockReloadTabFromDisk,
   mockDispatchEditor,
 } = vi.hoisted(() => ({
   mockMessage: vi.fn(),
   mockSave: vi.fn(),
   mockReadTextFile: vi.fn(),
   mockSaveToPath: vi.fn(),
-  mockReloadTabFromDisk: vi.fn(),
   mockDispatchEditor: vi.fn(),
 }));
 
@@ -34,13 +33,10 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
   save: (...a: unknown[]) => mockSave(...a),
 }));
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: (...a: unknown[]) => mockReadTextFile(...a),
+  readFile: (...a: unknown[]) => fileBytes(mockReadTextFile(...a)),
 }));
 vi.mock("@/services/persistence/saveToPath", () => ({
   saveToPath: (...a: unknown[]) => mockSaveToPath(...a),
-}));
-vi.mock("@/services/persistence/reloadFromDisk", () => ({
-  reloadTabFromDisk: (...a: unknown[]) => mockReloadTabFromDisk(...a),
 }));
 vi.mock("@/lib/formats/registry", () => ({
   dispatchEditor: (...a: unknown[]) => mockDispatchEditor(...a),
@@ -54,6 +50,9 @@ import { resolveDirtyFileChange } from "./resolveDirtyFileChange";
 const TAB = "tab-dirty";
 const PATH = "/w/doc.md";
 const doc = () => useDocumentStore.getState().documents[TAB];
+/** The user's unsaved edit, and the file a sync client rewrote underneath it. */
+const LOCAL_EDIT = "local edit\n";
+const REWRITTEN = "rewritten on disk\n";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -61,7 +60,6 @@ beforeEach(() => {
   useDocumentStore.getState().initDocument(TAB, "on disk\n", PATH, { savedContent: "on disk\n" });
   mockReadTextFile.mockResolvedValue("on disk\n");
   mockSaveToPath.mockResolvedValue(true);
-  mockReloadTabFromDisk.mockResolvedValue(undefined);
   mockDispatchEditor.mockReturnValue({
     id: "markdown",
     adapters: {
@@ -121,13 +119,17 @@ describe("Save As — the stale-document defect", () => {
   });
 
   it("does not reload when Save As is cancelled — local edits survive", async () => {
+    useDocumentStore.getState().setEditorContent(TAB, LOCAL_EDIT);
+    mockReadTextFile.mockResolvedValue(REWRITTEN);
     mockMessage.mockResolvedValue("Yes");
     mockSave.mockResolvedValue(null);
 
     await resolveDirtyFileChange(TAB, PATH);
 
     expect(mockSaveToPath).not.toHaveBeenCalled();
-    expect(mockReloadTabFromDisk).not.toHaveBeenCalled();
+    // No reload: the disk was never read, and the edit is still the content.
+    expect(mockReadTextFile).not.toHaveBeenCalled();
+    expect(doc()).toMatchObject({ content: LOCAL_EDIT, isDirty: true });
   });
 
   it("clears the missing flag after a successful Save As", async () => {
@@ -176,25 +178,41 @@ describe("Save As — the stale-document defect", () => {
 });
 
 describe("Reload", () => {
-  it("delegates to reloadTabFromDisk", async () => {
+  beforeEach(() => {
+    useDocumentStore.getState().setEditorContent(TAB, LOCAL_EDIT);
+    mockReadTextFile.mockResolvedValue(REWRITTEN);
+  });
+
+  it("replaces the local edit with the file on disk, as a clean baseline", async () => {
+    useDocumentStore.getState().markMissing(TAB);
     mockMessage.mockResolvedValue("No");
+
     await resolveDirtyFileChange(TAB, PATH);
-    expect(mockReloadTabFromDisk).toHaveBeenCalledWith(TAB, PATH);
+
+    expect(mockReadTextFile).toHaveBeenCalledWith(PATH);
+    expect(doc()).toMatchObject({
+      content: REWRITTEN,
+      filePath: PATH,
+      isDirty: false,
+      lastDiskContent: REWRITTEN,
+      isMissing: false,
+    });
   });
 
   it("marks the document missing when the reload throws", async () => {
     mockMessage.mockResolvedValue("No");
-    mockReloadTabFromDisk.mockRejectedValue(new Error("ENOENT"));
+    mockReadTextFile.mockRejectedValue(new Error("ENOENT"));
 
     await resolveDirtyFileChange(TAB, PATH);
 
     expect(doc()?.isMissing).toBe(true);
+    expect(doc()?.content).toBe(LOCAL_EDIT);
   });
 
   it("accepts the localized button label as well as 'No'", async () => {
     mockMessage.mockResolvedValue("dialog:fileChanged.buttonReload");
     await resolveDirtyFileChange(TAB, PATH);
-    expect(mockReloadTabFromDisk).toHaveBeenCalled();
+    expect(doc()?.content).toBe(REWRITTEN);
   });
 });
 
@@ -233,11 +251,19 @@ describe("Keep my changes (the safe default)", () => {
   });
 
   it("an unrecognised dialog result is treated as Keep, never as Reload", async () => {
+    useDocumentStore.getState().setEditorContent(TAB, LOCAL_EDIT);
+    mockReadTextFile.mockResolvedValue(REWRITTEN);
     mockMessage.mockResolvedValue("some-unexpected-string");
 
     await resolveDirtyFileChange(TAB, PATH);
 
-    expect(mockReloadTabFromDisk).not.toHaveBeenCalled();
-    expect(doc()?.isDivergent).toBe(true);
+    // Not reloaded: the edit is still the content; Keep only adopts the disk
+    // bytes as the comparison baseline.
+    expect(doc()).toMatchObject({
+      content: LOCAL_EDIT,
+      isDirty: true,
+      isDivergent: true,
+      lastDiskContent: REWRITTEN,
+    });
   });
 });

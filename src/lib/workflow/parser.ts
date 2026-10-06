@@ -410,7 +410,7 @@ export function parseWorkflow(yaml: string): WorkflowGraph {
 
 /**
  * Does this string look like an engine workflow? The ONE rule lives in
- * `detection.ts` (audit 20260928: this was a second, laxer regex that
+ * `detection.ts` (this used to be a second, laxer regex that
  * disagreed with it); with no path to consult, the content alone decides.
  */
 export function isWorkflowYaml(yaml: string): boolean {

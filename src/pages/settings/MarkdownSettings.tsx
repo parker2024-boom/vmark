@@ -2,6 +2,8 @@
  * Markdown Settings Section
  *
  * Paste & input, layout, and HTML rendering configuration.
+ *
+ * @module pages/settings/MarkdownSettings
  */
 
 import { useTranslation } from "react-i18next";

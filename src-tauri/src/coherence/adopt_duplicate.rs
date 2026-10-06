@@ -1,4 +1,4 @@
-//! Copy-versus-move detection for adoption (audit #44). Split from `adopt.rs`
+//! Copy-versus-move detection for adoption. Split from `adopt.rs`
 //! for size.
 //!
 //! An identity-bearing file at a path the registry has not seen is either a
@@ -44,7 +44,7 @@ pub(super) fn refuse_live_duplicate(
         PriorPath::Gone => return Ok(()), // the original moved away: a move
         PriorPath::Unverifiable(why) => {
             // An original that EXISTS but cannot be read is not evidence of a
-            // move (round 2 of #44): refuse rather than repoint the registry.
+            // move: refuse rather than repoint the registry.
             return Err(format!(
                 "cannot adopt {rel_path}: vmark.id {} is registered at {prior}, which exists but \
                  could not be read ({why}) — cannot tell a move from a copy",

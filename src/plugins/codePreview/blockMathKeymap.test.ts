@@ -14,10 +14,6 @@ const testRegistry = {
   setState: (partial: Partial<typeof registryState>) => Object.assign(registryState, partial),
 };
 
-vi.mock("./tiptap", () => ({
-  EDITING_STATE_CHANGED: "codePreviewEditingChanged",
-}));
-
 import { Schema } from "@tiptap/pm/model";
 import { EditorState, TextSelection } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";

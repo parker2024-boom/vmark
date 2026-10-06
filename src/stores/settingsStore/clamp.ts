@@ -40,7 +40,10 @@ export const CLAMP_RANGES: Partial<Record<ObjectSections, Record<string, [number
   general: {
     autoSaveInterval: [5, 3600],
     historyMaxSnapshots: [1, 1000],
-    historyMaxAgeDays: [0, 3650],
+    // Unlike its two neighbours below, 0 here does not mean "off": the prune
+    // cutoff is `now - days`, so 0 days deletes the snapshot a save has just
+    // written. One day is the shortest retention the settings page offers.
+    historyMaxAgeDays: [1, 3650],
     historyMergeWindow: [0, 3600],
     historyMaxFileSize: [0, 1_048_576],
     tabSize: [1, 8],

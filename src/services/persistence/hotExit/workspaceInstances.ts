@@ -1,3 +1,11 @@
+/**
+ * workspaceInstances — captures a window's workspace instances into hot-exit
+ * state, restores them, and reconciles the restored instances with the
+ * recreated tabs so each tab has one owner.
+ *
+ * @module services/persistence/hotExit/workspaceInstances
+ */
+
 import { isWorkspaceRailEnabled } from "@/services/featureFlags/workspaceRailFeatureFlag";
 import {
   useWorkspaceInstancesStore,
@@ -219,7 +227,7 @@ function ensureLooseInstanceForUnownedTabs(windowLabel: string): void {
   );
   if (!needsLoose) return;
 
-  // Structural since WI-13.1: ensureLooseInstance preserves a valid current
+  // Structural: ensureLooseInstance preserves a valid current
   // activation, so capture-time ownership repair cannot flip the live rail.
   useWorkspaceInstancesStore.getState().ensureLooseInstance(windowLabel);
 }
@@ -233,11 +241,11 @@ function serializeInstancesWithCurrentTabs(
   const tabs = useTabStore.getState().getTabsByWindow(windowLabel);
   const activeTabId = useTabStore.getState().activeTabId[windowLabel] ?? null;
 
-  // Partition each tab exactly once through the shared ownership kernel
-  // (WI-1R). Browser tabs land in the window-global BROWSER_SCOPE (D1) and are
+  // Partition each tab exactly once through the shared ownership kernel.
+  // Browser tabs land in the window-global BROWSER_SCOPE (D1) and are
   // therefore never serialized into any instance's tabIds/closedTabIds — their
-  // persistence is the window session (WI-8.2), not workspace instances.
-  // Closed-tab ids project straight from the SCOPED history (WI-11.1), which
+  // persistence is the window session, not workspace instances.
+  // Closed-tab ids project straight from the SCOPED history, which
   // is already keyed by instance.
   const ownedTabIds = partitionWindowTabs(tabs, instances, activeInstanceId).byScope;
   const closedScopes = useClosedTabScopesStore.getState();

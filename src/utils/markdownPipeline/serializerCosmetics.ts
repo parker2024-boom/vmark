@@ -4,7 +4,7 @@
  * Purpose: remark-stringify emits defensive backslash escapes and `&#x20;`
  * entities that are correct but noisy. This pass removes them ONLY when the
  * cleaned string re-parses to the exact same mdast as the conservative
- * output, so it can never change document meaning (audit H6/H7).
+ * output, so it can never change document meaning.
  *
  * Split out of `serializer.ts` to keep both files within their size budgets.
  *
@@ -188,7 +188,7 @@ function normalizedParse(markdown: string): string | null {
  * result re-parses to the exact same mdast as the conservative output. Falls
  * back to entity-edits-only, then to the conservative string. This makes
  * "the cosmetic pass never changes meaning" a structural invariant instead of
- * a per-character guess (audit H6/H7).
+ * a per-character guess.
  */
 /**
  * Size above which the cosmetic pass is skipped and the CONSERVATIVE output

@@ -2,7 +2,7 @@
  * TerminalTabRename
  *
  * Purpose: The inline rename text box that replaces a terminal tab while the
- * user is editing its name (WI-4.1). Extracted from TerminalTabBar so that
+ * user is editing its name. Extracted from TerminalTabBar so that
  * file keeps its single responsibility and stays under the size limit.
  *
  * Key decisions:
@@ -21,7 +21,7 @@
  *     hygiene `terminalSetProgramTitle` applies to program-supplied titles.
  *
  * @coordinates-with TerminalTabBar.tsx — sole caller
- * @coordinates-with stores/uiStore/terminalSlice.ts — terminalRenameSession sets isUserRenamed
+ * @coordinates-with stores/terminalStore/sessionActions.ts — terminalRenameSession sets isUserRenamed
  * @module components/Terminal/TerminalTabRename
  */
 import { useCallback, useRef, useState } from "react";

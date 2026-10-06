@@ -1,5 +1,5 @@
 //! One navigation of a throwaway WebView2 window to the render document,
-//! shared by export and print (#236).
+//! shared by export and print.
 //!
 //! Purpose: `windows.rs` and `windows_print.rs` each built the window, took
 //! the `CoreWebView2`, registered a `NavigationCompleted` handler, navigated
@@ -7,7 +7,7 @@
 //! lifecycle bug in the other. This is the one copy; each caller supplies
 //! only what happens once the document has loaded.
 //!
-//! What it guarantees (#233, #234, #237, #238, #239):
+//! What it guarantees:
 //!   - both handlers are registered BEFORE the document navigation starts,
 //!     and the completion acted on is the DOCUMENT's, once: `NavigationStarting`
 //!     tells `navigation.rs` the id of the navigation whose URI names the
@@ -16,14 +16,14 @@
 //!     delivered after the webview's `Source` has advanced to the document)
 //!     nor any other navigation can start a print, and no second delivery
 //!     can start a second one;
-//!   - the sink is claimed inside that decision (#227): a document that
+//!   - the sink is claimed inside that decision: a document that
 //!     loaded for a caller whose bounded wait ended is torn down, never
 //!     printed or shown;
 //!   - every failure after the window exists goes through ONE path,
 //!     [`RenderWindow::fail`] — settle, then close — so no branch can forget
 //!     the close that used to leave a hidden window and its Edge process
 //!     behind (a `with_webview` that fails included);
-//!   - the caller's timeout can close the window too (#224, #227): the
+//!   - the caller's timeout can close the window too: the
 //!     window's close is armed on the sink as soon as the window exists,
 //!     and `wait.rs` runs it when its bound elapses.
 //!
@@ -119,7 +119,7 @@ pub(super) fn navigate_once<T: Send + 'static>(
 ) -> Result<(), CommandError> {
     let file_url = path_to_file_url(html_path)?;
     let (window, render) = RenderWindow::build(app, visible, title)?;
-    // From here the caller's timeout can close the window (#224, #227);
+    // From here the caller's timeout can close the window;
     // every settle path below closes it itself.
     let render_timeout = render.clone();
     sink.teardown.arm(move || render_timeout.close());
@@ -127,7 +127,7 @@ pub(super) fn navigate_once<T: Send + 'static>(
     let attached = window.with_webview(move |pw| attach(pw, render_cb, file_url, sink, on_loaded));
     if let Err(e) = attached {
         // The window exists; returning without this leaked it and its Edge
-        // process (#234, #239).
+        // process.
         render.close();
         return Err(window_error(&e.to_string()));
     }
@@ -135,7 +135,7 @@ pub(super) fn navigate_once<T: Send + 'static>(
 }
 
 /// On the UI thread that owns the controller: take the core, register both
-/// navigation handlers BEFORE navigating (#233), then navigate.
+/// navigation handlers BEFORE navigating, then navigate.
 fn attach<T: Send + 'static>(
     pw: PlatformWebview,
     render: RenderWindow,
@@ -154,15 +154,21 @@ fn attach<T: Send + 'static>(
     // id is learned at its start and matched at its end.
     let starting = starting_handler(gate.clone());
     let mut token = Default::default();
+    // SAFETY: `core` is the controller's live `ICoreWebView2`, called on its own
+    // UI thread; `starting` is a live handler and `token` a valid out-pointer.
     if let Err(e) = unsafe { core.add_NavigationStarting(&starting, &mut token) } {
         return render.fail(&sink, com_error("navigation-starting handler", &e));
     }
     let handler = completion_handler(render.clone(), sink.clone(), gate, on_loaded);
     let mut token = Default::default();
+    // SAFETY: as above — a live `ICoreWebView2` on its UI thread, a live handler
+    // and a valid out-pointer for the registration token.
     if let Err(e) = unsafe { core.add_NavigationCompleted(&handler, &mut token) } {
         return render.fail(&sink, com_error("navigation handler", &e));
     }
     let url = HSTRING::from(file_url.as_str());
+    // SAFETY: `url` is an `HSTRING` that outlives the call, so the pointer is a
+    // valid NUL-terminated wide string for as long as WebView2 reads it.
     if let Err(e) = unsafe { core.Navigate(PCWSTR(url.as_ptr())) } {
         render.fail(&sink, com_error("navigate", &e));
     }
@@ -185,7 +191,7 @@ fn starting_handler(gate: Gate) -> ICoreWebView2NavigationStartingEventHandler {
 /// that interface is what `add_NavigationCompleted` takes.
 ///
 /// The webview comes from the event's own `sender`, never from a captured
-/// `ICoreWebView2` (#461). Capturing one put a strong COM reference to the
+/// `ICoreWebView2`. Capturing one put a strong COM reference to the
 /// webview inside a handler registered ON that webview — a cycle that kept
 /// the webview, this closure and the sink alive after the window closed,
 /// since the tokens are not unregistered. `sender` is the same object,
@@ -204,7 +210,7 @@ fn completion_handler<T: Send + 'static>(
             source: source.as_deref(),
             succeeded: navigation_succeeded(args.as_ref()),
         };
-        // The claim is part of the decision, atomically with it (#227). The
+        // The claim is part of the decision, atomically with it. The
         // borrow ends here, before the step acts.
         let step = gate.borrow_mut().classify(completion, || sink.claim());
         match step {

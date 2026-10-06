@@ -14,7 +14,7 @@
  *     workspaceConfigDefaults.ts. openWorkspace and bootstrapConfig share that
  *     ONE normalizer (defaults, identity, array copies, and the #1187 repair
  *     of app-created empty excludes), so a disk config lands in the same
- *     shape as a caller's — and then DEEP-CLONE it (audit #506): the
+ *     shape as a caller's — and then DEEP-CLONE it: the
  *     normalizer copies the arrays but keeps nested `identity` / `ai` /
  *     `sessionTabs` by reference, and a caller that keeps mutating those would
  *     change persisted state and workspace trust behind set()'s back, the
@@ -92,7 +92,7 @@ export const useWorkspaceStore = create<WorkspaceState & WorkspaceActions>()(
       isWorkspaceMode: false,
 
       openWorkspace: (rootPath, config = null) => {
-        // A BLANK root is not a workspace (audit #1012). `""` set
+        // A BLANK root is not a workspace. `""` set
         // `isWorkspaceMode: true` alongside a falsy `rootPath`, and every
         // consumer reads that pair as closed — `bootstrapConfig` returns early
         // on `!rootPath`, `updateWorkspaceConfig` refuses the write — leaving a
@@ -133,7 +133,7 @@ export const useWorkspaceStore = create<WorkspaceState & WorkspaceActions>()(
         const { config } = get();
         if (!config) return;
 
-        // DEEP-clone the merged config (audit #1013), the same invariant
+        // DEEP-clone the merged config, the same invariant
         // `openWorkspace` and `bootstrapConfig` already hold. The old
         // field-by-field copy listed three keys — excludeFolders, lastOpenTabs,
         // sessionTabs — and silently missed `identity` and `ai`, which are
@@ -150,7 +150,7 @@ export const useWorkspaceStore = create<WorkspaceState & WorkspaceActions>()(
         if (!config) return;
 
         // A SINGLE path segment, because that is the only thing the matcher can
-        // ever match (audit #1014): `isPathExcluded` splits the relative path
+        // ever match: `isPathExcluded` splits the relative path
         // and compares segments exactly, so `""` and `"src/vendor"` are entries
         // that persist forever and exclude nothing. Refused loudly rather than
         // stored as a rule that silently does not work. The value is stored as
@@ -179,15 +179,15 @@ export const useWorkspaceStore = create<WorkspaceState & WorkspaceActions>()(
         if (!config) return;
 
         const excludeFolders = config.excludeFolders.filter((f) => f !== folder);
-        // Removing something that was never there is not a change (audit
-        // #1015). Writing anyway notified every subscriber and wrote the whole
+        // Removing something that was never there is not a change.
+        // Writing anyway notified every subscriber and wrote the whole
         // config back to storage for nothing.
         if (excludeFolders.length === config.excludeFolders.length) return;
 
         set({ config: { ...config, excludeFolders } });
       },
 
-      // ONE mutation path (audit #1016). This was a second implementation of
+      // ONE mutation path. This was a second implementation of
       // `updateConfig({ lastOpenTabs })` — same merge, same clone, written
       // twice — so the two could drift on validation or on cloning depth, and
       // the deep-clone fix above would have landed on only one of them.
@@ -247,7 +247,7 @@ export const useWorkspaceStore = create<WorkspaceState & WorkspaceActions>()(
         isWorkspaceMode: state.isWorkspaceMode,
         config: state.config,
       }),
-      // Persisted state is NORMALIZED on the way back in (audit #1017).
+      // Persisted state is NORMALIZED on the way back in.
       // zustand's default merge is a shallow object copy, so a config written
       // by an older build — or edited in localStorage — used to reach live
       // state without passing the normalizer every other entry point runs.
@@ -265,7 +265,7 @@ export const useWorkspaceStore = create<WorkspaceState & WorkspaceActions>()(
 );
 
 /**
- * Default excluded folders, FROZEN (audit #1018).
+ * Default excluded folders, FROZEN.
  *
  * This is the array every future workspace's `excludeFolders` is copied from,
  * and re-exporting it live meant any consumer could `push` into it and change

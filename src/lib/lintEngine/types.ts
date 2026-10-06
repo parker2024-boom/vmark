@@ -2,6 +2,8 @@
  * Markdown Lint Engine — Type Definitions
  *
  * Purpose: Shared types for the lint engine, rules, and UI integration.
+ *
+ * @module lib/lintEngine/types
  */
 
 /**
@@ -45,7 +47,7 @@ export interface LintDiagnostic {
 }
 
 /**
- * Pre-computed line index shared across rules (O6 / WI-2.5). The orchestrator
+ * Pre-computed line index shared across rules (O6). The orchestrator
  * splits the source into lines and computes each line's absolute start offset
  * exactly once, instead of every line-oriented rule re-splitting the source
  * (~7×/pass) and `noUndefinedRefs` recomputing offsets in O(L²).

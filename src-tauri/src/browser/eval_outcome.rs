@@ -14,12 +14,12 @@
 //! the native completion; nothing here touches WebKit, so every mapping is a unit
 //! test.
 //!
-//! Round 3 (#17): a refusal raised INSIDE the main-thread turn — `submit_if_fresh`
+//! A refusal raised INSIDE the main-thread turn — `submit_if_fresh`
 //! finding the generation superseded — is carried as the typed `CommandError` it is
 //! (`EvalError::Refused`), never flattened to a message string and re-derived from
 //! a prefix, which kept the code and token but lost the `tabId`/`when` details.
 //!
-//! Round 4 (#31): the native surface's own failure crosses the hop typed too
+//! The native surface's own failure crosses the hop typed too
 //! (`EvalError::Surface(NativeSurfaceError)`), so no half of an eval error is a
 //! string a classifier has to re-read.
 //!
@@ -150,8 +150,8 @@ pub fn script_error_message(
 /// `internal`; an oversized result is refused as input too, because the script
 /// chose what to return.
 ///
-/// A timeout is `timeout` — that is what happened — but an INDETERMINATE one
-/// (round 3, #18): nothing cancels an enqueued script, so it may still complete,
+/// A timeout is `timeout` — that is what happened — but an INDETERMINATE one:
+/// nothing cancels an enqueued script, so it may still complete,
 /// and `timeout` is otherwise the app's retryable class. `detail.indeterminate:
 /// true` is what tells a generic retry policy to stop and verify instead of running
 /// a mutating act twice; `classifyCommandError` on the frontend reads exactly that

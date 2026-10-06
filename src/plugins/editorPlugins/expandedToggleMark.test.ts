@@ -36,7 +36,7 @@ const { MockMultiSelection } = vi.hoisted(() => {
   return { MockMultiSelection };
 });
 
-vi.mock("@/plugins/multiCursor", () => ({
+vi.mock("@/plugins/shared/MultiSelection", () => ({
   MultiSelection: MockMultiSelection,
 }));
 

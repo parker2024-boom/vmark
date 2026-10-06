@@ -1,5 +1,5 @@
-//! Coherence layer kernel (spec: dev-docs/specs/coherence-format-v0.md;
-//! plan: dev-docs/plans/20260718-coherence-layer.md).
+//! Coherence layer kernel (format v0; plan:
+//! .claude/adr/plans/20260718-coherence-layer.md).
 //!
 //! Module boundaries per ADR-C4:
 //! - Pure kernel (no I/O): `types`, `canonical`, `dag`, `project`
@@ -18,6 +18,7 @@ pub mod adopt;
 pub mod adopt_duplicate;
 pub mod anchor_parse;
 pub mod anchors;
+pub(crate) mod blocking;
 pub mod canonical;
 pub mod capture;
 pub mod capture_input;
@@ -76,6 +77,7 @@ pub mod provenance_commands;
 pub mod read_model;
 pub mod read_view;
 pub mod scan;
+pub(crate) mod scan_cache;
 pub(crate) mod scan_diagnostics;
 pub mod scan_git;
 pub mod scan_report;

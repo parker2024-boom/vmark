@@ -7,6 +7,7 @@
 
 use super::*;
 use crate::coherence::capture::{capture, CaptureRequest};
+use crate::coherence::scan_diagnostics::path_under_ignored_dir;
 use crate::coherence::state::WorkspaceKernel;
 use crate::coherence::types::{Agent, AgentType, Confidence, Intent, WriterId};
 use std::path::Path;
@@ -54,7 +55,7 @@ fn write_file(root: &Path, rel: &str, content: &str) {
 // ── git integration (real repos) ────────────────────────────────────────
 
 fn run_git(dir: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::ai_provider::build_command("git", &[])
         .args(args)
         .current_dir(dir)
         .env("GIT_AUTHOR_NAME", "t")

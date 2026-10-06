@@ -132,12 +132,14 @@ describe("addSuggestion", () => {
   });
 
   it("stores createdAt timestamp", () => {
-    const before = Date.now();
-    const id = addTestSuggestion();
-    const after = Date.now();
-    const s = useAiSuggestionStore.getState().getSuggestion(id)!;
-    expect(s.createdAt).toBeGreaterThanOrEqual(before);
-    expect(s.createdAt).toBeLessThanOrEqual(after);
+    const createdAt = Date.UTC(2026, 0, 2, 3, 4, 5);
+    vi.setSystemTime(createdAt);
+    try {
+      const id = addTestSuggestion();
+      expect(useAiSuggestionStore.getState().getSuggestion(id)!.createdAt).toBe(createdAt);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

@@ -1,5 +1,5 @@
 /**
- * Range-aware list conversion (WI-3, audit-followups 20260729).
+ * Range-aware list conversion.
  *
  * `toggleListType`'s cursor path converts only the list under `$from`; this
  * module handles RANGE selections: every bullet/ordered list intersecting

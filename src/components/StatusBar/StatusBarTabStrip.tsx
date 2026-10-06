@@ -80,10 +80,10 @@ export function StatusBarTabStrip({
   const newTabShortcut = useShortcutsStore((state) => state.getShortcut("newTab"));
   const newTabTooltip = tooltipWithShortcut(t("newTabTitle"), formatKeyForDisplay(newTabShortcut));
 
-  // WI-TNAV1.2 — the strip scrolls with its scrollbar suppressed in both
+  // The strip scrolls with its scrollbar suppressed in both
   // engines, so without these the tabs simply vanish (F1).
   const regionRef = useRef<HTMLDivElement | null>(null);
-  // WI-DSPL1.1 (F4) — the non-focused pane's document has no pill state at
+  // F4 — the non-focused pane's document has no pill state at
   // all otherwise: `activeTabId` is the ADR-1 alias of the FOCUSED pane.
   const windowLabel = useWindowLabel();
   const paneIndicated = usePaneStore((s) =>
@@ -91,7 +91,7 @@ export function StatusBarTabStrip({
   );
   const { canScrollLeft, canScrollRight } = useTabStripOverflow(regionRef);
 
-  // WI-TNAV1.3 (F2) — keyed on an ACTIVATION KEY, not `activeTabId`: the
+  // F2 — keyed on an ACTIVATION KEY, not `activeTabId`: the
   // browser pill is current while `activeTabId` is null, so an activeTabId-only
   // effect could never reveal it.
   useScrollActiveTabIntoView(regionRef, {

@@ -1,4 +1,4 @@
-//! Address-tier predicates for the AI navigation policy (WI-NB3.2).
+//! Address-tier predicates for the AI navigation policy.
 //!
 //! Split from `ai_policy.rs` along the natural seam: that module owns URL and
 //! hostname policy; this one owns pure ADDRESS math — the blocked IPv4/IPv6
@@ -18,7 +18,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 
 /// The IPv4 address a transition-prefix IPv6 address EMBEDS, if any — such an
 /// address is exactly as reachable as its payload, so it must be exactly as
-/// blocked (WI-NB3.2; the disguise classes NeoBrowser's guard covered):
+/// blocked (the disguise classes NeoBrowser's guard covered):
 /// IPv4-mapped/compatible (`::ffff:a.b.c.d`, `::a.b.c.d`), 6to4 (`2002:VVVV:WWWW::/16`,
 /// v4 in bits 16–47), and the NAT64 well-known prefix (`64:ff9b::/96`, v4 in the
 /// last 32 bits).

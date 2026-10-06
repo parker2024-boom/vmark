@@ -2,9 +2,9 @@
  * Purpose: Runs the optional `actionlint` binary over the workbench's
  *   workflow text and returns its findings as `Diagnostic` rows for the
  *   DiagnosticsBanner — the behaviour `website/guide/workflow-viewer.md` and
- *   the "Use actionlint when available" setting promise. Until WI-FL3.8 the
- *   wrapper's only production caller was the MCP `workflow.validate`
- *   handler, so the setting changed nothing a user could see.
+ *   the "Use actionlint when available" setting promise. The wrapper's only
+ *   production caller used to be the MCP `workflow.validate` handler, so the
+ *   setting changed nothing a user could see.
  *
  *   Runner: `lintWithActionlint` → the Rust `gha_lint` command, which spawns
  *   the binary from the login-shell PATH on the blocking pool. A process
@@ -14,7 +14,7 @@
  *   when it does — a superseded run's result is discarded, and its process
  *   is never joined by a second one (audit 20260907, #290). Serializing puts
  *   the whole queue behind one call, so each is bounded by
- *   ACTIONLINT_TIMEOUT_MS (audit R2, #585). The parser's rows never wait for
+ *   ACTIONLINT_TIMEOUT_MS. The parser's rows never wait for
  *   this hook: it starts empty and the banner re-renders when a run lands.
  *
  * Key decisions:
@@ -27,7 +27,7 @@
  *     the binary, so silence would make "ran clean" and "never ran" look
  *     identical, while a toast per run would be spam. `failed`, or a
  *     rejected IPC → one warning toast with actionlint's own message as the
- *     detail line (WI-UI4.4). Module-level flags, reset only by the test
+ *     detail line. Module-level flags, reset only by the test
  *     seam.
  *   - Translation goes through the i18n singleton rather than
  *     `useTranslation`, so the effect depends on (enabled, tab, text) alone;
@@ -63,7 +63,7 @@ export const ACTIONLINT_DEBOUNCE_MS = 500;
  *
  * The runs are SERIALIZED, so a call that never settles is not one lost
  * result: every later run queues behind it and the banner keeps the rows it
- * had for the rest of the session (audit R2, #585). A spawn that hangs — a
+ * had for the rest of the session. A spawn that hangs — a
  * binary waiting on stdin, a stalled network mount — settles nothing on its
  * own, and only the frontend half is reachable from here: this releases the
  * QUEUE, it does not kill the process, which is `gha_lint`'s to do.
@@ -154,7 +154,7 @@ function queueLint(
     } catch (e: unknown) {
       // DELIVERY is the caller's code — a toast surface, a state update — and
       // it is outside everything above. A throw here used to reject the tail
-      // this function returns (audit round 3, #584).
+      // this function returns.
       workflowError("actionlint outcome delivery failed:", e);
     }
   });

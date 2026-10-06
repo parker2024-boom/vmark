@@ -59,7 +59,7 @@ pub fn current_branch(root: &Path) -> Option<String> {
     Some(name)
 }
 
-/// D3.3 (WI-3.7): the current HEAD commit's SHA iff it is a completed
+/// D3.3: the current HEAD commit's SHA iff it is a completed
 /// merge (two or more parents). `None` for a linear head, detached HEAD,
 /// or a non-git dir. Mid-conflict merges are handled upstream (the scan
 /// defers on MERGE_HEAD), so reaching here means the merge concluded.
@@ -77,7 +77,7 @@ pub fn merge_commit_sha(root: &Path) -> Option<String> {
 
 /// The files a completed merge changed relative to **both** parents — the union
 /// of `git diff --name-only <sha>^1 <sha>` and `<sha>^2 <sha>`, so a change from
-/// either side is caught (Phase 5, SP4/WI-5.1). For a rename git reports the new
+/// either side is caught (Phase 5, SP4). For a rename git reports the new
 /// path; for a delete, the removed path. Empty for a non-merge, a bad SHA, or a
 /// non-git dir. Deterministic (sorted, deduped) so the audit mapping is total.
 pub fn merge_changed_files(root: &Path, sha: &str) -> Vec<String> {

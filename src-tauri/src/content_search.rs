@@ -4,28 +4,30 @@
 //! returns matching lines grouped by file. Powers the "Find in Files" feature.
 //!
 //! Pipeline: Frontend invoke("search_workspace_content") → this module
-//!   → manual BFS via std::fs::read_dir → regex matching → Vec<FileSearchResult>
+//!   (regex, root check, budget) → `content_search_walk` (depth-first walk via
+//!   std::fs::read_dir) → `content_search_file` (one open per file) →
+//!   `content_search_match` (per-line regex matching) → Vec<FileSearchResult>
 //!
 //! Key decisions:
 //!   - Uses `std::fs::read_dir` + `regex` crate — markdown workspaces are small
-//!     enough that a manual BFS walker is adequate without heavier dependencies.
+//!     enough that a manual walker is adequate without heavier dependencies.
 //!   - Runs inside `spawn_blocking` because it does synchronous I/O.
 //!   - Results capped at MAX_MATCHES total and MAX_FILES to prevent UI flooding.
 //!   - Files over MAX_FILE_SIZE are skipped to avoid memory pressure.
 //!   - Line content is trimmed and capped at MAX_LINE_LEN chars.
-//!   - Match range offsets are character indices (not byte offsets) for JS compat.
+//!   - Match range offsets are UTF-16 code-unit indices (not byte offsets) for JS compat.
 //!   - Binary files are skipped via a simple NUL-byte check on the first 8KB.
 //!   - Symlinks are skipped to prevent directory traversal outside workspace.
 //!   - Invalid regex returns a structured error string (never panics).
 //!   - Regex compilation has an explicit 1MB size limit and matching DFA size
 //!     limit to prevent memory-based DoS. The `regex` crate itself guarantees
 //!     linear-time matching, so catastrophic backtracking is not a concern.
-//!   - A 5-second wall-clock deadline applies to every search. Deadline checks
-//!     fire at directory and file boundaries, inside entry enumeration (strided
-//!     every 256 entries), before each `read_to_string`, and inside per-line
-//!     scanning. On timeout the walker returns partial results and emits a
-//!     `log::warn!` — matching the same silent-truncation contract as
-//!     MAX_FILES / MAX_MATCHES.
+//!   - A 5-second wall-clock deadline applies to every search, held by one
+//!     `DeadlineBudget`. It is checked at directory and file boundaries, inside
+//!     entry enumeration (strided every 256 entries), before each file read,
+//!     and inside per-line scanning. On timeout the walker returns partial
+//!     results and emits a `log::warn!` — matching the same silent-truncation
+//!     contract as MAX_FILES / MAX_MATCHES.
 //!   - `search_workspace_content_checked` returns the same results PLUS a
 //!     `complete` flag that is false whenever any ELIGIBLE evidence was
 //!     skipped (deadline, caps, unreadable dir/file, oversized file). The
@@ -38,16 +40,24 @@
 //! @coordinates-with stores/uiStore/contentSearchSlice.ts — frontend consumer (invokes search_workspace_content)
 //! @coordinates-with workspaceStore.ts — provides rootPath and excludeFolders
 //! @coordinates-with services/media/workspaceReferenceCheck.ts — checked variant
+//! @coordinates-with content_search_walk.rs — the directory walk and the deadline budget
+//! @coordinates-with content_search_file.rs — the per-file scan
 
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+#[path = "content_search_file.rs"]
+mod file_scan;
 #[path = "content_search_match.rs"]
 pub(crate) mod matching; // `ALWAYS_SKIP` is shared with the file-tree walker (#1357)
+#[path = "content_search_walk.rs"]
+mod walk;
+
+use matching::build_regex;
 pub(crate) use matching::LineMatch;
-use matching::{build_regex, is_binary, matches_extensions, search_line, should_skip_dir};
+use walk::{DeadlineBudget, SearchPlan};
 
 /// Maximum total matches returned across all files.
 const MAX_MATCHES: usize = 1000;
@@ -133,166 +143,33 @@ fn search_sync_with_deadline(
     }
     fs::read_dir(&root).map_err(|e| format!("Cannot read workspace root: {}", e))?;
 
-    let mut results: Vec<FileSearchResult> = Vec::new();
-    let mut total_matches: usize = 0;
-    let mut complete = true;
-
-    // Walk directory tree
-    let mut dirs_to_visit: Vec<PathBuf> = vec![root.clone()];
-
-    while let Some(dir) = dirs_to_visit.pop() {
-        if results.len() >= MAX_FILES || total_matches >= MAX_MATCHES || Instant::now() >= deadline
-        {
-            complete = false; // directories remain unvisited
-            break;
-        }
-
-        let Ok(entries) = fs::read_dir(&dir) else {
-            complete = false; // this directory's files were never seen
-            continue;
-        };
-
-        let mut subdirs: Vec<PathBuf> = Vec::new();
-        let mut files: Vec<PathBuf> = Vec::new();
-
-        // Stride for deadline checks inside inner loops — avoids calling
-        // Instant::now() on every iteration while keeping the wall-clock cap
-        // responsive on huge directories or very long files.
-        const DEADLINE_CHECK_STRIDE: usize = 256;
-
-        for (i, entry) in entries.flatten().enumerate() {
-            if i % DEADLINE_CHECK_STRIDE == 0 && Instant::now() >= deadline {
-                complete = false; // remaining entries were never enumerated
-                break;
-            }
-            let path = entry.path();
-            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-                continue;
-            };
-
-            // Skip symlinks to prevent directory traversal outside workspace
-            if path
-                .symlink_metadata()
-                .map(|m| m.file_type().is_symlink())
-                .unwrap_or(false)
-            {
-                continue;
-            }
-
-            if path.is_dir() {
-                if !should_skip_dir(name, &exclude_folders) {
-                    subdirs.push(path);
-                }
-            } else if path.is_file() {
-                // Skip hidden files
-                if name.starts_with('.') {
-                    continue;
-                }
-                if markdown_only && !matches_extensions(&path, &extensions) {
-                    continue;
-                }
-                files.push(path);
-            }
-        }
-
-        // Sort subdirs for deterministic ordering
-        subdirs.sort();
-        dirs_to_visit.extend(subdirs);
-
-        // Search each file
-        for file_path in files {
-            if results.len() >= MAX_FILES
-                || total_matches >= MAX_MATCHES
-                || Instant::now() >= deadline
-            {
-                complete = false; // remaining files were never scanned
-                break;
-            }
-
-            if is_binary(&file_path) {
-                continue;
-            }
-
-            // Skip files larger than MAX_FILE_SIZE to prevent memory pressure
-            if let Ok(meta) = fs::metadata(&file_path) {
-                if meta.len() > MAX_FILE_SIZE {
-                    log::debug!(
-                        "[ContentSearch] Skipping large file ({} bytes): {}",
-                        meta.len(),
-                        file_path.display()
-                    );
-                    complete = false; // an eligible file went unscanned
-                    continue;
-                }
-            }
-
-            // Re-check the deadline before an expensive blocking read.
-            if Instant::now() >= deadline {
-                complete = false;
-                break;
-            }
-
-            let Ok(content) = fs::read_to_string(&file_path) else {
-                log::debug!("[ContentSearch] Cannot read file: {}", file_path.display());
-                complete = false; // an eligible file went unscanned
-                continue;
-            };
-
-            let mut file_matches: Vec<LineMatch> = Vec::new();
-
-            for (line_idx, line) in content.lines().enumerate() {
-                if total_matches >= MAX_MATCHES {
-                    complete = false; // remaining lines were never scanned
-                    break;
-                }
-                // Cheap periodic deadline check on very long files.
-                if line_idx % DEADLINE_CHECK_STRIDE == 0 && Instant::now() >= deadline {
-                    complete = false;
-                    break;
-                }
-
-                if let Some(mut line_match) = search_line(line, (line_idx + 1) as u32, &re) {
-                    // Never exceed MAX_MATCHES: a single line can carry many
-                    // ranges, so truncate to the remaining budget.
-                    // (the pre-line break above guarantees remaining >= 1)
-                    line_match
-                        .match_ranges
-                        .truncate(MAX_MATCHES - total_matches);
-                    total_matches += line_match.match_ranges.len();
-                    file_matches.push(line_match);
-                }
-            }
-
-            if !file_matches.is_empty() {
-                let relative = file_path
-                    .strip_prefix(&root)
-                    .unwrap_or(&file_path)
-                    .to_string_lossy()
-                    .replace('\\', "/");
-
-                results.push(FileSearchResult {
-                    path: file_path.to_string_lossy().to_string(),
-                    relative_path: relative,
-                    matches: file_matches,
-                });
-            }
-        }
-    }
+    let budget = DeadlineBudget::until(deadline);
+    let mut tally = walk::walk(&SearchPlan {
+        re: &re,
+        root: &root,
+        markdown_only,
+        extensions: &extensions,
+        exclude_folders: &exclude_folders,
+        budget,
+    });
 
     // Surface a timeout via the log so it's visible in dev builds. The public
     // API intentionally returns partial results (matching the existing
     // MAX_FILES / MAX_MATCHES silent-truncation contract) — callers treat
     // "fewer than expected" uniformly regardless of cause. If the frontend
     // ever needs to distinguish timeout from cap, widen the return type.
-    if Instant::now() >= deadline {
-        complete = false;
+    if budget.spent() {
+        tally.complete = false;
         log::warn!(
             "[ContentSearch] Search for {:?} timed out after {:?} with {} files / {} matches — returning partial results",
-            query, SEARCH_TIMEOUT, results.len(), total_matches
+            query, SEARCH_TIMEOUT, tally.results.len(), tally.total_matches
         );
     }
 
-    Ok(SearchOutcome { results, complete })
+    Ok(SearchOutcome {
+        results: tally.results,
+        complete: tally.complete,
+    })
 }
 
 /// Tauri command: search workspace file contents AND report whether every
@@ -372,3 +249,7 @@ pub async fn search_workspace_content(
 #[cfg(test)]
 #[path = "content_search.test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "content_search_fixture.test.rs"]
+mod fixture_tests;

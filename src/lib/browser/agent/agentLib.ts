@@ -1,5 +1,5 @@
 /**
- * The injected agent library (WI-2.3 / WI-NB1.1) — the standalone ES5 refs /
+ * The injected agent library — the standalone ES5 refs /
  * query / visibility / snapshot functions prepended to every driver script,
  * assembled on the shared perception core. Split from `actScript.ts` (which keeps
  * the script BUILDERS) along that seam; the act half lives in `agentAct.ts`.
@@ -9,8 +9,8 @@
  * role vocabulary, then the refs, query and act sections below. `agentLib.test.ts`
  * pins that the library starts with the core and defines each function exactly once.
  *
- * Every locator and the snapshot run the core's ONE budgeted walk (`__vmarkWalk`,
- * #103) and keep only what they emit — never a list of every element — so a
+ * Every locator and the snapshot run the core's ONE budgeted walk (`__vmarkWalk`)
+ * and keep only what they emit — never a list of every element — so a
  * hostile page can make an answer incomplete (reported as truncated) but never
  * make the webview allocate without limit.
  *

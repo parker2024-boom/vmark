@@ -3,6 +3,8 @@
  *
  * Low-level helper functions for source mode toolbar actions.
  * Used by sourceAdapter.ts for text insertion and formatting.
+ *
+ * @module plugins/toolbarActions/sourceAdapterHelpers
  */
 
 import { EditorSelection } from "@codemirror/state";

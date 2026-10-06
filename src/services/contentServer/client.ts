@@ -20,7 +20,7 @@ export interface ServerHandle {
   port: number;
   /**
    * The workspace trust the running child was spawned with, which its CSP
-   * enforces (WI-FL3.6). Compared with the live trust after a start: a flip
+   * enforces. Compared with the live trust after a start: a flip
    * while starting leaves a server enforcing the old value.
    */
   trusted: boolean;
@@ -29,8 +29,8 @@ export interface ServerHandle {
 export type SlidevExportFormat = "pdf" | "png" | "pptx";
 
 /**
- * What `content_server_start` would find, probed WITHOUT spawning anything
- * (WI-FL1.1). Mirrors `content_server/runtime.rs::ContentServerRuntime`;
+ * What `content_server_start` would find, probed WITHOUT spawning anything.
+ * Mirrors `content_server/runtime.rs::ContentServerRuntime`;
  * absent optionals arrive as `null`. Consumers index the halves as
  * `ContentServerRuntime["node"]` rather than through named aliases.
  */

@@ -47,8 +47,8 @@ interface BridgeStatus {
 /**
  * Adopt a refresh's answer, or keep what was already known when it had none.
  *
- * `fresh ? fresh.port : previous.port`, never `fresh?.port ?? previous.port`
- * (audit #743): a STOPPED bridge legitimately reports `port: null`, and `??`
+ * `fresh ? fresh.port : previous.port`, never `fresh?.port ?? previous.port`:
+ * a STOPPED bridge legitimately reports `port: null`, and `??`
  * reads that as "absent" and substitutes the previous port — so a bridge that
  * had just stopped was reported with the port nothing is listening on any more.
  * `running` never had the bug (`false ?? x` is `false`), which is exactly why
@@ -67,11 +67,11 @@ export function latestBridgeStatus(
  *
  * Three things this owns that a single straight-line body kept getting wrong:
  *   - the bridge status is read AFTER the sidecar call as well as before
- *     (audit #741) — the sidecar round trip is the long one, and the verdict
+ *     — the sidecar round trip is the long one, and the verdict
  *     describes the bridge at the END of the check, not the start;
- *   - the result and the stored health are built ONCE (audit #744), so the
+ *   - the result and the stored health are built ONCE, so the
  *     success and failure branches cannot drift a field apart; and
- *   - concurrent checks are generation-stamped and counted (audit #739): only
+ *   - concurrent checks are generation-stamped and counted: only
  *     the LATEST run writes the store, and `isChecking` clears when the last
  *     one settles, not the first.
  */
@@ -84,7 +84,7 @@ export function useMcpHealthCheck() {
   const { running, port, refresh } = useMcpServer();
 
   // The latest health check's generation, and how many are still in flight.
-  // Same shape `useMcpServer` uses for its own bridge mutations (#382/#383).
+  // Same shape `useMcpServer` uses for its own bridge mutations.
   const runGeneration = useRef(0);
   const pendingChecks = useRef(0);
 
@@ -97,7 +97,7 @@ export function useMcpHealthCheck() {
     setIsChecking(true);
 
     // The render-time bridge status, superseded by every refresh that answers.
-    // Declared OUTSIDE the try (audit #745): when the sidecar call below fails
+    // Declared OUTSIDE the try: when the sidecar call below fails
     // after the refresh succeeded, the catch used to report the closure's
     // `running`/`port` — the values from the render that created this callback
     // — and so described a bridge state this very call had already superseded.
@@ -113,14 +113,14 @@ export function useMcpHealthCheck() {
     try {
       bridge = latestBridgeStatus(await refresh(), bridge);
       const sidecarHealth = await invoke<SidecarHealthInfo>("mcp_sidecar_health");
-      // Re-read AFTER the sidecar call (audit #741). The bridge can start or
+      // Re-read AFTER the sidecar call. The bridge can start or
       // stop while the sidecar is being probed, and the pre-call snapshot then
       // describes a bridge state the check itself outlived.
       bridge = latestBridgeStatus(await refresh(), bridge);
 
       const sidecarOk = sidecarHealth.status === "ok";
       // ONE decision about what went wrong, used by both the returned result
-      // and the stored health (audit #744). `undefined` is the success signal
+      // and the stored health. `undefined` is the success signal
       // callers read alongside `success`; the store spells the same thing null.
       const error = sidecarOk
         ? bridge.running
@@ -164,7 +164,7 @@ export function useMcpHealthCheck() {
       };
     } finally {
       pendingChecks.current -= 1;
-      // The LAST check to settle clears the flag (audit #739): an unconditional
+      // The LAST check to settle clears the flag: an unconditional
       // clear in a `finally` let the first of two overlapping checks report
       // "done" while the second was still running, and the spinner stopped.
       if (pendingChecks.current === 0) setIsChecking(false);

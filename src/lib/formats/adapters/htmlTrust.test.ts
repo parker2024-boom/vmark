@@ -16,6 +16,7 @@ import {
   trustedFrameUrl,
   trustedFrameUrlFor,
 } from "./htmlTrust";
+import { VIDEO_EMBED_ORIGINS } from "@/utils/videoProviderRegistry";
 
 const TOKEN = "0123456789abcdef".repeat(4);
 const SCHEME_FORM = `${TRUSTED_SCHEME}://doc/${TOKEN}`;
@@ -124,8 +125,9 @@ describe("trustedFrameUrl — the form for the running platform", () => {
 });
 
 /// The app cannot embed a frame its own CSP forbids, and a wider `frame-src` is
-/// a security decision: the directive must name the two trusted origins and
-/// nothing beyond `'self'`.
+/// a security decision: the directive must name the two trusted origins, the
+/// video embed origins the embed builder declares (WI-RA25.1), and nothing
+/// beyond `'self'`.
 describe("the app CSP allows exactly the trusted origins", () => {
   const config = JSON.parse(readFileSync(CONFIG, "utf8"));
   const csp: string = config.app.security.csp;
@@ -136,8 +138,10 @@ describe("the app CSP allows exactly the trusted origins", () => {
     expect(frameSrc).toContain(TRUSTED_WINDOWS_ORIGIN);
   });
 
-  it("and nothing else beyond 'self'", () => {
-    expect([...frameSrc].sort()).toEqual(["'self'", `${TRUSTED_SCHEME}:`, TRUSTED_WINDOWS_ORIGIN].sort());
+  it("and nothing else beyond 'self' and the video embeds", () => {
+    expect([...frameSrc].sort()).toEqual(
+      ["'self'", `${TRUSTED_SCHEME}:`, TRUSTED_WINDOWS_ORIGIN, ...VIDEO_EMBED_ORIGINS].sort(),
+    );
   });
 
   /// `useHttpsScheme` would move every custom protocol on Windows to

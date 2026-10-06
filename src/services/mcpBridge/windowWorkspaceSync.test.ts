@@ -20,7 +20,6 @@ function harness(initialRoot: string | null) {
   let root = initialRoot;
   const stop = startWindowWorkspaceSync({
     invoke: invoke as never,
-    windowLabel: "doc-0",
     subscribe,
     getRoot: () => root,
   });
@@ -38,7 +37,6 @@ describe("startWindowWorkspaceSync", () => {
   it("registers the current root on start", () => {
     const { invoke } = harness("/repo");
     expect(invoke).toHaveBeenCalledWith("mcp_bridge_set_window_workspace", {
-      windowLabel: "doc-0",
       workspaceRoot: "/repo",
     });
   });
@@ -50,7 +48,6 @@ describe("startWindowWorkspaceSync", () => {
     expect(invoke).not.toHaveBeenCalled();
     setRoot("/other");
     expect(invoke).toHaveBeenCalledWith("mcp_bridge_set_window_workspace", {
-      windowLabel: "doc-0",
       workspaceRoot: "/other",
     });
   });
@@ -67,7 +64,6 @@ describe("startWindowWorkspaceSync", () => {
     }) as unknown as typeof useWorkspaceStore.subscribe;
     startWindowWorkspaceSync({
       invoke: invoke as never,
-      windowLabel: "doc-0",
       subscribe,
       getRoot: () => "/repo",
     });
@@ -78,7 +74,6 @@ describe("startWindowWorkspaceSync", () => {
     // not be swallowed as a no-op.
     listener?.({ rootPath: "/repo" });
     expect(invoke).toHaveBeenCalledWith("mcp_bridge_set_window_workspace", {
-      windowLabel: "doc-0",
       workspaceRoot: "/repo",
     });
   });
@@ -101,7 +96,6 @@ describe("startWindowWorkspaceSync", () => {
     }) as unknown as typeof useWorkspaceStore.subscribe;
     startWindowWorkspaceSync({
       invoke: invoke as never,
-      windowLabel: "doc-0",
       subscribe,
       getRoot: () => "/repo",
     });
@@ -133,7 +127,6 @@ describe("startWindowWorkspaceSync", () => {
     const subscribe = (() => () => {}) as unknown as typeof useWorkspaceStore.subscribe;
     const stop = startWindowWorkspaceSync({
       invoke: invoke as never,
-      windowLabel: "doc-0",
       subscribe,
       getRoot: () => "/repo",
     });
@@ -145,7 +138,6 @@ describe("startWindowWorkspaceSync", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(invoke).toHaveBeenCalledWith("mcp_bridge_set_window_workspace", {
-      windowLabel: "doc-0",
       workspaceRoot: null,
     });
   });
@@ -155,7 +147,6 @@ describe("startWindowWorkspaceSync", () => {
     invoke.mockClear();
     setRoot(null);
     expect(invoke).toHaveBeenCalledWith("mcp_bridge_set_window_workspace", {
-      windowLabel: "doc-0",
       workspaceRoot: null,
     });
   });
@@ -165,7 +156,6 @@ describe("startWindowWorkspaceSync", () => {
     invoke.mockClear();
     stop();
     expect(invoke).toHaveBeenCalledWith("mcp_bridge_set_window_workspace", {
-      windowLabel: "doc-0",
       workspaceRoot: null,
     });
   });

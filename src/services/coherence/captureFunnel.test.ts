@@ -14,9 +14,11 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 const mockRegisterPendingSave = vi.fn(() => 42);
 const mockClearPendingSave = vi.fn();
+const mockClearPendingSaveAfterGrace = vi.fn();
 vi.mock("@/utils/pendingSaves", () => ({
   registerPendingSave: (...args: unknown[]) => mockRegisterPendingSave(...args),
   clearPendingSave: (...args: unknown[]) => mockClearPendingSave(...args),
+  clearPendingSaveAfterGrace: (...args: unknown[]) => mockClearPendingSaveAfterGrace(...args),
 }));
 
 import {
@@ -133,7 +135,6 @@ describe("captureWrite", () => {
   });
 
   it("registers a pending save when the kernel rewrote the file with identity", async () => {
-    vi.useFakeTimers();
     const withIdentity = { ...receipt, content_with_identity: "---\nvmark:\n  id: x\n---\n# Scene\n" };
     mockInvoke.mockResolvedValue(withIdentity);
     await captureWrite({
@@ -146,8 +147,10 @@ describe("captureWrite", () => {
       "/ws/story/scene.md",
       withIdentity.content_with_identity
     );
-    vi.advanceTimersByTime(1100);
-    expect(mockClearPendingSave).toHaveBeenCalledWith("/ws/story/scene.md", 42);
+    // Kept for the grace window (pinned in utils/pendingSaves.test.ts), not
+    // cleared at once: the watcher's echo of the kernel's rewrite arrives late.
+    expect(mockClearPendingSave).not.toHaveBeenCalled();
+    expect(mockClearPendingSaveAfterGrace).toHaveBeenCalledWith("/ws/story/scene.md", 42);
   });
 
   it("degrades silently when the kernel call fails", async () => {

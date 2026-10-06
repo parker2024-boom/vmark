@@ -13,6 +13,12 @@
  *   - MATH_BLOCK_LANGUAGE sentinel stores math blocks as codeBlock with a special
  *     language value, since PM schema doesn't have a dedicated math block node
  *   - TOC nodes are converted from `toc` MDAST type to atom PM nodes
+ *   - A code fence's `meta` and a list's `spread` are passed as attributes;
+ *     a schema that does not declare them drops them (modelLimitAttrs.test.ts)
+ *   - In a loose list (blank lines between items, or an item holding blocks
+ *     separated by one), an item the source wrote with no blank line before it
+ *     gets `tightBefore` (listItemGapJoin.ts writes it back that way). Missing
+ *     or malformed positions leave it unset, which writes the blank line.
  *
  * @coordinates-with mdastConverterHelpers.ts — shared context type and helpers
  * @coordinates-with mdastMediaConverters.ts — paragraph/HTML media promotion
@@ -73,7 +79,12 @@ export function convertCode(context: MdastToPmContext, node: Code): PMNode | nul
   if (!type) return null;
 
   const text = node.value ? context.schema.text(node.value) : null;
-  return type.create({ language: node.lang || null, sourceLine: getSourceLine(node) }, text ? [text] : []);
+  // `meta` (the fence info after the language) is kept where the node type
+  // declares it; ProseMirror ignores an attribute a type does not declare.
+  return type.create(
+    { language: node.lang || null, meta: node.meta || null, sourceLine: getSourceLine(node) },
+    text ? [text] : [],
+  );
 }
 
 export function convertList(context: MdastToPmContext, node: List, marks: Mark[]): PMNode | null {
@@ -82,10 +93,41 @@ export function convertList(context: MdastToPmContext, node: List, marks: Mark[]
   const type = context.schema.nodes[typeName];
   if (!type) return null;
 
-  const children = context.convertChildren(node.children, marks, "block");
+  // `spread` (a loose list) is kept where the node type declares it.
+  const spread = node.spread === true;
+  // A tight list has no gap to record: every item already sits under the last.
+  const loose = spread || node.children.some((item) => item.spread === true);
+  const children: PMNode[] = [];
+  node.children.forEach((item, index) => {
+    const tight = loose && index > 0 && blankLinesBetween(node.children[index - 1], item) === 0;
+    for (const converted of context.convertChildren([item], marks, "block")) {
+      children.push(tight ? withTightBefore(converted) : converted);
+    }
+  });
   const sourceLine = getSourceLine(node);
-  const attrs = isOrdered ? { start: node.start ?? 1, sourceLine } : { sourceLine };
+  const attrs = isOrdered ? { start: node.start ?? 1, sourceLine, spread } : { sourceLine, spread };
   return type.create(attrs, children);
+}
+
+/**
+ * Blank lines between two sibling items in the source, or null when either
+ * position is missing or malformed.
+ */
+function blankLinesBetween(previous: ListItem, next: ListItem): number | null {
+  const end = previous.position?.end.line;
+  const start = next.position?.start.line;
+  if (!Number.isInteger(end) || !Number.isInteger(start)) return null;
+  return (start as number) - (end as number) - 1;
+}
+
+/**
+ * Copy of a list item marked `tightBefore`; other nodes pass through. A schema
+ * that does not declare the attribute drops it, as ProseMirror does any
+ * undeclared attribute.
+ */
+function withTightBefore(node: PMNode): PMNode {
+  if (node.type.name !== "listItem") return node;
+  return node.type.create({ ...node.attrs, tightBefore: true }, node.content, node.marks);
 }
 
 export function convertListItem(

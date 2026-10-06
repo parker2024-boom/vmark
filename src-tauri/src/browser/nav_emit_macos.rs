@@ -1,4 +1,4 @@
-//! Window-routed emission for browser events (WI-S0.2 / ADR-6).
+//! Window-routed emission for browser events (ADR-6).
 //!
 //! The nav delegate used to emit via `app.emit`, which BROADCASTS to every window. With
 //! two document windows each showing a browser tab, every window's listeners saw every
@@ -21,6 +21,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
 use super::NavDelegate;
+use crate::browser::locks;
 use crate::browser::surface::BrowserSurface;
 
 impl NavDelegate {
@@ -35,7 +36,7 @@ impl NavDelegate {
 /// The window that owns `tab_id`, per the registry.
 fn owner_of(app: &AppHandle, tab_id: &str) -> Option<String> {
     let state = app.try_state::<BrowserSurface>()?;
-    let registry = state.registry.lock().ok()?;
+    let registry = locks::registry(&state)?;
     registry.window_of(tab_id).map(str::to_string)
 }
 
@@ -60,12 +61,12 @@ pub(super) fn emit_to_owner<P: Serialize + Clone>(
         Some(label) => match app.emit_to(label.as_str(), event, payload) {
             Ok(()) => true,
             Err(e) => {
-                log::warn!("[browser] {event} for {tab_id} not delivered to {label}: {e}");
+                log::warn!("[browser] {event} for {tab_id:?} not delivered to {label:?}: {e}");
                 false
             }
         },
         None => {
-            log::debug!("[browser] dropping {event} for {tab_id}: no owning window");
+            log::debug!("[browser] dropping {event} for {tab_id:?}: no owning window");
             false
         }
     }

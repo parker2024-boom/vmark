@@ -12,13 +12,13 @@
  *   - Hover state is per-EditorView (WeakMap-keyed) so multi-window / tear-off editors
  *     do not race on shared module timers.
  *   - Popup uses FootnotePopupView (DOM-based, not React) for performance
- *   - appendTransaction handles footnote deletion + renumbering in a single atomic step
- *   - appendTransaction skips IME composition (would disrupt CJK input) and undo/redo
- *     batches (would corrupt history; plugins/shared/historyBatch)
+ *   - appendTransaction handles footnote deletion + renumbering in a single atomic step;
+ *     it lives in cleanupOnEdit.ts, which also keeps it from reading the document on
+ *     edits that cannot have removed a reference
  *   - Footnote references and definitions are bidirectionally linked for navigation
  *
  * @coordinates-with FootnotePopupView.ts — DOM construction and event handling for the popup
- * @coordinates-with tiptapCleanup.ts — renumbering and orphan cleanup transactions
+ * @coordinates-with cleanupOnEdit.ts — the appendTransaction: cleanup after a reference is removed
  * @coordinates-with tiptapDomUtils.ts — DOM traversal for finding footnote elements
  * @coordinates-with tiptapNodes.ts — footnoteReference and footnoteDefinition node types
  * @coordinates-with stores/footnotePopupStore.ts — popup visibility and position state
@@ -26,65 +26,18 @@
  */
 
 import { Extension } from "@tiptap/core";
-import { Plugin, PluginKey, type Transaction, type EditorState, NodeSelection } from "@tiptap/pm/state";
-import type { Node as PMNode, NodeType, Slice } from "@tiptap/pm/model";
+import { Plugin, PluginKey, NodeSelection } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import type { StoreApi } from "@/plugins/shared/types";
 import type { FootnotePopupState } from "@/plugins/shared/popupPorts";
 import { HOVER_OPEN_DELAY_MS, HOVER_CLOSE_DELAY_MS, getHoverState, clearHoverTimeout, clearCloseTimeout, resetHoverState } from "./hoverState";
 import { FootnotePopupView } from "./FootnotePopupView";
-import { collectFootnoteNodes, createCleanupAndRenumberTransaction, createRenumberTransaction, hasRefCountDropped } from "./tiptapCleanup";
+import { createFootnoteCleanupOnEdit } from "./cleanupOnEdit";
 import { findFootnoteDefinition, findFootnoteReference, getFootnoteDefFromTarget, getFootnoteRefFromTarget, scrollToPosition } from "./tiptapDomUtils";
-import { isHistoryBatch } from "@/plugins/shared/historyBatch";
+import { requirePort } from "@/plugins/shared/requirePort";
 import "./footnote-popup.css";
 
 export const footnotePopupPluginKey = new PluginKey("footnotePopup");
-/**
- * Fast path: scan a transaction's inserted slices for a node of `refType`
- * or `defType`. Used to short-circuit when the cached doc state says there
- * are no footnotes — we only need to rewalk the whole doc if an insert
- * could have introduced one.
- */
-function transactionsInsertFootnote(
-  transactions: readonly Transaction[],
-  refType: NodeType,
-  defType: NodeType,
-): boolean {
-  for (const tr of transactions) {
-    for (const step of tr.steps) {
-      // ReplaceStep/ReplaceAroundStep expose `slice`; other step types don't.
-      const slice = (step as { slice?: Slice }).slice;
-      if (!slice) continue;
-      let found = false;
-      slice.content.descendants((node) => {
-        if (node.type === refType || node.type === defType) {
-          found = true;
-          return false;
-        }
-        return true;
-      });
-      if (found) return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Short-circuit scan: stops on the first footnote reference or definition.
- * Cheaper than `collectFootnoteNodes` for the common "doc has no footnotes"
- * case, since it exits early rather than walking the entire document.
- */
-function docContainsFootnotes(doc: PMNode): boolean {
-  let hasFootnotes = false;
-  doc.descendants((node) => {
-    if (node.type.name === "footnote_reference" || node.type.name === "footnote_definition") {
-      hasFootnotes = true;
-      return false;
-    }
-    return true;
-  });
-  return hasFootnotes;
-}
 
 function handleMouseOver(store: StoreApi<FootnotePopupState>, view: EditorView, event: MouseEvent): boolean {
   const refElement = getFootnoteRefFromTarget(event.target);
@@ -254,17 +207,16 @@ class FootnotePopupPluginView {
 /** Options for the footnote-popup extension. */
 export interface FootnotePopupOptions {
   /** The popup state this plugin drives — a PORT, not the app's store. */
-  store: StoreApi<FootnotePopupState>;
+  store: StoreApi<FootnotePopupState> | undefined;
 }
 
 export const footnotePopupExtension = Extension.create<FootnotePopupOptions>({
   name: "footnotePopup",
   addOptions() {
-    return { store: undefined as unknown as StoreApi<FootnotePopupState> };
+    return { store: undefined };
   },
   addProseMirrorPlugins() {
-    const { store } = this.options;
-    if (!store) throw new Error("footnotePopupExtension requires a `store` option");
+    const store = requirePort(this.options.store, "footnotePopupExtension", "store");
     return [
       new Plugin({
         key: footnotePopupPluginKey,
@@ -286,98 +238,7 @@ export const footnotePopupExtension = Extension.create<FootnotePopupOptions>({
             mouseout: (v, e) => handleMouseOut(store, v, e),
           },
         },
-        appendTransaction: (() => {
-          // Track whether cleanup was deferred during IME composition.
-          // If a composition transaction deletes a footnote ref, the cleanup
-          // can't run mid-composition (would disrupt CJK input), so we mark
-          // it pending and run on the first non-composition doc change.
-          let cleanupPending = false;
-          // Cached result of the last full-doc "has footnotes" scan. null = not yet
-          // determined (scan on first transaction). For large footnote-free docs,
-          // this avoids walking the entire document on every keystroke.
-          let hasFootnotesCache: boolean | null = null;
-
-          return (transactions: readonly Transaction[], oldState: EditorState, newState: EditorState) => {
-          const refType = newState.schema.nodes.footnote_reference;
-          const defType = newState.schema.nodes.footnote_definition;
-          if (!refType || !defType) return null;
-
-          const docChanged = transactions.some((tr) => tr.docChanged);
-          if (!docChanged && !cleanupPending) return null;
-          // Undo/redo restores recorded footnotes: never rewrite it (see historyBatch), but the cache may be stale.
-          if (isHistoryBatch(transactions)) {
-            hasFootnotesCache = null;
-            return null;
-          }
-
-          // Skip during IME composition — dispatching transactions mid-composition
-          // can cause ProseMirror to reconcile the DOM, disrupting active CJK input
-          // (cf. Tiptap #6758 emoji extension, #7126 TableOfContents).
-          const isComposition = transactions.some(
-            (tr) => tr.getMeta("composition") || tr.getMeta("uiEvent") === "input"
-          );
-          if (isComposition) {
-            // Mark pending if doc changed during composition — cleanup will
-            // run on the next non-composition transaction.
-            if (docChanged) cleanupPending = true;
-            return null;
-          }
-
-          // If cleanup was deferred from a composition transaction, clear
-          // the flag and run cleanup/renumber unconditionally based on the
-          // current state — the old ref deletion is no longer visible in
-          // oldState vs newState since both already reflect the change.
-          const wasDeferred = cleanupPending;
-          cleanupPending = false;
-
-          // Fast path: if we already know the doc has no footnotes, inspect only
-          // the transaction's inserted slices. If none contain footnote nodes,
-          // skip entirely — no need to rewalk the whole doc.
-          if (hasFootnotesCache === false) {
-            if (!transactionsInsertFootnote(transactions, refType, defType)) return null;
-            // A footnote slice was inserted — fall through to full scan and refresh cache.
-          }
-
-          // Fast check: if new doc has no footnote refs AND no definitions, skip full scan
-          const hasFootnotes = docContainsFootnotes(newState.doc);
-          hasFootnotesCache = hasFootnotes;
-          if (!hasFootnotes) return null;
-
-          const newCollected = collectFootnoteNodes(newState.doc);
-          const newRefLabels = newCollected.refLabels;
-
-          if (!wasDeferred) {
-            // Normal path: check if any ref was deleted in this transaction.
-            // Per-label COUNTS, not label sets — deleting one of two
-            // duplicate refs ([1,2,1] → [2,1]) leaves the set unchanged but
-            // still requires renumbering.
-            const oldCollected = collectFootnoteNodes(oldState.doc);
-            if (!hasRefCountDropped(oldCollected.refs, newCollected.refs)) return null;
-          }
-          // Deferred path: skip refDeleted check — cleanup needed regardless
-
-          const defs = newCollected.defs;
-          const orphanedDefs = defs.filter((d) => !newRefLabels.has(d.label));
-
-          if (orphanedDefs.length === 0 && newRefLabels.size === 0) {
-            if (defs.length > 0) {
-              let tr = newState.tr;
-              const sortedDefs = [...defs].sort((a, b) => b.pos - a.pos);
-              for (const def of sortedDefs) {
-                tr = tr.delete(def.pos, def.pos + def.size);
-              }
-              return tr;
-            }
-            return null;
-          }
-
-          if (orphanedDefs.length === 0) {
-            return createRenumberTransaction(newState, refType, defType, newCollected);
-          }
-
-          return createCleanupAndRenumberTransaction(newState, newRefLabels, refType, defType, newCollected);
-          };
-        })(),
+        appendTransaction: createFootnoteCleanupOnEdit(),
       }),
     ];
   },

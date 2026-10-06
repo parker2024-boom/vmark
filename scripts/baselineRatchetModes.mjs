@@ -1,6 +1,8 @@
 /**
  * The comparison engine behind the baseline ratchet: one function per
- * comparison mode, plus the allowRaise reconciliation.
+ * comparison mode. The allowRaise reconciliation lives in
+ * scripts/lib/baselineRatchet/allowRaise.mjs and is re-exported here, so the
+ * CLI keeps one import site for the engine.
  *
  * Every function here is pure — base value in, head value in, failures and
  * notices out — so the CLI (scripts/check-baseline-ratchet.mjs) owns all of
@@ -17,6 +19,8 @@
  * @coordinates-with scripts/baselineRatchetTsAllowlist.mjs — the one custom
  *   comparator, kept in its own module because reading identities out of
  *   TypeScript source is a parser, not a comparison mode
+ * @coordinates-with scripts/lib/baselineRatchet/allowRaise.mjs — the one-shot
+ *   allowRaise reconciliation, re-exported below
  */
 import { tsIdenticalAllowlistIdentities } from "./baselineRatchetTsAllowlist.mjs";
 import { contrastFloors } from "./baselineRatchetContrastFloors.mjs";
@@ -27,6 +31,8 @@ import {
   tsExpectedDeltas,
   tsFidelityLedger,
 } from "./baselineRatchetSpecLedgers.mjs";
+
+export { reconcileAllowRaise } from "./lib/baselineRatchet/allowRaise.mjs";
 
 /** `//`-prefixed and `_`-prefixed keys are prose, present in most baselines. */
 function isCommentKey(key) {
@@ -258,44 +264,4 @@ function diffIdentity(baseSet, headSet, check, where) {
     for (const a of added) notices.push(`    + ${a}`);
   }
   return { failures, notices, raises: [] };
-}
-
-/**
- * Reconcile observed raises against the manifest's allowRaise entries.
- * A declared raise that did not happen is STALE — that is what makes the
- * exemption one-shot rather than permanent.
- */
-export function reconcileAllowRaise(allowRaise, raises) {
-  const failures = [];
-  const notices = [];
-  const consumed = new Set();
-
-  for (const entry of allowRaise) {
-    if (typeof entry.reason !== "string" || entry.reason.trim() === "") {
-      failures.push(`allowRaise for ${entry.path}:${entry.key} has no reason — state why, or delete it.`);
-      continue;
-    }
-    const idx = raises.findIndex((r) => r.path === entry.path && r.key === entry.key && !consumed.has(r));
-    const match = idx === -1 ? undefined : raises[idx];
-    if (!match) {
-      failures.push(
-        `stale allowRaise: ${entry.path}:${entry.key} declares ${entry.from} → ${entry.to}, but no such ` +
-          "raise exists against this merge base (it has already landed, or the value changed). Delete it.",
-      );
-      continue;
-    }
-    if (match.from !== entry.from || match.to !== entry.to) {
-      failures.push(
-        `allowRaise mismatch: ${entry.path}:${entry.key} permits ${entry.from} → ${entry.to}, ` +
-          `but the actual change is ${match.from} → ${match.to}.`,
-      );
-      continue;
-    }
-    consumed.add(match);
-    notices.push(`allowed raise: ${entry.path}:${entry.key} ${entry.from} → ${entry.to}`);
-    notices.push(`    reason: ${entry.reason}`);
-  }
-
-  const unexplained = raises.filter((r) => !consumed.has(r));
-  return { failures, notices, unexplained };
 }

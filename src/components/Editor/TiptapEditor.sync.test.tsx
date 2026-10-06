@@ -1,6 +1,6 @@
 // Split from TiptapEditor.test.tsx per the test-file size gate (WI-7).
 // The mock/header block is replicated because vi.mock is per-module hoisted.
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render } from "@testing-library/react";
 
 /**
@@ -41,7 +41,6 @@ const mocks = vi.hoisted(() => ({
     setSelectedText: mocks.setSelectedText,
   })),
   useWindowLabel: vi.fn(() => "main"),
-  consumeWysiwygPendingNav: vi.fn(() => false),
   reportUnparseableDocument: vi.fn(),
   // Mock editor returned by useEditor
   mockEditor: null as ReturnType<typeof createMockEditor> | null,
@@ -215,18 +214,8 @@ vi.mock("@/stores/documentStore", () => ({
   useFileLoadStore: { getState: () => ({ active: false }) },
 }));
 
-vi.mock("./wysiwygPendingNav", () => ({
-  consumeWysiwygPendingNav: (...args: unknown[]) => mocks.consumeWysiwygPendingNav(...args),
-}));
-
 vi.mock("@/services/editor/unparseableDocument", () => ({
   reportUnparseableDocument: (...args: unknown[]) => mocks.reportUnparseableDocument(...args),
-}));
-
-vi.mock("./ImageContextMenu", () => ({
-  ImageContextMenu: ({ onAction }: { onAction: (a: string) => void }) => (
-    <button data-testid="image-ctx" onClick={() => onAction("test")} />
-  ),
 }));
 
 import { TiptapEditorInner } from "./TiptapEditor";
@@ -447,6 +436,11 @@ describe("TiptapEditorInner — visibility transition effect", () => {
 // ── flushCursorInfo / scheduleCursorUpdate (deeper coverage) ────────
 
 describe("TiptapEditorInner — cursor update scheduling", () => {
+  // The cursor-tracking delay (200 ms) runs on the fake clock and is advanced,
+  // not slept through on the wall clock.
+  beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }));
+  afterEach(() => vi.useRealTimers());
+
   it("schedules cursor info via RAF after tracking enabled", async () => {
     const mockView = {
       state: {
@@ -476,7 +470,7 @@ describe("TiptapEditorInner — cursor update scheduling", () => {
     config.onCreate({ editor });
 
     // Wait for CURSOR_TRACKING_DELAY_MS (200ms) to enable tracking
-    await new Promise((r) => setTimeout(r, 250));
+    await vi.advanceTimersByTimeAsync(250);
 
     vi.clearAllMocks();
     mocks.getTiptapEditorView.mockReturnValue(mockView);
@@ -520,7 +514,7 @@ describe("TiptapEditorInner — cursor update scheduling", () => {
     const config = mocks.useEditor.mock.calls[0][0];
     config.onCreate({ editor });
 
-    await new Promise((r) => setTimeout(r, 250));
+    await vi.advanceTimersByTimeAsync(250);
 
     const rafBefore = rafCount;
     // Call onSelectionUpdate twice — second should not schedule new RAF
@@ -552,7 +546,7 @@ describe("TiptapEditorInner — cursor update scheduling", () => {
     const config = mocks.useEditor.mock.calls[0][0];
     config.onCreate({ editor });
 
-    await new Promise((r) => setTimeout(r, 250));
+    await vi.advanceTimersByTimeAsync(250);
 
     mocks.setSelectedText.mockClear();
     config.onSelectionUpdate({ editor });
@@ -578,7 +572,7 @@ describe("TiptapEditorInner — cursor update scheduling", () => {
     const config = mocks.useEditor.mock.calls[0][0];
     config.onCreate({ editor });
 
-    await new Promise((r) => setTimeout(r, 250));
+    await vi.advanceTimersByTimeAsync(250);
 
     mocks.setSelectedText.mockClear();
     config.onSelectionUpdate({ editor });

@@ -34,7 +34,7 @@
  * @coordinates-with terminalSessionStoreSync.ts — theme / workspace / settings sync effects
  * @coordinates-with terminalSessionInputWiring.ts — IME and onData → PTY wiring
  * @coordinates-with spawnPty.ts — shell process creation
- * @coordinates-with stores/uiStore/terminalSlice.ts — store slice driving session list and active ID
+ * @coordinates-with stores/terminalStore/sessionActions.ts — session store driving session list and active ID
  * @module components/Terminal/useTerminalSessions
  */
 import { useRef, useEffect, useCallback } from "react";
@@ -42,7 +42,7 @@ import type { IPty } from "@/lib/pty";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { initialState } from "@/stores/settingsStore/defaults";
 import { currentTerminalThemeId } from "./terminalThemeId";
-import { useUIStore } from "@/stores/uiStore";
+import { useTerminalStore } from "@/stores/terminalStore";
 import { createTerminalInstance } from "./createTerminalInstance";
 import { sessionBellHandler } from "./terminalSessionBell";
 import { useUIStoreSync } from "./terminalSessionStoreSync";
@@ -79,7 +79,7 @@ export function useTerminalSessions(
 
   // Fit the active terminal (and propagate the new dimensions to its PTY)
   const fit = useCallback(() => {
-    const activeId = useUIStore.getState().terminal.activeSessionId;
+    const activeId = useTerminalStore.getState().activeSessionId;
     if (!activeId) return;
     const entry = sessionsRef.current.get(activeId);
     if (!entry) return;
@@ -91,7 +91,7 @@ export function useTerminalSessions(
 
   /** Get search addon of active session. */
   const getActiveSearchAddon = useCallback((): SearchAddon | null => {
-    const activeId = useUIStore.getState().terminal.activeSessionId;
+    const activeId = useTerminalStore.getState().activeSessionId;
     if (!activeId) return null;
     const entry = sessionsRef.current.get(activeId);
     return entry?.instance.searchAddon ?? null;
@@ -99,7 +99,7 @@ export function useTerminalSessions(
 
   /** Get terminal + pty refs for context menu. */
   const getActiveTerminal = useCallback(() => {
-    const activeId = useUIStore.getState().terminal.activeSessionId;
+    const activeId = useTerminalStore.getState().activeSessionId;
     if (!activeId) return null;
     const entry = sessionsRef.current.get(activeId);
     if (!entry) return null;
@@ -107,14 +107,14 @@ export function useTerminalSessions(
       term: entry.instance.term,
       ptyRef: entry.ptyRefForKeys,
       resetDisplay: entry.instance.resetDisplay,
-      // OSC 133 marks for "Copy Command Output" (WI-4.4). Empty without
+      // OSC 133 marks for "Copy Command Output". Empty without
       // shell integration, which hides the menu item.
       getCommands: entry.instance.getCommands,
     };
   }, []);
 
-  // Publish a per-SESSION terminal resolver for non-React callers (WI-4.3
-  // "Run in Terminal"). Keyed by id rather than "the active one" so a deferred
+  // Publish a per-SESSION terminal resolver for non-React callers
+  // ("Run in Terminal"). Keyed by id rather than "the active one" so a deferred
   // delivery lands in the session it was requested for, even if the user
   // switched tabs meanwhile. Registered per window; cleared on unmount so a
   // torn-down panel cannot hand out a disposed instance.
@@ -140,7 +140,7 @@ export function useTerminalSessions(
       // Skip if already exists (guard against double-init)
       if (sessionsRef.current.has(sessionId)) return;
 
-      // The store's OWN defaults, not ten literals restated here (audit #19).
+      // The store's OWN defaults, not ten literals restated here.
       const { fontSize, lineHeight, cursorStyle, cursorBlink, useWebGL, macOptionIsMeta,
         screenReaderMode, minimumContrastRatio, scrollback, osc52Clipboard } =
         { ...initialState.terminal, ...useSettingsStore.getState().terminal };
@@ -152,7 +152,7 @@ export function useTerminalSessions(
 
       // Construction can throw (WebGL exhaustion, disposed parent). Uncaught it
       // propagated out of the INIT EFFECT, which then never registered cleanup —
-      // leaking every session built before the failure (audit #17).
+      // leaking every session built before the failure.
       let instance;
       try {
         instance = createTerminalInstance({
@@ -168,19 +168,19 @@ export function useTerminalSessions(
         // permanently blank tab that neither fit nor restart could recover
         // (no entry ever registered). Remove it — the reconcile's removal
         // pass is a no-op for an id with no live instance.
-        useUIStore.getState().terminalRemoveSession(sessionId);
+        useTerminalStore.getState().terminalRemoveSession(sessionId);
         return;
       }
 
-      // Program title → per-session tab title (G4/WI-3.2). xterm parses OSC
+      // Program title → per-session tab title (G4). xterm parses OSC
       // 0/2 internally and exposes onTitleChange; registering our own OSC
       // handler would shadow the built-in (LIFO). The returned IDisposable is
       // owned by term.dispose() — no manual cleanup needed.
       // An EMPTY title is forwarded too: `OSC 2 ; BEL` is how a program clears a
       // title it set, and swallowing it left a stale tab name forever. The store
-      // trims, so "" lands as "" and the tab falls back to its label (audit #18).
+      // trims, so "" lands as "" and the tab falls back to its label.
       instance.term.onTitleChange((title) => {
-        useUIStore.getState().terminalSetProgramTitle(sessionId, title);
+        useTerminalStore.getState().terminalSetProgramTitle(sessionId, title);
       });
 
       const entry: SessionEntry = {

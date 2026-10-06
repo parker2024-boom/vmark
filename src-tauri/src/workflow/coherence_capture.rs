@@ -1,4 +1,4 @@
-//! WI-1.6 — coherence capture for workflow `action/save-file` writes
+//! Coherence capture for workflow `action/save-file` writes
 //! (in-process, no IPC). The runner is the capture site: it knows the
 //! step graph, so the input set is computed by walking template
 //! references (`${{ steps.X... }}` and bare `X.output` aliases)
@@ -13,7 +13,7 @@
 //! `capture_with_policy` applies it — with the setting off and no ledger, a
 //! save-file step creates no `.vmark/` and stamps nothing. A run that carried
 //! no policy is treated as off. It used to ride in `WorkflowRunnerState`, an
-//! app-global slot whose correctness rested on one-run-at-a-time (#66/#80).
+//! app-global slot whose correctness rested on one-run-at-a-time.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -56,7 +56,7 @@ fn referenced_ids(value: &str, known_ids: &HashSet<&str>) -> Vec<String> {
         scan = &region[close..];
     }
     // Bare whole-value alias `X.output` (legacy grammar), judged by the
-    // EXECUTOR's own rule (#512). This used to accept any `known_id.<anything>`
+    // EXECUTOR's own rule. This used to accept any `known_id.<anything>`
     // whose whole value was `[A-Za-z0-9._-]`, so a step named `read` turned the
     // literal `read.text` — and even a plain filename like `read.md` — into a
     // dependency edge. `resolve` substitutes neither, so those edges recorded a
@@ -72,7 +72,7 @@ fn referenced_ids(value: &str, known_ids: &HashSet<&str>) -> Vec<String> {
 /// Every step `target_id` transitively depends on, by template reference —
 /// including `target_id` itself (BFS).
 ///
-/// One walk, two questions (#516): which reads feed the save, and whether a
+/// One walk, two questions: which reads feed the save, and whether a
 /// model was among the steps that produced it. Asking them separately would be
 /// two traversals that can disagree about what "feeding this step" means.
 fn reachable_from(steps: &[StepSlice], target_id: &str) -> HashSet<String> {
@@ -131,7 +131,7 @@ fn normalize_in_workspace(path: &str, workspace_root: &Path) -> Option<String> {
     (!text.is_empty()).then_some(text)
 }
 
-/// Who a save-file step's content should be attributed to (#516).
+/// Who a save-file step's content should be attributed to.
 ///
 /// Not always the model. A workflow may be actions only — read a file,
 /// transform it, save it — and the kernel then recorded `AgentType::Model` /
@@ -161,7 +161,7 @@ fn agent_for(steps: &[StepSlice], reachable: &HashSet<String>) -> Agent {
     }
 }
 
-/// One successful save-file step, as its capture needs it (#65: this was eight
+/// One successful save-file step, as its capture needs it (this was eight
 /// positional arguments, four of them `&str`, under a lint suppression).
 pub struct SaveFileCapture<'a> {
     pub workspace_root: &'a Path,
@@ -191,7 +191,7 @@ pub fn capture_save_file(
         policy,
     } = save;
     // Coherence keys objects on a NORMALIZED workspace-relative path, so a
-    // raw `with.path` cannot be handed to it as written (audit #514).
+    // raw `with.path` cannot be handed to it as written.
     // `action/read-file` accepts `./notes.md`, `notes.md`, an absolute path
     // inside the workspace and a symlink alias for any of them — all valid,
     // all the same object, and all previously recorded as distinct names. The
@@ -233,9 +233,9 @@ pub fn capture_save_file(
 }
 
 /// Runner-facing entry: runs off-thread but is AWAITED by the runner
-/// (audit A11 — captures land in step order; a same-path later step can
+/// (captures land in step order; a same-path later step can
 /// never record before an earlier one). Failures log; steps never fail.
-/// `policy` is the run's own, passed down from `run_workflow` (#66).
+/// `policy` is the run's own, passed down from `run_workflow`.
 pub async fn capture_save_file_ordered<R: Runtime>(
     app: &AppHandle<R>,
     workspace_root: &Path,
@@ -259,8 +259,12 @@ pub async fn capture_save_file_ordered<R: Runtime>(
                 return;
             }
         };
-        let Ok(mut kernel) = kernel.lock() else {
-            log::warn!("coherence: workflow capture skipped: kernel poisoned");
+        // A poisoned kernel may hold a half-rebuilt index; it refuses until
+        // reopened (logged by the helper), and the step is untouched.
+        let Some(mut kernel) = crate::lock_policy::lock_or_refuse(
+            &kernel,
+            "the coherence kernel (workflow capture skipped)",
+        ) else {
             return;
         };
         let reachable = reachable_from(&steps, &step_id);

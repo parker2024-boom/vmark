@@ -1,7 +1,7 @@
 /**
  * Tab commands — CommandBus registration for tab lifecycle + status bar
  * (keybinding Phase 3, migrated from useTabShortcuts; moved to
- * services/commands in the WI-10 hooks→services migration once
+ * services/commands in the hooks→services migration once
  * `closeTabWithDirtyCheck` landed in services/tabs/tabOperations).
  *
  * Each command mirrors the exact behavior the bespoke hook had
@@ -54,7 +54,7 @@ function buildTabCommandSpecs(): CommandDefinition[] {
       run: (_a, ctx: Ctx) => {
         const windowLabel = wl(ctx);
         const tabState = useTabStore.getState();
-        // WI-4R: cycle only the VISIBLE projection — hidden instances' tabs
+        // Cycle only the VISIBLE projection — hidden instances' tabs
         // are unreachable by next/prev (rail off = full list, unchanged).
         const ids = visibleWindowTabs(windowLabel).map((t) => t.id);
         const target = cycleTabId(ids, tabState.activeTabId[windowLabel] ?? null, direction);
@@ -80,7 +80,7 @@ function buildTabCommandSpecs(): CommandDefinition[] {
     title: () => i18n.t("commands:tab.reopenClosed"),
     category: "file",
     run: (_a, ctx: Ctx) => {
-      // WI-FL3.3 (D12): the trigger the File-menu item and the `reopenClosedTab`
+      // The trigger the File-menu item and the `reopenClosedTab`
       // shortcut (unbound by default) dispatch to. Empty history is a no-op —
       // the service returns null and nothing changes.
       reopenClosedTabForActiveContext(wl(ctx));

@@ -10,7 +10,7 @@
  * (e.g. restored by hot exit), so restoration never creates a duplicate tab
  * for an already-loaded file. The command paths previously omitted this guard.
  *
- * Ownership (audit #480): a restored text tab goes through
+ * Ownership: a restored text tab goes through
  * `applyFileOwnershipAfterOpen` like every other open — fileOpen, Finder,
  * media, replace-tab — so it is claimed for its workspace instance and a copy
  * already writable in another window makes this one read-only. The media
@@ -18,17 +18,23 @@
  * read/create/ingest and skipped it, so a workspace reopened in a second
  * window could hold a second WRITABLE copy of a file.
  *
+ * Rollback: a tab this loop created whose initialisation then fails (text
+ * ingest, or the ownership claim on either branch) is removed with
+ * `detachTab`, not `closeTab` — by this loop for text, by
+ * `openMediaFileInNewTab` itself for media. It was never the user's tab, so it must not
+ * enter the reopen history, and a tab `createTab` deduplicated onto belongs to
+ * another opener and is never removed.
+ *
  * @module services/navigation/restoreWorkspaceTabs
  */
 
-import { readTextFile } from "@tauri-apps/plugin-fs";
-import { z } from "zod";
+import { readDocumentText } from "@/services/files/readDocumentText";
 import { useTabStore, tabFilePath } from "@/stores/tabStore";
 import { useDocumentStore } from "@/stores/documentStore";
 import { usePaneStore } from "@/stores/paneStore";
 import { loadSplitLayout } from "@/services/persistence/splitLayoutPersistence";
 import { findExistingTabForPath } from "@/services/tabs/findExistingTabForPath";
-import { tryOpenMediaFile } from "@/services/navigation/openMediaFile";
+import { isBinaryMediaPath, openMediaFileInNewTab } from "@/services/navigation/openMediaFile";
 import { getReplaceableTab } from "@/services/tabs/replaceableTab";
 import { applyFileOwnershipAfterOpen } from "@/services/workspaces/fileOwnership";
 import { workspaceWarn } from "@/utils/debug";
@@ -40,7 +46,7 @@ import { useClosedTabScopesStore } from "@/stores/tabStoreClosedScopes";
  * Is `tabId` STILL the clean untitled tab it was when we probed for it?
  *
  * The probe happens before the file reads and the close happens after, so the
- * verdict in between is stale by construction: `await readTextFile` yields, and
+ * verdict in between is stale by construction: `await readDocumentText` yields, and
  * in that window the user can type into the tab, save it, or close it. Acting
  * on the old verdict would discard their work — the one outcome this cleanup
  * must never produce. So the decision to close is re-derived from live state at
@@ -52,8 +58,39 @@ function stillReplaceable(windowLabel: string, tabId: string): boolean {
   return !(useDocumentStore.getState().documents[tabId]?.isDirty ?? false);
 }
 
-/** WI-3: a restorable path is a non-empty string — everything else is skipped. */
-const restorablePathSchema = z.string().min(1);
+/**
+ * Remove a tab this loop created and could not finish initialising. Not
+ * `closeTab`: that is the user's close and files the tab under "recently
+ * closed", offering to reopen a file whose restore just failed.
+ */
+function rollBackCreatedTab(windowLabel: string, tabId: string): void {
+  useTabStore.getState().detachTab(windowLabel, tabId);
+}
+
+/**
+ * Restore one binary media path as a path-only tab. Returns whether a tab was
+ * created. A tab `createTab` deduplicated onto is another opener's and is not
+ * counted. A failed open has already rolled back its own tab
+ * (`openMediaFileInNewTab` detaches what it created), so this only reports it.
+ */
+function restoreMediaTab(windowLabel: string, filePath: string): boolean {
+  let created = false;
+  try {
+    openMediaFileInNewTab(windowLabel, filePath, {
+      onTabCreated: (_tabId, isExistingTab) => {
+        created = !isExistingTab;
+      },
+    });
+    return created;
+  } catch (error) {
+    workspaceWarn(`Could not restore media tab: ${filePath}`, error);
+    return false;
+  }
+}
+
+/** A restorable path is a non-empty string — everything else is skipped. */
+const isRestorablePath = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
 
 /**
  * Restore ONE path. Returns whether a tab was created.
@@ -69,27 +106,22 @@ async function restoreOnePath(windowLabel: string, filePath: string): Promise<bo
   // open pipeline refuses it before any read; this function hand-rolls its own
   // read/create/ingest and so has to consult the same guard. A workspace's
   // persisted tabs are document paths, and a media tab IS a document tab with a
-  // path, so an image or video in `lastOpenTabs` reached `readTextFile`.
+  // path, so an image or video in `lastOpenTabs` reached the text read.
   //
-  // INSIDE the failure boundary (audit #976). This ran outside either catch, so
+  // INSIDE the failure boundary. This ran outside either catch, so
   // a throw from media routing, document init or the ownership claim rejected
   // `restoreOnePath` — and with it the whole loop, abandoning every sibling
   // path after it. One unrestorable file must cost one tab, not the session.
-  try {
-    if (tryOpenMediaFile(windowLabel, filePath)) return true;
-  } catch (error) {
-    workspaceWarn(`Could not restore media tab: ${filePath}`, error);
-    return false;
-  }
+  if (isBinaryMediaPath(filePath)) return restoreMediaTab(windowLabel, filePath);
 
   let content: string;
   try {
-    content = await readTextFile(filePath);
+    content = await readDocumentText(filePath);
   } catch (error) {
     // Read failure only. Nothing was created, so there is nothing to roll back.
     // Kept separate from the catch below so a post-create failure cannot be
-    // mislabelled as an unreadable file — and the CAUSE travels with it (audit
-    // #978): moved, deleted, permission-denied and undecodable all land here,
+    // mislabelled as an unreadable file — and the CAUSE travels with it:
+    // moved, deleted, permission-denied and undecodable all land here,
     // and the message alone could not tell a user which of them happened.
     workspaceWarn(`Could not restore tab: ${filePath}`, error);
     return false;
@@ -101,7 +133,7 @@ async function restoreOnePath(windowLabel: string, filePath: string): Promise<bo
   // and hand back THEIR tab, and the ingest below would overwrite its contents.
   if (findExistingTabForPath(windowLabel, filePath)) return false;
 
-  // …and the two dedup rules are NOT the same rule (audit #979).
+  // …and the two dedup rules are NOT the same rule.
   // `findExistingTabForPath` matches on the DOCUMENT's filePath, while
   // `createTab` matches on the TAB's — so a tab another opener created but has
   // not ingested yet is invisible above and deduplicated here, and `createTab`
@@ -113,13 +145,13 @@ async function restoreOnePath(windowLabel: string, filePath: string): Promise<bo
     // Deduplicated onto someone else's tab. Ingesting would overwrite whatever
     // they are loading into it, and the rollback below would CLOSE it — a
     // user-facing close, complete with a false "recently closed" entry — for a
-    // failure in this loop (audit #980).
+    // failure in this loop.
     return false;
   }
   try {
     // The disk-open door canonicalises AND derives line metadata.
     useDocumentStore.getState().ingestExternalContent(tabId, content, "disk-open", { filePath });
-    // Claim + cross-window writable check, after the document exists (#480).
+    // Claim + cross-window writable check, after the document exists.
     applyFileOwnershipAfterOpen(tabId, filePath);
     return true;
   } catch (error) {
@@ -127,14 +159,14 @@ async function restoreOnePath(windowLabel: string, filePath: string): Promise<bo
     // ownership claim). Roll the tab back rather than leave an orphan with no
     // document, and surface the actual error instead of hiding it as "file
     // moved".
-    useTabStore.getState().closeTab(windowLabel, tabId);
+    rollBackCreatedTab(windowLabel, tabId);
     workspaceWarn(`Failed to initialise restored tab: ${filePath}`, error);
     return false;
   }
 }
 
 /**
- * Drop a restoration-cleanup close from the reopen history (audit #983).
+ * Drop a restoration-cleanup close from the reopen history.
  *
  * `closeTab` is the USER's close: it files the tab under "recently closed", so
  * removing the startup blank left a synthetic Untitled entry there — and as the
@@ -158,7 +190,7 @@ function forgetClosedTab(windowLabel: string, tabId: string): void {
  * Restore the given file paths as tabs in `windowLabel`. Paths that already
  * have an open tab are skipped (dedup). Unreadable paths (moved/deleted) are
  * skipped with a warning. The list comes from a persisted workspace config, so
- * it is untrusted (WI-3): wrong-typed entries are skipped, siblings restored.
+ * it is untrusted: wrong-typed entries are skipped, siblings restored.
  * Returns the number of tabs newly created.
  */
 export async function restoreWorkspaceTabs(
@@ -174,12 +206,11 @@ export async function restoreWorkspaceTabs(
 
   let created = 0;
   for (const rawPath of paths) {
-    const parsed = restorablePathSchema.safeParse(rawPath);
-    if (!parsed.success) {
+    if (!isRestorablePath(rawPath)) {
       workspaceWarn("Skipping non-restorable session tab path:", rawPath);
       continue;
     }
-    const filePath = parsed.data;
+    const filePath = rawPath;
     // Dedup guard: skip files already open in this window (e.g. hot-exit restore).
     if (findExistingTabForPath(windowLabel, filePath)) continue;
 
@@ -204,7 +235,7 @@ export async function restoreWorkspaceTabs(
     forgetClosedTab(windowLabel, replaceable.tabId);
   }
 
-  // WI-TNAV2.5 — every `createTab` above ACTIVATES, so without this the session
+  // Every `createTab` above ACTIVATES, so without this the session
   // opens with an MRU in reverse-restore order that the user never produced,
   // and the first `Ctrl+Tab` jumps somewhere arbitrary. Hot-exit restore has
   // the same shape and the same fix; this is the second path, which the first
@@ -230,7 +261,7 @@ export function restoreSplitLayout(windowLabel: string, rootPath: string): void 
   if (!primaryTabId || !secondaryTabId || primaryTabId === secondaryTabId) return;
 
   const pane = usePaneStore.getState();
-  // Under a `restore` origin (audit #985). Every activation below is
+  // Under a `restore` origin. Every activation below is
   // rehydration, and `user` — the default — makes the MRU record a visit the
   // user never made, immediately after `restoreWorkspaceTabs` collapsed the MRU
   // for exactly that reason. A scope is available here, unlike in that loop,

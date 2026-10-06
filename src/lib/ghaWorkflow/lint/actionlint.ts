@@ -1,43 +1,27 @@
-// WI-5.3 — frontend wrapper around the Rust gha_lint Tauri command.
-//
-// Calls the optional actionlint binary via Rust. Three outcomes are
-// possible (mirroring the Rust LintResult enum):
-//
-//   - binary_missing → return empty diagnostics + binaryAvailable: false.
-//     The frontend hides the actionlint diagnostics layer silently.
-//   - ok            → forward diagnostics under GHA-ACTIONLINT-<kind>.
-//   - failed        → return empty diagnostics + error message; UI may
-//     show a one-time toast but other linters keep working.
-//
-// Audit fix (cross-validator): the `extraPath` option defaults to the
-// login-shell PATH from `get_login_shell_path` when callers omit it.
-// macOS GUI apps inherit a minimal PATH (`/usr/bin:/bin`) that misses
-// /opt/homebrew/bin, which is where Homebrew's actionlint lives.
-// Without this default, actionlint silently reported "binary missing"
-// for any user who installed it via Homebrew.
+/**
+ * Frontend wrapper around the Rust gha_lint Tauri command.
+ *
+ * Calls the optional actionlint binary via Rust. Three outcomes are
+ * possible (mirroring the Rust LintResult enum):
+ *
+ *   - binary_missing → return empty diagnostics + binaryAvailable: false.
+ *     The frontend hides the actionlint diagnostics layer silently.
+ *   - ok            → forward diagnostics under GHA-ACTIONLINT-<kind>.
+ *   - failed        → return empty diagnostics + error message; UI may
+ *     show a one-time toast but other linters keep working.
+ *
+ * Only the YAML crosses the boundary. Which actionlint binary runs, and the
+ * PATH it runs with, are decided in Rust from the login-shell PATH (macOS GUI
+ * launches inherit a minimal PATH that misses /opt/homebrew/bin). The webview
+ * used to send that PATH itself, which let page content choose the program
+ * the backend executes.
+ *
+ * @module lib/ghaWorkflow/lint/actionlint
+ */
 
 import { invoke } from "@tauri-apps/api/core";
 import type { Diagnostic, DiagnosticCode } from "../types";
-import { errorMessage } from "@/utils/errorMessage";
-
-let cachedShellPath: string | null = null;
-
-async function resolveExtraPath(): Promise<string | undefined> {
-  if (cachedShellPath !== null) return cachedShellPath || undefined;
-  try {
-    const path = await invoke<string>("get_login_shell_path");
-    cachedShellPath = path ?? "";
-    return cachedShellPath || undefined;
-  } catch {
-    cachedShellPath = "";
-    return undefined;
-  }
-}
-
-/** Test-only: reset the in-process login-shell PATH cache. */
-export function __resetActionlintPathCacheForTests(): void {
-  cachedShellPath = null;
-}
+import { commandErrorMessage } from "@/services/commands/commandError";
 
 interface RustActionlintDiagnostic {
   message: string;
@@ -63,29 +47,15 @@ export interface ActionlintOutcome {
   error?: string;
 }
 
-export async function lintWithActionlint(
-  yaml: string,
-  options: { extraPath?: string } = {},
-): Promise<ActionlintOutcome> {
-  // Default to the login-shell PATH so Homebrew installs (e.g.,
-  // /opt/homebrew/bin/actionlint) are reachable from the Rust process,
-  // which inherits the GUI app's minimal PATH on macOS.
-  const extraPath =
-    options.extraPath !== undefined
-      ? options.extraPath
-      : await resolveExtraPath();
-
+export async function lintWithActionlint(yaml: string): Promise<ActionlintOutcome> {
   let result: RustLintResult;
   try {
-    result = await invoke<RustLintResult>("gha_lint", {
-      yaml,
-      extraPath,
-    });
+    result = await invoke<RustLintResult>("gha_lint", { yaml });
   } catch (e) {
     return {
       binaryAvailable: false,
       diagnostics: [],
-      error: errorMessage(e),
+      error: commandErrorMessage(e),
     };
   }
 

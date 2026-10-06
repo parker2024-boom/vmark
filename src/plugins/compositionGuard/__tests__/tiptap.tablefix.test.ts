@@ -11,9 +11,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock imeGuard before importing the extension
 const mockFlushProseMirrorCompositionQueue = vi.fn();
-const mockGetImeCleanupPrefixLength = vi.fn(() => 0);
-const mockIsImeKeyEvent = vi.fn(() => false);
-const mockIsProseMirrorInCompositionGrace = vi.fn(() => false);
+const mockGetImeCleanupPrefixLength = vi.fn((..._args: unknown[]): number | null => 0);
+const mockIsImeKeyEvent = vi.fn((..._args: unknown[]) => false);
+const mockIsProseMirrorInCompositionGrace = vi.fn((..._args: unknown[]) => false);
 const mockMarkProseMirrorCompositionEnd = vi.fn();
 
 vi.mock("@/utils/imeGuard", () => ({
@@ -26,18 +26,14 @@ vi.mock("@/utils/imeGuard", () => ({
   markProseMirrorCompositionEnd: (...args: unknown[]) => mockMarkProseMirrorCompositionEnd(...args),
 }));
 
-// Mock splitBlockFix
-const mockFixCompositionSplitBlock = vi.fn(() => null);
-vi.mock("../splitBlockFix", () => ({
-  fixCompositionSplitBlock: (...args: unknown[]) => mockFixCompositionSplitBlock(...args),
-}));
-
 // Mock splitBlock from ProseMirror commands (used for Korean deferred Enter)
 const mockSplitBlock = vi.fn();
 vi.mock("@tiptap/pm/commands", () => ({
   splitBlock: (...args: unknown[]) => mockSplitBlock(...args),
 }));
 
+import { Schema } from "@tiptap/pm/model";
+import { EditorState, TextSelection, type Transaction } from "@tiptap/pm/state";
 import { compositionGuardExtension } from "../tiptap";
 
 // Mock requestAnimationFrame to execute callbacks synchronously
@@ -63,7 +59,7 @@ describe("compositionGuard tableHeader cursor fix", () => {
       type: undefined,
       parent: undefined,
     } as never);
-    const plugin = plugins[0] as {
+    const plugin = plugins[0] as unknown as {
       props: {
         handleDOMEvents: Record<string, (view: unknown, event?: unknown) => boolean>;
       };
@@ -363,8 +359,12 @@ describe("compositionGuard tableHeader cursor fix", () => {
     events.compositionupdate(mockView, { data: "ni" });
     events.compositionend(mockView, { data: "你" });
 
-    // Run captured rAF — should hit line 102 guard and return
-    if (capturedRafCb) capturedRafCb(0);
+    // Run captured rAF — the cleanup's start-past-the-block guard returns early.
+    // Asserted, not optional: a frame that was never scheduled would make the
+    // assertion below pass without running the cleanup at all.
+    const frame = capturedRafCb as FrameRequestCallback | null;
+    expect(frame).not.toBeNull();
+    frame?.(0);
 
     // dispatch should NOT have been called (early return hit)
     expect(mockView.dispatch).not.toHaveBeenCalled();
@@ -512,7 +512,7 @@ describe("compositionGuard scheduleImeCleanup — table cell and dispatch", () =
       type: undefined,
       parent: undefined,
     } as never);
-    const plugin = plugins[0] as {
+    const plugin = plugins[0] as unknown as {
       props: {
         handleDOMEvents: Record<string, (view: unknown, event?: unknown) => boolean>;
       };
@@ -522,7 +522,6 @@ describe("compositionGuard scheduleImeCleanup — table cell and dispatch", () =
 
   it("dispatches delete transaction when getImeCleanupPrefixLength returns nonzero", () => {
     mockGetImeCleanupPrefixLength.mockReturnValue(3);
-    mockFixCompositionSplitBlock.mockReturnValue(null);
 
     const events = getFullPlugin();
     const mockTr = {
@@ -558,7 +557,6 @@ describe("compositionGuard scheduleImeCleanup — table cell and dispatch", () =
 
   it("uses table cell boundary for cleanupEnd when compositionStartPos is inside a table cell", () => {
     mockGetImeCleanupPrefixLength.mockReturnValue(2);
-    mockFixCompositionSplitBlock.mockReturnValue(null);
 
     const events = getFullPlugin();
     const mockTr = {
@@ -595,41 +593,53 @@ describe("compositionGuard scheduleImeCleanup — table cell and dispatch", () =
     expect(mockTr.delete).toHaveBeenCalledWith(5, 7); // deleteFrom=5, deleteTo=5+2
   });
 
-  it("dispatches splitBlockFix transaction when fixCompositionSplitBlock returns a fix", () => {
-    const mockTrFix = { fake: "splitBlockFixTr" };
-    mockFixCompositionSplitBlock.mockReturnValue(mockTrFix);
-
-    const events = getFullPlugin();
-    const mockView = {
-      state: {
-        selection: { from: 5 },
-        doc: {
-          resolve: () => ({
-            depth: 1,
-            node: (d: number) => ({ type: { name: d === 1 ? "paragraph" : "doc" } }),
-            end: () => 20,
-          }),
-          textBetween: () => "nihao",
-          content: { size: 30 },
-        },
-        tr: {
-          delete: vi.fn().mockReturnThis(),
-          setMeta: vi.fn().mockReturnThis(),
-        },
+  it("dispatches the split-block fix when the composed text landed in a split-off paragraph", () => {
+    // Real documents: the composition began in a heading, the browser split
+    // it and put the composed text in a new paragraph; the post-composition
+    // cleanup must dispatch the real fixCompositionSplitBlock repair.
+    const schema = new Schema({
+      nodes: {
+        doc: { content: "block+" },
+        heading: { content: "text*", group: "block", attrs: { level: { default: 1 } } },
+        paragraph: { content: "text*", group: "block" },
+        text: {},
       },
-      dispatch: vi.fn(),
+    });
+    const startDoc = schema.node("doc", null, [schema.node("heading", null, [schema.text("Titleni")])]);
+    const before = EditorState.create({ schema, doc: startDoc, selection: TextSelection.create(startDoc, 6) });
+
+    const plugin = compositionGuardExtension.config.addProseMirrorPlugins!.call({
+      editor: {},
+      name: "compositionGuard",
+      options: {},
+      storage: {},
+      type: undefined,
+      parent: undefined,
+    } as never)[0] as unknown as {
+      props: { handleDOMEvents: Record<string, (view: unknown, event?: unknown) => boolean> };
+      spec: { state: { apply: (tr: unknown, value: null) => null } };
     };
+    const events = plugin.props.handleDOMEvents;
+    const view = { state: before, dispatch: vi.fn() };
 
-    events.compositionstart(mockView);
-    events.compositionupdate(mockView, { data: "ni" });
-    events.compositionend(mockView, { data: "你" });
+    events.compositionstart(view);
+    events.compositionupdate(view, { data: "ni" });
 
-    // fixCompositionSplitBlock returned a fix, so dispatch should be called with it
-    expect(mockView.dispatch).toHaveBeenCalledWith(mockTrFix);
+    const splitTr = before.tr.split(8, 1, [{ type: schema.nodes.paragraph }]);
+    splitTr.insertText("你", 10);
+    splitTr.setSelection(TextSelection.create(splitTr.doc, 11));
+    plugin.spec.state.apply(splitTr, null);
+    view.state = before.apply(splitTr);
+
+    // rAF runs synchronously in this suite, so cleanup runs inside compositionend.
+    events.compositionend(view, { data: "你" });
+
+    expect(view.dispatch).toHaveBeenCalledTimes(1);
+    const fixed = (view.dispatch.mock.calls[0][0] as Transaction).doc;
+    expect(fixed.childCount).toBe(1);
+    expect(fixed.firstChild!.textContent).toBe("Title你");
   });
-
   it("scheduleImeCleanup returns early when compositionData is empty", () => {
-    mockFixCompositionSplitBlock.mockReturnValue(null);
 
     // Capture rAF callback
     let capturedRafCb: FrameRequestCallback | null = null;
@@ -663,8 +673,10 @@ describe("compositionGuard scheduleImeCleanup — table cell and dispatch", () =
     // compositionend with empty data — compositionData stays empty
     events.compositionend(mockView, { data: "" });
 
-    if (capturedRafCb) capturedRafCb(0);
-    // scheduleImeCleanup returns early because compositionData is empty
+    const frame = capturedRafCb as FrameRequestCallback | null;
+    expect(frame).not.toBeNull();
+    frame?.(0);
+    // The cleanup returns early because compositionData is empty
     expect(mockView.dispatch).not.toHaveBeenCalled();
 
     // Restore synchronous rAF

@@ -1,15 +1,18 @@
-// Media tab surface — the component Editor.tsx mounts for kind:"media" (WI-2).
-//
-// Purpose: Bridge the tab/document store to the store-agnostic <MediaView>
-//   render core. Reads the tab's absolute filePath via a store selector
-//   (never destructured) and wraps the preview in a full-width, read-only
-//   container. A media tab's document `content` is always empty — the bytes
-//   reach the webview through the Tauri asset protocol inside MediaView.
-//
-// @coordinates-with components/Editor/Editor.tsx — kind:"media" dispatch
-// @coordinates-with components/Editor/MediaView/MediaView.tsx — render core
-// @coordinates-with stores/documentStore.ts — per-tab filePath + documentId
-// @module components/Editor/MediaViewer/MediaViewer
+/**
+ * Media tab surface — the component Editor.tsx mounts for kind:"media".
+ *
+ * Purpose: Bridge the tab/document store to the store-agnostic <MediaView>
+ *   render core. Reads the tab's absolute filePath via a store selector
+ *   (never destructured) and wraps the preview in a full-width, read-only
+ *   container. A media tab's document `content` is always empty — the bytes
+ *   reach the webview through the Tauri asset protocol inside MediaView.
+ *
+ * @coordinates-with components/Editor/Editor.tsx — kind:"media" dispatch
+ * @coordinates-with components/Editor/MediaView/MediaView.tsx — render core
+ * @coordinates-with stores/documentStore.ts — per-tab filePath + documentId
+ *
+ * @module components/Editor/MediaViewer/MediaViewer
+ */
 
 import { useDocumentStore } from "@/stores/documentStore";
 import { MediaView } from "@/components/Editor/MediaView/MediaView";

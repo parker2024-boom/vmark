@@ -23,6 +23,8 @@ fn write_script(dir: &std::path::Path, name: &str, body: &str) -> String {
 /// True while the OS still knows the pid (running OR zombie — a zombie is
 /// exactly what an unreaped kill leaves behind).
 fn pid_alive(pid: u32) -> bool {
+    // SAFETY: `kill` with signal 0 sends nothing and touches no memory; it only
+    // reports whether the pid exists.
     unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
 }
 
@@ -111,8 +113,7 @@ fn timeout_kills_and_reaps_the_child() {
     // whole flake: the kill was real and on time, the child had simply not
     // reached its first line yet, and the poll below then reported "child
     // never launched" — a launch failure that had not happened.
-    std::process::Command::new(&script)
-        .arg("--vmark-warmup")
+    crate::ai_provider::build_command(&script, &["--vmark-warmup"])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())

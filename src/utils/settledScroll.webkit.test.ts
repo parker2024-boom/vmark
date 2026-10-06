@@ -12,7 +12,15 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { scrollToSettled } from "./settledScroll";
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+/**
+ * More animation frames than scrollToSettled's correction loop can run: it
+ * stops after at most MAX_FRAMES (60) frames when no render is busy, and no
+ * render is busy here. Counting frames instead of milliseconds waits for the
+ * loop itself, however slowly the machine paints.
+ */
+const CORRECTION_LOOP_BOUND_FRAMES = 64;
 
 function buildLargeDocument() {
   const style = document.createElement("style");
@@ -49,18 +57,19 @@ describe("scrollToSettled under content-visibility (real engine)", () => {
   it("lands each far heading at the top of the viewport on the first try", async () => {
     const doc = buildLargeDocument();
     cleanup = doc.cleanup;
-    await wait(50);
+    await nextFrame();
+    await nextFrame();
 
     const offsets: number[] = [];
     for (const index of [30, 5, 20]) {
       const target = doc.headings[index];
       const distance = () => target.getBoundingClientRect().top - doc.scroller.getBoundingClientRect().top;
       scrollToSettled(doc.scroller, distance, doc.root);
-      await wait(1500);
+      for (let frame = 0; frame < CORRECTION_LOOP_BOUND_FRAMES; frame += 1) await nextFrame();
       offsets.push(Math.round(Math.abs(distance())));
     }
 
     // Within a pixel: correction stops once less than 1px remains.
     expect(Math.max(...offsets), `offsets from the top: ${offsets.join(", ")}px`).toBeLessThanOrEqual(1);
-  }, 30_000);
+  });
 });

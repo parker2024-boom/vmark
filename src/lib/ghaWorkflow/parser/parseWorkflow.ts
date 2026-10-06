@@ -1,8 +1,12 @@
-// WI-1.2 — parser orchestrator.
-//
-// Wraps @actions/workflow-parser, dispatches to per-IR-slice subparsers,
-// and translates parser context errors + subparser diagnostics into our
-// stable Diagnostic[] taxonomy (plan §4.4).
+/**
+ * Parser orchestrator — turns GitHub Actions workflow YAML into the typed IR.
+ *
+ * Wraps @actions/workflow-parser, dispatches to per-IR-slice subparsers,
+ * and translates parser context errors + subparser diagnostics into our
+ * stable Diagnostic[] taxonomy.
+ *
+ * @module lib/ghaWorkflow/parser/parseWorkflow
+ */
 
 import { parseWorkflow } from "@actions/workflow-parser";
 import type { Diagnostic, TopLevelPositions, WorkflowIR } from "../types";

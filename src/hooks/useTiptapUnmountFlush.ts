@@ -53,7 +53,7 @@ export function useTiptapUnmountFlush({
       if ((pendingRaf.current || pendingDebounceTimeout.current) && editorRef.current && flushToStoreRef.current) {
         try {
           // Latest-ref read is the point (#755) — see hook doc comment.
-          // eslint-disable-next-line react-hooks/exhaustive-deps
+          // eslint-disable-next-line react-hooks/exhaustive-deps -- reading the latest ref at unmount is the point: the flush must use the live editor and flusher
           flushToStoreRef.current(editorRef.current);
         } catch (error) {
           // Surface the failure — a failed final serialization means edits

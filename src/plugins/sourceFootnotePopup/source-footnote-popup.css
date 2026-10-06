@@ -3,7 +3,7 @@
  * Layout: header row (label + buttons) + textarea
  */
 
-/* Shell chrome comes from `.popup-container` (WI-UI3.2); anchored inside the
+/* Shell chrome comes from `.popup-container`; anchored inside the
    CodeMirror scroller, so position stays absolute. */
 .source-footnote-popup {
   position: absolute;

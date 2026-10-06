@@ -22,7 +22,7 @@ export interface WorkspaceConfig {
   version: 1;
   excludeFolders: string[];
   lastOpenTabs: string[]; // Doc paths for session restore (legacy; kept for older builds)
-  /** WI-1.1 — full ordered tab list (documents + browser tabs). Written by
+  /** Full ordered tab list (documents + browser tabs). Written by
    *  workspaceSession.ts, read back by sessionTabs.ts; the Rust side keeps it
    *  as an opaque JSON value, so the schema lives on this side. */
   sessionTabs?: SessionTabsV1;

@@ -42,10 +42,12 @@ jobs:
           SINCE=$(date -u -d '24 hours ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v-24H '+%Y-%m-%dT%H:%M:%SZ')
           TODAY=$(date -u '+%Y-%m-%d')
 
-          echo "## Claude Cost Report — $TODAY" > report.md
-          echo "" >> report.md
-          echo "| Workflow | Run | Duration | Turns | Input Tokens | Output Tokens | Cache Created | Cache Read | Cost (USD) |" >> report.md
-          echo "|----------|-----|----------|-------|-------------|--------------|--------------|------------|------------|" >> report.md
+          {
+            echo "## Claude Cost Report — $TODAY"
+            echo ""
+            echo "| Workflow | Run | Duration | Turns | Input Tokens | Output Tokens | Cache Created | Cache Read | Cost (USD) |"
+            echo "|----------|-----|----------|-------|-------------|--------------|--------------|------------|------------|"
+          } > report.md
 
           TOTAL_COST=0
           TOTAL_RUNS=0
@@ -135,30 +137,32 @@ jobs:
           print(f"{total_cost:.2f} {total_days} {avg_7d:.2f} {avg_30d:.2f}")
           PYEOF
           )
-          read CUMULATIVE_COST CUMULATIVE_DAYS AVG_7D AVG_30D <<< "$STATS"
+          read -r CUMULATIVE_COST CUMULATIVE_DAYS AVG_7D AVG_30D <<< "$STATS"
 
           # --- Phase 3: Build cumulative summary ---
 
-          echo "" >> report.md
-          echo "### Cumulative" >> report.md
-          echo "" >> report.md
-          echo "| Metric | Value |" >> report.md
-          echo "|--------|-------|" >> report.md
-          echo "| All-time total ($CUMULATIVE_DAYS days) | \$${CUMULATIVE_COST} |" >> report.md
-          echo "| 7-day daily average | \$${AVG_7D} |" >> report.md
-          echo "| 30-day daily average | \$${AVG_30D} |" >> report.md
-          echo "" >> report.md
+          {
+            echo ""
+            echo "### Cumulative"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|--------|-------|"
+            echo "| All-time total ($CUMULATIVE_DAYS days) | \$${CUMULATIVE_COST} |"
+            echo "| 7-day daily average | \$${AVG_7D} |"
+            echo "| 30-day daily average | \$${AVG_30D} |"
+            echo ""
 
-          echo "### Today's Breakdown" >> report.md
-          echo "" >> report.md
-          echo "| Metric | Value |" >> report.md
-          echo "|--------|-------|" >> report.md
-          echo "| Input tokens | $TOTAL_INPUT |" >> report.md
-          echo "| Output tokens | $TOTAL_OUTPUT |" >> report.md
-          echo "| Cache creation tokens | $TOTAL_CACHE_CREATE |" >> report.md
-          echo "| Cache read tokens | $TOTAL_CACHE_READ |" >> report.md
-          echo "" >> report.md
-          echo "*Costs are API-equivalent pricing even on subscription plans.*" >> report.md
+            echo "### Today's Breakdown"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|--------|-------|"
+            echo "| Input tokens | $TOTAL_INPUT |"
+            echo "| Output tokens | $TOTAL_OUTPUT |"
+            echo "| Cache creation tokens | $TOTAL_CACHE_CREATE |"
+            echo "| Cache read tokens | $TOTAL_CACHE_READ |"
+            echo ""
+            echo "*Costs are API-equivalent pricing even on subscription plans.*"
+          } >> report.md
 
           cat report.md
 

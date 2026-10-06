@@ -1,5 +1,5 @@
 /**
- * Hot-exit capture/restore of per-instance context state (WI-9.4).
+ * Hot-exit capture/restore of per-instance context state.
  *
  * Three additive, OPTIONAL WindowState fields (Rust passes them through as
  * opaque JSON; old payloads simply lack them):
@@ -10,11 +10,11 @@
  *   - `closed_tab_scopes` — the scoped reopen history WITH metadata, restored
  *     verbatim (closed tabs never recreate, so their historical ids remain
  *     valid reopen identifiers).
- *   - `browser_session` — window-global human browser records (WI-8.2 schema,
+ *   - `browser_session` — window-global human browser records (window-session schema,
  *     same validation gate), recreated in the background.
  *
  * Restore runs AFTER `reconcileRestoredWindowWorkspaceInstances` (tab ids
- * remapped) and BEFORE the final context hydrate (WI-13.2 ordering).
+ * remapped) and BEFORE the final context hydrate.
  *
  * @coordinates-with hooks/resilience/_hotExitCapture.ts — capture site
  * @coordinates-with services/persistence/resilience/_hotExitRestore.ts — restore site
@@ -92,7 +92,7 @@ function remapOutlineTabIds(
  * Restore the captured per-instance context after tab-id reconciliation.
  *
  * Returns whether every rejected fragment was PRESERVED. The caller must not
- * let the session file be cleared on `false` (audit 20260804-F12): this used
+ * let the session file be cleared on `false`: this used
  * to fire the quarantine write and forget it, so a restore could report
  * success — and the session file be deleted — while the artifact write was
  * still in flight or had already failed. The rejected payloads then existed
@@ -106,9 +106,9 @@ export async function restoreInstanceContextState(
   const quarantined: QuarantinedEntry[] = [];
 
   if (windowState.ui_state_by_instance && isWorkspaceRailEnabled()) {
-    // WI-3: Zod-validate each entry BEFORE the cast; a corrupt entry is
+    // Zod-validate each entry BEFORE the cast; a corrupt entry is
     // quarantined (preserved), never hydrated. Remap outline tab ids so
-    // per-tab state follows the recreated tabs. Audit R2-F16: only THIS
+    // per-tab state follows the recreated tabs. Only THIS
     // window's instances may hydrate (payloads are untrusted — junk or
     // cross-window ids are dropped).
     const windowInstanceIds = new Set(
@@ -132,7 +132,7 @@ export async function restoreInstanceContextState(
   }
 
   if (windowState.closed_tab_scopes && isWorkspaceRailEnabled()) {
-    // WI-3: a wrong-typed payload is quarantined instead of hydrated.
+    // A wrong-typed payload is quarantined instead of hydrated.
     const scopes = opaqueRecordSchema.safeParse(windowState.closed_tab_scopes);
     if (scopes.success) {
       useClosedTabScopesStore

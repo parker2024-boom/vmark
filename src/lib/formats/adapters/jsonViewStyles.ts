@@ -1,18 +1,22 @@
-// Purpose: token-aligned react-json-view-lite styling shared by the json /
-// yaml / toml tree previews.
-//
-// The library themes correctly for light/dark via its own defaultStyles /
-// darkStyles, but its value colors are the library's palette, not VMark's.
-// jsonViewStyles() keeps the theme-correct base (container, row indentation,
-// expand icons — chosen by isDark) and overrides ONLY the value/key/
-// punctuation classes with our own, so a JSON/YAML/TOML file renders with the
-// SAME GitHub-palette colors as the CodeMirror Source pane (source-syntax.css).
-//
-// The override class names resolve in json-view-theme.css, scoped under
-// `.json-tree-preview` so they win over the library's single-class styles.
-//
-// @coordinates-with json-view-theme.css — defines the override classes
-// @coordinates-with adapters/json.tsx, yaml.tsx, toml.tsx — consumers
+/**
+ * Purpose: token-aligned react-json-view-lite styling shared by the json /
+ * yaml / toml tree previews.
+ *
+ * The library themes correctly for light/dark via its own defaultStyles /
+ * darkStyles, but its value colors are the library's palette, not VMark's.
+ * jsonViewStyles() keeps the theme-correct base (container, row indentation,
+ * expand icons — chosen by isDark) and overrides ONLY the value/key/
+ * punctuation classes with our own, so a JSON/YAML/TOML file renders with the
+ * SAME GitHub-palette colors as the CodeMirror Source pane (source-syntax.css).
+ *
+ * The override class names resolve in json-view-theme.css, scoped under
+ * `.json-tree-preview` so they win over the library's single-class styles.
+ *
+ * @coordinates-with json-view-theme.css — defines the override classes
+ * @coordinates-with adapters/json.tsx, yaml.tsx, toml.tsx — consumers
+ *
+ * @module lib/formats/adapters/jsonViewStyles
+ */
 
 import { defaultStyles, darkStyles, type JsonView } from "react-json-view-lite";
 import type { ComponentProps } from "react";

@@ -8,11 +8,6 @@ import { getSchema } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { DOMSerializer, DOMParser as PMDOMParser } from "@tiptap/pm/model";
 
-// Mock the VideoEmbedNodeView to avoid DOM complexity
-vi.mock("../VideoEmbedNodeView", () => ({
-  VideoEmbedNodeView: vi.fn(),
-}));
-
 // Allow tests to override getProviderConfig behaviour
 const mockGetProviderConfig = vi.fn();
 vi.mock("@/utils/videoProviderRegistry", async (importOriginal) => {

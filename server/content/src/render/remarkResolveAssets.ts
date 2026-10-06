@@ -3,7 +3,7 @@
  *
  * A note's `![caption](picture.png)` is relative to the note, so the browser
  * resolves it under `/note/…` — a route that serves only indexed markdown, so
- * the image 404s even with a valid session (audit 20260906, MCP-C03).
+ * the image 404s even with a valid session.
  *
  * Done in mdast rather than over the rendered HTML: the URL is a field on the
  * node here, so there is no HTML parsing or regex rewriting of `src`

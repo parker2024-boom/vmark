@@ -1,5 +1,5 @@
 /**
- * Which workflow extension families a source editor gets (WI-19).
+ * Which workflow extension families a source editor gets.
  *
  * Purpose: one place decides, so the four workflow extensions in
  * `sourceEditorExtensions.ts` cannot drift apart. Before the flag split they
@@ -11,7 +11,7 @@
  *                the parse-error gutter apply to every YAML file (MED-2).
  *   - `viewer` — GitHub Actions authoring aids: `${{ }}` completion,
  *                cursor↔canvas sync, `uses:` goto-def. They read; they never run.
- *                Unconditional for YAML since D6 (WI-FL2.6): the viewer has no
+ *                Unconditional for YAML since D6: the viewer has no
  *                flag. Still its own family because the composition wires
  *                three extensions off it and the engine beside it stays gated.
  *   - `engine` — the bespoke execution engine's live preview parse, behind

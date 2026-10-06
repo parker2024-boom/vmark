@@ -1,4 +1,4 @@
-//! Origin canonicalization + grant enforcement in the driver (WI-2.1 / R4 / I3 / R7a).
+//! Origin canonicalization + grant enforcement in the driver (R4 / I3 / R7a).
 //!
 //! **This is the authoritative enforcement point.** The TS layer
 //! (`src/lib/browser/origin/originGuard.ts`) specifies the rules and enforces them
@@ -275,7 +275,7 @@ pub fn is_driver_operation_allowed_for_mode(
     shared_origin_approved: bool,
     // For an AiSandbox tab, whether a READ is allowed on the committed origin: `true`
     // for a profile-less tab, but for a profile-backed tab only on the origin its
-    // profile-open grant approved — WI-P6.1 H1 (no reading Y after a redirect off X).
+    // profile-open grant approved (no reading Y after a redirect off X).
     sandbox_read_allowed: bool,
 ) -> bool {
     // Closed vocabulary first — not even the per-tab `read` path (`"Read"` ≠ `read`).

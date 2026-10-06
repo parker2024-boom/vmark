@@ -1,5 +1,5 @@
 /**
- * ProvenanceGroup (WI-3.2) — the breakdown's "provenance unknown"
+ * ProvenanceGroup — the breakdown's "provenance unknown"
  * section: orphaned-but-recoverable artifacts with the lazy
  * suggest → checkbox → confirm flow (design-3.md D1.5). Pull-only:
  * nothing here nags; the group renders only when candidates exist.

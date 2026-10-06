@@ -5,15 +5,15 @@
  * Pandoc install hint), plus ONE lazy command per Pandoc format registered by
  * `registerPandocFormatCommands` — six formats today, but the count comes from
  * `PANDOC_FORMAT_KEYS` inside a dynamically-loaded module, so it is not a number
- * this header can state (audit #893: it claimed "6 export commands" and there
+ * this header can state (it once claimed "6 export commands" and there
  * were five eager ones).
  *
- * ONE envelope for every document export (audit #904). `runDocExport` owns the
+ * ONE envelope for every document export. `runDocExport` owns the
  * whole of it — the re-entry guard, the WYSIWYG flush, the active-document
  * lookup, the failure log and the failure toast — and the Pandoc handlers go
  * through it too. They used to carry their own copy, and the two copies had
  * already drifted: Pandoc toasted its failure, the eager exports only logged
- * theirs (audit #897).
+ * theirs.
  *
  * @module services/commands/exportCommands
  */
@@ -36,7 +36,7 @@ function windowLabelOf(ctx: Ctx): string {
 }
 
 /**
- * Whether this window has a document to export (audit #896).
+ * Whether this window has a document to export.
  *
  * Used as the `when` predicate of every document-scoped export: without it the
  * palette offered "Export as HTML" with no document open, and dispatching it
@@ -51,13 +51,13 @@ function hasExportableDocument(ctx: CommandContext): boolean {
 /**
  * Run one document export under the shared envelope.
  *
- * The flush is INSIDE the guard (audit #895). It used to run before it, so a
+ * The flush is INSIDE the guard. It used to run before it, so a
  * re-entrant click — rejected, doing nothing else — still mutated the document
  * store under the export that was already running, and a flusher that threw
  * rejected the command dispatch from outside every catch in this module.
  *
  * A contained failure is LOGGED AND SHOWN, through the one shared policy in
- * `commandFailure.ts` (#897). Only logging it left a lazy-chunk load failure or
+ * `commandFailure.ts`. Only logging it left a lazy-chunk load failure or
  * a disk-full error looking exactly like a click that had done nothing.
  * `failureMessage` overrides the shown text where a translated sentence beats
  * the raw error.
@@ -114,7 +114,7 @@ function buildExportCommandSpecs(): CommandDefinition[] {
       id: "export.html",
       errorLabel: "Failed to export HTML:",
       exec: async (doc) => {
-        const defaultName = getExportFolderName(doc.content, doc.filePath);
+        const defaultName = getExportFolderName(doc.content, doc.filePath, i18n.t("common:untitled"));
         const defaultDir = doc.filePath ? getDirectory(doc.filePath) : undefined;
         const { exportToHtml } = await import("@/export/useExportOperations");
         await exportToHtml({
@@ -139,7 +139,7 @@ function buildExportCommandSpecs(): CommandDefinition[] {
       id: "export.pdfNative",
       errorLabel: "Failed to export PDF:",
       exec: async (doc) => {
-        const defaultName = getExportFolderName(doc.content, doc.filePath);
+        const defaultName = getExportFolderName(doc.content, doc.filePath, i18n.t("common:untitled"));
         const { exportToPdfNative } = await import("@/export/useExportOperations");
         await exportToPdfNative({
           markdown: doc.content,
@@ -155,7 +155,7 @@ function buildExportCommandSpecs(): CommandDefinition[] {
       exec: async (doc) => {
         const { copyAsHtml } = await import("@/export/useExportOperations");
         // The path is what a relative image in the copied markup resolves
-        // against (audit R2, #704).
+        // against.
         await copyAsHtml(doc.content, doc.filePath);
       },
     }),
@@ -164,7 +164,7 @@ function buildExportCommandSpecs(): CommandDefinition[] {
       id: "export.pandocHint",
       title: () => i18n.t("commands:export.pandocHint"),
       category: "export",
-      // Needs no document, but it DOES need to report a refusal (audit #900).
+      // Needs no document, but it DOES need to report a refusal.
       // An `openUrl` the opener plugin rejects — a scheme outside the
       // capability, no registered handler — otherwise left the click doing
       // nothing, and rejected the dispatch on the way out.
@@ -181,7 +181,7 @@ function buildExportCommandSpecs(): CommandDefinition[] {
 }
 
 /**
- * Register the five eager export commands as ONE owner batch (audit #899).
+ * Register the five eager export commands as ONE owner batch.
  *
  * `hasCommand("export.html")` reported the whole batch installed whenever that
  * single id existed — from a foreign registrar, or from a batch that failed
@@ -203,7 +203,7 @@ function pandocFormatCommand(fmt: string): CommandDefinition {
     title: () => `${i18n.t("commands:export.pandocFormat")} (${fmt})`,
     errorLabel: `Failed to export via Pandoc (${fmt}):`,
     exec: async (doc) => {
-      const defaultName = getExportFolderName(doc.content, doc.filePath);
+      const defaultName = getExportFolderName(doc.content, doc.filePath, i18n.t("common:untitled"));
       const defaultDir = doc.filePath ? getDirectory(doc.filePath) : undefined;
       const { exportViaPandoc } = await import("@/export/pandocExport");
       await exportViaPandoc({
@@ -217,7 +217,7 @@ function pandocFormatCommand(fmt: string): CommandDefinition {
     // Pandoc keeps its OWN message — "Pandoc export failed" names the tool the
     // user has to install, which a raw error string does not. Through the
     // STATIC i18n binding, not a dynamic re-import of the module already
-    // imported at the top of this file (audit #905).
+    // imported at the top of this file.
     failureMessage: () => i18n.t("dialog:toast.pandocExportFailed"),
   });
 }
@@ -227,7 +227,7 @@ function pandocFormatCommand(fmt: string): CommandDefinition {
  * etc.). Called lazily by the menu mount because PANDOC_FORMAT_KEYS lives
  * inside the lazy-loaded export module.
  *
- * ONE owner batch (audit #903). The previous `if (hasCommand(id)) continue`
+ * ONE owner batch. The previous `if (hasCommand(id)) continue`
  * could not tell this module's own re-registration — which a menu remount
  * makes on every mount — from a FOREIGN registrar squatting that id, so it
  * silently kept whatever was there, including a stale handler left by HMR.

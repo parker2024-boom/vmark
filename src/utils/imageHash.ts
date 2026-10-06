@@ -3,6 +3,8 @@
  *
  * Compute SHA-256 hashes for image deduplication.
  * Uses Web Crypto API for hashing.
+ *
+ * @module utils/imageHash
  */
 
 import { asArrayBufferBacked } from "./binary";

@@ -7,6 +7,8 @@
  * Key decisions:
  *   - Converts PM selection to markdown for source peek display, and parses
  *     edited markdown back to PM content for replacement
+ *   - A range is serialized by `serializeSlice`, the same function copy as
+ *     markdown uses, so the two cannot drift apart again
  *   - ensureBlockContent wraps inline fragments in paragraphs to satisfy
  *     PM schema constraints (doc requires block children)
  *   - Uses ReplaceStep for surgical content replacement to preserve undo history
@@ -14,43 +16,18 @@
  * @coordinates-with sourcePeekStore.ts — stores peek state (range, content)
  * @coordinates-with sourcePeekInline/tiptap.ts — renders the inline peek editor
  * @coordinates-with markdownPipeline/ — markdown ↔ PM conversion
+ * @coordinates-with markdownPipeline/docFromSlice.ts — serializeSlice, ensureBlockContent
  * @module services/editor/sourcePeek
  */
 
 import { NodeSelection, Selection, type EditorState } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
-import { Fragment, Slice, type Schema, type Node as PMNode, type NodeType } from "@tiptap/pm/model";
-import { parseMarkdown, serializeMarkdown } from "@/utils/markdownPipeline";
+import { Slice, type Schema } from "@tiptap/pm/model";
+import { parseMarkdown } from "@/utils/markdownPipeline";
+import { ensureBlockContent, serializeSlice } from "@/utils/markdownPipeline/docFromSlice";
 import { sourcePeekError } from "@/utils/debug";
 import type { MarkdownPipelineOptions } from "@/utils/markdownPipeline/types";
 import { type SourcePeekRange } from "@/stores/sourcePeekStore";
-
-/**
- * Ensures content has at least one block node.
- * Wraps inline content in a paragraph if needed.
- */
-function ensureBlockContent(content: Fragment, paragraphType: NodeType | undefined): Fragment {
-  if (content.childCount === 0 && paragraphType) {
-    return Fragment.from(paragraphType.create());
-  }
-  const firstChild = content.firstChild;
-  if (firstChild && !firstChild.isBlock && paragraphType) {
-    return Fragment.from(paragraphType.create(null, content));
-  }
-  return content;
-}
-
-function createDocFromSlice(schema: Schema, slice: Slice): PMNode {
-  const docType = schema.topNodeType;
-  const content = ensureBlockContent(slice.content, schema.nodes.paragraph);
-
-  try {
-    return docType.create(null, content);
-  } catch {
-    /* v8 ignore next -- @preserve error recovery path; createAndFill() branches are unreachable in unit tests */
-    return docType.createAndFill() ?? docType.create();
-  }
-}
 
 /**
  * Block types that should be edited as a complete unit.
@@ -113,9 +90,7 @@ export function serializeSourcePeekRange(
   range: SourcePeekRange,
   options: MarkdownPipelineOptions = {}
 ): string {
-  const slice = state.doc.slice(range.from, range.to);
-  const doc = createDocFromSlice(state.schema, slice);
-  return serializeMarkdown(state.schema, doc, options);
+  return serializeSlice(state.schema, state.doc.slice(range.from, range.to), options);
 }
 
 /** Parse markdown into a ProseMirror Slice suitable for replacing a source peek range. */

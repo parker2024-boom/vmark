@@ -61,7 +61,9 @@ function wrapper({ children }: { children: ReactNode }) {
 
 /** Emit one raw watcher event the way Rust does, then let the pipeline run. */
 async function emitFsChange(kind: string, paths: string[]): Promise<void> {
-  for (const handler of fsListeners) handler({ payload: { watchId: WINDOW, kind, paths } });
+  for (const handler of fsListeners) {
+    handler({ payload: { watchId: WINDOW, rootPath: ROOT, changes: [{ kind, paths }], rescan: false } });
+  }
   await settle();
   await vi.advanceTimersByTimeAsync(60); // bus coalesce window
   await settle();

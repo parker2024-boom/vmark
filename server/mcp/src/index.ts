@@ -9,10 +9,10 @@
  * from it, and each entry's action list is asserted against the live enum by
  * `__tests__/unit/tools/toolContract.test.ts`. This prose deliberately names
  * no tool and no count — read the registry; every list it used to carry
- * drifted (audit 20260907 #100). The legacy 60-tool surface was pruned in
- * WI-1.5; `selection.{get,set}` was re-added per ADR-7 after the round-trip
+ * drifted (audit 20260907 #100). The legacy 60-tool surface was pruned
+ * by the MCP-pruning plan; `selection.{get,set}` was re-added per ADR-7 after the round-trip
  * cost on large documents proved a real burden.
- * See dev-docs/plans/20260504-mcp-pruning.md for the full rationale.
+ * See .claude/adr/plans/20260504-mcp-pruning.md for the full rationale.
  *
  * No MCP *resources* are exposed: `session.get_state` returns in one
  * round-trip everything the deleted `vmark://document/*` and
@@ -24,7 +24,7 @@
  * `dist/cli.js`, and `main` points here for `import`. This file carried a
  * `#!/usr/bin/env node` shebang and documented `node dist/index.js` as a way
  * to run the server: both were dead, and following either gave a process that
- * exits immediately having served nothing (audit R2 #202).
+ * exits immediately having served nothing.
  *
  * Run it with `npx @vmark/mcp-server` (or `node dist/cli.js`). The server
  * communicates with VMark via WebSocket bridge on localhost (port
@@ -86,7 +86,7 @@ import type { Bridge } from './bridge/types.js';
  * --health-check describes it. Everything below derives from this list, so the
  * registrations, the category descriptors and `EXPECTED_TOOL_COUNT` cannot
  * disagree — they used to be four hand-kept copies, and the action counts in
- * the prose drifted to 7/5/2 against a real 8/13/5 (20260728 audit) and to
+ * the prose drifted to 7/5/2 against a real 8/13/5 (found by an audit) and to
  * 8/6 against 12/8 (feature-ledger inspection) before anything noticed.
  *
  * Nothing here is retyped from a tool module: `name` and `actions` are the
@@ -196,7 +196,7 @@ export function describeActionCount(actions: readonly string[]): string {
  * Three registry entries used to spell their actions out in prose — the
  * workspace verbs, and all twelve/eight of the browser halves — which is the
  * drift channel this registry exists to close, reopened inside the registry
- * itself (audit R2 #203). What stays hand-written is the part `actions` cannot
+ * itself. What stays hand-written is the part `actions` cannot
  * express: the non-enumerative `note` about approval gating and read-only
  * safety.
  */

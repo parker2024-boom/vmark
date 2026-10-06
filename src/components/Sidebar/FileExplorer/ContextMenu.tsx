@@ -18,7 +18,6 @@
  * @module components/Sidebar/FileExplorer/ContextMenu
  */
 import {
-  useEffect,
   useRef,
   useCallback,
   useMemo,
@@ -37,7 +36,9 @@ import {
 } from "lucide-react";
 import { useDismissOnOutsideOrEscape } from "@/hooks/useDismissOnOutsideOrEscape";
 import { useMenuRovingFocus } from "@/hooks/useMenuRovingFocus";
+import { useMenuPosition } from "@/hooks/useMenuPosition";
 import { canOpenTerminalHere } from "@/services/terminal/openTerminalHere";
+import { revealInFileManagerKey } from "@/utils/pathUtils";
 import "./ContextMenu.css";
 
 /** Determines which menu items are shown: file actions, folder actions, or empty-area actions. */
@@ -100,7 +101,7 @@ function buildFolderMenuItems(
     { id: "delete", label: labels.delete, icon: <Trash2 size={14} />, separator: true },
     { id: "copyPath", label: labels.copyPath, icon: <Copy size={14} /> },
     { id: "revealInFinder", label: labels.revealLabel, icon: <FolderOpen size={14} /> },
-    // Folders only (WI-4.2) — "here" has no meaning for a file, and offering
+    // Folders only — "here" has no meaning for a file, and offering
     // it on one would just open the parent, which is not what was clicked.
     {
       id: "openTerminalHere",
@@ -134,14 +135,6 @@ function getMenuItems(
   }
 }
 
-/** Platform-appropriate translation key for the "reveal in file manager" action. */
-function revealLabelKey(): string {
-  const platform = typeof navigator !== "undefined" ? navigator.platform.toLowerCase() : "";
-  if (platform.includes("mac")) return "contextMenu.revealInFinder";
-  if (platform.includes("win")) return "contextMenu.showInExplorer";
-  return "contextMenu.showInFileManager";
-}
-
 interface ContextMenuProps {
   type: ContextMenuType;
   position: ContextMenuPosition;
@@ -158,7 +151,7 @@ export function ContextMenu({ type, position, onAction, onClose }: ContextMenuPr
   // Resolve platform-appropriate "reveal in file manager" label via translation keys.
   // The React Compiler auto-memoizes the component, so no manual useMemo is needed —
   // and a useMemo reading the `navigator` global can't be preserved by the compiler (#1063).
-  const revealLabel = t(revealLabelKey());
+  const revealLabel = t(revealInFileManagerKey());
 
   const menuLabels = useMemo(() => ({
     open: t("contextMenu.open"),
@@ -183,31 +176,8 @@ export function ContextMenu({ type, position, onAction, onClose }: ContextMenuPr
   // Click-outside only; Escape/Tab are owned by the roving hook.
   useDismissOnOutsideOrEscape(true, menuRef, onClose, { escape: false });
 
-  // Position adjustment to keep menu in viewport
-  useEffect(() => {
-    if (!menuRef.current) return;
-
-    const menu = menuRef.current;
-    const rect = menu.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-
-    let adjustedX = position.x;
-    let adjustedY = position.y;
-
-    // Adjust horizontal position
-    if (position.x + rect.width > viewportWidth - 10) {
-      adjustedX = viewportWidth - rect.width - 10;
-    }
-
-    // Adjust vertical position
-    if (position.y + rect.height > viewportHeight - 10) {
-      adjustedY = viewportHeight - rect.height - 10;
-    }
-
-    menu.style.left = `${adjustedX}px`;
-    menu.style.top = `${adjustedY}px`;
-  }, [position]);
+  // Placement, clamped into the viewport (see useMenuPosition).
+  useMenuPosition(menuRef, position);
 
   const handleItemClick = useCallback(
     (id: ContextMenuActionId) => {
@@ -246,7 +216,7 @@ export function ContextMenu({ type, position, onAction, onClose }: ContextMenuPr
             className="context-menu-item"
             // The roving-focus hook already SKIPS disabled items; the
             // attribute is what stops a mouse click from firing the action
-            // anyway (WI-4.2 — "Open Terminal Here" at the session cap).
+            // anyway ("Open Terminal Here" at the session cap).
             disabled={item.disabled}
             aria-disabled={item.disabled}
             onClick={() => handleItemClick(item.id)}

@@ -15,7 +15,9 @@
  *     existing target.
  *   - The open document (and any other tab at the old path) is re-pointed by
  *     the service's path reconciliation — no direct setFilePath call here.
- *   - Failures return false so the title bar stays in edit mode.
+ *   - Failures return false so the title bar stays in edit mode, and say
+ *     why: a name collision or a failed rename shows the same error dialog
+ *     the tab and sidebar renames show, instead of only reaching the log.
  *
  * @coordinates-with TitleBar.tsx — calls renameFile on double-click confirm
  * @coordinates-with services/persistence/renameFile.ts — shared rename core
@@ -23,6 +25,7 @@
  */
 import { useState, useCallback, useRef } from "react";
 import { renameFile as renameFileOnDisk } from "@/services/persistence/renameFile";
+import { showError, FileErrors } from "@/services/dialogs/errorDialog";
 import { titleBarWarn, fileOpsError } from "@/utils/debug";
 
 /** Hook that performs file rename operations triggered from the title bar. */
@@ -53,9 +56,15 @@ export function useTitleBarRename() {
             return true;
           case "exists":
             titleBarWarn("Target file already exists:", outcome.name);
+            await showError(
+              outcome.isFile
+                ? FileErrors.fileExists(outcome.name)
+                : FileErrors.folderExists(outcome.name),
+            );
             return false;
           case "error":
             fileOpsError("Failed to rename file:", outcome.error);
+            await showError(FileErrors.renameFailed(newName));
             return false;
         }
       } finally {

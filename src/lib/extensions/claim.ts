@@ -1,5 +1,5 @@
 /**
- * Claim protocol — ADR-015 D2b, WI-1.3.
+ * Claim protocol — ADR-015 D2b.
  *
  * Purpose: decide which extension owns an ambiguous mdast node, deterministically
  * and visibly, instead of by `if`-order accident.

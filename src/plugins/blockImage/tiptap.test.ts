@@ -1,24 +1,22 @@
-// @vitest-environment node
 /**
  * Tests for blockImage tiptap extension — node definition, attributes,
- * parseHTML, renderHTML, keyboard shortcuts, and addNodeView.
+ * parseHTML, renderHTML, keyboard shortcuts, and addNodeView. The node view
+ * factory builds the REAL BlockImageNodeView; only the Tauri asset boundary
+ * (`convertFileSrc`) is faked.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { Schema } from "@tiptap/pm/model";
 
-// Mock CSS and node view
-const { MockBlockImageNodeView } = vi.hoisted(() => ({
-  MockBlockImageNodeView: vi.fn(),
-}));
-vi.mock("./block-image.css", () => ({}));
-vi.mock("./BlockImageNodeView", () => ({
-  BlockImageNodeView: MockBlockImageNodeView,
-}));
-vi.mock("../shared/sourceLineAttr", () => ({
-  sourceLineAttr: {},
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(() => Promise.resolve()),
+  convertFileSrc: (path: string) => `asset://localhost${path}`,
 }));
 
 import { blockImageExtension } from "./tiptap";
+import { BlockImageNodeView } from "./BlockImageNodeView";
+import { bindHostPopups } from "@/plugins/shared/hostPopups";
+import { useDocumentStore } from "@/stores/documentStore";
 import { NodeSelection } from "@tiptap/pm/state";
 
 describe("blockImageExtension", () => {
@@ -411,53 +409,69 @@ describe("blockImageExtension", () => {
   });
 
   describe("addNodeView", () => {
+    const schema = new Schema({
+      nodes: {
+        doc: { content: "block+" },
+        text: {},
+        block_image: { group: "block", atom: true, attrs: { src: { default: "" }, alt: { default: "" }, title: { default: "" } } },
+      },
+    });
+    const editor = { view: {} };
+    const openImageMenu = vi.fn();
+    bindHostPopups({ openImageMenu, openMediaPopup: vi.fn() });
+
+    const views: BlockImageNodeView[] = [];
+    afterEach(() => {
+      views.splice(0).forEach((v) => v.destroy());
+      openImageMenu.mockClear();
+    });
+
+    function build(ownerTabId: string | undefined, getPos: unknown, attrs: Record<string, string>) {
+      const factory = blockImageExtension.config.addNodeView!.call({ options: { ownerTabId } } as never)!;
+      const node = schema.node("block_image", attrs);
+      const view = factory({ node, getPos, editor } as never) as unknown as BlockImageNodeView;
+      views.push(view);
+      return view;
+    }
+
+    function rightClick(view: BlockImageNodeView) {
+      view.dom.querySelector("img")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    }
+
     it("defines addNodeView", () => {
       expect(blockImageExtension.config.addNodeView).toBeDefined();
     });
 
-    it("creates BlockImageNodeView with function getPos", () => {
-      MockBlockImageNodeView.mockClear();
-      const factory = blockImageExtension.config.addNodeView!.call({ options: { ownerTabId: undefined } } as never)!;
-      const mockNode = { type: { name: "block_image" } };
-      const mockGetPos = vi.fn(() => 5);
-      const mockEditor = { view: {} };
-
-      factory({ node: mockNode, getPos: mockGetPos, editor: mockEditor } as never);
-
-      expect(MockBlockImageNodeView).toHaveBeenCalledWith(mockNode, mockGetPos, mockEditor, undefined);
+    it("builds a real block image node view from the node's attributes", () => {
+      const view = build(undefined, () => 5, { src: "https://example.com/a.png", alt: "Alt", title: "T" });
+      expect(view).toBeInstanceOf(BlockImageNodeView);
+      expect(view.dom.tagName).toBe("FIGURE");
+      const img = view.dom.querySelector("img")!;
+      expect(img.alt).toBe("Alt");
+      expect(img.title).toBe("T");
+      expect(img.getAttribute("src")).toBe("https://example.com/a.png");
     });
 
-    it("passes the configured owner tab to the node view", () => {
+    it("hands the node view the function getPos (the context menu reports its position)", () => {
+      const view = build(undefined, () => 5, { src: "https://example.com/a.png" });
+      rightClick(view);
+      expect(openImageMenu).toHaveBeenCalledWith(expect.objectContaining({ imageNodePos: 5 }));
+    });
+
+    it("resolves a relative src against the configured owner tab's document", async () => {
       // The whole point of the option: a relative `src` must resolve against
       // the document that owns the node, not the focused tab.
-      MockBlockImageNodeView.mockClear();
-      const factory = blockImageExtension.config.addNodeView!.call({
-        options: { ownerTabId: "tab-owner" },
-      } as never)!;
-      const mockNode = { type: { name: "block_image" } };
-      const mockGetPos = vi.fn(() => 5);
-      const mockEditor = { view: {} };
-
-      factory({ node: mockNode, getPos: mockGetPos, editor: mockEditor } as never);
-
-      expect(MockBlockImageNodeView).toHaveBeenCalledWith(
-        mockNode, mockGetPos, mockEditor, "tab-owner",
-      );
+      useDocumentStore.getState().initDocument("tab-owner", "", "/docs/owner/note.md");
+      const view = build("tab-owner", () => 5, { src: "pic.png" });
+      const img = view.dom.querySelector("img")!;
+      await vi.waitFor(() => expect(img.getAttribute("src")).toBe("asset://localhost/docs/owner/pic.png"));
     });
 
-    it("wraps non-function getPos with fallback returning undefined", () => {
-      MockBlockImageNodeView.mockClear();
-      const factory = blockImageExtension.config.addNodeView!.call({ options: { ownerTabId: undefined } } as never)!;
-      const mockNode = { type: { name: "block_image" } };
-      const mockEditor = { view: {} };
-
-      factory({ node: mockNode, getPos: true, editor: mockEditor } as never);
-
-      expect(MockBlockImageNodeView).toHaveBeenCalledTimes(1);
-      // The second arg should be the fallback function
-      const safeGetPos = MockBlockImageNodeView.mock.calls[0][1];
-      expect(typeof safeGetPos).toBe("function");
-      expect(safeGetPos()).toBeUndefined();
+    it("wraps a non-function getPos with a fallback that answers undefined", () => {
+      const view = build(undefined, true, { src: "https://example.com/a.png" });
+      // An undefined position means the node view opens no menu at all.
+      rightClick(view);
+      expect(openImageMenu).not.toHaveBeenCalled();
     });
   });
 });

@@ -3,7 +3,7 @@
  *
  * Purpose: Capture inter-block blank-line runs (>1) from MDAST positions into a
  * nullable `blankLinesBefore` attribute on the following top-level block, so the
- * run can be re-emitted on serialize (blank-line preservation, WI-1.2/ADR-4).
+ * run can be re-emitted on serialize (blank-line preservation, ADR-4).
  * Extracted from mdastToProseMirror.ts to keep that orchestrator small.
  *
  * Capture is UNCONDITIONAL (ADR-4): whether it is re-emitted is decided at

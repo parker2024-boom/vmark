@@ -1,3 +1,9 @@
+/**
+ * App — the root component: routes each window to the main editor layout, the
+ * settings page or the PDF export page, under a top-level error boundary.
+ * @module App
+ */
+
 import { Component, lazy, Suspense, type CSSProperties, type ReactNode } from "react";
 import { FeatureErrorBoundary } from "@/components/FeatureErrorBoundary";
 import { useTranslation, withTranslation, type WithTranslation } from "react-i18next";
@@ -110,7 +116,7 @@ function DropOverlay() {
   const { t } = useTranslation();
   const isDragging = useUIStore((state) => state.isDraggingFiles);
   // The native browser view paints over all React DOM in its rect, so freeze every
-  // mounted browser tab while this overlay is up (WI-SOC.1).
+  // mounted browser tab while this overlay is up.
   useBrowserOccluder(isDragging, "file-drop");
   if (!isDragging) return null;
 

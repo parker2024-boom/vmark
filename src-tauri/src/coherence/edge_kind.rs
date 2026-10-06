@@ -8,7 +8,7 @@
 //! a schema-pack table).
 //!
 //! **Contradiction is NOT a kind** — it is an `EdgeCheck` assessment folded in by
-//! `project_edge` (design D-table, G-B round-2 consistency #2). `Propagation` has
+//! `project_edge` (design D-table). `Propagation` has
 //! no `semantic` variant, by construction.
 
 use serde::{Deserialize, Serialize};

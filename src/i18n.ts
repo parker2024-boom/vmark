@@ -11,7 +11,8 @@
  *   - load: "currentOnly" avoids loading both "zh" and "zh-CN" for
  *     regional codes — only the exact requested locale is fetched.
  *   - Language is seeded from settingsStore on startup; runtime changes
- *     are handled by calling i18n.changeLanguage() elsewhere.
+ *     follow the setting through a store subscription, and the last
+ *     requested language wins even when an earlier locale is still loading.
  *   - Sets document.documentElement.lang on languageChanged event for
  *     correct assistive-technology announcements.
  *
@@ -92,33 +93,31 @@ i18n.on("languageChanged", (lng) => {
   document.documentElement.lang = lng;
 });
 
-// Cross-window sync: when another window changes language via settings sync,
-// update this window's i18n instance to match.
-/* v8 ignore start -- @preserve reason: cross-window sync subscription only fires in multi-window runtime */
-let lastLang = i18n.language;
-// Monotonic id of the most recently requested switch. changeLanguage is async,
-// so two rapid switches can resolve out of order; only the newest request may
-// commit the baseline. Without this, a superseded switch resolving last would
-// record its stale language, and re-selecting the language actually showing
-// would then be skipped as a no-op (audit Medium-12).
+// Follow the language setting — changed here, or in another window and
+// delivered by settings sync — into this window's i18n instance.
+//
+// The last REQUESTED language wins. The guard below compares against what was
+// last asked for, not what last finished loading: comparing against the
+// committed language dropped a switch back to it made while another locale
+// was still loading ("ja", then "en"), and the late locale then took over the
+// UI while the setting said otherwise. i18next applies only its newest
+// changeLanguage when loads overlap, so requesting every change in order is
+// enough to make the last one win.
+let lastRequested: string | undefined = i18n.language;
+// Monotonic id of the most recent request, so only a failure of the NEWEST
+// request reopens the guard.
 let langRequestId = 0;
 useSettingsStore.subscribe((state) => {
   const lang = state.general.language;
-  if (!lang || lang === lastLang) return;
+  if (!lang || lang === lastRequested) return;
+  lastRequested = lang;
   const requestId = ++langRequestId;
-  // Commit the baseline only once the switch actually succeeds AND it is still
-  // the newest request. Committing first meant a rejected changeLanguage
-  // (missing bundle) left the baseline claiming success, so the subscriber
-  // never retried — with an unhandled rejection to boot.
-  i18n
-    .changeLanguage(lang)
-    .then(() => {
-      if (requestId === langRequestId) lastLang = lang;
-    })
-    .catch((error: unknown) => {
-      i18nWarn("changeLanguage failed; keeping previous locale", error);
-    });
+  i18n.changeLanguage(lang).catch((error: unknown) => {
+    // A failed switch (missing bundle) must not leave the guard claiming it
+    // happened, or the next settings emission would never retry it.
+    if (requestId === langRequestId) lastRequested = undefined;
+    i18nWarn("changeLanguage failed; keeping previous locale", error);
+  });
 });
-/* v8 ignore stop */
 
 export default i18n;

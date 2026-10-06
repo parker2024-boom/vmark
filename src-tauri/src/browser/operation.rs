@@ -26,9 +26,9 @@ pub(crate) const NEVER_AUTOMATED: &[&str] = &["upload"];
 /// requires a fresh per-call one-shot. Mirrors `NEVER_GRANTABLE` in
 /// `src/lib/browser/approval/grants.ts`.
 ///
-/// `session` joins `eval` here (WI-P6.3): loading a saved credential blob into a
+/// `session` joins `eval` here: loading a saved credential blob into a
 /// context is user-gated per call and must never become a standing "this site may
-/// restore sessions" grant. `record` joins them (WI-NB7.3): starting a recording of
+/// restore sessions" grant. `record` joins them: starting a recording of
 /// the user's own actions is a per-use consent, never a standing permission.
 pub(crate) const NEVER_GRANTABLE: &[&str] = &["eval", "session", "record"];
 
@@ -38,7 +38,7 @@ pub(crate) const NEVER_GRANTABLE: &[&str] = &["eval", "session", "record"];
 /// `style` and `eval` carry a caller-supplied script/CSS, so an "Allow once" the
 /// user approved for payload A must NOT authorize a substituted payload B on the
 /// retry. The driver binds a hash of the exact script the eval will run and
-/// refuses a mismatched retry. (Security review P5 — High #1, Medium #4.)
+/// refuses a mismatched retry.
 ///
 /// `type`, `key` and `scroll` bind too (audit 20260903 A-05): the built script
 /// EMBEDS the text to type, the key plus its modifiers, or the scroll delta, so
@@ -93,7 +93,7 @@ impl BrowserOperation {
         match self {
             // `session` binds an `action:handle` descriptor, so an "Allow once" for
             // "load work_login" cannot be spent on loading a different saved session
-            // (WI-P6.3) — the same anti-substitution reasoning as style/eval.
+            // — the same anti-substitution reasoning as style/eval.
             Self::Style | Self::Eval | Self::Session | Self::Type | Self::Key | Self::Scroll => {
                 true
             }

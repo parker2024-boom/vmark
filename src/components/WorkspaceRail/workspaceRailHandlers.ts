@@ -20,7 +20,6 @@
  */
 import type { useTranslation } from "react-i18next";
 import { imeToast as toast } from "@/services/ime/imeToast";
-import { cleanupTabState } from "@/services/windowClose/tabCleanup";
 import { closeTabsWithDirtyCheck } from "@/services/tabs/tabOperations";
 import { closeWorkspaceInstance } from "@/services/workspaces/closeWorkspaceInstance";
 import {
@@ -61,9 +60,7 @@ export async function handleMoveWorkspace(
   t: Translate,
 ): Promise<void> {
   try {
-    const result = await moveWorkspaceInstanceToNewWindow(windowLabel, instanceId, {
-      cleanupTab: cleanupTabState,
-    });
+    const result = await moveWorkspaceInstanceToNewWindow(windowLabel, instanceId);
     if (result && !result.ok) {
       toast.error(t("dialog:toast.workspaceMoveFailed"));
     }

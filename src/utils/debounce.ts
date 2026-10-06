@@ -6,7 +6,7 @@
  * Returns the wrapped function augmented with `.cancel()` and `.flush()`.
  *
  * Used as the shared primitive under the bespoke search debounce controllers
- * (`createQueryDebounce`, `createDebouncedSearchCounter`).
+ * (`createQueryDebounce`, `createSourceSearchRecount`).
  *
  * @module utils/debounce
  */

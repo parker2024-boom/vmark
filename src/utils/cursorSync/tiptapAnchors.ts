@@ -6,6 +6,8 @@
  *
  * Key decisions:
  *   - Table anchor walks the PM ancestor chain to find tableRow/table parents
+ *   - Table offsetInCell is a character offset into the cell's text, the same
+ *     unit source mode's table.ts uses, so a mode switch keeps the column
  *   - Code block anchor counts newlines before cursor to derive line/column
  *   - All restoration functions use addToHistory:false to avoid undo pollution
  *
@@ -30,28 +32,31 @@ export function getBlockAnchor($pos: ResolvedPos): BlockAnchor | undefined {
 
     // Table cell: extract row and column indices
     if (name === "tableCell" || name === "tableHeader") {
+      // `$pos.index(depth)` is the index of the child of the node AT `depth`
+      // that contains the position: the cell's index within its row is read
+      // at the row's depth, the row's index within the table at the table's.
       let row = 0;
       let col = 0;
       for (let pd = d - 1; pd >= 0; pd--) {
         const parentName = $pos.node(pd).type.name;
-        /* v8 ignore next -- @preserve reason: false branch ("table" parent) always follows "tableRow" in ProseMirror structure */
         if (parentName === "tableRow") {
-          col = $pos.index(pd + 1);
-        /* v8 ignore start -- @preserve "table" ancestor branch not separately exercised in tests */
+          col = $pos.index(pd);
         } else if (parentName === "table") {
-          row = $pos.index(pd + 1);
+          row = $pos.index(pd);
           break;
         }
-        /* v8 ignore stop */
       }
 
-      const offsetInCell = $pos.pos - $pos.start(d);
+      // A character offset into the cell's text — the unit source mode uses —
+      // not a document-position delta, which would also count the cell's
+      // paragraph-open token.
+      const offsetInCell = node.textBetween(0, $pos.pos - $pos.start(d)).length;
 
       return {
         kind: "table",
         row,
         col,
-        offsetInCell: Math.max(0, offsetInCell),
+        offsetInCell,
       };
     }
 
@@ -76,7 +81,33 @@ export function getBlockAnchor($pos: ResolvedPos): BlockAnchor | undefined {
 }
 
 /**
+ * Document position of the `offset`-th character of a cell's text, where
+ * `contentStart` is the position just inside the cell. An offset past the text
+ * clamps to the end of the last text; a cell with no text resolves to the
+ * start of its first textblock.
+ */
+function cellTextPosition(cell: PMNode, contentStart: number, offset: number): number {
+  let remaining = Math.max(0, offset);
+  let result: number | null = null;
+  let lastTextEnd: number | null = null;
+  cell.descendants((node, pos) => {
+    if (result !== null) return false;
+    if (!node.isText) return true;
+    const length = node.text?.length ?? 0;
+    if (remaining <= length) {
+      result = contentStart + pos + remaining;
+    } else {
+      remaining -= length;
+      lastTextEnd = contentStart + pos + length;
+    }
+    return false;
+  });
+  return result ?? lastTextEnd ?? contentStart + 1;
+}
+
+/**
  * Restore cursor in a table using block anchor coordinates.
+ * `offsetInCell` is a character offset into the cell's text.
  */
 export function restoreCursorInTable(
   view: EditorView,
@@ -129,8 +160,7 @@ export function restoreCursorInTable(
       for (let j = 0; j < rowNode.childCount; j++) {
         const cellNode = rowNode.child(j);
         if (j === anchor.col) {
-          const offset = Math.min(anchor.offsetInCell, cellNode.content.size);
-          const finalPos = cellPos + offset;
+          const finalPos = cellTextPosition(cellNode, cellPos + 1, anchor.offsetInCell);
           try {
             const tr = state.tr
               .setSelection(TextSelection.near(state.doc.resolve(finalPos)))

@@ -1,8 +1,7 @@
 /**
  * Purpose: Parse a web-workflow markdown file into the typed `WebWorkflow` IR,
- * with precise line-numbered diagnostics (ADR-W1, WI-4.1). Any line ending
- * (CRLF/CR/LF) and a leading BOM are accepted (audit 2026-09-03 W-12).
- * Origin: Embedded browser sites and workflows plan (2026-07-12, retired)
+ * with precise line-numbered diagnostics (ADR-W1). Any line ending
+ * (CRLF/CR/LF) and a leading BOM are accepted.
  *
  * File shape:
  *   ---
@@ -23,7 +22,10 @@
  * `{var}` yields a warning. Warnings are reported on BOTH outcomes, so one pass shows
  * every diagnostic. Diagnostics carry a stable `code` so a UI layer can localize them
  * (the parser is pure and must not import `t()`).
+ *
+ * @module lib/browser/workflow/parser
  */
+
 import {
   STEP_KINDS,
   type DiagnosticCode,

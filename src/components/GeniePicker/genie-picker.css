@@ -3,7 +3,7 @@
  * ============================================================================ */
 
 /* Backdrop / panel / footer chrome come from the shared overlay shell
-   (`overlay-shared.css`, WI-UI3.1). */
+   (`overlay-shared.css`). */
 /* ---- Header / Search ---- */
 
 .genie-picker-header {
@@ -43,7 +43,7 @@
   flex-wrap: wrap;
 }
 
-/* `.vm-chip` (WI-UI3.4); residual = the picker's uppercase label styling. */
+/* `.vm-chip`; residual = the picker's uppercase label styling. */
 .genie-chip {
   font-weight: 600;
   /* R5: an enabled control rests at secondary, not the decorative tier. */
@@ -445,7 +445,7 @@
 
 
 /* focus: caret-only — borderless finder/popup input; the caret is the
-   indicator (rule 33 §2, WI-UI1.8). */
+   indicator (rule 33 §2). */
 .genie-picker-search:focus {
   outline: none;
 }

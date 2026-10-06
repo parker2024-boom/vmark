@@ -1,14 +1,18 @@
-// Media viewer format adapter — images / audio / video.
-//
-// kind:"media" — a binary format. It is rendered full-width by a dedicated
-// surface (Editor.tsx routes kind:"media" to MediaViewer), NOT by
-// SplitPaneEditor, so no CodeMirror source pane mounts and the file is never
-// read as UTF-8 text. The bytes reach the webview via the Tauri asset
-// protocol (convertFileSrc), so a media tab's document `content` stays empty.
-//
-// Extensions come from the shared source of truth in utils/mediaExtensions.ts,
-// minus `svg` (which owns its own text/split-pane format). See
-// dev-docs/plans/20260703-media-viewer.md.
+/**
+ * Media viewer format adapter — images / audio / video.
+ *
+ * kind:"media" — a binary format. It is rendered full-width by a dedicated
+ * surface (Editor.tsx routes kind:"media" to MediaViewer), NOT by
+ * SplitPaneEditor, so no CodeMirror source pane mounts and the file is never
+ * read as UTF-8 text. The bytes reach the webview via the Tauri asset
+ * protocol (convertFileSrc), so a media tab's document `content` stays empty.
+ *
+ * Extensions come from the shared source of truth in utils/mediaExtensions.ts,
+ * minus `svg` (which owns its own text/split-pane format). See
+ * .claude/adr/plans/20260703-media-viewer.md.
+ *
+ * @module lib/formats/adapters/media
+ */
 
 import {
   IMAGE_EXTENSIONS,

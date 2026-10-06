@@ -1,3 +1,11 @@
+/**
+ * schemaMigrationWorkspaceContexts — migrates a hot-exit session to version 5
+ * by normalizing each window's workspace instances, repairing malformed entries
+ * and inferring their kind, or synthesizing them from the legacy window state.
+ *
+ * @module services/persistence/hotExit/schemaMigrationWorkspaceContexts
+ */
+
 import type {
   HotExitWorkspaceInstanceState,
   SessionData,

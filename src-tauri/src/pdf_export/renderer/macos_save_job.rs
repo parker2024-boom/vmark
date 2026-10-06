@@ -2,7 +2,7 @@
 //!
 //! Purpose: `print_to_pdf` used to infer that the PDF was done by watching the
 //! output file's size stop changing for ~700 ms, and after its deadline it
-//! accepted any non-empty file as success (#213, #214). A slow or paused
+//! accepted any non-empty file as success. A slow or paused
 //! writer could pass the first test with a truncated file and the second
 //! accepted exactly the file the loop had just failed to prove complete.
 //! AppKit reports completion: `runOperationModalForWindow:delegate:
@@ -16,7 +16,7 @@
 //! object AppKit will still message. It also carries the OUTPUT PATH, because
 //! a wait that gives up is not a cancellation — `NSPrintOperation` has no
 //! cancel — so the job goes on writing a file the command has already
-//! disowned. The late callback removes it (#425); the alternative is a
+//! disowned. The late callback removes it; the alternative is a
 //! `*.vmark-staging-*.pdf` left beside the user's document.
 //!
 //! @coordinates-with macos_ops.rs — the only caller
@@ -43,14 +43,14 @@ use super::staging::remove_temp;
 /// How long the run loop is ticked for the operation to report. The overall
 /// export has its own 180 s bound in `mod.rs`; this is the part spent inside
 /// the print pipeline, and a job still running after it is reported as a
-/// timeout — never as "probably done" (#214).
+/// timeout — never as "probably done".
 const SAVE_JOB_WAIT: Duration = Duration::from_secs(60);
 
 pub(super) struct SaveJobIvars {
     /// The `success` flag AppKit sent, once it has.
     done: Cell<Option<bool>>,
     self_retain: Cell<Option<Retained<SaveJobDelegate>>>,
-    /// The wait gave up before the callback came (#425). Nothing will publish
+    /// The wait gave up before the callback came. Nothing will publish
     /// what the job goes on to write, and the sink has already removed the
     /// name it knew — so the late callback removes the file itself.
     abandoned: Cell<bool>,
@@ -79,10 +79,10 @@ define_class!(
                 // The staging file this wrote is one nobody asked for any
                 // more: the command reported a timeout and moved on, and a
                 // leftover `*.vmark-staging-*.pdf` beside the user's output
-                // is litter with their document in it (#425).
+                // is litter with their document in it.
                 log::warn!(
-                    "[PDF] print operation reported success={success} after the wait gave up; removing {}",
-                    self.ivars().output.display()
+                    "[PDF] print operation reported success={success} after the wait gave up; removing {:?}",
+                    self.ivars().output
                 );
                 remove_temp(&self.ivars().output);
             }
@@ -159,7 +159,7 @@ pub(super) fn run_save_job(
     // Nothing cancels an NSPrintOperation, and the delegate must stay alive
     // for the callback AppKit will still send (see the header). Tell it the
     // wait is over, so the file it is still writing is removed on arrival
-    // rather than left beside the user's output (#425). Safe to set here and
+    // rather than left beside the user's output. Safe to set here and
     // not racy: the callback only ever runs inside `run_loop_tick`, and the
     // loop above has just left one.
     delegate.ivars().abandoned.set(true);
@@ -173,7 +173,7 @@ pub(super) fn run_save_job(
     ))
 }
 
-/// Remove whatever is at the output path before the job runs (#212). The
+/// Remove whatever is at the output path before the job runs. The
 /// old `let _ = remove_file(..)` let a stale file that could not be removed
 /// sit there and be reported as the export's result.
 pub(super) fn clear_stale_output(output_path: &str) -> Result<(), CommandError> {
@@ -208,7 +208,7 @@ enum PdfShape {
 /// is not — empty, something else, or a document that stops before its
 /// trailer — is removed, so the caller cannot open it as the export.
 ///
-/// The header alone was not verification (#434): `%PDF-` is five bytes, and a
+/// The header alone was not verification: `%PDF-` is five bytes, and a
 /// print that died partway through writes them before it writes anything else.
 /// `%%EOF` is what says the writer finished, and it is the same marker every
 /// reader looks for; checking both is the strongest structural claim available
@@ -225,8 +225,8 @@ pub(super) fn verify_pdf(output_path: &Path) -> Result<(), CommandError> {
         // fail anyway.
         Err(e) => {
             log::warn!(
-                "[PDF] could not examine the output at {}: {e}",
-                output_path.display()
+                "[PDF] could not examine the output at {:?}: {e}",
+                output_path
             );
             return Err(localized_error!(
                 ErrorCode::Io,
@@ -238,15 +238,12 @@ pub(super) fn verify_pdf(output_path: &Path) -> Result<(), CommandError> {
     match shape {
         PdfShape::Complete => Ok(()),
         PdfShape::Empty => {
-            log::debug!("[PDF] output missing or empty at {}", output_path.display());
+            log::debug!("[PDF] output missing or empty at {:?}", output_path);
             let _ = std::fs::remove_file(output_path);
             Err(localized_error!(ErrorCode::Io, "errors.pdf.emptyOutput"))
         }
         PdfShape::NotPdf => {
-            log::warn!(
-                "[PDF] output at {} is not a complete PDF",
-                output_path.display()
-            );
+            log::warn!("[PDF] output at {:?} is not a complete PDF", output_path);
             let _ = std::fs::remove_file(output_path);
             Err(localized_error!(ErrorCode::Io, "errors.pdf.outputNotPdf"))
         }

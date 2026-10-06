@@ -10,7 +10,7 @@ import { adjacentScript } from "./script";
 /**
  * Normalize ellipsis patterns, in the shape the surrounding script uses.
  *
- * There is no single correct output (WI-CJKF5.2):
+ * There is no single correct output:
  *
  * | | Chinese | Japanese | Korean | Latin |
  * |---|---|---|---|---|
@@ -28,7 +28,11 @@ export function normalizeEllipsis(text: string): string {
   // Replace spaced dots with standard ellipsis. Horizontal whitespace only —
   // dots on separate lines are sentence-ending periods, not a spaced
   // ellipsis, and collapsing them would join those lines.
-  text = text.replace(/[ \t]*\.[ \t]+\.[ \t]+\.(?:[ \t]+\.)*/g, "...");
+  //
+  // The lookbehind pins a match to the START of its whitespace run. The match
+  // is the same either way (the leftmost one always starts there), but without
+  // it a run of spaces that no dot follows was rescanned from every space in it.
+  text = text.replace(/(?<![ \t])[ \t]*\.[ \t]+\.[ \t]+\.(?:[ \t]+\.)*/g, "...");
 
   // The (?!\.) guard anchors to the END of a dot run so 4+ dots are never
   // split in the middle (e.g. "wait.... ok" stays intact). `[ \t]*` only — an
@@ -37,7 +41,7 @@ export function normalizeEllipsis(text: string): string {
   // A space the author typed BEFORE the run is left alone, deliberately: this
   // rule only decides the run's own shape, and `中文 ...` is not attached to
   // 中文 by the same adjacency test everything else here uses. Deleting
-  // authored whitespace is the limit WI-CJKF3.3 also declines to cross.
+  // authored whitespace is the limit `fixQuoteSpacing` also declines to cross.
   text = text.replace(/\.\.\.(?!\.)([ \t]*)/g, (whole, gap: string, offset: number) => {
     const script = adjacentScript(text, offset, offset + whole.length);
     if (script === "han") return "……";

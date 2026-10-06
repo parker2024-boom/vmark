@@ -26,8 +26,12 @@ const schema = getProductionSchema();
 const MARKS = ["bold", "italic", "strike"] as const;
 const CHARS = ["a", "d", "é", "1", "中", "文", "ע", "🙂", "#", ".", "*", "。", "（", " "];
 
-/** Same budget reasoning as roundtrip.property.test.ts: a liveness bound only. */
-const PROPERTY_TEST_TIMEOUT_MS = 30_000;
+// These properties pass no timeout of their own: they run under the suite's
+// liveness bound (`LIVENESS_TIMEOUT_MS`, vitest.shared.ts), set from what is
+// unambiguously a hang. A per-test bound below it is a performance assertion
+// in disguise: CPU-bound properties overran 30 s and 120 s on a loaded box
+// while correct, and a real regression fails on an assertion, not by running
+// long.
 
 const run = fc.record({
   text: fc
@@ -85,5 +89,5 @@ describe("attention delimiters — round-trip property", () => {
       }),
       { numRuns: 400, seed: 20260915 },
     );
-  }, PROPERTY_TEST_TIMEOUT_MS);
+  });
 });

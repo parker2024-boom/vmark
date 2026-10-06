@@ -35,8 +35,8 @@ pub async fn read_session(app: &tauri::AppHandle) -> Result<Option<LoadedSession
 /// ladder and assert against the copy — which cannot catch a divergence.
 ///
 /// The corrupt main file is deliberately left ON DISK: it is the only evidence
-/// of what went wrong, and the frontend needs `recovered_from_backup` (audit
-/// 20260803 §11) to quarantine it before a successful restore clears both.
+/// of what went wrong, and the frontend needs `recovered_from_backup`
+/// to quarantine it before a successful restore clears both.
 async fn read_session_from_paths(
     session_path: &std::path::Path,
     backup_path: &std::path::Path,

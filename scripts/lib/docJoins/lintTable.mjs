@@ -1,5 +1,5 @@
 /**
- * Doc join `lint-table` (WI-FL0.3): `website/guide/lint.md` ↔ the lint engine.
+ * Doc join `lint-table`: `website/guide/lint.md` ↔ the lint engine.
  *
  * Two things the page states are restatements of code, and both had drifted
  * through every green CI run — a docs-only PR runs no test that reads the rules:
@@ -39,13 +39,14 @@
  * @coordinates-with src/lib/lintEngine/ruleMeta.ts — RULE_META
  * @coordinates-with src/stores/settingsStore/shortcutDefinitions.ts — the lint shortcut defaults
  * @coordinates-with scripts/lib/keybindingFormat.mjs — prosemirrorToDocs, the docs renderer
+ * @coordinates-with scripts/lib/docJoins/lintTableChords.mjs — the chords a page writes, found and spelled
  * @coordinates-with website/guide/lint.md — the page under test
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { keyTokens, prosemirrorToDocs } from "../keybindingFormat.mjs";
 import { splitRow } from "./markdownTables.mjs";
+import { chordsInDoc, docsChord } from "./lintTableChords.mjs";
 
 export const id = "lint-table";
 
@@ -66,29 +67,6 @@ const TRIGGER_ROWS = [
   { shortcutId: "lintPrev", action: "Jump to the previous diagnostic" },
 ];
 
-const MODIFIER_NAMES = ["Mod", "Cmd", "Ctrl", "Alt", "Shift", "Option", "Meta", "Command", "Control"];
-const MODIFIERS = new Set(MODIFIER_NAMES);
-/** Keys with a NAME rather than a character — the vocabulary `chordTokens` accepts. */
-const NAMED_KEYS = [
-  "F\\d{1,2}", "Enter", "Return", "Esc", "Escape", "Tab", "Space", "Backspace",
-  "Delete", "Up", "Down", "Left", "Right", "Home", "End", "PageUp", "PageDown",
-];
-const NAMED_KEY_RE = new RegExp(`^(?:${NAMED_KEYS.join("|")})$`);
-/**
- * A chord written in bare prose: a modifier, then `-`/`+`-joined modifiers and
- * one key. Built from the SAME vocabularies `chordTokens` accepts — a
- * hand-written alternation listed only `F\d` and a single character, so a
- * stale `Cmd + Enter` or `Alt + PageDown` in prose matched nothing and was
- * never checked (audit R2 #141). Longer alternatives first, so `PageUp` is not
- * consumed as `P`.
- */
-const PROSE_CHORD_RE = new RegExp(
-  `\\b(?:${MODIFIER_NAMES.join("|")})(?:\\s?[-+]\\s?(?:${[...MODIFIER_NAMES, ...NAMED_KEYS].join("|")}|[A-Za-z0-9]))+\\b`,
-  "g",
-);
-/** A backtick-run code span (`` `x` ``, ```` `` ` `` ````, ```` ``` ````) on one line. */
-const CODE_SPAN_RE = /(`+)(.+?)\1(?!`)/g;
-
 /** The description up to the first ` — `, `: ` or ` (` — the part that must equal the rule's title. */
 export function leadingTitle(description) {
   const cuts = [" — ", ": ", " ("].map((s) => description.indexOf(s)).filter((i) => i >= 0);
@@ -101,7 +79,7 @@ const severityLabel = (s) => s[0].toUpperCase() + s.slice(1);
  * Cells of one table row. Delegates to `markdownTables.splitRow` — the shared
  * GFM splitter — rather than carrying a second one: the lookbehind this
  * replaced read the `\` of an even backslash run as an escape, and stripped a
- * TRAILING `\|` as though it were the row's outer delimiter (audit R2 #142).
+ * TRAILING `\|` as though it were the row's outer delimiter.
  */
 const splitCells = splitRow;
 
@@ -109,8 +87,7 @@ const isRow = (line) => line.trim().startsWith("|");
 /**
  * A GFM delimiter row: every cell is `-`/`:`, and it has the SAME number of
  * cells as its header. GFM requires that equality — without it a pipe line
- * followed by a shorter dash line was read as a table nothing renders as one
- * (audit R2 #143).
+ * followed by a shorter dash line was read as a table nothing renders as one.
  */
 const isDelimiterRow = (line, headerCells) => {
   const cells = splitCells(line);
@@ -170,85 +147,6 @@ function joinRuleTable(doc, ruleMeta, { docPath, metaPath }, findings, info) {
   info.push(`${rows.length} documented rules joined against ${ruleMeta.length} in ${metaPath}`);
 }
 
-/** Tokens of a chord as written (`Alt + Mod + V`, `Cmd-Shift-L`, `F2`), or null when the text is not a chord. */
-function chordTokens(text) {
-  const s = text.trim();
-  if (/^F\d{1,2}$/.test(s)) return [s];
-  let tokens;
-  if (s.includes("+")) tokens = s.split("+").map((t) => t.trim());
-  else {
-    // `keyTokens` refuses a malformed key (`prettier --check`, `-x`); for a
-    // code span on a guide page that refusal just means "not a chord".
-    try {
-      // TRIMMED: the prose matcher accepts a space either side of the
-      // separator, so `Cmd - Shift - L` reaches here as ["Cmd ", " Shift ",
-      // " L"] — no token matched a modifier, the chord read as "not a chord",
-      // and a stale one written that way was never checked (audit R2 #145).
-      tokens = keyTokens(s).map((t) => t.trim());
-    } catch {
-      return null;
-    }
-  }
-  if (tokens.length < 2 || tokens.some((t) => t === "")) return null;
-  if (!tokens.some((t) => MODIFIERS.has(t))) return null;
-  if (!tokens.every((t) => MODIFIERS.has(t) || NAMED_KEY_RE.test(t) || t.length === 1)) return null;
-  return tokens;
-}
-
-/**
- * The docs spelling of a token list, produced BY `prosemirrorToDocs` rather
- * than by a second copy of its rule.
- *
- * The copy had already drifted, in the direction that matters: it upper-cased
- * a single ASCII letter (`t.length === 1 && /[a-z]/i`), while the renderer it
- * is compared against upper-cases any single Unicode LETTER by CODE POINT
- * (`/^\p{L}$/u` — audit 20260907 #91 fixed that side and not this one). So a
- * chord on a non-ASCII or astral key rendered one way by the shortcut
- * definition and another way by the page reader, and a page carrying the
- * CORRECT chord would have been reported stale.
- *
- * Round-tripping through the ProseMirror spelling is what makes one rule serve
- * both: `chordTokens` rejects empty tokens and multi-character tokens that are
- * not named keys, so `join("-")` is unambiguous — the minus KEY re-reads as the
- * `Mod--` form `keyTokens` already understands.
- */
-const docsChord = (tokens) => prosemirrorToDocs(tokens.join("-"));
-
-/**
- * Every chord written on the page — code spans and bare prose, fenced blocks
- * skipped — with its line and text as written.
- *
- * The fence is tracked by its MARKER and LENGTH, per CommonMark: only a fence
- * of the same character and at least the opening length closes it. A boolean
- * toggle closed a ```` ``` ```` block on a `~~~` line inside it, and on a
- * shorter run of the same character, so the rest of the block was read as prose
- * and its example chords reported as stale (audit R2 #147).
- */
-function chordsInDoc(doc) {
-  const out = [];
-  let fence = null;
-  doc.split("\n").forEach((line, i) => {
-    const m = /^\s*(`{3,}|~{3,})/.exec(line);
-    if (m) {
-      const marker = m[1][0];
-      const length = m[1].length;
-      if (fence === null) fence = { marker, length };
-      else if (marker === fence.marker && length >= fence.length) fence = null;
-      return;
-    }
-    if (fence !== null) return;
-    for (const m of line.matchAll(CODE_SPAN_RE)) {
-      const tokens = chordTokens(m[2]);
-      if (tokens) out.push({ line: i + 1, text: m[2].trim(), tokens });
-    }
-    for (const m of line.replace(CODE_SPAN_RE, " ").matchAll(PROSE_CHORD_RE)) {
-      const tokens = chordTokens(m[0]);
-      if (tokens) out.push({ line: i + 1, text: m[0], tokens });
-    }
-  });
-  return out;
-}
-
 function joinTriggers(doc, shortcuts, renderShortcut, { docPath, defsPath }, findings, info) {
   const rows = findTable(doc, ["Trigger", "Action"]);
   if (!rows) {
@@ -258,7 +156,7 @@ function joinTriggers(doc, shortcuts, renderShortcut, { docPath, defsPath }, fin
   // A trigger table row is `| Trigger | Action |`. A row of any other arity is
   // a malformed table, not a documented trigger — and `cells[1]` on one still
   // matched, so a three-cell row could satisfy the join. Duplicate Action rows
-  // are refused too: `find` would take an arbitrary one of them (audit R2 #149).
+  // are refused too: `find` would take an arbitrary one of them.
   const seenActions = new Set();
   for (const { line, cells } of rows) {
     if (cells.length !== 2) {
@@ -316,8 +214,7 @@ function checkedRuleMeta(meta, source) {
     }
     // A duplicate id makes both directions of the join lie: `byId` keeps the
     // LAST entry, so the row is checked against one of them, and the
-    // completeness loop finds `seen` holds the id and calls BOTH documented
-    // (audit R2 #150).
+    // completeness loop finds `seen` holds the id and calls BOTH documented.
     if (ids.has(m.id)) throw new Error(`${source}: RULE_META declares "${m.id}" twice — one rule, one row`);
     ids.add(m.id);
   }
@@ -328,7 +225,7 @@ function checkedRuleMeta(meta, source) {
  * The three shortcut definitions this join consumes must each exist exactly
  * once and carry string keys. `Array.isArray` alone let a duplicate id through
  * — `find` then picked an arbitrary one — and a non-string `defaultKey` reached
- * the renderer as whatever it was (audit R2 #151).
+ * the renderer as whatever it was.
  */
 function checkedShortcuts(defs, source) {
   if (!Array.isArray(defs)) throw new Error(`${source}: DEFAULT_SHORTCUTS is not an array`);

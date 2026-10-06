@@ -173,7 +173,8 @@ fn probe() -> &'static ProbeReport {
     REPORT.get_or_init(|| {
         let dir = tempfile::tempdir().expect("temp dir for the report");
         let report_path = dir.path().join("report.json");
-        let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+        let probe = std::env::current_exe().expect("test binary");
+        let output = crate::ai_provider::build_command(&probe.to_string_lossy(), &[])
             .env(REPORT_ENV, &report_path)
             .output()
             .expect("spawn the test binary as the probe");

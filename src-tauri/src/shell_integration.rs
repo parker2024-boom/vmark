@@ -1,4 +1,4 @@
-//! Shell integration setup (WI-3.1, extended by WI-3.3/3.4).
+//! Shell integration setup for zsh and bash.
 //!
 //! Purpose: Materializes the per-shell integration rc that emits OSC 133
 //! command-boundary marks + OSC 7 cwd, and returns what the frontend needs to
@@ -6,7 +6,7 @@
 //! arguments. zsh and bash are supported; other shells return `None` and the
 //! terminal spawns without integration (graceful degrade).
 //!
-//! Why the return type carries `args` (WI-3.3): zsh is hooked purely through
+//! Why the return type carries `args`: zsh is hooked purely through
 //! the environment (`ZDOTDIR`), but bash has no environment hook that applies
 //! to interactive shells — `BASH_ENV` is non-interactive-only — so it must be
 //! spawned as `bash --rcfile <path>`. Rather than special-casing bash in the
@@ -21,6 +21,13 @@
 //! there, and a configured `bash.exe` does not match the `bash` basename, so
 //! Windows keeps spawning with no integration exactly as before.
 //!
+//! Only a shell VMark discovered is prepared (`require_discovered_shell`): the
+//! `shell` argument comes from the webview and, for zsh, is executed here, so
+//! it must be one of the paths `shell_env` offers — not merely a file that
+//! happens to be called `zsh`. Anything else is an error, and the terminal
+//! spawns without integration.
+//!
+//! @coordinates-with shell_env.rs — the shells VMark discovered (the allowlist)
 //! @coordinates-with lib.rs — command registered in generate_handler![]
 //! @coordinates-with src/components/Terminal/terminalSpawnEnv.ts — applies env + args
 //! @coordinates-with src/components/Terminal/spawnPty.ts — forwards args to spawn()
@@ -37,7 +44,7 @@ static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// zsh integration rc, embedded at compile time.
 const ZSH_INTEGRATION: &str = include_str!("../resources/shell-integration/vmark.zsh");
-/// bash integration rc, embedded at compile time (WI-3.4).
+/// bash integration rc, embedded at compile time.
 const BASH_INTEGRATION: &str = include_str!("../resources/shell-integration/vmark.bash");
 
 /// What the frontend must apply when spawning an integrated shell.
@@ -128,14 +135,62 @@ fn prepare_shell_integration_blocking<R: Runtime>(
     shell: String,
     app: AppHandle<R>,
 ) -> Result<Option<ShellIntegration>, String> {
-    let Some(kind) = shell_kind(&shell) else {
+    prepare_with(&shell, discovered_shells, || {
+        app.path().app_local_data_dir().map_err(|e| {
+            log::warn!("[shell_integration] no app data dir; spawning without integration: {e}");
+            format!("Failed to resolve app data dir: {e}")
+        })
+    })
+}
+
+/// The shells VMark itself found on this machine: the ones Settings offers
+/// (`list_available_shells`) plus the default it falls back to
+/// (`get_default_shell`, which can name a shell `/etc/shells` omits). These are
+/// the only values the terminal ever passes as `shell`.
+fn discovered_shells() -> Vec<String> {
+    let mut shells = crate::shell_env::available_shells();
+    let default = crate::shell_env::default_shell();
+    if !shells.contains(&default) {
+        shells.push(default);
+    }
+    shells
+}
+
+/// Refuse a `shell` VMark did not discover.
+///
+/// `shell` arrives from the webview, and for zsh this command RUNS it
+/// (`<shell> -lic …`, the `ZDOTDIR` probe). Judging it by file name alone made
+/// any file called `zsh` runnable from a script in the page. The comparison is
+/// with the discovered path exactly as VMark spelled it: a different path to
+/// the same file — through a symlink, `..`, a doubled or trailing slash — is
+/// not one VMark found, and is refused without touching the filesystem.
+fn require_discovered_shell(shell: &str, discovered: &[String]) -> Result<(), String> {
+    if discovered.iter().any(|known| known == shell) {
+        Ok(())
+    } else {
+        Err(format!(
+            "shell {shell:?} is not one VMark found on this system"
+        ))
+    }
+}
+
+/// `prepare_shell_integration` with its two environment inputs injected: the
+/// shells VMark discovered, and where the app keeps its local data. Both are
+/// asked for only once `shell` is one VMark can instrument, so an unsupported
+/// shell costs neither a shell lookup nor a directory.
+fn prepare_with(
+    shell: &str,
+    discovered: impl FnOnce() -> Vec<String>,
+    data_dir: impl FnOnce() -> Result<PathBuf, String>,
+) -> Result<Option<ShellIntegration>, String> {
+    let Some(kind) = shell_kind(shell) else {
         return Ok(None);
     };
-
-    let base = app.path().app_local_data_dir().map_err(|e| {
-        log::warn!("[shell_integration] no app data dir; spawning without integration: {e}");
-        format!("Failed to resolve app data dir: {e}")
+    require_discovered_shell(shell, &discovered()).inspect_err(|e| {
+        log::warn!("[shell_integration] {e}; spawning without integration");
     })?;
+
+    let base = data_dir()?;
     let dir = base.join("shell-integration").join(kind.dir_name());
     std::fs::create_dir_all(&dir).map_err(|e| {
         log::warn!("[shell_integration] cannot create {dir:?}; spawning without integration: {e}");
@@ -153,7 +208,7 @@ fn prepare_shell_integration_blocking<R: Runtime>(
     // minimal GUI env may be /bin/sh and misresolve (Codex audit). Only zsh
     // consumes this; bash carries no env override.
     let user_zdotdir = match kind {
-        ShellKind::Zsh => crate::ai_provider::login_shell_zdotdir(&shell),
+        ShellKind::Zsh => crate::ai_provider::login_shell_zdotdir(shell),
         ShellKind::Bash => None,
     };
     Ok(Some(build_integration(kind, &dir, user_zdotdir)))
@@ -172,9 +227,9 @@ fn build_integration(
             // rc; `USER_ZDOTDIR` carries the user's real ZDOTDIR (resolved
             // from a login shell — the GUI process env is minimal) so
             // `vmark.zsh` can source their config instead of falling back to
-            // `$HOME` (terminal gap G1, WI-1.2).
+            // `$HOME` (terminal gap G1).
             env: build_zsh_env(dir, user_zdotdir),
-            // zsh needs no args — this is what keeps WI-3.3 byte-identical
+            // zsh needs no args — this is what keeps zsh launches byte-identical
             // for existing users.
             args: Vec::new(),
         },
@@ -215,7 +270,12 @@ fn build_zsh_env(integration_dir: &Path, user_zdotdir: Option<String>) -> BTreeM
 /// the same filesystem). The per-call unique name (PID + monotonic counter)
 /// keeps two concurrent calls from clobbering each other's temp file before the
 /// rename — the final rc is always one writer's complete contents, never
-/// a torn mix (WI-4.6).
+/// a torn mix.
+///
+/// Atomic, and deliberately NOT durable: nothing is synced. The rc is rewritten
+/// from the embedded script before every shell spawn, so whatever a crash left
+/// behind is replaced before it is next read, and a sync would add a full disk
+/// flush to every terminal that opens.
 fn write_rc_atomic(dir: &Path, file_name: &str, contents: &str) -> io::Result<()> {
     let rc = dir.join(file_name);
     let tmp = dir.join(format!(
@@ -232,3 +292,7 @@ fn write_rc_atomic(dir: &Path, file_name: &str, contents: &str) -> io::Result<()
 #[cfg(test)]
 #[path = "shell_integration.test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "shell_integration_discovery.test.rs"]
+mod discovery_tests;

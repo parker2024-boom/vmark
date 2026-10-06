@@ -1,5 +1,5 @@
 /**
- * DelegationsSection (WI-3.4) — live agent delegations with explicit
+ * DelegationsSection — live agent delegations with explicit
  * grant/revoke acts (design-3.md D2.2): 7-day default, never forever,
  * a confirmation dialog naming principal, scope, and expiry before
  * anything is recorded.
@@ -32,7 +32,7 @@ export function DelegationsSection({ workspaceRoot }: { workspaceRoot: string | 
     ];
     // Strict decimal integer, bounded to a sane maximum — "7days" must
     // not parse as 7, and a huge value must not make toISOString() throw
-    // an unhandled rejection (audit D11).
+    // an unhandled rejection.
     const MAX_DAYS = 365;
     if (!workspaceRoot || busy || trimmed === "" || scope.length === 0) return;
     if (!/^\d+$/.test(days.trim())) return;

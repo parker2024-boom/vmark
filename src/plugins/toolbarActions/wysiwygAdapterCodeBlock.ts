@@ -103,7 +103,7 @@ function convertListToCodeBlock(view: EditorView, language?: string): CodeBlockO
  * Wrappers that may be SPLIT at a selection boundary so only the covered
  * part converts (their content spec is `block+`, so both halves stay valid).
  * Details (summary-first content) and tables cannot be split validly — a
- * partial selection of those refuses the conversion instead (WI-2).
+ * partial selection of those refuses the conversion instead.
  */
 const SPLITTABLE_WRAPPERS = new Set(["blockquote", "alertBlock"]);
 

@@ -51,12 +51,13 @@ vibe-coding에도 이 도구들을 사용 중이라면 (Claude Code, Codex CLI, 
 
 ## REST API 제공자
 
-REST 제공자는 클라우드 API에 직접 연결합니다. 각각 엔드포인트, API 키, 모델명이 필요합니다.
+REST 제공자는 클라우드(또는 로컬) API에 직접 연결합니다. 각각 엔드포인트, API 키, 모델명이 필요합니다. 응답은 요청이 완료될 때 한 번에 도착합니다 — REST 제공자는 토큰을 스트리밍하지 않으며, CLI 제공자는 스트리밍합니다.
 
 | 제공자 | 기본 엔드포인트 | 환경 변수 |
 |--------|--------------|----------|
 | Anthropic | `https://api.anthropic.com` | `ANTHROPIC_API_KEY` |
 | OpenAI | `https://api.openai.com` | `OPENAI_API_KEY` |
+| OpenAI 호환 | *(직접 설정)* | — |
 | Google AI | *(내장)* | `GOOGLE_API_KEY` 또는 `GEMINI_API_KEY` |
 | Ollama (API) | `http://localhost:11434` | — |
 
@@ -64,8 +65,8 @@ REST 제공자는 클라우드 API에 직접 연결합니다. 각각 엔드포�
 
 REST 제공자를 선택하면 세 가지 필드가 나타납니다:
 
-- **API 엔드포인트** — 기본 URL (고정 엔드포인트를 사용하는 Google AI는 숨겨짐)
-- **API 키** — 비밀 키 (메모리에만 저장 — 디스크에는 절대 기록하지 않음)
+- **API 엔드포인트** — 기본 URL (고정 엔드포인트를 사용하는 Google AI는 숨겨짐). 끝에 `/v1`이 붙어 있어도 괜찮습니다 — VMark가 경로가 중복되지 않도록 정규화합니다(예: `https://host/v1`과 `https://host` 모두 작동)
+- **API 키** — 비밀 키. 운영 체제의 자격 증명 저장소에 보관되며, `localStorage`나 일반 텍스트 설정 파일에는 절대 저장되지 않습니다 — [API 키 저장 위치](#api-키-저장-위치)를 참고하세요
 - **모델** — 모델 식별자 (예: `claude-sonnet-4-5-20250929`, `gpt-4o`, `gemini-2.0-flash`)
 
 ### 환경 변수 자동 채우기
@@ -94,6 +95,23 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 3. API 키를 붙여넣습니다
 4. 모델을 선택합니다 (기본값: `gpt-4o`)
 
+### 설정: OpenAI 호환 (DeepSeek, Groq, OpenRouter, …)
+
+많은 제공자가 OpenAI와 같은 통신 프로토콜(`/v1/chat/completions`, `Bearer` 인증)을 사용합니다. **OpenAI 호환** 슬롯은 공급업체별 항목 없이 이들 모두 — DeepSeek, Groq, OpenRouter, Together, Moonshot, 자체 호스팅 게이트웨이 등 — 에 연결합니다.
+
+다른 REST 제공자에 비해 필드가 하나 더 있습니다. 편집 가능한 **제공자 이름**으로, 일반 레이블 대신 "DeepSeek"(또는 설정한 이름)으로 표시됩니다.
+
+예시 — DeepSeek:
+
+1. [platform.deepseek.com](https://platform.deepseek.com)에서 API 키를 받습니다
+2. VMark 설정 > 통합에서 **OpenAI 호환** 을 선택합니다
+3. **제공자 이름** 을 `DeepSeek`로 설정합니다 (선택 사항, 표시용)
+4. **API 엔드포인트** 를 `https://api.deepseek.com`로 설정합니다 (끝에 `/v1`이 있어도 괜찮습니다 — VMark가 정규화합니다)
+5. API 키를 붙여넣습니다
+6. **모델** 을 `deepseek-chat`(또는 `deepseek-reasoner`)으로 설정합니다. 직접 입력하거나 새로 고침을 클릭해 엔드포인트의 모델 목록을 가져옵니다
+
+엔드포인트는 필수입니다 — 이 슬롯에는 기본 호스트가 없습니다. 지니를 실행하기 전에 **테스트**(⚡) 버튼과 **모델 테스트**(🧪) 버튼으로 연결을 확인하세요.
+
 ### 설정: Google AI (REST)
 
 1. [aistudio.google.com](https://aistudio.google.com)에서 API 키를 받습니다
@@ -119,6 +137,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 | 이미 Codex 또는 Gemini가 설치되어 있음 | **Codex / Gemini (CLI)** — 구독 사용 |
 | 프라이버시 / 오프라인 필요 | Ollama 설치 → `http://localhost:11434`에서 **Ollama (API)** |
 | 커스텀 또는 자체 호스팅 모델 | **Ollama (API)** + 엔드포인트 |
+| DeepSeek / Groq / OpenRouter / 모든 OpenAI 호환 API | **OpenAI 호환** — 엔드포인트, 키, 모델 설정 |
 | 가장 저렴한 클라우드 옵션 원함 | **모든 CLI 제공자** — 구독이 API보다 훨씬 저렴 |
 | 구독 없음, 가벼운 사용만 | API 키 환경 변수 설정 → **REST 제공자** (토큰당 요금) |
 | 최고 품질 출력 필요 | **Claude (CLI)** 또는 **Anthropic (REST)** + `claude-sonnet-4-5-20250929` |
@@ -148,16 +167,22 @@ VMark는 모든 제공자 호출을 보호하므로, CLI 가 응답하지 않거
 - **공유 HTTP 클라이언트**: REST 제공자는 단일 연결 풀링 `reqwest` 클라이언트를 공유하므로, 지니를 연속 실행할 때마다 TCP/TLS 핸드셰이크 비용이 발생하지 않습니다.
 - **Windows 경로 검색**: Windows 에서 VMark는 CLI 를 감지할 때 사용자의 전체 `PATH` (PowerShell 전용 항목 포함)를 읽으므로, 터미널에서 동작하는 사용자 설치 도구가 VMark 내에서도 동작합니다.
 
+## API 키 저장 위치
+
+API 키는 운영 체제의 자격 증명 저장소 — macOS 키체인, Windows 자격 증명 관리자 또는 Linux Secret Service — 에 서비스 이름 `app.vmark.secrets`로, 제공자마다 하나의 항목으로 보관됩니다. VMark는 실행 중인 세션 동안에만 메모리에 사본을 유지합니다. 저장되는 제공자 설정에는 키가 절대 포함되지 않으며, `localStorage`에도 아무것도 기록되지 않습니다. 이전 버전의 VMark가 일반 텍스트 설정 파일에 저장한 키는 새 버전이 처음 불러올 때 키체인으로 옮겨지며, 일반 텍스트 사본은 키체인 쓰기를 다시 읽어 성공을 확인한 후에만 삭제됩니다.
+
+키체인이 쓰기를 거부하면 VMark는 키를 조용히 메모리에 유지하는 대신 오류 토스트를 표시합니다. macOS에서 애드혹 서명된 개발 빌드는 다시 서명할 때마다 키체인 접근을 다시 요청할 수 있으며, 릴리스 빌드는 한 번만 묻습니다.
+
 ## 보안 참고 사항
 
-- **API 키는 임시** — 메모리에만 저장되며, 디스크나 `localStorage`에는 절대 기록되지 않습니다
-- **환경 변수** 는 실행 시 한 번 읽혀 메모리에 캐시됩니다
+- **API 키는 OS 키체인에 저장** — 위 내용 참고. VMark의 설정 파일이나 `localStorage`에는 절대 기록되지 않습니다
+- **환경 변수** 는 제공자를 선택할 때 읽히며, 비어 있는 키 필드만 채웁니다
 - **CLI 제공자** 는 기존 CLI 인증을 사용합니다 — VMark는 자격 증명을 직접 보지 않습니다
 - **모든 요청은 직접** 사용자 머신에서 제공자로 전송됩니다 — VMark 서버를 거치지 않습니다
 
 ## 문제 해결
 
-**"AI 제공자 없음"** — **감지** 를 클릭하여 CLI를 스캔하거나, API 키와 함께 REST 제공자를 구성합니다.
+**"사용 가능한 AI 공급자가 없습니다"** — **감지** 를 클릭하여 CLI를 스캔하거나, API 키와 함께 REST 제공자를 구성합니다.
 
 **CLI에 "찾을 수 없음" 표시** — CLI가 `$PATH`에 없습니다. 설치하거나 셸 프로파일을 확인하세요. macOS에서 GUI 앱은 터미널 `$PATH`를 상속받지 않을 수 있습니다 — `/etc/paths.d/`에 경로를 추가해 보세요.
 

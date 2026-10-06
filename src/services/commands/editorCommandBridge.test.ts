@@ -7,7 +7,6 @@
 import { beforeEach, describe, it, expect, vi } from "vitest";
 
 vi.mock("@/services/editor/runEditorAction", () => ({ runEditorAction: vi.fn() }));
-vi.mock("./actionAvailability", () => ({ actionAvailability: vi.fn(() => true) }));
 vi.mock("@/i18n", () => ({
   default: { t: (key: string, opts?: { defaultValue?: string }) => opts?.defaultValue ?? key },
 }));
@@ -19,6 +18,7 @@ import {
 } from "./editorCommandBridge";
 import { runEditorAction } from "@/services/editor/runEditorAction";
 import { actionAvailability } from "./actionAvailability";
+import type { CommandContextResolved } from "./commandContext";
 import { ACTION_DEFINITIONS } from "@/plugins/actions/actionRegistry";
 import {
   searchCommands,
@@ -28,7 +28,27 @@ import {
   type CommandDefinition,
 } from "./CommandBus";
 
-const CTX = { windowLabel: "main" };
+/** A resolved context in which every editor action is available (real predicate). */
+const CTX: CommandContextResolved = {
+  windowLabel: "main",
+  mode: "wysiwyg",
+  isDocument: true,
+  formatId: null,
+  editorAvailable: true,
+  readOnly: false,
+  hasSelection: true,
+  multiSelection: null,
+  inTable: false,
+  inLink: false,
+  inList: false,
+  inBlockquote: false,
+  inCodeBlock: false,
+  inHeading: false,
+};
+/** No live document tab: the real predicate refuses every action. */
+const NO_DOCUMENT: CommandContextResolved = { ...CTX, isDocument: false };
+/** Read-only: mutating actions are refused, selection actions stay. */
+const READ_ONLY: CommandContextResolved = { ...CTX, readOnly: true };
 
 function specById(id: string): CommandDefinition {
   const spec = buildEditorCommandSpecs().find((s) => s.id === id);
@@ -88,13 +108,19 @@ describe("buildEditorCommandSpecs", () => {
     expect(runEditorAction).toHaveBeenCalledWith("setHeading", { windowLabel: "main", params: { level: 3 } });
   });
 
-  it("when calls actionAvailability with the ActionId (setHeading rows share the id)", () => {
-    specById("editor.bold").when?.(CTX);
-    expect(actionAvailability).toHaveBeenCalledWith("bold", CTX);
-
-    vi.mocked(actionAvailability).mockClear();
-    specById("editor.setHeading.4").when?.(CTX);
-    expect(actionAvailability).toHaveBeenCalledWith("setHeading", CTX);
+  it("when evaluates actionAvailability for the spec's own ActionId (setHeading rows share the id)", () => {
+    for (const ctx of [CTX, NO_DOCUMENT, READ_ONLY]) {
+      expect(specById("editor.bold").when?.(ctx)).toBe(actionAvailability("bold", ctx));
+      expect(specById("editor.selectWord").when?.(ctx)).toBe(actionAvailability("selectWord", ctx));
+      for (const level of [1, 4, 6]) {
+        expect(specById(`editor.setHeading.${level}`).when?.(ctx)).toBe(actionAvailability("setHeading", ctx));
+      }
+    }
+    // The verdicts differ per action, so a spec wired to the wrong id is caught.
+    expect(specById("editor.bold").when?.(READ_ONLY)).toBe(false);
+    expect(specById("editor.selectWord").when?.(READ_ONLY)).toBe(true);
+    expect(specById("editor.setHeading.4").when?.(CTX)).toBe(true);
+    expect(specById("editor.setHeading.4").when?.(NO_DOCUMENT)).toBe(false);
   });
 });
 
@@ -119,16 +145,16 @@ describe("registerEditorCommands + palette search (DoD)", () => {
   });
 
   it("executeCommand refuses an unavailable editor command (when → actionAvailability)", async () => {
-    vi.mocked(actionAvailability).mockReturnValue(false);
     registerEditorCommands();
-    expect(await executeCommand("editor.bold", null, CTX)).toBe(false);
+    expect(await executeCommand("editor.bold", null, NO_DOCUMENT)).toBe(false);
+    expect(await executeCommand("editor.bold", null, READ_ONLY)).toBe(false);
     expect(runEditorAction).not.toHaveBeenCalled();
   });
 
   it("hides unavailable actions from search (when → actionAvailability)", () => {
-    vi.mocked(actionAvailability).mockReturnValue(false);
     registerEditorCommands();
-    expect(searchCommands("bold", CTX)).toHaveLength(0);
+    expect(searchCommands("bold", NO_DOCUMENT)).toHaveLength(0);
+    expect(searchCommands("bold", READ_ONLY).some((r) => r.command.id === "editor.bold")).toBe(false);
   });
 
   it("preflights a collision with an existing bus id and registers nothing", () => {

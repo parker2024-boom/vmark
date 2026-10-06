@@ -32,8 +32,8 @@ export interface LedgerEntry {
 /**
  * Corpus filename → the source rewrites reviewed and accepted for it.
  *
- * Absence means "this document must round-trip byte-identical". Ten of the
- * twenty-two corpus documents currently do.
+ * Absence means "this document must round-trip byte-identical". Eleven of the
+ * twenty-three corpus documents currently do.
  */
 export const FIDELITY_LEDGER: Record<string, LedgerEntry[]> = {
   "02-lists.md": [
@@ -41,10 +41,6 @@ export const FIDELITY_LEDGER: Record<string, LedgerEntry[]> = {
       rule: "orderedListRenumbered",
       reason:
         "CommonMark takes an ordered list's start from its FIRST item and ignores every later ordinal; a blank line between items of one type makes a loose list, not a second list. The authored `7.` after `1. 2. 3.` is item four, so emitting `4.` is spec-correct. Fingerprint confirms no meaning change.",
-    },
-    {
-      rule: "blankLineCollapse",
-      reason: "Blank-line preservation is opt-in; runs between list blocks collapse.",
     },
   ],
   "03-code.md": [
@@ -95,9 +91,6 @@ export const FIDELITY_LEDGER: Record<string, LedgerEntry[]> = {
   ],
   "18-nested-details.md": [
     { rule: "blankLineCollapse", reason: "Blank lines inside nested <details> collapse; preservation is opt-in." },
-  ],
-  "19-list-edge-cases.md": [
-    { rule: "blankLineCollapse", reason: "Blank-line preservation is opt-in." },
   ],
   "21-alerts-rich.md": [
     { rule: "alertQuoteContinuation", reason: "Canonical `>` continuation spelling inside rich alerts." },

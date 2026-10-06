@@ -1,4 +1,4 @@
-//! Context commands (WI-2b.7; design-2a.md D1). Service tier (ADR-C4):
+//! Context commands (design-2a.md D1). Service tier (ADR-C4):
 //! list the context set (implicit default always present), create named
 //! greenhouse contexts, and flip enforcement — the explicit human
 //! confirmation for enforcing lives in the UI (D4.3); this layer only

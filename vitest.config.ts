@@ -1,6 +1,17 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
-import { LIVENESS_TIMEOUT_MS, maxWorkers, sourceAliases, suffixGlob, testGlob } from "./vitest.shared.ts";
+import {
+  LIVENESS_TIMEOUT_MS,
+  TEST_DEFINES,
+  maxWorkers,
+  pinTestClockEnvironment,
+  sourceAliases,
+  suffixGlob,
+  testGlob,
+} from "./vitest.shared.ts";
+
+// Before `defineConfig`, so every forked worker inherits it; see the function.
+pinTestClockEnvironment();
 
 /**
  * Worker count, extension list and the measurements behind them live in
@@ -53,6 +64,8 @@ import { LIVENESS_TIMEOUT_MS, maxWorkers, sourceAliases, suffixGlob, testGlob } 
  */
 export default defineConfig({
   plugins: [react()],
+  // The build-time constants the app reads (see TEST_DEFINES).
+  define: TEST_DEFINES,
   test: {
     globals: true,
     environment: "jsdom",
@@ -136,9 +149,22 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "json-summary", "html"],
+      // Without an include, Vitest reports only the files some test LOADED, so
+      // a production module no test imports was absent from the summary and
+      // invisible to the floors below — it could ship with zero tests. With
+      // it, an unimported file is reported at 0%. Pinned by
+      // `scripts/check-coverage-include.test.mjs`.
+      include: ["src/**/*.{ts,tsx}"],
       exclude: [
         "node_modules/",
         "src/test/",
+        // Benchmarks, run by `pnpm bench` (`vitest bench`), never shipped.
+        "src/bench/**",
+        // Type-only in effect: its one runtime value, the unexported
+        // `_ACTION_IDS` array, exists only so `typeof` can derive the
+        // `ActionId` union. Every importer takes types, so the module is never
+        // evaluated and its single statement could only ever read 0%.
+        "src/plugins/actions/types.ts",
         // Build/dev tooling. Scripts are still unit-tested — by the GATE
         // TIER (`vitest.gates.config.ts`, `pnpm test:gates`), not by the
         // include glob above, which is `src/**` only since the split. Their
@@ -166,19 +192,19 @@ export default defineConfig({
         // justification in the commit message. The per-relaxation history
         // that used to live here (2026-04 → 2026-07, ~290 lines) is in git
         // history. Per-file gaps: pnpm test:coverage, then coverage/index.html.
-        // Actuals at last ratchet (2026-08-22): st 94.26, br 90.61,
-        // fn 93.51, ln 95.19 — raised by the WI-TNAV/WI-DSPL work.
+        // Actuals at last ratchet, the first measured over EVERY src file
+        // (coverage.include above), not only the loaded ones: st 95.83,
+        // br 92.44, fn 95.19, ln 96.79, identical in two consecutive runs.
         // Each floor is derived from the WORSE of two consecutive local
-        // runs, not the better: branches measured 90.62 then 90.61, and a
-        // floor set from the high reading is a floor set from luck.
-        // Previous ratchet (2026-07-30): st 93.97, br 90.42,
-        // fn 93.45, ln 94.77. The branches buffer is ~0.07 pp (not 0.05):
+        // runs, not the better: a floor set from the high reading is a
+        // floor set from luck. Previous ratchet: st 94.26, br 90.61,
+        // fn 93.51, ln 95.19. The branches buffer is ~0.07 pp (not 0.05):
         // the suite had drifted to EXACTLY the old floor and CI's ±2-3
         // branch run-to-run variance flaked unrelated PRs red.
-        statements: 94.21,
-        branches: 90.54,
-        functions: 93.46,
-        lines: 95.14,
+        statements: 95.78,
+        branches: 92.37,
+        functions: 95.14,
+        lines: 96.74,
       },
     },
   },

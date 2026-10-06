@@ -3,20 +3,25 @@
 //! Key decision: the settings window is a singleton — re-shown and focused
 //! if already open, with `settings:navigate` emitted for section jumps.
 //!
-//! Key decision: creation is IDEMPOTENT, not merely guarded by the
-//! exists-check at the top. Once `open_settings_window` became
+//! Key decision: "is it open? if not, build it" is ONE step, taken through
+//! `ensure_window` (`window_creation.rs`). Once `open_settings_window` became
 //! `#[tauri::command(async)]` (see `mod.rs` — the Windows deadlock), two rapid
-//! clicks stopped being serialized by the IPC loop and can now both observe
-//! "no settings window" before either builds. Exactly one `build()` wins,
-//! because labels are registered on the main thread; the loser focuses the
-//! winner's window instead of surfacing `WindowLabelAlreadyExists` as an error
-//! the user cannot act on. A mutex around check-then-create would have been the
-//! obvious alternative and is the WRONG one: the non-macOS branch calls
-//! `Menu::new`, which blocks on the main thread, so a worker holding the lock
-//! while the main thread runs the menu's own Preferences handler would deadlock
-//! — reintroducing, from the other side, the bug this file was changed to fix.
+//! clicks stopped being serialized by the IPC loop, and a check here followed
+//! by a build there let both clicks see "no settings window" and both build
+//! one: Tauri checks the label on the calling thread and registers it
+//! unconditionally afterwards, so the second window silently replaced the
+//! first under the same label. A caller that arrives second now focuses the
+//! window the first one built.
 
-use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+
+use super::{ensure_window, Ensured};
+
+const SETTINGS_WIDTH: f64 = 760.0;
+// 540 cut most panels off mid-list, so the window opened already scrolled.
+const SETTINGS_HEIGHT: f64 = 680.0;
+const SETTINGS_MIN_WIDTH: f64 = 600.0;
+const SETTINGS_MIN_HEIGHT: f64 = 400.0;
 
 /// Create or focus the settings window.
 /// If settings window exists, focuses it. Otherwise creates a new one.
@@ -48,16 +53,8 @@ fn settings_url(section: Option<&str>) -> String {
 /// The singleton's window label.
 pub(super) const SETTINGS_LABEL: &str = "settings";
 
-/// Reveal an already-open Settings window and jump to `section`.
-///
-/// Returns `false` when there is no such window, so a caller can tell "focused
-/// it" from "nothing to focus" without a second lookup.
-fn focus_existing<R: Runtime>(app: &AppHandle<R>, section: Option<&str>) -> bool {
-    use tauri::Emitter;
-
-    let Some(window) = app.get_webview_window(SETTINGS_LABEL) else {
-        return false;
-    };
+/// Reveal the already-open Settings window and jump to `section`.
+fn reveal_and_navigate<R: Runtime>(window: &WebviewWindow<R>, section: Option<&str>) {
     // Unminimize if minimized
     if window.is_minimized().unwrap_or(false) {
         log::debug!("[window_manager] Settings was minimized, unminimizing");
@@ -70,45 +67,22 @@ fn focus_existing<R: Runtime>(app: &AppHandle<R>, section: Option<&str>) -> bool
     if let Some(s) = section {
         let _ = window.emit("settings:navigate", s);
     }
-    true
 }
 
-/// Create or focus the settings window, optionally navigating to a specific section.
-/// If settings window exists, focuses it and navigates to the section.
-/// Otherwise creates a new one with the section in the URL.
-///
-/// Generic over the runtime so a mock app can exercise the concurrent-create
-/// path (`settings_window.test.rs`); the `#[tauri::command]` wrapper above is
-/// unaffected and still resolves to `Wry`.
-pub fn show_settings_window_section<R: Runtime>(
+/// Build the Settings window on `url`. Runs on the main thread, inside
+/// `ensure_window`, only when no Settings window exists.
+fn build_settings_window<R: Runtime>(
     app: &AppHandle<R>,
-    section: Option<&str>,
-) -> Result<String, tauri::Error> {
-    const SETTINGS_WIDTH: f64 = 760.0;
-    // 540 cut most panels off mid-list, so the window opened already scrolled.
-    const SETTINGS_HEIGHT: f64 = 680.0;
-    const SETTINGS_MIN_WIDTH: f64 = 600.0;
-    const SETTINGS_MIN_HEIGHT: f64 = 400.0;
-
-    // If settings window exists, bring it to front, focus, and navigate to section
-    if focus_existing(app, section) {
-        log::debug!("[window_manager] Settings window exists, focusing it");
-        return Ok(SETTINGS_LABEL.to_string());
-    }
-
-    log::debug!("[window_manager] Creating new settings window");
-
-    let url = settings_url(section);
-
-    // Create new settings window.
-    //
+    label: &str,
+    url: String,
+) -> tauri::Result<WebviewWindow<R>> {
     // On Linux/GTK, creating the window hidden and then changing size/position
     // before show can leave the native titlebar hit-test region stale until the
     // first maximize/unmaximize cycle. Create non-macOS settings windows with
     // their final geometry up front so close/minimize/maximize respond
     // immediately.
     let settings_title = rust_i18n::t!("window.settings.title").to_string();
-    let mut builder = WebviewWindowBuilder::new(app, SETTINGS_LABEL, WebviewUrl::App(url.into()))
+    let mut builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
         .title(&settings_title)
         .inner_size(SETTINGS_WIDTH, SETTINGS_HEIGHT)
         .min_inner_size(SETTINGS_MIN_WIDTH, SETTINGS_MIN_HEIGHT)
@@ -139,20 +113,7 @@ pub fn show_settings_window_section<R: Runtime>(
             .visible(true);
     }
 
-    let window = match builder.build() {
-        Ok(window) => window,
-        // A concurrent call already built it (see the module header). The
-        // window the user asked for exists, so this is success, not an error —
-        // and the section they asked for still has to be delivered.
-        Err(e) => {
-            return if focus_existing(app, section) {
-                log::debug!("[window_manager] Settings was created concurrently, focusing it");
-                Ok(SETTINGS_LABEL.to_string())
-            } else {
-                Err(e)
-            };
-        }
-    };
+    let window = builder.build()?;
 
     #[cfg(target_os = "macos")]
     {
@@ -164,8 +125,40 @@ pub fn show_settings_window_section<R: Runtime>(
         let _ = window.center();
         let _ = window.show();
     }
-    #[cfg(not(target_os = "macos"))]
-    let _ = window;
+
+    Ok(window)
+}
+
+/// Create or focus the settings window, optionally navigating to a specific section.
+/// If settings window exists, focuses it and navigates to the section.
+/// Otherwise creates a new one with the section in the URL.
+///
+/// Generic over the runtime so a mock app can exercise the concurrent-create
+/// path (`settings_window.test.rs`); the `#[tauri::command]` wrapper above is
+/// unaffected and still resolves to `Wry`.
+pub fn show_settings_window_section<R: Runtime>(
+    app: &AppHandle<R>,
+    section: Option<&str>,
+) -> Result<String, tauri::Error> {
+    let url = settings_url(section);
+    let ensured = ensure_window(app, SETTINGS_LABEL, move |app, label| {
+        log::debug!("[window_manager] Creating new settings window");
+        build_settings_window(app, label, url)
+    })?;
+
+    match ensured {
+        // Built on the requested section: there is nothing to navigate.
+        Ensured::Created(_) => {}
+        Ensured::Existing(window) => {
+            log::debug!("[window_manager] Settings window exists, focusing it");
+            reveal_and_navigate(&window, section);
+        }
+        // Another call is building it and it will open focused. The window the
+        // user asked for is on its way, so this is success, not an error.
+        Ensured::Pending => {
+            log::debug!("[window_manager] Settings is being created by another call");
+        }
+    }
 
     Ok(SETTINGS_LABEL.to_string())
 }

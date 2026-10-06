@@ -21,7 +21,7 @@
  * (`removeTrailingSpaces`, `collapseSpaces`) are wrong without that
  * distinction: they deleted the space before every inline code span, image,
  * wiki link, footnote reference, inline math span and HTML tag in the
- * document (WI-CJKF2.1). Both default to true, which is correct for a whole
+ * document. Both default to true, which is correct for a whole
  * document.
  */
 export interface FormatOptions {
@@ -31,6 +31,14 @@ export interface FormatOptions {
   startsAtLineStart?: boolean;
   /** The text's last offset is the end of a line in the enclosing document. */
   endsAtLineEnd?: boolean;
+  /**
+   * Set when the text BEGINS with the `)` that closes a markdown link whose
+   * protected URL sits immediately to its left: the link's visible text, with
+   * trailing emphasis and code markers removed (empty for an empty link).
+   * That `)` is link syntax, not a parenthesis, and what the reader sees to
+   * its left is this text.
+   */
+  linkLabel?: string | undefined;
 }
 
 /** Target quote style: curly (""), corner (「」), or guillemets (<<>>). */

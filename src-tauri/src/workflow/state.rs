@@ -1,6 +1,6 @@
 //! The workflow runner's managed state.
 //!
-//! Split out of `commands.rs` by WI-19: adding the feature flag pushed that
+//! Split out of `commands.rs` because adding the feature flag pushed that
 //! file past its frozen size, and the state was never a command anyway — it is
 //! what `.manage()` holds and what `workflow::guards` reads.
 //!
@@ -8,12 +8,12 @@
 //! (audit 20260907):
 //!   - the engine gate + the `running` claim of a start, against the flag
 //!     write + cancel of `workflow_engine_policy(false)` — one lock,
-//!     `admission`, held across each pair (#260, #274);
+//!     `admission`, held across each pair;
 //!   - matching an execution id and arming its cancel — done under the
 //!     `current_execution` lock, which the next run's reset also takes, so a
-//!     stale cancel cannot land after the flag was reset for a new run (#273);
+//!     stale cancel cannot land after the flag was reset for a new run;
 //!   - releasing `running` on a refused start — an RAII `AdmissionGuard`
-//!     rather than a `store(false)` on every early return (#259).
+//!     rather than a `store(false)` on every early return.
 //!
 //! @coordinates-with workflow/commands.rs — the commands that mutate it
 //! @coordinates-with workflow/guards.rs — reads `engine_enabled`
@@ -25,7 +25,7 @@
 #[path = "state_cancel.rs"]
 mod state_cancel;
 pub(super) use state_cancel::{decide_cancel, CancelDecision};
-/// A restore's claim on `running` (#71), split out at the same limit.
+/// A restore's claim on `running`, split out at the same limit.
 #[path = "state_restore.rs"]
 mod state_restore;
 
@@ -54,12 +54,12 @@ impl<R: Runtime> Drop for RunningGuard<R> {
     }
 }
 
-/// The `running` flag between a successful claim and the spawn (#259).
+/// The `running` flag between a successful claim and the spawn.
 ///
 /// Every refusal between the two — bad YAML, a missing workspace, a failed
 /// snapshot — used to carry its own `running.store(false)`, six of them, and
 /// the seventh was in the command. Dropping this guard releases the flag, the
-/// published execution id AND its use (#91 — a start that never spawned
+/// published execution id AND its use (a start that never spawned
 /// carried no run); `commit` hands the flag to the runner task, whose
 /// `RunningGuard` releases it when the run ends.
 pub(super) struct AdmissionGuard<'a> {
@@ -94,7 +94,7 @@ impl Drop for AdmissionGuard<'_> {
 /// Shared state for workflow execution. Held by the Tauri app via `.manage()`
 /// at startup; outlives any individual execution.
 ///
-/// **The synchronization is PRIVATE, and the transitions are the API** (#558).
+/// **The synchronization is PRIVATE, and the transitions are the API**.
 /// Every field was `pub`, and so was the raw `set_engine_enabled` setter, so
 /// the three atomic pairings this module exists to enforce could each be
 /// walked around by a caller that took the pieces directly. `pub(super)` makes
@@ -102,7 +102,7 @@ impl Drop for AdmissionGuard<'_> {
 /// primitives at all. Not private, because `commands.test.rs` reads `running`
 /// and `current_execution` to assert what a command left behind.
 pub struct WorkflowRunnerState {
-    /// Concurrency guard — only one workflow runs at a time, APP-WIDE (#272):
+    /// Concurrency guard — only one workflow runs at a time, APP-WIDE:
     /// this state is `.manage()`d once per app, so every window's
     /// `run_workflow` claims the same flag, and a second window is refused
     /// with `alreadyRunning` while any window's run is live.
@@ -132,9 +132,9 @@ pub struct WorkflowRunnerState {
     /// already-finished execution can't cancel whatever started next (C6).
     pub(super) current_execution: Arc<Mutex<Option<String>>>,
     /// Serializes a start's gate-check + claim against a policy change's
-    /// flag write + cancel (#260, #274). Held only across those two pairs.
+    /// flag write + cancel. Held only across those two pairs.
     admission: Mutex<()>,
-    /// The ids recent runs carried, so a caller cannot reuse one (#264).
+    /// The ids recent runs carried, so a caller cannot reuse one.
     recent_ids: RecentExecutionIds,
 }
 
@@ -174,8 +174,8 @@ impl WorkflowRunnerState {
 
     /// Record the flag AND, on the `false` transition, cancel whatever is
     /// running — both under the admission lock, so a start cannot read
-    /// "enabled", lose the cancel to its own flag reset, and run disabled
-    /// (#260, #274). Returns whether a run was asked to stop.
+    /// "enabled", lose the cancel to its own flag reset, and run disabled.
+    /// Returns whether a run was asked to stop.
     pub(super) fn apply_engine_policy(&self, enabled: bool) -> bool {
         let _serial = self.admission_lock();
         self.set_engine_enabled(enabled);
@@ -183,8 +183,8 @@ impl WorkflowRunnerState {
     }
 
     /// Claim the `running` flag AND publish the id the run will carry, in one
-    /// critical section (#559) — resetting the previous run's cancel on the
-    /// way, under the lock `request_cancel` arms it under (#273).
+    /// critical section — resetting the previous run's cancel on the
+    /// way, under the lock `request_cancel` arms it under.
     ///
     /// The two used to be separate calls, and `request_cancel` matches against
     /// `current_execution` — so a cancel arriving between them read `None`,
@@ -192,7 +192,7 @@ impl WorkflowRunnerState {
     /// id and subscribes before `run_workflow` resolves, so it can legitimately
     /// cancel an id this process has claimed but not published; the gap spanned
     /// a YAML parse, a `canonicalize` and a graph sort. `None` means another
-    /// run holds the flag; `Some(Err)` a reused id (#264), refused with the
+    /// run holds the flag; `Some(Err)` a reused id, refused with the
     /// claim already released.
     pub(super) fn claim_and_publish(
         &self,
@@ -232,7 +232,7 @@ impl WorkflowRunnerState {
     /// Called by `RunningGuard::drop`; factored out (no `AppHandle`) so the
     /// cancel-lifecycle clearing is unit-testable without a Tauri runtime.
     ///
-    /// **The order is load-bearing** (audit 20260803 §1). `running` is the
+    /// **The order is load-bearing**. `running` is the
     /// only thing standing between a finishing workflow and the next one: the
     /// instant it reads `false`, another `run_workflow` can win the CAS and
     /// publish ITS execution id. Releasing the flag first therefore left this
@@ -253,11 +253,11 @@ impl WorkflowRunnerState {
     /// Arm the soft cancel flag for `execution_id` — but only when it names the
     /// execution actually running (C6). The match and the store happen under
     /// one lock: a request that read the id before it changed cannot store
-    /// its cancel after the next run has already reset the flag (#273).
+    /// its cancel after the next run has already reset the flag.
     ///
     /// Deliberately NOT gated on `engine_enabled`: a workflow that is already
     /// running has to stay stoppable even after the user switches the feature
-    /// off, which is the whole point of audit 20260803 §3. The gate belongs to
+    /// off, which is the whole point of leaving cancel ungated. The gate belongs to
     /// `run_workflow`, which STARTS work; cancelling only ever stops it.
     pub(super) fn request_cancel(&self, execution_id: &str) -> CancelDecision {
         let current = self
@@ -278,7 +278,7 @@ impl WorkflowRunnerState {
     /// the engine off should not leave a run going that the (now hidden) UI can
     /// no longer reach. Arming the flag while idle would be latched state the
     /// next run has to remember to clear, so the check is part of the contract.
-    /// It reads the PUBLISHED id, not `running` (#72): a snapshot restore holds
+    /// It reads the PUBLISHED id, not `running`: a snapshot restore holds
     /// `running` too, publishes no id, and observes no cancel.
     pub(super) fn request_cancel_if_running(&self) -> bool {
         let current = self

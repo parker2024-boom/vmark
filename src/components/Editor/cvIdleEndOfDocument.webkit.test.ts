@@ -25,19 +25,8 @@
  */
 import "@/styles/index.css";
 import "@/components/Editor/editor.css";
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { userEvent } from "vitest/browser";
-
-// tiptapEditorHelpers reports a refused parse through i18n, the document
-// store and a toast. None of that is exercised here (the markdown always
-// parses), and loading it cost ~80s of module evaluation on the main thread
-// this tier's files share — enough to time out the terminal keyboard tests
-// running beside this file (measured). A call would be a bug: fail loudly.
-vi.mock("@/services/editor/unparseableDocument", () => ({
-  reportUnparseableDocument: () => {
-    throw new Error("unexpected unparseable document in the cv regression test");
-  },
-}));
 import { Editor } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
 import { createTiptapExtensions } from "@/services/assembly/createTiptapExtensions";
@@ -50,7 +39,6 @@ import {
   suppressCvIdleDuringEdit,
 } from "./tiptapEditorHelpers";
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 /** Resolves in the task after a frame's rendering update: the painted geometry. */
 const afterPaint = () =>
   new Promise<void>((resolve) =>
@@ -64,6 +52,25 @@ const afterPaint = () =>
       channel.port2.postMessage(0);
     }),
   );
+
+/**
+ * Paint frames until the scroller's geometry has held still for `stable`
+ * consecutive frames — content-visibility has finished deciding which blocks
+ * are relevant and recording their remembered sizes. Waits on the condition,
+ * not on a guess at how long that takes; `maxFrames` is the liveness bound.
+ */
+async function untilLayoutSettles(scroller: HTMLElement, content: HTMLElement, stable = 10, maxFrames = 600) {
+  const probe = () => `${scroller.scrollTop}:${scroller.scrollHeight}:${content.getBoundingClientRect().height}`;
+  let last = probe();
+  let still = 0;
+  for (let frame = 0; still < stable; frame += 1) {
+    if (frame >= maxFrames) throw new Error(`layout did not settle within ${maxFrames} frames`);
+    await afterPaint();
+    const now = probe();
+    still = now === last ? still + 1 : 0;
+    last = now;
+  }
+}
 
 /** Deterministic prose well past the content-visibility threshold. */
 function largeMarkdown(): string {
@@ -159,12 +166,12 @@ describe("content-visibility idle re-add near the end of a large document (real 
     const blocksUseCv = () => contentMayResizeInFlight(editor.view.dom);
     expect(blocksUseCv(), "premise: the engine applies content-visibility").toBe(true);
 
-    await wait(100);
+    await untilLayoutSettles(scroller, editor.view.dom);
     for (let pass = 0; pass < 3; pass += 1) {
       scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight - slack;
       for (let frame = 0; frame < 10; frame += 1) await afterPaint();
     }
-    await wait(700);
+    await untilLayoutSettles(scroller, editor.view.dom);
 
     const viewportTop = () => scroller.getBoundingClientRect().top;
     const blocks = Array.from(editor.view.dom.children) as HTMLElement[];
@@ -185,7 +192,7 @@ describe("content-visibility idle re-add near the end of a large document (real 
     const start = spansBlocks ? targetEnd - 10 : targetStart + 3;
     const end = spansBlocks ? editor.view.posAtDOM(blocks[targetIndex + 1], 0) + 10 : start + 40;
     editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, start, end)));
-    await wait(700);
+    await untilLayoutSettles(scroller, editor.view.dom);
 
     const distanceToBottom = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
     expect(distanceToBottom, "premise: reading near the end").toBeLessThanOrEqual(slack + 1);
@@ -218,5 +225,5 @@ describe("content-visibility idle re-add near the end of a large document (real 
       Math.max(...drift.map(Math.abs)),
       `top block drift per painted frame (px): ${[...new Set(drift)].join(", ")}`,
     ).toBeLessThanOrEqual(1);
-  }, 30_000);
+  });
 });

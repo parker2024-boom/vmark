@@ -1,6 +1,6 @@
 //! One routed request: the stage that reaches a WINDOW and waits for it.
 //!
-//! Split out of `handle_message` (#376/#381), which had grown to 232 lines
+//! Split out of `handle_message`, which had grown to 232 lines
 //! across two unrelated jobs — deciding what an envelope IS, and driving a
 //! request all the way to a webview and back. This half is the second job, in
 //! its own order, which is the part that matters:
@@ -8,9 +8,9 @@
 //!   1. take the write lock for a write-class operation, so writes serialize
 //!      while reads run together;
 //!   2. register the pending request (which sweeps stale entries, enforces the
-//!      overload cap and refuses a client a stop already drained — #379);
+//!      overload cap and refuses a client a stop already drained);
 //!   3. route to the owning window and emit, each step answering the client
-//!      itself when it refuses (F5, WI-3.5);
+//!      itself when it refuses (F5);
 //!   4. wait [`REQUEST_TIMEOUT`], with one App Nap wake-and-retry;
 //!   5. deliver, with the write lock already released.
 //!
@@ -60,8 +60,8 @@ pub(super) fn next_bridge_request_id() -> String {
 /// Rust drops a guard at the END of its scope — i.e. *after* the delivery
 /// await — so the release has to be explicit. It used to only look explicit:
 /// the guard was bound as `let _write_guard`, a comment above the final
-/// `deliver_response` claimed the lock was already gone, and it was not
-/// (audit round 1, finding 8). Delivery can force-disconnect a backpressured
+/// `deliver_response` claimed the lock was already gone, and it was not.
+/// Delivery can force-disconnect a backpressured
 /// peer, which takes the bridge state lock, so every other write operation
 /// queued behind one slow client's teardown.
 ///
@@ -95,7 +95,7 @@ pub(super) async fn run<R: tauri::Runtime>(
         log::debug!(
             "[MCP Bridge] Client {} acquiring write lock for {}",
             client_id,
-            request.request_type
+            crate::peer_text::peer_text(&request.request_type)
         );
         Some(bridge.write_lock().await)
     };
@@ -105,7 +105,7 @@ pub(super) async fn run<R: tauri::Runtime>(
     let request_type_for_log = request.request_type.clone();
 
     // Store the pending request (sweeps stale entries, enforces the overload
-    // cap, and refuses a client a stop already drained — #379). The state lock
+    // cap, and refuses a client a stop already drained). The state lock
     // is released before responding: send_error_response may force-disconnect.
     let registered = {
         let mut guard = bridge.lock().await;
@@ -130,7 +130,7 @@ pub(super) async fn run<R: tauri::Runtime>(
         args_json,
     };
 
-    // F5 (WI-3.5): route by owning workspace, fail loud on ambiguity /
+    // F5: route by owning workspace, fail loud on ambiguity /
     // conflict / missing window (helper replies + cleans up on refusal).
     let Some(target_label) =
         route_target_or_reply(&request, app, &request_id, client_id, client_tx, &msg_id).await
@@ -172,7 +172,8 @@ pub(super) async fn run<R: tauri::Runtime>(
 
     if !is_read {
         log::debug!(
-            "[MCP Bridge] Client {client_id} completed {request_type_for_log} - releasing write lock"
+            "[MCP Bridge] Client {client_id} completed {} - releasing write lock",
+            crate::peer_text::peer_text(&request_type_for_log)
         );
     }
 

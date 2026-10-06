@@ -1,7 +1,7 @@
 /**
  * Lowlight (highlight.js) syntax highlighting for WYSIWYG code blocks.
  *
- * WI-UI1.5 (D11): a ROLE MAP onto the per-theme `--syntax-*` tokens
+ * D11: a ROLE MAP onto the per-theme `--syntax-*` tokens
  * (ThemeTokens.syntax, emitted by applyTheme; static paper/night fallback in
  * index.css) — this file contains ZERO colour literals, so a retint is a
  * catalog edit and light/dark need no second rule set. It also covers the

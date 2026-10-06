@@ -1,4 +1,4 @@
-//! Operator commit-on-accept (Phase 3, WI-3.4; design v4.1/v4.2/v4.3/v4.6). The
+//! Operator commit-on-accept (Phase 3; design v4.1/v4.2/v4.3/v4.6). The
 //! human-only accept that turns a previewed candidate into one committed
 //! transformation. It is an idempotency + optimistic-concurrency protocol, not a
 //! capture wrapper — it composes the review-verified Phase-3.0 primitives:
@@ -46,7 +46,7 @@ pub fn accept_candidate(
     now: &str,
 ) -> Result<AcceptReceipt, String> {
     // A poisoned kernel's index is untrustworthy — the O(1) idem lookup below
-    // could miss a durable ledger entry (re-review #3). Refuse until reopen.
+    // could miss a durable ledger entry. Refuse until reopen.
     kernel.ensure_available()?;
 
     // 1. Tamper check — recompute the content-addressed identity.

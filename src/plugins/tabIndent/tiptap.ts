@@ -23,6 +23,8 @@
  * because our custom listItem node doesn't register Tiptap commands.
  *
  * This prevents Tab from moving focus outside the editor.
+ *
+ * @module plugins/tabIndent/tiptap
  */
 
 import { Extension } from "@tiptap/core";
@@ -32,7 +34,7 @@ import { liftListItem, sinkListItem } from "@tiptap/pm/schema-list";
 import { isInTable, getTableInfo } from "@/plugins/tableUI/tableActions.tiptap";
 import { canTabEscape, type TabEscapeResult } from "./tabEscape";
 import { canShiftTabEscape, type ShiftTabEscapeResult } from "./shiftTabEscape";
-import { MultiSelection } from "@/plugins/multiCursor/MultiSelection";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
 
 const tabIndentPluginKey = new PluginKey("tabIndent");
 
@@ -52,7 +54,7 @@ function applyEscapeResult(
     const tr = state.tr.setSelection(escapeResult);
     // Clear all escapable mark types present in the schema.
     // Different cursors may be in different marks, so we can't rely
-    // on the primary cursor's marks alone (#10).
+    // on the primary cursor's marks alone.
     for (const name of ESCAPABLE_MARK_NAMES) {
       const markType = state.schema.marks[name];
       if (markType) {

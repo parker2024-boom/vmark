@@ -48,7 +48,7 @@ THEME_NAMES='"(paper|white|mint|sepia|night|solarized)"|'\''(paper|white|mint|se
 #   - The export reader bundle has its own theme handling.
 #   - Snapshot files contain captured theme output.
 #   - baselineRatchetManifest.mjs registers the theme-contrast baseline with
-#     one identity entry PER THEME (WI-UI0.1) — the names are the manifest keys.
+#     one identity entry PER THEME — the names are the manifest keys.
 #   - theme-contrast-baseline.json keys its failing lists by theme id.
 #   - Gates-tier tests (*.test.mjs) construct theme fixtures by name, the same
 #     reason app-tier *.test.ts files were always allowlisted.

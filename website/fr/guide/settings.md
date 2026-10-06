@@ -245,13 +245,13 @@ Le paramètre n'apparaît pas sur macOS ni sur Linux.
 | Paramètre | Description | Par défaut | Options |
 |-----------|-------------|------------|---------|
 | Activer la sauvegarde automatique | Enregistrer automatiquement les fichiers après modification | Activé | Activé / Désactivé |
-| Insérer le bloc d'identité à l'enregistrement | Permet à VMark d'insérer un bloc d'identité `vmark:` dans le frontmatter d'un fichier et de créer un dossier `.vmark` dans l'espace de travail, pour que la couche de cohérence puisse suivre le document. Cela vaut pour toute écriture : enregistrements, modifications par l'IA et MCP, rétablissements de versions antérieures et nouveaux fichiers. Désactivé, rien n'est inséré et aucun dossier `.vmark` n'est créé ; un espace de travail qui en possède déjà un continue d'enregistrer les modifications des documents qu'il suit — un document qu'il a déjà enregistré, ou un document qui porte déjà sa propre identité `vmark:`, comme un fichier suivi que vous avez déplacé ou récupéré par un checkout. Voir [Cohérence](/fr/guide/coherence) | Désactivé | Activé / Désactivé |
+| Insérer le bloc d'identité à l'enregistrement | Permet à VMark d'insérer un bloc d'identité `vmark:` dans le frontmatter d'un fichier et de créer un dossier `.vmark` dans l'espace de travail, pour que la couche de cohérence puisse suivre le document. Cela vaut pour toute écriture : enregistrements, modifications par l'IA et MCP, rétablissements de versions antérieures et nouveaux fichiers. Désactivé, rien n'est inséré et aucun dossier `.vmark` n'est créé ; un espace de travail qui en possède déjà un continue d'enregistrer les modifications des documents qu'il suit — un document qu'il a déjà enregistré, ou un document qui porte déjà sa propre identité `vmark:`, comme un fichier suivi que vous avez déplacé ou récupéré par un checkout. Voir [Cohérence](/fr/guide/coherence#comment-ca-marche-30-secondes) | Désactivé | Activé / Désactivé |
 | Intervalle d'enregistrement | Temps entre les sauvegardes automatiques. Disponible uniquement lorsque la sauvegarde automatique est activée | 30 secondes | 10s, 30s, 1 min, 2 min, 5 min |
 | Conserver l'historique du document | Suivre les versions du document pour l'annulation et la récupération | Activé | Activé / Désactivé |
 | Versions maximum | Nombre d'instantanés d'historique à conserver par document | 50 versions | 10, 25, 50, 100 |
 | Conserver les versions pendant | Âge maximum des instantanés d'historique avant leur suppression | 7 jours | 1 jour, 7 jours, 14 jours, 30 jours |
 | Fenêtre de fusion | Les sauvegardes automatiques consécutives dans cette fenêtre se consolident en un seul instantané, réduisant le bruit de stockage | 30 secondes | Désactivé, 10s, 30s, 1 min, 2 min |
-| Taille max de fichier pour l'historique | Ne pas prendre d'instantanés d'historique pour les fichiers dépassant ce seuil | 512 Ko | 256 Ko, 512 Ko, 1 Mo, 5 Mo, Illimité |
+| Taille max de fichier pour l'historique | Ne pas prendre d'instantanés d'historique lors de l'enregistrement automatique pour les fichiers dépassant ce seuil. Les enregistrements manuels, les enregistrements MCP et la copie de sécurité prise avant de restaurer une version sont toujours conservés | 512 Ko | 256 Ko, 512 Ko, 1 Mo, 5 Mo, Illimité |
 
 ### Images
 
@@ -341,7 +341,7 @@ avec le sélecteur à l'écran ou `F6` / `Shift + F6`.
 
 ### Éditeur externe
 
-Pour le bouton **Ouvrir dans l'éditeur externe** sur les onglets de code en lecture seule, choisissez l'éditeur qui doit se lancer. Un bundle d'application (ex. `/Applications/Visual Studio Code.app`) ou un exécutable.
+Pour le bouton **Ouvrir dans l'éditeur externe** sur les onglets de code en lecture seule, choisissez l'éditeur qui doit se lancer : le nom d'un éditeur connu (`code`, `zed`, `subl`, `vim`, …) ou le chemin complet d'un bundle d'application (ex. `/Applications/Visual Studio Code.app`) ou d'un exécutable. Les shells, les interpréteurs et les émulateurs de terminal sont refusés, de même qu'un chemin qui n'existe pas.
 
 Le paramètre GUI a priorité sur les variables d'environnement — l'explicite prime sur l'implicite. Laissez-le vide pour utiliser la chaîne de substitution `$VMARK_EXTERNAL_EDITOR → $VISUAL → $EDITOR → valeur par défaut de la plateforme`. Voir [Ouvrir dans l'éditeur externe](/fr/guide/formats#ouvrir-dans-l-editeur-externe) pour l'ordre de résolution complet et le portail de sécurité.
 
@@ -441,7 +441,7 @@ Configurer le panneau de terminal intégré. Ouvrez le terminal avec `` Ctrl + `
 
 | Paramètre | Description | Par défaut | Options |
 |-----------|-------------|------------|---------|
-| Shell | Quel shell utiliser. Nécessite un redémarrage du terminal pour prendre effet | Système par défaut | Shells détectés automatiquement sur votre système (ex. zsh, bash, fish) |
+| Shell | Quel shell utiliser. Nécessite un redémarrage du terminal pour prendre effet. Un shell enregistré qui n'est plus disponible s'affiche comme *(indisponible)* et le shell par défaut est utilisé | Système par défaut | Shells détectés automatiquement sur votre système (ex. zsh, bash, fish) |
 | Position du panneau | Où placer le panneau de terminal | Auto | Auto (basé sur le rapport d'aspect de la fenêtre), Haut, Bas, Gauche, Droite |
 | Taille du panneau | Proportion d'espace disponible occupée par le terminal. Le redimensionnement par glissement du panneau met également à jour cette valeur | 40% | 10% à 80% |
 | Taille de police | Taille du texte dans le terminal | 13px | 10px à 24px |
@@ -450,7 +450,7 @@ Configurer le panneau de terminal intégré. Ouvrez le terminal avec `` Ctrl + `
 | Clignotement du curseur | Si le curseur du terminal clignote | Activé | Activé / Désactivé |
 | Copier à la sélection | Copier automatiquement le texte du terminal sélectionné dans le presse-papiers | Désactivé | Activé / Désactivé |
 | Afficher automatiquement les transcriptions | Afficher le Markdown, les tableaux et les diagrammes Mermaid Claude/Codex à côté de la CLI du terminal. Ajoute un hook SessionStart local à la configuration de Claude Code et de Codex ; redémarrez les sessions CLI en cours après activation | Désactivé | Activé / Désactivé |
-| Rendu WebGL | Utiliser le rendu accéléré GPU pour le terminal. Désactiver en cas de problèmes de saisie IME. Nécessite un redémarrage du terminal | Activé | Activé / Désactivé |
+| Rendu WebGL | Utiliser le rendu accéléré GPU pour le terminal. Désactiver en cas de problèmes de saisie IME. Nécessite un redémarrage du terminal. macOS et Windows uniquement — Linux utilise toujours le rendu DOM | Activé | Activé / Désactivé |
 | Presse-papiers distant (OSC 52) | Permettre aux programmes exécutés dans le terminal — via ssh, dans tmux — de copier vers le presse-papiers du système. Le canal fonctionne en écriture seule : la lecture du presse-papiers est toujours refusée, car n'importe quelle sortie affichée dans le terminal pourrait la demander | Activé | Activé / Désactivé |
 | Historique de défilement | Nombre de lignes de sortie que chaque session conserve dans son historique de défilement. Des valeurs plus élevées consomment plus de mémoire | 5 000 | 1 000 / 5 000 / 10 000 / 50 000 |
 | Mode lecteur d'écran | Exposer la sortie du terminal aux technologies d'assistance (VoiceOver). Désactivé par défaut pour des raisons de performance | Désactivé | Activé / Désactivé |
@@ -469,7 +469,7 @@ Voir [Terminal intégré](/fr/guide/terminal) pour plus d'informations sur les s
 
 ## À propos
 
-Affiche la version de l'application, les liens vers le site web et le dépôt GitHub, et la gestion des mises à jour.
+Affiche la version de l'application, les liens vers le site web et le dépôt GitHub, et la gestion des mises à jour. Le lien **Mentions de tiers** ouvre les textes de licence des logiciels open source fournis avec VMark dans l'application par défaut du système pour les fichiers texte.
 
 ### Mises à jour
 
@@ -541,7 +541,22 @@ Les quatre valeurs par défaut sont toujours incluses : en retirer une ne dure q
 |-----------|-------------|------------|
 | Garder les deux éditeurs actifs | Monter simultanément les éditeurs WYSIWYG et mode Source pour un changement de mode plus rapide. Augmente la consommation mémoire | Désactivé |
 
-### Moteur de workflow
+### Cohérence
+
+| Paramètre | Description | Par défaut | Options |
+|-----------|-------------|------------|---------|
+| Confiance de la vérification sémantique | Degré de certitude requis pour qu'une vérification soit enregistrée comme verdict. En dessous, la réponse est conservée mais marquée inconnue | 0.9 | 0.7, 0.8, 0.9, 0.95 |
+
+Voir [Cohérence](/fr/guide/coherence) pour ce qu'est une vérification et la façon dont les verdicts sont enregistrés.
+
+### Fichiers de workflow
+
+| Paramètre | Description | Par défaut | Options |
+|-----------|-------------|------------|---------|
+| Récupérer les métadonnées des actions | Permettre à VMark de récupérer le `action.yml` des GitHub Actions référencées pour remplir le formulaire `with:` de l'éditeur structuré. Désactivez-le pour garder l'éditeur de workflow entièrement hors ligne | Activé | Activé / Désactivé |
+| Utiliser actionlint lorsqu'il est disponible | Si le binaire `actionlint` est dans votre PATH, l'exécuter sur les fichiers de workflow pour obtenir des diagnostics plus riches. Sans effet si le binaire n'est pas installé | Activé | Activé / Désactivé |
+
+### Workflow
 
 Le visualiseur GitHub Actions n'a pas d'interrupteur : ouvrir un fichier sous
 `.github/workflows/` affiche le graphe et l'éditeur de formulaires, et les aides
@@ -551,8 +566,8 @@ l'unique préférence du visualiseur et le moteur d'exécution, qui est distinct
 
 | Paramètre | Description | Par défaut | Options |
 |-----------|-------------|------------|---------|
+| Conserver la mise en forme YAML à l'enregistrement | Lors de l'enregistrement des modifications de workflow effectuées via le panneau de formulaire, préserver les commentaires, ancres, ordre des clés et lignes vides du YAML d'origine via le pipeline d'aller-retour CST. Lorsqu'il est désactivé, l'enregistrement utilise un sérialiseur compact (plus rapide mais avec perte) | Activé | Activé / Désactivé |
 | Moteur de workflow | Exécuter les fichiers de workflow YAML propres à VMark : un fichier de workflow s'ouvre avec son graphe d'étapes et une barre d'outils Exécuter / Annuler à côté de la source, et les génies de workflow peuvent s'exécuter. Les étapes peuvent appeler des fournisseurs IA et écrire des fichiers ; le moteur reste donc désactivé tant que vous ne le demandez pas | Désactivé | Activé / Désactivé |
-| Préserver le formatage YAML | Lors de l'enregistrement des modifications de workflow effectuées via le panneau de formulaire, préserver les commentaires, ancres, ordre des clés et lignes vides du YAML d'origine via le pipeline d'aller-retour CST. Lorsqu'il est désactivé, l'enregistrement utilise un sérialiseur compact (plus rapide mais avec perte) | Activé | Activé / Désactivé |
 
 Le moteur ne change pas ce qu'affiche le visualiseur : les fichiers GitHub Actions
 s'ouvrent dans le visualiseur dans tous les cas, et, moteur désactivé, un fichier

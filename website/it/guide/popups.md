@@ -24,7 +24,7 @@ Un clic lascia la tastiera nel documento; fai clic sul campo URL per modificare 
 
 **Campi:**
 - **URL** — Modifica la destinazione del collegamento
-- **Apri** — Apri il collegamento nel browser
+- **Apri destinazione** — Apre un URL esterno nel browser, salta all'intestazione per i collegamenti `#segnalibro`, oppure apre un file locale in una nuova scheda per i collegamenti tra file
 - **Copia** — Copia l'URL negli appunti
 - **Elimina** — Rimuovi il collegamento, mantieni il testo
 
@@ -54,6 +54,17 @@ I collegamenti che iniziano con `#` vengono trattati come segnalibri (collegamen
 ::: tip Collegamenti tra File
 I collegamenti che puntano a file locali aprono il file di destinazione in una nuova scheda, posizionandosi sull'intestazione quando il collegamento contiene un `#fragment`. I percorsi relativi come `../appendix/cards.md` o `./notes.md` vengono risolti rispetto alla cartella del documento corrente. I percorsi assoluti — `/Users/me/notes/a.md` su macOS/Linux, `C:\notes\a.md` su Windows — aprono esattamente il file indicato. I percorsi di rete (`\\server\share\…`) non vengono aperti dai collegamenti. Se il documento è senza titolo, è possibile aprire solo percorsi assoluti.
 :::
+
+## Selettore di Intestazioni (Collegamenti Segnalibro)
+
+**Attivazione:** `Alt + Mod + B` (Link segnalibro), **Inserisci → Link → Segnalibro**, oppure il gruppo dei collegamenti della Barra degli strumenti universale
+
+Un collegamento segnalibro punta a un'intestazione dello stesso documento (`[text](#heading-id)`). Invece di digitare l'ancora, il selettore elenca tutte le intestazioni del documento, rientrate per livello, con un campo filtro in alto.
+
+**Comportamento:**
+- `↑`/`↓` scorrono l'elenco, `Invio` inserisce il collegamento, `Escape` chiude
+- Con del testo selezionato, la selezione diventa il testo del collegamento; senza selezione, viene inserito come collegamento il testo dell'intestazione stessa
+- Il popup lo segnala quando il documento non ha intestazioni o quando nulla corrisponde al filtro
 
 ## Popup Media (Immagini, Video, Audio)
 
@@ -88,7 +99,9 @@ Un popup unificato per la modifica di tutti i tipi di media — immagini, video 
 
 ### Modalità Sorgente
 
-In modalità Sorgente, facendo clic sulla sintassi dell'immagine `![alt](path)` si apre lo stesso popup media. I file multimediali (estensioni video/audio) mostrano un'anteprima fluttuante con controlli di riproduzione nativi al passaggio del mouse.
+In modalità Sorgente, facendo clic sulla sintassi dell'immagine `![alt](path)` si apre lo stesso popup media.
+
+La modalità Sorgente mostra anche un'**anteprima** fluttuante del media — un'immagine, oppure un lettore video o audio con controlli di riproduzione nativi. Compare mentre il cursore si trova all'interno di `![alt](path)` (senza testo selezionato) e quando il mouse passa sopra la sintassi; l'anteprima del cursore ha la precedenza su quella al passaggio del mouse. Il percorso deve terminare con un'estensione di immagine, video o audio riconosciuta (oppure essere un URL `data:image/`). L'anteprima si nasconde mentre il popup media è aperto.
 
 ## Menu Contestuale Immagine
 
@@ -112,7 +125,7 @@ Modifica le espressioni matematiche LaTeX con anteprima in tempo reale.
 
 **Attivazione:**
 - **WYSIWYG:** Fai clic sulla matematica inline `$...$`
-- **Sorgente:** Posiziona il cursore all'interno di `$...$`, `$$...$$` o blocchi ` ```latex `
+- **Sorgente:** Posiziona il cursore all'interno di un `$...$` non vuoto, di un blocco `$$...$$` o di un blocco ` ```latex ` / ` ```math `
 
 **Campi:**
 - **Input LaTeX** — Modifica l'espressione matematica
@@ -121,7 +134,8 @@ Modifica le espressioni matematiche LaTeX con anteprima in tempo reale.
 
 **Scorciatoie:**
 - `Mod + Invio` — Salva e chiudi
-- `Escape` — Annulla e chiudi
+- `Clic all'esterno` — Salva e chiudi (conferma le modifiche)
+- `Escape` — Annulla e chiudi (scarta le modifiche)
 - `Shift + Backspace` — Elimina matematica inline (funziona anche quando non è vuota, solo WYSIWYG)
 - `Alt + Mod + M` — Inserisci nuova matematica inline
 
@@ -130,7 +144,7 @@ Quando hai un errore di sintassi LaTeX, il popup mostra suggerimenti utili come 
 :::
 
 ::: info Modalità Sorgente
-La modalità Sorgente fornisce lo stesso popup matematico modificabile della modalità WYSIWYG — un'area di testo per l'input LaTeX con un'anteprima KaTeX in tempo reale sottostante. Il popup si apre automaticamente quando il cursore entra in qualsiasi sintassi matematica (`$...$`, `$$...$$` o ` ```latex `). Premi `Mod + Invio` per salvare o `Escape` per annullare.
+La modalità Sorgente fornisce lo stesso popup matematico modificabile della modalità WYSIWYG — un'area di testo per l'input LaTeX con un'anteprima KaTeX in tempo reale sottostante. Il popup si apre automaticamente quando il cursore entra in qualsiasi sintassi matematica (un `$...$` non vuoto, `$$...$$` o ` ```latex ` / ` ```math `). Premi `Mod + Invio` per salvare o `Escape` per annullare. Un `$$` vuoto digitato alla fine di una riga viene trattato come testo normale — probabilmente un delimitatore di matematica in blocco scritto a metà — e non apre il popup.
 :::
 
 ## Popup Note a Piè di Pagina
@@ -139,6 +153,7 @@ Modifica il contenuto delle note a piè di pagina inline.
 
 **Attivazione:**
 - **WYSIWYG:** Passa il mouse sul riferimento della nota `[^1]`
+- **Sorgente:** Passa il mouse su un riferimento o una definizione di nota, o fai clic
 
 **Campi:**
 - **Contenuto** — Testo della nota su più righe (con ridimensionamento automatico)
@@ -196,6 +211,10 @@ Correggi gli errori di ortografia con suggerimenti.
 - **Suggerimenti** — Fai clic per sostituire con il suggerimento
 - **Aggiungi al Dizionario** — Smetti di contrassegnare come errore ortografico
 
+## Spostare il Testo Trascinandolo
+
+In modalità WYSIWYG puoi spostare una selezione con il mouse: premi sul testo selezionato, trascina — un cursore di rilascio mostra dove verrà inserito — e rilascia. Lo spostamento è un unico passaggio annullabile (`Mod + Z` lo riporta indietro). Premi `Escape` durante il trascinamento, oppure lascia che la finestra perda il focus, per annullare. VMark lo implementa da sé perché la shell desktop intercetta gli eventi di trascinamento nativi del browser, ed è per questo che si tratta di un gesto del mouse e non del trascinamento di sistema.
+
 ## Confronto tra Modalità
 
 | Elemento | Modifica WYSIWYG | Sorgente |
@@ -224,7 +243,9 @@ Correggi gli errori di ortografia con suggerimenti.
 - Per contenuto su più righe (note, matematica): usa `Mod + Invio` per salvare
 
 ### Comportamento del Mouse
-- Fai clic fuori dal popup per chiudere (le modifiche vengono scartate)
+- Fai clic fuori dal popup per chiudere. Il comportamento predefinito è **scartare** le
+  modifiche non salvate; il popup matematica è un'eccezione e **conferma** la modifica
+  al clic all'esterno (vedi la sezione [Popup Matematica](#popup-matematica)).
 - I popup al passaggio del mouse (nota, wiki) hanno un ritardo di 300ms prima di essere mostrati
 - Spostare il mouse di nuovo sul popup lo mantiene aperto
 

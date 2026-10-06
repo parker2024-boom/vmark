@@ -11,11 +11,6 @@ import { getSchema } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { EditorState } from "@tiptap/pm/state";
 
-// Mock the VideoEmbedNodeView to avoid DOM complexity
-vi.mock("../VideoEmbedNodeView", () => ({
-  VideoEmbedNodeView: vi.fn(),
-}));
-
 // Allow tests to override getProviderConfig behaviour
 const mockGetProviderConfig = vi.fn();
 vi.mock("@/utils/videoProviderRegistry", async (importOriginal) => {

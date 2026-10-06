@@ -22,10 +22,11 @@
  * @module hooks/useExternalFileChanges.eolRewrite.test
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { fileBytes } from "@/test/fileBytes";
 
 const readTextFileMock = vi.fn();
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: (...args: unknown[]) => readTextFileMock(...args),
+  readFile: (...args: unknown[]) => fileBytes(readTextFileMock(...args)),
   exists: vi.fn(async () => true),
 }));
 

@@ -198,19 +198,26 @@ Die Schemavalidierung ist bewusst minimal — sie bestätigt, dass erforderliche
 
 ## Bedingungen
 
-Ein Schritt kann eine `if:`-Bedingung tragen. Ergibt sie false, wird der Schritt übersprungen (nicht als fehlgeschlagen gewertet); ergibt sie true oder fehlt sie, wird der Schritt ausgeführt. Drei Statusfunktionen stehen zur Verfügung:
+Ein Schritt kann eine `if:`-Bedingung tragen. Ergibt sie false, wird der Schritt übersprungen (nicht als fehlgeschlagen gewertet). Drei Statusfunktionen stehen zur Verfügung, und sie folgen den Regeln von GitHub Actions:
 
-| Bedingung | Bedeutung |
-|-----------|-----------|
-| `success()` | True, wenn kein vorheriger Schritt fehlgeschlagen ist. |
-| `failure()` | True, wenn ein vorheriger Schritt fehlgeschlagen ist. |
-| `always()` | Immer true. |
+| Bedingung | True, wenn |
+|-----------|------------|
+| `success()` | Bisher kein Schritt fehlgeschlagen ist **und** jeder Schritt, den dieser per `needs` voraussetzt, abgeschlossen wurde. |
+| `failure()` | Irgendein früherer Schritt des Laufs fehlgeschlagen ist — nicht nur ein Schritt, den dieser per `needs` voraussetzt. |
+| `always()` | Immer. |
+
+`success()` ist der Standard. Ein Schritt ohne `if:` läuft nur, wenn `success()` gilt, und ebenso ein Schritt, dessen `if:` keine der drei Funktionen nennt — `if: X` bedeutet `success() && (X)`. Genau das verhindert, dass ein gewöhnlicher Schritt nach einem Fehler läuft.
+
+| Was vorher geschah | Einfacher oder `success()`-Schritt | `failure()`-Schritt | `always()`-Schritt |
+|---|---|---|---|
+| Alles, was er voraussetzt, war erfolgreich | läuft | übersprungen | läuft |
+| Ein vorausgesetzter Schritt ist **fehlgeschlagen** (oder hat das Zeitlimit überschritten, oder seine Genehmigung wurde abgelehnt) | übersprungen | läuft | läuft |
+| Ein vorausgesetzter Schritt wurde durch sein eigenes `if:` **übersprungen** | übersprungen | übersprungen — nichts ist fehlgeschlagen | läuft |
+| Der Lauf wurde **abgebrochen** | übersprungen | übersprungen | übersprungen |
+
+Ein Abbruch ist nichts, was eine Bedingung sehen kann: Er wird vor dem `if:` geprüft, und jeder verbleibende Schritt wird mit *Workflow cancelled* übersprungen, `always()`-Schritte eingeschlossen. Ein Lauf, in dem ein Schritt fehlgeschlagen ist, endet trotzdem als **fehlgeschlagen** und nennt den ersten fehlgeschlagenen Schritt, auch wenn danach `failure()`- oder `always()`-Schritte gelaufen sind.
 
 Sie können Verweise und Vergleiche kombinieren, z. B. `${{ steps.classify.outputs.title == "Draft" }}`. Eine fehlerhafte oder nicht unterstützte Bedingung **lässt den Schritt laut fehlschlagen**, statt ihn stillschweigend durchzulassen — es gibt keinen Rückfall nach dem Muster „im Fehlerfall true annehmen“.
-
-::: warning Aktuelle Einschränkung: failure() und always() greifen noch nicht
-Der Runner überspringt alle verbleibenden Schritte, sobald ein Schritt fehlschlägt — und dieses Überspringen geschieht, **bevor** die `if:`-Bedingung ausgewertet wird. Deshalb funktioniert `success()` wie beschrieben, doch `failure()`- und `always()`-Bedingungen sind derzeit wirkungslos: Ein durch sie geschützter Schritt wird nach einem Fehler zusammen mit allem anderen übersprungen und bekommt so nie die Gelegenheit, auf dem Fehlerpfad zu laufen. Betrachten Sie `failure()` / `always()` vorerst als reservierte Syntax. Verwenden Sie `success()` (oder keine Bedingung) für Schritte, die auf dem Normalpfad laufen sollen.
-:::
 
 ## Einstellungen pro Schritt
 
@@ -227,7 +234,7 @@ Der Runner überspringt alle verbleibenden Schritte, sobald ein Schritt fehlschl
 
 ### Zeitlimits
 
-Jeder Schritt läuft innerhalb seines effektiven Zeitlimits. Läuft es ab, schlägt der Schritt mit `Timed out after Xs` fehl: Der Kindprozess eines CLI-Anbieters wird beendet; eine laufende REST-Anfrage wird verworfen. Nachfolgende Schritte, die von einem Schritt mit Zeitüberschreitung abhängen, werden übersprungen. Außerdem gilt eine feste Obergrenze von 5 MB für die gesammelte Ausgabe eines einzelnen Schritts — ein außer Kontrolle geratener Anbieter wird mit `Provider output exceeded 5 MB cap` abgebrochen.
+Jeder Schritt läuft innerhalb seines effektiven Zeitlimits. Läuft es ab, schlägt der Schritt mit `Timed out after Xs` fehl: Der Kindprozess eines CLI-Anbieters wird beendet; eine laufende REST-Anfrage wird verworfen. Ein Schritt mit Zeitüberschreitung gilt als fehlgeschlagen: Schritte, die von ihm abhängen, werden übersprungen, es sei denn, ihr `if:` verwendet `failure()` oder `always()`. Außerdem gilt eine feste Obergrenze von 5 MB für die gesammelte Ausgabe eines einzelnen Schritts — ein außer Kontrolle geratener Anbieter wird mit `Provider output exceeded 5 MB cap` abgebrochen.
 
 ## Genehmigungen
 
@@ -251,7 +258,7 @@ Wählen Sie **Genehmigen**, um den Schritt auszuführen, oder **Ablehnen** (auch
 
 Während der Lauf fortschreitet, aktualisiert sich jeder Knoten live — läuft, erfolgreich, übersprungen oder fehlerhaft —, sodass Sie die Pipeline voranschreiten sehen und genau erkennen, welcher Schritt fehlgeschlagen ist, falls einer fehlschlägt. Am Ende zeigt die Symbolleiste an, ob der Lauf abgeschlossen wurde, fehlgeschlagen ist oder abgebrochen wurde. Verweigert das Backend den Start eines Laufs — die Engine ist aus, das YAML ist ungültig, die Sicherung ist fehlgeschlagen —, nennt eine Benachrichtigung den Grund.
 
-Es läuft immer nur ein Workflow gleichzeitig in der gesamten App, nicht pro Fenster: Während einer läuft, ist Ausführen in jeder anderen Workflow-Datei deaktiviert, und ein zwischenzeitlich gestartetes Workflow-Genie wird abgewiesen.
+Es läuft immer nur ein Workflow gleichzeitig in der gesamten App, nicht pro Fenster. Während einer läuft, ist Ausführen in jeder anderen Workflow-Datei **im selben Fenster** deaktiviert, und die Symbolleiste zeigt *Ein anderer Workflow läuft gerade*. Eine Workflow-Datei in einem anderen Fenster zeigt Ausführen weiterhin aktiviert; ein Klick darauf wird mit *Ein Workflow läuft bereits. Warten Sie, bis er fertig ist, oder brechen Sie ihn ab.* abgewiesen. Auch ein zwischenzeitlich gestartetes Workflow-Genie wird abgewiesen.
 
 ### Einen Lauf rückgängig machen
 
@@ -265,15 +272,18 @@ Wenn der Lauf endet, bietet die Symbolleiste **Dateien wiederherstellen** an. Na
 flowchart TD
     A["Click Run on .yml file"] --> B["Topological sort of steps by needs:"]
     B --> C{"Next step"}
-    C --> D{"Dependency failed or workflow failed?"}
+    C --> D{"Run cancelled?"}
     D -->|Yes| E["Skip step"]
-    D -->|No| F{"if: condition present?"}
-    F -->|"Evaluates false"| E
-    F -->|"True or absent"| G{"approval resolves to ask?"}
+    D -->|No| F{"Evaluate if: against the run so far (success() when absent)"}
+    F -->|"False"| E
+    F -->|"Error"| I["Step fails"]
+    F -->|"True"| G{"approval resolves to ask?"}
     G -->|Yes| H["Pause: approval dialog"]
-    H -->|Denied| I["Step fails"]
+    H -->|"Denied or expired"| I
+    H -->|"Cancelled"| E
     H -->|Approved| J["Fill template, call provider"]
     G -->|No| J
+    J -->|"Error or timeout"| I
     J --> K["Store outputs.text and JSON fields"]
     K --> C
     E --> C

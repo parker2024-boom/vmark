@@ -1,132 +1,19 @@
-<script setup>
-// Skip Vue template processing for the whole page so ${{ }} expressions
-// in code spans and fenced YAML blocks don't get interpreted.
-</script>
-
-<div v-pre>
-
 # Genies de workflow
 
-Les Genies de VMark se déclinent en deux variantes :
+Un **Genie de workflow** est un [workflow de Genies](/fr/guide/workflows) — un pipeline YAML à plusieurs étapes — enregistré dans votre dossier de Genies sous forme de fichier `.yml` ou `.yaml`. Il apparaît dans le sélecteur de Genies (`Mod + Y`) et dans **Édition → Génies** exactement comme un Genie Markdown ; le choisir exécute tout le pipeline via le moteur de workflow au lieu d’envoyer une seule invite.
 
-- **Genies Markdown** (`.md`) — modèles d’invites à un seul tir. Le format Genie d’origine. Voir [AI Genies](/fr/guide/ai-genies).
-- **Genies de workflow** (`.yml` / `.yaml`) — pipelines à plusieurs étapes qui enchaînent des Genies Markdown avec un flux de données explicite.
+## Prérequis
 
-Les deux formats résident dans le même répertoire global de Genies et apparaissent dans le même sélecteur (`Cmd+Y`). Un Genie de workflow s’affiche comme une ligne Genie ordinaire ; le sélectionner lance l’exécuteur de workflow au lieu de l’appel IA à un seul tir.
+| Prérequis | Pourquoi |
+|-----------|----------|
+| **Paramètres → Avancé → Outils de développement**, puis **Moteur de workflow** activé | Le moteur est désactivé par défaut. Le sélecteur liste toujours un Genie de workflow quand le moteur est désactivé, mais son exécution échoue avec « Le moteur de workflow est désactivé dans les préférences » |
+| Un espace de travail ouvert | Les étapes d’action comme `action/save-file` résolvent les chemins par rapport à la racine de l’espace de travail ; sans espace de travail, VMark affiche une notification et ne lance pas l’exécution |
+| Un [fournisseur d’IA](/fr/guide/ai-providers) configuré | Les étapes Genie appellent le fournisseur actif, le même que celui utilisé par les Genies Markdown |
 
-## Quand utiliser quoi
+## En écrire un
 
-| Besoin | Format |
-|--------|--------|
-| Transformation unique (réécrire, traduire, résumer) | Markdown |
-| Pipeline plan → brouillon → polissage | Workflow |
-| Différents modèles d’IA pour différentes étapes | Workflow |
-| Étapes nécessitant des points d’approbation | Workflow |
-| La sortie d’une étape alimente la suivante | Workflow |
+Placez le fichier YAML n’importe où sous le dossier de Genies (**Édition → Génies → Ouvrir le dossier des génies**) ; les sous-dossiers deviennent des catégories, comme pour les Genies Markdown. Le sélecteur affiche le nom de fichier comme nom du Genie, et la `description` du YAML (ou, à défaut, son `name`) comme ligne secondaire. La portée d’un Genie de workflow est le document entier — l’exécution n’a aucune sélection sur laquelle travailler — donc chaque étape fournit son propre `with: { input: … }`, et les Genies Markdown qu’elle appelle le lient tel quel à leur substitut `{{content}}`.
 
-Si une seule invite suffit, utilisez un Genie Markdown. Si vous avez besoin de composer des étapes, d’un flux de données structuré ou d’une approbation humaine en boucle, utilisez un workflow.
+L’exemple fourni `triage-and-translate.yml` est un point de départ prêt à l’emploi : copiez-le dans le dossier et remplacez le texte d’amorce. Son emplacement, le schéma YAML complet, les expressions, les approbations, les modèles par étape et les délais sont tous documentés dans [Workflows de Genies](/fr/guide/workflows) ; l’exécution elle-même — graphe des étapes en direct, Exécuter/Annuler, boîtes de dialogue d’approbation — se comporte exactement comme décrit là-bas.
 
-## Format de fichier
-
-Un Genie de workflow est un fichier YAML. Champs de premier niveau :
-
-| Champ | Requis | Rôle |
-|-------|--------|------|
-| `name` | Oui | Libellé lisible. Le sélecteur utilise le **nom de fichier** comme nom d’affichage ; ce champ apparaît comme description si aucun `description:` n’est défini. |
-| `description` | Non | Résumé d’une ligne affiché dans le sélecteur. |
-| `defaults` | Non | Modèle / approbation / limites par défaut appliqués à chaque étape. |
-| `env` | Non | Variables d’environnement disponibles via `${VAR}` ou `${{ env.NAME }}`. |
-| `steps` | Oui | Liste ordonnée d’étapes. |
-
-### Forme d’une étape
-
-```yaml
-- id: my-step
-  uses: genie/<name>     # or action/<name>
-  with:
-    input: "text or expression"
-  needs: prior-step      # optional; can also be a list
-  approval: ask          # optional; "auto" (default) or "ask"
-  model: claude-sonnet   # optional; overrides defaults
-  limits:
-    timeout: 120s        # default 300s
-    max_tokens: 4096     # REST providers only
-```
-
-### Types d’étapes
-
-| Préfixe `uses:` | Comportement |
-|-----------------|--------------|
-| `genie/<name>` | Charge le Genie Markdown correspondant, remplit son modèle avec la map `with:` de l’étape, appelle le fournisseur d’IA actif. Les substituts `{{content}}` / `{{input}}` du Genie Markdown récupèrent automatiquement `with.input`. |
-| `action/read-file` | Lit un chemin relatif à l’espace de travail. La sortie est le contenu du fichier. |
-| `action/save-file` | Écrit `with.input` dans `with.path`. |
-| `action/notify` | Journalise `with.message`. |
-| `action/copy` | Renvoie `with.input` inchangé (utile pour le chaînage). |
-
-### Expressions
-
-À l’intérieur de toute valeur `with:` :
-
-| Syntaxe | Se résout en |
-|---------|--------------|
-| `${{ steps.ID.outputs.FIELD }}` | Un champ de sortie spécifique d’une étape antérieure. |
-| `${{ steps.ID.output }}` | Sucre syntaxique pour `outputs.text` d’une étape antérieure. |
-| `${{ env.NAME }}` | Une valeur de `env:` du workflow. |
-| `${VAR}` | Idem ci-dessus, forme héritée. |
-| `stepId.output` (chaîne entière) | Alias hérité de `${{ steps.stepId.output }}`. |
-
-Les références à une étape ou à un champ inconnus font échouer l’étape au moment de la résolution des paramètres, avant tout appel IA.
-
-### Liaison de modèle
-
-Quand une étape `genie/<name>` s’exécute, le modèle d’invite de son Genie Markdown est rempli selon ces règles :
-
-- `{{input}}` → `with.input`
-- `{{content}}` → `with.content` si présent, sinon `with.input` (fatal si aucun des deux)
-- `{{context}}` → `with.context` si présent, sinon chaîne vide (jamais fatal)
-- `{{any-other-key}}` → `with.<key>` (fatal si manquant)
-
-Cela signifie que **les Genies Markdown existants fonctionnent sans modification** dans les workflows — appelez-les avec `with: { input: "..." }` et le substitut `{{content}}` le récupère via la chaîne d’alias.
-
-### Point d’approbation
-
-Quand une étape porte `approval: ask` (ou `defaults.approval: ask` au niveau du workflow), l’exécuteur fait une pause, ouvre une boîte de dialogue affichant l’aperçu de l’invite résolue et le modèle, puis attend le verdict de l’utilisateur avant d’appeler le fournisseur. Échap refuse. Le délai est le plus petit entre `limits.timeout` de l’étape et 10 minutes.
-
-## Exemple
-
-VMark fournit le workflow d’exemple `triage-and-translate.yml` dans le bundle de l’application (`Resources/resources/workflows/examples/`) ; il n’est pas installé dans votre répertoire de Genies. Copiez-le là pour le personnaliser. Le workflow ci-dessous est un autre exemple :
-
-```yaml
-name: Outline and Polish
-description: Generate an outline, then polish the output for clarity.
-
-defaults:
-  approval: auto
-
-steps:
-  - id: outline
-    uses: genie/outline
-    with:
-      input: "Replace this seed with your topic."
-
-  - id: polish
-    uses: genie/polish
-    needs: outline
-    with:
-      input: ${{ steps.outline.outputs.text }}
-```
-
-`genie/outline` produit un plan structuré ; l’étape `polish` réécrit ensuite cette sortie pour plus de clarté. Les deux références `genie/*` se résolvent vers les Genies Markdown fournis dans `structure/outline.md` et `editing/polish.md`.
-
-## Annulation, délais, limites
-
-- **Annuler** — Cliquez sur Stop dans le panneau latéral du workflow. L’exécuteur tue tout processus enfant CLI du fournisseur en cours en un tick et abandonne les requêtes REST en cours.
-- **Délai par étape** — Encapsulé dans `tokio::time::timeout(step.limits.timeout)`. À l’expiration, l’étape échoue avec «&nbsp;Timed out after Xs&nbsp;» et les étapes en aval sont sautées.
-- **Plafond de sortie** — La sortie d’une seule étape est plafonnée à 5 Mo. Un fournisseur emballé déclenche annulation + «&nbsp;Provider output exceeded 5 MB cap&nbsp;».
-
-## Voir aussi
-
-- [AI Genies](/fr/guide/ai-genies) — format et création des Genies Markdown.
-- [Visualiseur de workflows](/fr/guide/workflow-viewer) — le même panneau latéral React Flow utilisé ici, conçu à l’origine pour les workflows GitHub Actions.
-
-</div>
+Voir aussi [AI Genies](/fr/guide/ai-genies) pour le format des Genies Markdown à invite unique.

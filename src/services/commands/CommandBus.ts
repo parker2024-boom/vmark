@@ -31,7 +31,7 @@ export interface CommandContext {
 }
 
 /**
- * Every field is `readonly` (audit #879). Definitions are stored and handed back
+ * Every field is `readonly`. Definitions are stored and handed back
  * BY REFERENCE — `getCommand` and `listCommands` do not copy — so a mutable `id`
  * is a way to desynchronize a definition from the registry key it is filed
  * under, and from the owner claim in `OWNERS`, without going through
@@ -138,7 +138,7 @@ export function registerCommands(
 
 /**
  * Everything a registration attempt can mutate, captured so it can be undone
- * exactly (audit #453). Opaque to callers — the shape is this module's.
+ * exactly. Opaque to callers — the shape is this module's.
  */
 export interface CommandRegistrySnapshot {
   readonly commands: ReadonlyArray<readonly [string, CommandDefinition]>;
@@ -147,7 +147,7 @@ export interface CommandRegistrySnapshot {
 }
 
 /**
- * Snapshot the registry for a transactional registration (audit #453).
+ * Snapshot the registry for a transactional registration.
  *
  * An id-only snapshot could express "delete what was added" and nothing else,
  * which is not the inverse of what a batch does: `registerCommands` REPLACES
@@ -177,7 +177,7 @@ export function restoreCommandRegistry(snapshot: CommandRegistrySnapshot): void 
 /**
  * Remove every command registered under an `owner` token. Idempotent.
  *
- * The generation token goes with them (audit #881): `OWNER_GENERATION` is
+ * The generation token goes with them: `OWNER_GENERATION` is
  * documented as the owner's CURRENT token, and an owner with no commands has
  * none. Leaving it behind kept an entry per transient owner forever and left a
  * spent disposer still matching. `registerCommands` calls this before stamping
@@ -215,7 +215,7 @@ export function getCommand(id: string): CommandDefinition | undefined {
 
 /**
  * Whether a command id is already registered. The sentinel-guarded registrar
- * modules use this as their ONLY idempotence guard (#514): this registry
+ * modules use this as their ONLY idempotence guard: this registry
  * survives an HMR reload, where a module-level flag would reset, and it is
  * what the registerAllCommands rollback clears, where a module-level flag
  * would outlive the rollback and skip the retry.

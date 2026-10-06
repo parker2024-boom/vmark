@@ -8,7 +8,7 @@
  *   Why a hand-rolled completer instead of `@actions/languageservice`'s
  *   provider stack: the provider stack requires a ContextProviderConfig
  *   + ValueProviderConfig setup that the lint pipeline already documents
- *   as deferred (WI-5.2 in the prior plan). For names-only completion
+ *   as deferred (in the prior plan). For names-only completion
  *   we have everything we need from the IR. Type-aware completion
  *   (e.g., outputs of a specific action) is the part that needs the
  *   provider — explicitly out-of-scope per the plan's risk section.
@@ -115,7 +115,7 @@ const ROOT_CONTEXTS: readonly { label: string; detail: string }[] = [
 /**
  * Collect identifiers available in expression scope from the IR.
  *
- * Codex audit MED-3 fix: previously offered ALL job ids under
+ * Previously offered ALL job ids under
  * `needs.*` and ALL steps in the active job. GHA only exposes:
  *   - `needs.<id>`: jobs in this job's needs[] array (direct deps only)
  *   - `steps.<id>`: prior-or-current step (already-run steps)
@@ -344,7 +344,7 @@ export function completeAtPosition(
   } else if (path.length === 3 && path[0] === "steps" && path[2] === "outputs") {
     // steps.<id>.outputs.<TAB> — outputs aren't inferable from the IR
     // alone (they live in action.yml or are written by a prior step).
-    // Empty list per WI-A.1 risk note; handled by ContextProvider in
+    // Empty list for now; handled by ContextProvider in
     // a future plan.
     options = [];
   } else if (

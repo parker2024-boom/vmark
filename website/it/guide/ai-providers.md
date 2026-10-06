@@ -51,12 +51,13 @@ Se stai usando questi strumenti anche per il vibe-coding (Claude Code, Codex CLI
 
 ## Provider API REST
 
-I provider REST si connettono direttamente alle API cloud. Ognuno richiede un endpoint, una chiave API e il nome del modello.
+I provider REST si connettono direttamente alle API cloud (o locali). Ognuno richiede un endpoint, una chiave API e il nome del modello. Le risposte arrivano in un unico blocco quando la richiesta è completata — i provider REST non trasmettono i token in streaming; i provider CLI sì.
 
 | Provider | Endpoint Predefinito | Variabile d'Ambiente |
 |----------|---------------------|---------------------|
 | Anthropic | `https://api.anthropic.com` | `ANTHROPIC_API_KEY` |
 | OpenAI | `https://api.openai.com` | `OPENAI_API_KEY` |
+| Compatibile con OpenAI | *(lo imposti tu)* | — |
 | Google AI | *(integrato)* | `GOOGLE_API_KEY` o `GEMINI_API_KEY` |
 | Ollama (API) | `http://localhost:11434` | — |
 
@@ -64,8 +65,8 @@ I provider REST si connettono direttamente alle API cloud. Ognuno richiede un en
 
 Quando selezioni un provider REST, appaiono tre campi:
 
-- **Endpoint API** — L'URL base (nascosto per Google AI, che usa un endpoint fisso)
-- **Chiave API** — La tua chiave segreta (conservata solo in memoria — mai scritta su disco)
+- **Endpoint API** — L'URL base (nascosto per Google AI, che usa un endpoint fisso). Un `/v1` finale va bene — VMark lo normalizza in modo che il percorso non venga duplicato (es. `https://host/v1` e `https://host` funzionano entrambi)
+- **Chiave API** — La tua chiave segreta. Viene conservata nell'archivio delle credenziali del sistema operativo, mai in `localStorage` o in un file di impostazioni in chiaro — vedi [Dove risiedono le chiavi API](#dove-risiedono-le-chiavi-api)
 - **Modello** — L'identificatore del modello (es. `claude-sonnet-4-5-20250929`, `gpt-4o`, `gemini-2.0-flash`)
 
 ### Compilazione Automatica tramite Variabili d'Ambiente
@@ -94,6 +95,23 @@ raggiunge VMark solo quando avvii l'app da quella shell. Se viene avviato dal Do
 3. Incolla la tua chiave API
 4. Scegli un modello (predefinito: `gpt-4o`)
 
+### Configurazione: Compatibile con OpenAI (DeepSeek, Groq, OpenRouter, …)
+
+Molti provider parlano lo stesso protocollo di OpenAI (`/v1/chat/completions`, autenticazione `Bearer`). Lo slot **Compatibile con OpenAI** si collega a uno qualsiasi di essi — DeepSeek, Groq, OpenRouter, Together, Moonshot, un gateway self-hosted e così via — senza una voce dedicata per ciascun fornitore.
+
+Rispetto agli altri provider REST aggiunge un campo in più: un **Nome del provider** modificabile, così la riga mostra "DeepSeek" (o qualunque nome tu imposti) invece dell'etichetta generica.
+
+Esempio — DeepSeek:
+
+1. Ottieni una chiave API da [platform.deepseek.com](https://platform.deepseek.com)
+2. In Impostazioni VMark > Integrazioni, seleziona **Compatibile con OpenAI**
+3. Imposta **Nome del provider** su `DeepSeek` (facoltativo, solo estetico)
+4. Imposta **Endpoint API** su `https://api.deepseek.com` (un `/v1` finale va bene — VMark lo normalizza)
+5. Incolla la tua chiave API
+6. Imposta **Modello** su `deepseek-chat` (o `deepseek-reasoner`). Digitalo direttamente, oppure fai clic su aggiorna per scaricare l'elenco dei modelli dell'endpoint
+
+L'endpoint è obbligatorio — non esiste un host predefinito per questo slot. Usa i pulsanti **Test** (⚡) e **Testa modello** (🧪) per verificare la connessione prima di eseguire un genie.
+
 ### Configurazione: Google AI (REST)
 
 1. Ottieni una chiave API da [aistudio.google.com](https://aistudio.google.com)
@@ -119,6 +137,7 @@ Usa questo quando vuoi accesso in stile REST a un'istanza Ollama locale, o quand
 | Hai già Codex o Gemini installato | **Codex / Gemini (CLI)** — usa il tuo abbonamento |
 | Necessiti di privacy / offline | Installa Ollama → **Ollama (API)** su `http://localhost:11434` |
 | Modello personalizzato o self-hosted | **Ollama (API)** con il tuo endpoint |
+| DeepSeek / Groq / OpenRouter / qualsiasi API compatibile con OpenAI | **Compatibile con OpenAI** — imposta endpoint, chiave e modello |
 | Vuoi l'opzione cloud più economica | **Qualsiasi provider CLI** — l'abbonamento è molto più economico dell'API |
 | Nessun abbonamento, uso leggero | Imposta la chiave API come variabile d'ambiente → **Provider REST** (paga per token) |
 | Hai bisogno dell'output di qualità più alta | **Claude (CLI)** o **Anthropic (REST)** con `claude-sonnet-4-5-20250929` |
@@ -148,10 +167,16 @@ VMark protegge ogni chiamata al provider in modo che un CLI bloccato o una rispo
 - **Client HTTP condiviso**: i provider REST condividono un singolo client `reqwest` con pool di connessioni, quindi le esecuzioni consecutive di genie non pagano il costo di handshake TCP/TLS ogni volta.
 - **Scoperta del PATH su Windows**: su Windows, VMark legge il `PATH` completo dell'utente (incluse le voci solo PowerShell) quando rileva i CLI, in modo che gli strumenti installati dall'utente che funzionano in un terminale funzionino anche dentro VMark.
 
+## Dove Risiedono le Chiavi API
+
+Le chiavi API sono custodite nell'archivio delle credenziali del sistema operativo — Portachiavi di macOS, Gestione credenziali di Windows o Secret Service di Linux — sotto il nome di servizio `app.vmark.secrets`, una voce per provider. VMark ne tiene una copia in memoria solo per la sessione in corso; le impostazioni dei provider salvate non contengono mai una chiave, e nulla viene scritto in `localStorage`. Una chiave salvata da una versione precedente di VMark in un file di impostazioni in chiaro viene spostata nel portachiavi la prima volta che la versione più recente la carica, e la copia in chiaro viene eliminata solo dopo che la scrittura nel portachiavi è stata riletta con successo.
+
+Se il portachiavi rifiuta una scrittura, VMark mostra un toast di errore invece di tenere silenziosamente la chiave in memoria. Su macOS, una build di sviluppo con firma ad hoc può richiedere di nuovo l'accesso al portachiavi dopo ogni nuova firma; una build di rilascio lo chiede una sola volta.
+
 ## Note sulla Sicurezza
 
-- **Le chiavi API sono effimere** — conservate solo in memoria, mai scritte su disco o in `localStorage`
-- **Le variabili d'ambiente** vengono lette una volta all'avvio e memorizzate nella cache in memoria
+- **Le chiavi API risiedono nel portachiavi del sistema operativo** — vedi sopra; non vengono mai scritte nei file delle impostazioni di VMark né in `localStorage`
+- **Le variabili d'ambiente** vengono lette quando selezioni un provider e compilano solo un campo della chiave vuoto
 - **I provider CLI** usano la tua autenticazione CLI esistente — VMark non vede mai le tue credenziali
 - **Tutte le richieste vanno direttamente** dalla tua macchina al provider — nessun server VMark intermedio
 
@@ -163,11 +188,11 @@ VMark protegge ogni chiamata al provider in modo che un CLI bloccato o una rispo
 
 **Il CLI si blocca / nessuna risposta** — Il timeout di esecuzione di VMark annullerà la chiamata automaticamente; vedrai un errore nel banner di stato del genie. Se un particolare CLI raggiunge sistematicamente il timeout, eseguilo una volta dal terminale per confermare che funzioni lì, poi verifica se richiede un'autenticazione interattiva.
 
-**Il provider REST restituisce JSON alterato / inaspettato** — VMark segnala un errore di analisi tipizzato (es. "list_models ha restituito una forma di risposta inaspettata"). Controlla l'URL dell'endpoint e verifica che il contratto API corrisponda al tipo di provider selezionato; alcuni gateway self-hosted pubblicizzano URL compatibili con OpenAI ma hanno uno schema diverso.
-
 **Il provider REST restituisce 401** — La tua chiave API non è valida o è scaduta. Genera una nuova dalla console del provider.
 
 **Il provider REST restituisce 429** — Hai raggiunto un limite di frequenza. Attendi un momento e riprova, o passa a un provider diverso.
+
+**Il provider REST restituisce JSON alterato / inaspettato** — VMark segnala un errore di analisi tipizzato (es. "list_models ha restituito una forma di risposta inaspettata"). Controlla l'URL dell'endpoint e verifica che il contratto API corrisponda al tipo di provider selezionato; alcuni gateway self-hosted pubblicizzano URL compatibili con OpenAI ma hanno uno schema diverso.
 
 **Risposte lente** — I provider CLI aggiungono un overhead da sottoprocesso. Per risposte più veloci, usa i provider REST che si connettono direttamente. Per l'opzione locale più veloce, usa Ollama con un modello piccolo.
 

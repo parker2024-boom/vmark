@@ -4,7 +4,7 @@
  * Row 2: caption/alt input
  */
 
-/* Shell chrome comes from `.popup-container` (WI-UI3.2). */
+/* Shell chrome comes from `.popup-container`. */
 .source-image-popup {
   position: absolute;
   flex-direction: column;

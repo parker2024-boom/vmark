@@ -73,13 +73,13 @@ export function rowIdAt(target: EventTarget | null): string | null {
 }
 
 /**
- * The menu state a right-click at `position` should produce (audit R3 #647):
+ * The menu state a right-click at `position` should produce:
  * that node's menu over a row, the workspace-level one over empty space, and
  * NO menu over a row the tree cannot resolve.
  *
  * That last case is not empty space. Falling through to the workspace menu put
- * "New File" and "New Folder" at the ROOT under a pointer sitting on a file
- * (audit R2, #649); no menu at all is the honest answer for a target that has
+ * "New File" and "New Folder" at the ROOT under a pointer sitting on a file;
+ * no menu at all is the honest answer for a target that has
  * gone — mid refresh, or filtered out.
  *
  * Pure, so the hit-testing is checkable without a right-click: the hook mixed

@@ -27,7 +27,7 @@ import type {
 import menuIdsData from "@shared/menu-ids.json";
 import { MENU_TO_ACTION } from "./menuMapping";
 import { ACTION_DEFINITIONS } from "./actionDefinitions";
-import { actionRegistryWarn } from "@/utils/debug";
+import { actionRegistryLog, actionRegistryWarn } from "@/utils/debug";
 
 // Re-export for consumers that import from this module
 export { MENU_TO_ACTION } from "./menuMapping";
@@ -66,7 +66,7 @@ export function getHeadingLevelFromParams(params?: Record<string, unknown>): Hea
   const level = params?.level;
   // Require a whole number 1–6: HeadingLevel is the discrete set {1,2,3,4,5,6};
   // a fractional value (e.g. 2.5) would be cast through and produce a malformed
-  // heading in the WYSIWYG/Source setters (audit-fix #4).
+  // heading in the WYSIWYG/Source setters.
   if (typeof level === "number" && Number.isInteger(level) && level >= 1 && level <= 6) {
     return level as HeadingLevel;
   }
@@ -99,8 +99,8 @@ if (import.meta.env?.DEV) {
     );
   }
   if (extraInRegistry.length > 0) {
-    console.info(
-      "[ActionRegistry] Extra menu IDs in MENU_TO_ACTION (not extracted from Rust):",
+    actionRegistryLog(
+      "Extra menu IDs in MENU_TO_ACTION (not extracted from Rust):",
       extraInRegistry
     );
   }

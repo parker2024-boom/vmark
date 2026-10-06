@@ -9,6 +9,8 @@
  * with the GHA workflow viewer). Every other adapter — JSON / TOML,
  * Mermaid / SVG, HTML, code viewers — is OFF by default so existing
  * users aren't surprised on upgrade.
+ *
+ * @module pages/settings/FormatsSettings
  */
 
 import { useEffect, useId, useRef, useState } from "react";
@@ -128,7 +130,7 @@ export function FormatsSettings() {
     ) {
       setEditorDraft(formats.externalEditor);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pushes store changes into the draft only; editorDraft is not a trigger, so an active edit is never clobbered
   }, [formats.externalEditor]);
 
   const browseForEditor = async () => {

@@ -1,7 +1,7 @@
 /**
  * The forms editor's inline "Add job" prompt, split out of
  * WorkflowEditorPanel (which was one line under the file-size limit) when its
- * validation grew a voice (audit R2, #581).
+ * validation grew a voice.
  *
  * Key decisions:
  *   - ONE definition of what a usable job id is. The rule used to be written

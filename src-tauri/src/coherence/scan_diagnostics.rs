@@ -1,20 +1,21 @@
-//! Diagnostic emission + ignored-path helpers split from `scan.rs` for the
+//! Diagnostic emission, ignored-path helpers and deletion marking split from `scan.rs` for the
 //! file-size gate. Diagnostics are deduped against the ledger by (code,
 //! path) so repeated scans never spam append-only history (spec §5.6);
-//! ignored-dir paths are the walk's blind spots (audit C8).
+//! ignored-dir paths are the walk's blind spots.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use serde_json::json;
 
+use super::index_row::RegistryState;
 use super::scan::{ScanReport, IGNORED_DIRS, IGNORED_REL_PREFIXES};
 use super::state::WorkspaceKernel;
-use super::types::{Envelope, TypedBody};
+use super::types::{Envelope, ObjectId, TypedBody};
 
 /// A workspace-relative path that lives UNDER an ignored directory — the
 /// walk never descends there, so its files can't be verified present or
-/// absent (audit C8). Only a NON-LEAF segment counts: a real object whose
-/// own filename is `node_modules` is not under an ignored dir (audit #3),
+/// absent. Only a NON-LEAF segment counts: a real object whose
+/// own filename is `node_modules` is not under an ignored dir,
 /// and both `/` and `\` are honored so a Windows-style path isn't misread
 /// as a single unignored segment.
 pub(super) fn path_under_ignored_dir(path: &str) -> bool {
@@ -37,6 +38,32 @@ pub(super) fn path_at_or_under_ignored_prefix(rel: &str) -> bool {
                 .strip_prefix(prefix)
                 .is_some_and(|rest| rest.starts_with('/'))
     })
+}
+
+/// Deletions: registered objects whose paths are gone — only when the walk saw
+/// everything. A path under an ignored directory (node_modules,
+/// .Trash, …) is never walked, so its absence from `present` is not evidence
+/// of deletion — skip it.
+pub(super) fn mark_absent(
+    kernel: &mut WorkspaceKernel,
+    registry: &RegistryState,
+    present: &HashSet<&str>,
+    seen_at: &HashMap<ObjectId, String>,
+    report: &mut ScanReport,
+) -> Result<(), String> {
+    if !report.complete {
+        return Ok(());
+    }
+    for (object, path) in registry.path_of.iter() {
+        if path_under_ignored_dir(path) {
+            continue;
+        }
+        if !present.contains(path.as_str()) && !seen_at.contains_key(object) {
+            kernel.index_mut().set_absent(object, true)?;
+            report.absent_marked += 1;
+        }
+    }
+    Ok(())
 }
 
 /// Diagnostics are deduped against the ledger by (code, path) so repeated

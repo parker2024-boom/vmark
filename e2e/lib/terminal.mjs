@@ -16,7 +16,7 @@
  *
  * Not assertable here: `VMARK_WORKSPACE`. macOS restricts reading another
  * process's environment (`ps eww` shows nothing under SIP), so that half of the
- * spawn contract stays manual-only — recorded in dev-docs/e2e-tier0-matrix.md.
+ * spawn contract stays manual-only.
  */
 
 import { execFile } from "node:child_process";

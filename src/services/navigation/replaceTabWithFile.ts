@@ -8,7 +8,7 @@
  * @module services/navigation/replaceTabWithFile
  */
 
-import { readTextFile } from "@tauri-apps/plugin-fs";
+import { readDocumentText } from "@/services/files/readDocumentText";
 import { useDocumentStore, useFileLoadStore } from "@/stores/documentStore";
 import { useTabStore } from "@/stores/tabStore";
 import { useRecentFilesStore } from "@/stores/workspaceStore";
@@ -43,7 +43,7 @@ export async function replaceTabWithFile(params: {
   const { windowLabel, tabId, targetPath, sourcePath, workspaceRoot } = params;
 
   // Binary media short-circuit (mirrors openFileInNewTabCore's tryOpenMediaFile):
-  // never size-gate or readTextFile a binary. Path-only, synchronous — the media
+  // never size-gate or text-read a binary. Path-only, synchronous — the media
   // surface streams the bytes via asset://. Must precede routeOpenBySize/read.
   if (isBinaryMediaPath(sourcePath)) {
     replaceTabWithMediaFile(tabId, targetPath);
@@ -65,7 +65,7 @@ export async function replaceTabWithFile(params: {
   }
 
   try {
-    const content = await readTextFile(sourcePath);
+    const content = await readDocumentText(sourcePath);
 
     // Close-during-open guard: the target tab can be closed while this read is
     // in flight. Mutating it now would resurrect/overwrite a tab that no longer

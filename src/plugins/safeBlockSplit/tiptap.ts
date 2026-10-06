@@ -10,7 +10,7 @@
  * paragraphs changes the insertion depth, so the earlier answer no longer
  * describes the document being split, and ProseMirror raises
  * `TransformError: Inserted content deeper than insertion position`. The Enter
- * edit is aborted (audit 20260906, F5).
+ * edit is aborted.
  *
  * Reproduced on the full VMark stack AND on vanilla StarterKit, and still
  * present in 3.31.3, so this is an upstream defect VMark works around rather

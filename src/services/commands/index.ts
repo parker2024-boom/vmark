@@ -1,5 +1,7 @@
 /**
  * CommandBus public surface — ADR-012.
+ *
+ * @module services/commands
  */
 
 export { executeCommand, searchCommands } from "./CommandBus";

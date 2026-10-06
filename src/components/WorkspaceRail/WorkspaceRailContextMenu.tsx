@@ -12,7 +12,7 @@
  * visible focus per rule 33).
  *
  * Four things the first version got wrong, all invisible until the menu is
- * opened twice or by keyboard (audit R3 #655/#657/#658/#659):
+ * opened twice or by keyboard:
  *
  *   - The menu is rendered CONDITIONALLY, not keyed, so opening it on another
  *     entry REUSES this component — the dismiss and the open batch into one
@@ -57,7 +57,7 @@ interface WorkspaceRailContextMenuProps {
   /**
    * The element focus returns to on dismiss — the rail entry that was
    * right-clicked. Supplied per OPENING because this component is reused
-   * across openings (#655); null when the menu was opened by something with no
+   * across openings; null when the menu was opened by something with no
    * element to go back to.
    */
   invoker: HTMLElement | null;
@@ -80,7 +80,7 @@ export function WorkspaceRailContextMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [focused, setFocused] = useState(0);
-  // Clamped against the viewport AND kept clamped as either changes (#656).
+  // Clamped against the viewport AND kept clamped as either changes.
   const clamped = useMenuViewportClamp(position, menuRef);
 
   // `action` is a stable, locale-independent hook for automation (the e2e
@@ -95,7 +95,7 @@ export function WorkspaceRailContextMenu({
   // React's own "adjust state when a prop changes" pattern, because an effect
   // that calls setState cascades a render (#1063). `position` is a fresh object
   // per right-click, so it identifies the opening; opening the menu on another
-  // entry reuses this component rather than remounting it (#655).
+  // entry reuses this component rather than remounting it.
   const [openedAt, setOpenedAt] = useState(position);
   if (openedAt !== position) {
     setOpenedAt(position);
@@ -130,7 +130,7 @@ export function WorkspaceRailContextMenu({
       return;
     }
     // Tab used to walk straight out of the menu and leave it open behind the
-    // keyboard (#657). Dismissing puts focus back on the rail entry, from
+    // keyboard. Dismissing puts focus back on the rail entry, from
     // which Tab then continues normally.
     if (event.key === "Tab") {
       event.preventDefault();
@@ -153,7 +153,7 @@ export function WorkspaceRailContextMenu({
     // Dismiss first so focus returns to the rail before the action mutates it.
     dismiss();
     // Not awaited — the menu is already gone and the handlers own their own
-    // toasts — but a rejection is CAUGHT (#658). `() => void` accepts an async
+    // toasts — but a rejection is CAUGHT. `() => void` accepts an async
     // function, so without this an action that throws asynchronously becomes an
     // unhandled rejection with nothing on screen to show for it.
     Promise.resolve(action()).catch((error: unknown) => {

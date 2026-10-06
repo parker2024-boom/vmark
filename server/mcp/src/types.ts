@@ -4,7 +4,7 @@
  * Tools only: the pruned surface exposes no MCP resources (`session.get_state`
  * replaced them), so `ResourceDefinition` / `ResourceHandler` /
  * `ResourceReadResult` and the `resources/*` half of `McpServerInterface` were
- * deleted with the pipeline that used them (audit 20260728 §4). The
+ * deleted with the pipeline that used them. The
  * `type: 'resource'` member of a tool result's `content` array below is a
  * DIFFERENT spec feature — an embedded resource block inside a tool response —
  * and is unaffected.

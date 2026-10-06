@@ -1,15 +1,32 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
 import { BrowserChrome } from "./BrowserChrome";
 import { useTabStore } from "@/stores/tabStore";
+import { bootstrapFormats } from "@/lib/formats";
 
 vi.mock("@/contexts/WindowContext", () => ({ useWindowLabel: () => "main" }));
-vi.mock("@/components/Browser/BrowserOmnibox", () => ({
-  BrowserOmnibox: ({ tabId }: { tabId: string }) => <div data-testid="omnibox">{tabId}</div>,
-}));
 vi.mock("@/services/tabs/tabOperations", () => ({
   closeTabWithDirtyCheck: vi.fn(() => Promise.resolve(true)),
 }));
+
+/** The real omnibox's address bar. */
+const addressBar = () => screen.getByRole("textbox", { name: "Address bar" });
+const queryAddressBar = () => screen.queryByRole("textbox", { name: "Address bar" });
+
+/**
+ * Assert which page the mounted omnibox drives. Its Reload re-navigates the
+ * page it addresses, so the target is read off the navigation command at the
+ * Tauri boundary (`invoke`, mocked in `src/test/setup.ts`).
+ */
+function expectOmniboxToNavigate(pageId: string, host: string): void {
+  vi.mocked(invoke).mockClear();
+  fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+  expect(invoke).toHaveBeenCalledWith("browser_navigate", {
+    tabId: pageId,
+    url: expect.stringContaining(host),
+  });
+}
 
 describe("BrowserChrome", () => {
   beforeEach(() => {
@@ -33,7 +50,7 @@ describe("BrowserChrome", () => {
     // omnibox too — the title-bar strip it used to live in is not rendered there
     // (#1296). The two placements are mutually exclusive by platform, so this
     // cannot double up with the title bar's copy.
-    expect(screen.getByTestId("omnibox")).toBeInTheDocument();
+    expect(addressBar()).toBeInTheDocument();
 
     fireEvent.keyDown(screen.getByRole("tab", { name: /One/ }), { key: "Enter" });
     expect(useTabStore.getState().activeTabId.main).toBe(first);
@@ -48,7 +65,7 @@ describe("BrowserChrome", () => {
 
     render(<BrowserChrome />);
 
-    expect(screen.getByTestId("omnibox")).toHaveTextContent(two);
+    expectOmniboxToNavigate(two, "two.example");
   });
 
   it("addresses the page it is GIVEN — the pane's, not the window's (split view)", () => {
@@ -60,14 +77,14 @@ describe("BrowserChrome", () => {
     // A pane showing page One must not hand its address bar to page Two: the
     // omnibox drives navigation, so aiming it elsewhere would navigate a page
     // the user cannot see.
-    expect(screen.getByTestId("omnibox")).toHaveTextContent(one);
+    expectOmniboxToNavigate(one, "one.example");
   });
 
   it("renders nothing when the window has no browser page at all", () => {
     render(<BrowserChrome />);
 
     expect(screen.queryByRole("tablist", { name: "Webpages" })).not.toBeInTheDocument();
-    expect(screen.queryByTestId("omnibox")).not.toBeInTheDocument();
+    expect(queryAddressBar()).not.toBeInTheDocument();
   });
 
   it("renders nothing for an id that was never a page", () => {
@@ -77,7 +94,7 @@ describe("BrowserChrome", () => {
 
     // Binding the omnibox to a dead id would point navigation at nothing while
     // the chrome looked normal — no tab selected, submit silently misfiring.
-    expect(screen.queryByTestId("omnibox")).not.toBeInTheDocument();
+    expect(queryAddressBar()).not.toBeInTheDocument();
   });
 
   it("drops the chrome when the page it addresses is CLOSED", () => {
@@ -88,22 +105,25 @@ describe("BrowserChrome", () => {
     useTabStore.getState().createBrowserPage("main", "https://two.example", "Two");
 
     const { rerender } = render(<BrowserChrome activePageId={one} />);
-    expect(screen.getByTestId("omnibox")).toHaveTextContent(one);
+    expectOmniboxToNavigate(one, "one.example");
 
     useTabStore.getState().closeTab("main", one);
     rerender(<BrowserChrome activePageId={one} />);
 
-    expect(screen.queryByTestId("omnibox")).not.toBeInTheDocument();
+    expect(queryAddressBar()).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Webpages" })).not.toBeInTheDocument();
   });
 
   it("renders nothing for a DOCUMENT tab id", () => {
+    // A document tab derives its format from the registry the app bootstraps
+    // at startup; without it the tab is built in a state the app never makes.
+    bootstrapFormats({ dataFormats: false, diagrams: false, htmlPreview: false, codeViewers: false });
     useTabStore.getState().createBrowserTab("main", "https://one.example", "One");
     const doc = useTabStore.getState().createTab("main");
 
     render(<BrowserChrome activePageId={doc} />);
 
-    expect(screen.queryByTestId("omnibox")).not.toBeInTheDocument();
+    expect(queryAddressBar()).not.toBeInTheDocument();
   });
 
   it("the close button is a sibling of its tab, so Enter on it never reaches the tab (#163)", () => {
@@ -130,12 +150,14 @@ describe("BrowserChrome", () => {
   });
 
   it("renders webpage tabs and navigation together in the title bar", () => {
-    useTabStore.getState().createBrowserTab("main", "https://one.example", "One");
+    const one = useTabStore.getState().createBrowserTab("main", "https://one.example", "One");
     render(<BrowserChrome placement="titlebar" />);
 
     expect(screen.getByRole("tablist", { name: "Webpages" })).toBeInTheDocument();
-    expect(screen.getByTestId("omnibox")).toHaveTextContent("tab-");
     expect(document.querySelector(".browser-titlebar-navigation")).toBeInTheDocument();
+    // The omnibox sits IN the navigation group and drives the page.
+    expect(addressBar().closest(".browser-titlebar-navigation")).toBeInTheDocument();
+    expectOmniboxToNavigate(one, "one.example");
     expect(document.querySelector(".browser-titlebar-drag-space")).toHaveAttribute(
       "data-tauri-drag-region",
     );
@@ -157,26 +179,29 @@ describe("BrowserChrome", () => {
 // native sibling view), so any interaction here while the AI holds the lease is
 // a takeover.
 describe("AI lease indicator (WI-NB5.1)", () => {
-  async function leaseStore() {
-    const { useBrowserLeaseStore } = await import("@/services/browser/lease");
-    return useBrowserLeaseStore;
+  async function leaseService() {
+    const [{ browserLease }, { resetBrowserLeaseStore }] = await Promise.all([
+      import("@/services/browser/lease"),
+      import("@/stores/browserLeaseStore"),
+    ]);
+    return { browserLease, resetBrowserLeaseStore };
   }
 
   beforeEach(async () => {
-    (await leaseStore()).setState({ leases: {}, inflightCancel: {} });
+    (await leaseService()).resetBrowserLeaseStore();
   });
 
   it("shows a takeover button while the AI holds the active page's lease", async () => {
-    const store = await leaseStore();
+    const { browserLease } = await leaseService();
     const id = useTabStore.getState().createBrowserTab("main", "https://one.example", "One");
-    store.getState().acquireForAi(id);
+    browserLease.acquireForAi(id);
 
     render(<BrowserChrome />);
     const takeover = screen.getByRole("button", { name: /AI is controlling/i });
     expect(takeover).toBeInTheDocument();
 
     fireEvent.click(takeover);
-    expect(store.getState().currentHolder(id)).toBe("human");
+    expect(browserLease.currentHolder(id)).toBe("human");
   });
 
   it("renders no indicator when nobody holds a lease", () => {
@@ -186,12 +211,12 @@ describe("AI lease indicator (WI-NB5.1)", () => {
   });
 
   it("any chrome interaction reclaims an AI-held lease (capture phase)", async () => {
-    const store = await leaseStore();
+    const { browserLease } = await leaseService();
     const id = useTabStore.getState().createBrowserTab("main", "https://one.example", "One");
-    store.getState().acquireForAi(id);
+    browserLease.acquireForAi(id);
 
     render(<BrowserChrome />);
-    fireEvent.mouseDown(screen.getByTestId("omnibox"));
-    expect(store.getState().currentHolder(id)).toBe("human");
+    fireEvent.mouseDown(addressBar());
+    expect(browserLease.currentHolder(id)).toBe("human");
   });
 });

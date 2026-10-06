@@ -38,6 +38,8 @@
  * misuse.
  *
  * All colors use CSS variables for theme consistency.
+ *
+ * @module pages/settings/components
  */
 
 export { SettingRow, SettingsGroup, CollapsibleGroup, SearchableSection } from "./layout";

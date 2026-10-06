@@ -3,11 +3,13 @@
  *
  * Actions for link editing in Source mode (CodeMirror 6).
  * Handles save, open, copy, and remove operations.
+ *
+ * @module plugins/sourceLinkPopup/sourceLinkActions
  */
 
 import type { EditorView } from "@codemirror/view";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import type { StoreApi } from "@/plugins/sourcePopup";
+import type { StoreApi } from "@/plugins/shared/types";
 import type { LinkPopupState } from "@/plugins/shared/popupPorts";
 
 /** The popup state these actions read — injected, never imported (ADR-015). */
@@ -49,7 +51,7 @@ function parseLinkMarkdown(
 }
 
 /**
- * Stale-range guard (WI-1 / D1): the captured `[from, to)` is only safe to
+ * Stale-range guard (D1): the captured `[from, to)` is only safe to
  * mutate while it is in bounds and still holds link markdown. A concurrent
  * edit (MCP, AI suggestion, external reload) shifts or destroys the range —
  * dispatching the captured offsets blindly would rewrite unrelated text.
@@ -65,7 +67,7 @@ function getIntactLinkFromRange(
 }
 
 /**
- * The user's intent, read at ACTION time (audit 20260804-F2).
+ * The user's intent, read at ACTION time.
  *
  * The popup closes on the same click that starts a save/remove, and closing
  * RESETS the store (`href: ""`, `linkFrom: 0`, `linkTo: 0`). While the user is

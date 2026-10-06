@@ -1,4 +1,4 @@
-//! The server-side bound on caller-supplied script/CSS text (audit 2026-07-28).
+//! The server-side bound on caller-supplied script/CSS text.
 //!
 //! The same 64 KiB number lives in two CLIENT-side places —
 //! `server/mcp/src/tools/browser.ts` (the MCP sidecar) and

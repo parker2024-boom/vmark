@@ -18,7 +18,8 @@
  *
  * @coordinates-with TiptapEditor.tsx — shares document content via documentStore
  * @coordinates-with sourceFocusRestore.ts — the shared focus/cursor/scroll restore step
- * @coordinates-with utils/cursorSync/codemirror.ts — cursor position extraction/restoration
+ * @coordinates-with sourceCursorTracker.ts — per-frame cursor snapshot and selected text
+ * @coordinates-with services/search/sourceSearchCounter.ts — recounts find matches after edits
  * @coordinates-with stores/editorStore.ts — registers as the active source view
  * @module components/Editor/SourceEditor
  */
@@ -38,7 +39,6 @@ import {
 } from "@/hooks/useDocumentState";
 import { useSourceEditorSearch } from "@/hooks/useSourceEditorSearch";
 import { useSourceEditorSync } from "@/hooks/useSourceEditorSync";
-import { getCursorInfoFromCodeMirror } from "@/utils/cursorSync/codemirror";
 import { trackEditorScroll } from "@/services/editor/scrollPosition";
 import { useEditorStore } from "@/stores/editorStore";
 import { useDocumentStore } from "@/stores/documentStore";
@@ -47,14 +47,14 @@ import { runOrQueueCodeMirrorAction } from "@/utils/imeGuard";
 import { computeSourceCursorContext } from "@/plugins/sourceContextDetection/cursorContext";
 import { useImageDragDrop } from "@/hooks/useImageDragDrop";
 import { useSourceOutlineSync } from "@/hooks/useSourceOutlineSync";
-import { countMatches } from "@/utils/sourceEditorSearch";
-import { createDebouncedSearchCounter } from "@/utils/debouncedSearchCount";
+import { createSourceSearchRecount, sourceSearchPlace } from "@/services/search/sourceSearchCounter";
 import {
   createSourceEditorExtensions,
   shortcutKeymapCompartment,
   readOnlyCompartment,
 } from "@/services/assembly/sourceEditorExtensions";
 import { focusAndRestoreSource } from "./sourceFocusRestore";
+import { createSourceCursorTracker, sourceCursorExtension, type SourceCursorTracker } from "./sourceCursorTracker";
 
 interface SourceEditorProps {
   hidden?: boolean;
@@ -67,6 +67,7 @@ export function SourceEditor({ hidden = false, readOnly = false }: SourceEditorP
   const viewRef = useRef<EditorView | null>(null);
   const isInternalChange = useRef(false);
   const hiddenRef = useRef(hidden);
+  const cursorTrackerRef = useRef<SourceCursorTracker | null>(null);
 
   useSourceOutlineSync(viewRef, hidden);
 
@@ -81,7 +82,7 @@ export function SourceEditor({ hidden = false, readOnly = false }: SourceEditorP
   const setSelectedTextRef = useRef(setSelectedText);
   const cursorInfoRef = useRef(cursorInfo);
   // Latest-value refs synced during render: read by CodeMirror's update listener, a delayed focus/restore setTimeout, and an interval poll — all of which can fire before a passive effect would flush, so they need pre-commit freshness (#1063).
-  /* eslint-disable react-hooks/refs */
+  /* eslint-disable react-hooks/refs -- latest-value refs read by CodeMirror listeners and timers that can fire before passive effects flush */
   hiddenRef.current = hidden;
   setContentRef.current = setContent;
   setCursorInfoRef.current = setCursorInfo;
@@ -116,10 +117,12 @@ export function SourceEditor({ hidden = false, readOnly = false }: SourceEditorP
     }
   }, [hidden]);
 
-  // Clear shared selectedText when hidden — keeps the status bar from showing this
-  // editor's last selection while the WYSIWYG editor is active.
+  // On hide: publish a cursor snapshot still waiting for its frame (WYSIWYG restores from it),
+  // then clear shared selectedText so the status bar stops showing this editor's selection.
   useEffect(() => {
-    if (hidden) setSelectedTextRef.current("");
+    if (!hidden) return;
+    cursorTrackerRef.current?.flush();
+    setSelectedTextRef.current("");
   }, [hidden]);
 
   // Create CodeMirror instance
@@ -127,22 +130,14 @@ export function SourceEditor({ hidden = false, readOnly = false }: SourceEditorP
     /* v8 ignore next -- @preserve guard: true branch fires only when container unmounts mid-init */
     if (!containerRef.current || viewRef.current) return; // Guard: effect deps=[] ensures single run
 
-    const searchCounter = createDebouncedSearchCounter(
-      (content, _query, _caseSensitive, _wholeWord, _useRegex) => {
-        // Re-read fresh state: search params may have changed during the debounce delay
-        const freshState = useUIStore.getState().search;
-        if (!freshState.isOpen || !freshState.query) return;
-        const matchCount = countMatches(content, freshState.query, freshState.caseSensitive, freshState.wholeWord, freshState.useRegex);
-        // Keep currentIndex valid: reset to 0 if out of bounds or -1
-        let newIndex = freshState.currentIndex;
-        if (matchCount === 0) {
-          newIndex = -1;
-        } else if (newIndex < 0 || newIndex >= matchCount) {
-          newIndex = 0;
-        }
-        useUIStore.getState().searchSetMatches(matchCount, newIndex);
-      }
-    );
+    // Recount after edits; the current match keeps its place by position.
+    const searchRecount = createSourceSearchRecount();
+
+    const cursorTracker = createSourceCursorTracker({
+      setCursorInfo: (info) => setCursorInfoRef.current(info),
+      setSelectedText: (text) => setSelectedTextRef.current(text),
+    });
+    cursorTrackerRef.current = cursorTracker;
 
     const updateListener = EditorView.updateListener.of((update) => {
       // Skip updates when hidden — prevents polluting document store
@@ -155,30 +150,10 @@ export function SourceEditor({ hidden = false, readOnly = false }: SourceEditorP
         requestAnimationFrame(() => {
           isInternalChange.current = false;
         });
-        // Update match count when document changes and search is open (debounced)
-        const searchState = useUIStore.getState().search;
-        if (searchState.isOpen && searchState.query) {
-          searchCounter.schedule(
-            newContent,
-            searchState.query,
-            searchState.caseSensitive,
-            searchState.wholeWord,
-            searchState.useRegex
-          );
-        }
+        searchRecount.schedule(update.view); // only while the find bar has a query
       }
-      // Track cursor position for mode sync
-      if (update.selectionSet || update.docChanged) {
-        const info = getCursorInfoFromCodeMirror(update.view);
-        setCursorInfoRef.current(info);
-        // Aggregate every range — CodeMirror supports multi-range selection.
-        const ranges = update.state.selection.ranges;
-        const slices: string[] = [];
-        for (const r of ranges) {
-          if (r.from !== r.to) slices.push(update.state.sliceDoc(r.from, r.to));
-        }
-        setSelectedTextRef.current(slices.join("\n"));
-      }
+      // Track cursor position (once per frame) and selected text for mode sync
+      if (update.selectionSet || update.docChanged) cursorTracker.track(update);
     });
 
     const initialWordWrap = useUIStore.getState().wordWrap;
@@ -206,7 +181,7 @@ export function SourceEditor({ hidden = false, readOnly = false }: SourceEditorP
         initialShowLineNumbers,
         initialShowInvisibles,
         initialReadOnly: readOnly,
-        updateListener,
+        updateListener: [updateListener, sourceCursorExtension, sourceSearchPlace],
         tabId: mountTabId,
         lintEnabled: initialLintEnabled,
         filePath: mountFilePath,
@@ -255,14 +230,15 @@ export function SourceEditor({ hidden = false, readOnly = false }: SourceEditorP
 
     return () => {
       if (focusTimeoutId !== null) clearTimeout(focusTimeoutId);
-      searchCounter.cancel();
+      searchRecount.cancel();
       unsubscribeShortcuts();
       stopScrollMemory();
       useEditorStore.getState().clearSourceViewIfMatch(view);
+      cursorTracker.flush(); // a snapshot still waiting for its frame is published, not lost
       view.destroy();
       viewRef.current = null;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once: creates the CodeMirror view; later prop changes are pushed by dedicated effects
   }, []);
 
   // Handle visibility transitions: hidden → visible
@@ -296,7 +272,7 @@ export function SourceEditor({ hidden = false, readOnly = false }: SourceEditorP
       if (!viewRef.current || hiddenRef.current) return;
       focusAndRestoreSource(view, visibleTabId, cursorInfoRef.current);
     }, 50);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the visibility transition only; it reads the current render's values when it runs
   }, [hidden]);
 
   // Toggle read-only mode when prop changes

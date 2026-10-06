@@ -11,12 +11,15 @@
 //   - mount → deliver → real service processes it (observable state change)
 //   - unmount → the same-shaped event produces NO further state change
 //   - StrictMode double-mount → one event is handled exactly once
+//   - the heartbeat interval is the hook's only timer; the clock is faked so
+//     it fires when a test says so, never in the middle of an assertion
+//     (WI-RA14A.2)
 //
 // @coordinates-with services/mcpBridge/handleRequest.ts — the real route taken
 // @coordinates-with services/mcpBridge/v2/workspace.ts — switch_tab handler
 
 import { renderHook } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { StrictMode, createElement, type ReactNode } from "react";
 
 type BridgeHandler = (event: { payload: unknown }) => void;
@@ -83,6 +86,11 @@ beforeEach(() => {
   invokeCalls.length = 0;
   resetRequestDedup();
   seedTwoTabs();
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("useMcpBridge — real-pipeline wiring (WI-10 matrix)", () => {
@@ -133,5 +141,20 @@ describe("useMcpBridge — real-pipeline wiring (WI-10 matrix)", () => {
     expect(useTabStore.getState().activeTabId.main).toBe("tab-b");
     // Exactly one execution → exactly one bridge reply for this id.
     expect(respondPayloads().filter((p) => p.id === "wi10-strict")).toHaveLength(1);
+  });
+
+  it("heartbeat fires on its 5 s interval and stops at unmount", async () => {
+    const heartbeats = () => invokeCalls.filter((c) => c.cmd === "mcp_bridge_heartbeat").length;
+    const { unmount } = renderHook(() => useMcpBridge());
+    await flushMicrotasks();
+
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(heartbeats()).toBe(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(heartbeats()).toBe(1);
+
+    unmount();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(heartbeats()).toBe(1);
   });
 });

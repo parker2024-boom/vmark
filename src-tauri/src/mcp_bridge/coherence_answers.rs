@@ -1,4 +1,4 @@
-//! The `vmark.coherence.*` Rust-terminal answers (WI-1.10 + WI-2b.8 + WI-3.5),
+//! The `vmark.coherence.*` Rust-terminal answers,
 //! split from `routing.rs` for the file-size gate. All are answered from the
 //! managed kernel with no webview hop.
 //!
@@ -12,10 +12,9 @@
 //! * `resolve` appends a resolution receipt, gated on a live delegation for
 //!   the principal the caller's CONNECTION authenticated as.
 //!
-//! Calling this module read-only was true before WI-3.5 and stopped being
+//! Calling this module read-only was true before `resolve` and stopped being
 //! true with it; calling `edges` read-only while admitting in the same breath
-//! that it appends provenance was never true (audit rounds 1 and 2,
-//! finding 10).
+//! that it appends provenance was never true.
 
 use super::principal::BridgePrincipal;
 use super::types::McpResponse;
@@ -28,7 +27,7 @@ use crate::coherence::delegation::DelegationStore;
 use tauri::Runtime;
 
 /// Whether `root` is a workspace this installation has opened (its config
-/// marker exists) — the coherence tool's root allow-list (audit C1).
+/// marker exists) — the coherence tool's root allow-list.
 pub(super) fn is_known_workspace<R: Runtime>(app: &tauri::AppHandle<R>, root: &str) -> bool {
     use tauri::Manager;
     let Ok(ws_dir) = app.path().app_data_dir().map(|d| d.join("workspaces")) else {
@@ -112,7 +111,7 @@ fn answer_coherence_inner(
             let rows = perform_breakdown(&mut kernel)?;
             serde_json::to_value(rows).map_err(|e| format!("serialize edges: {e}"))
         }
-        // WI-2b.8: read-only semantic-layer views (R23 intact — no
+        // Read-only semantic-layer views (R23 intact — no
         // mutation reaches MCP before Phase 3's delegation model).
         "vmark.coherence.claims" => {
             let rows = perform_claims_list(&mut kernel)?;
@@ -122,11 +121,11 @@ fn answer_coherence_inner(
             let rows = perform_contexts_list(&mut kernel)?;
             serde_json::to_value(rows).map_err(|e| format!("serialize contexts: {e}"))
         }
-        // WI-3.5 (D2.4): the ONE mutating action — authorized by a live
+        // The ONE mutating action (D2.4) — authorized by a live
         // delegation bound to the principal the CONNECTION authenticated as.
         // Fail closed on everything.
         //
-        // Honest scope of that principal (audit 20260728 §2.1): it is the AI
+        // Honest scope of that principal: it is the AI
         // client whose VMark-issued credential arrived in the auth frame, not
         // a name the client asserted about itself — `identify` reaches no
         // decision here. The credential lives in that client's own MCP config,
@@ -161,7 +160,7 @@ fn answer_coherence_inner(
             let store = DelegationStore::from_entries(&read.entries);
             // The audit reference is the STABLE grant id, not the current
             // entry id — so "which resolutions did grant G authorize?"
-            // resolves across G's whole supersession chain (audit A7).
+            // resolves across G's whole supersession chain.
             let grant = store
                 .live_delegation_for(principal, &scope, &now)
                 .ok_or_else(|| format!("no live delegation authorizes {principal:?} for {scope}"))?

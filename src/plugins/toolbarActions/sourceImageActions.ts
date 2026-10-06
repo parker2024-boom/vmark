@@ -9,7 +9,7 @@
  */
 
 import type { EditorView } from "@codemirror/view";
-import { getAnchorRectFromRange } from "@/plugins/sourcePopup/sourcePopupUtils";
+import { getAnchorRectFromRange } from "@/plugins/shared/sourcePopupUtils";
 import { readClipboardImagePath } from "@/services/media/clipboardImagePath";
 import { copyImageToAssets } from "@/services/media/imageOperations";
 import { encodeMarkdownUrl } from "@/utils/markdownUrl";

@@ -1,9 +1,9 @@
 //! Policy checks for AI navigation URLs at the native seam: top-level candidates
-//! (`prepare_navigation_action`), subframe loads (`subframe_load_allowed`, audit
-//! 20260903 P-01) and the commit-time re-check (`ai_commit_allowed`).
+//! (`prepare_navigation_action`), subframe loads (`subframe_load_allowed`)
+//! and the commit-time re-check (`ai_commit_allowed`).
 //!
-//! The DECISIONS live in `nav_decision.rs`, platform-independent and table-tested
-//! (round 3, #22); this file gathers each decision's facts under the registry guard
+//! The DECISIONS live in `nav_decision.rs`, platform-independent and table-tested;
+//! this file gathers each decision's facts under the registry guard
 //! and performs what it names — minting a ticket, recording a shared approval,
 //! remembering the ticket the load rides.
 //!
@@ -12,6 +12,7 @@
 //! with the registry guard held in the established registry → grants order.
 
 use crate::browser::ai_policy::{self, validate_ai_navigation_url};
+use crate::browser::locks;
 use crate::browser::nav_decision::{
     commit_allowed, decide_navigation_action, CommitFacts, NavigationDecision, NavigationFacts,
 };
@@ -31,10 +32,7 @@ impl NavDelegate {
             .app
             .try_state::<BrowserSurface>()
             .and_then(|state| {
-                state
-                    .registry
-                    .lock()
-                    .ok()
+                locks::registry(&state)
                     .map(|reg| reg.state(&ivars.tab_id) == Some(Lifecycle::Navigating))
             })
             .unwrap_or(false)
@@ -49,14 +47,10 @@ impl NavDelegate {
         let Some(state) = ivars.app.try_state::<BrowserSurface>() else {
             return false;
         };
-        let Ok(policy) = state.ai_policy.lock().map(|policy| *policy) else {
+        let Some(policy) = locks::ai_policy(&state) else {
             return false;
         };
-        let Some(mode) = state
-            .registry
-            .lock()
-            .ok()
-            .and_then(|reg| reg.automation_mode(&ivars.tab_id))
+        let Some(mode) = locks::registry(&state).and_then(|reg| reg.automation_mode(&ivars.tab_id))
         else {
             return false;
         };
@@ -73,10 +67,10 @@ impl NavDelegate {
         let Some(state) = ivars.app.try_state::<BrowserSurface>() else {
             return false;
         };
-        let Ok(policy) = state.ai_policy.lock().map(|policy| *policy) else {
+        let Some(policy) = locks::ai_policy(&state) else {
             return false;
         };
-        let Ok(mut registry) = state.registry.lock() else {
+        let Some(mut registry) = locks::registry(&state) else {
             return false;
         };
         let tab_id = ivars.tab_id.as_str();
@@ -129,10 +123,10 @@ pub(super) fn ai_commit_allowed(
     tab_id: &str,
     url: &str,
 ) -> bool {
-    let Ok(policy) = state.ai_policy.lock().map(|policy| *policy) else {
+    let Some(policy) = locks::ai_policy(state) else {
         return false;
     };
-    let Ok(reg) = state.registry.lock() else {
+    let Some(reg) = locks::registry(state) else {
         return false;
     };
     let shared = mode == AutomationMode::AiShared;

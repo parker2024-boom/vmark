@@ -2,6 +2,8 @@
  * MCP Config Preview Dialog Component
  *
  * Shows preview of config changes before installation.
+ *
+ * @module pages/settings/McpConfigPreviewDialog
  */
 
 import { useCallback, useEffect, useRef } from "react";

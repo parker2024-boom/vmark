@@ -170,7 +170,7 @@
   color: var(--text-secondary);
 }
 
-/* `.vm-input--field` (WI-UI3.3) owns the treatment; residual = layout. */
+/* `.vm-input--field` owns the treatment; residual = layout. */
 .workflow-form__input {
   width: 100%;
   font-size: var(--font-size-sm);
@@ -657,7 +657,7 @@
   font-weight: 600;
 }
 
-/* WI-A.2 polish (Codex MED-4 fix) — visible per-chip description
+/* Visible per-chip description
    alongside the chip button so users see input docs without hovering. */
 .workflow-form__known-input-row {
   /* Component-internal one-off dimension per
@@ -682,7 +682,7 @@
   font-style: normal;
 }
 
-/* WI-C.1/C.2/C.3 — destructive + step-list controls + add-job inline form */
+/* Destructive + step-list controls + add-job inline form */
 
 
 .workflow-form__step-list-header {
@@ -831,7 +831,7 @@
 
 /* Expression-editor modal */
 
-/* Backdrop/panel chrome come from the shared overlay shell (WI-UI3.1);
+/* Backdrop/panel chrome come from the shared overlay shell;
    only the editor's own metrics stay. */
 .workflow-expression-editor {
   --vm-overlay-width: 60ch;
@@ -906,20 +906,20 @@
   color: var(--accent-primary);
 }
 
-/* WI-UI1.8 (C10/rule 33 §4): visible keyboard focus. */
+/* C10/rule 33 §4: visible keyboard focus. */
 .workflow-form__known-input:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 1px;
 }
 
-/* WI-UI1.8 (C10/rule 33 §4): visible keyboard focus. */
+/* C10/rule 33 §4: visible keyboard focus. */
 .workflow-editor-panel__add-job-cancel:focus-visible,
 .workflow-editor-panel__add-job-submit:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 1px;
 }
 
-/* WI-UI1.8 (C10/rule 33 §6): content-widget checkbox focus. */
+/* C10/rule 33 §6: content-widget checkbox focus. */
 .workflow-form__checkbox:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 1px;

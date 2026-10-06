@@ -198,19 +198,26 @@ Schema validation is intentionally minimal — it confirms that required keys ex
 
 ## Conditions
 
-A step may carry an `if:` condition. If it evaluates to false, the step is skipped (not failed); if it evaluates to true or is absent, the step runs. Three status functions are available:
+A step may carry an `if:` condition. If it evaluates to false, the step is skipped (not failed). Three status functions are available, and they follow GitHub Actions' rules:
 
-| Condition | Meaning |
-|-----------|---------|
-| `success()` | True when no prior step has failed. |
-| `failure()` | True when a prior step has failed. |
-| `always()` | Always true. |
+| Condition | True when |
+|-----------|-----------|
+| `success()` | No step has failed so far, **and** every step this one `needs` completed. |
+| `failure()` | Any earlier step in the run has failed — not only a step this one `needs`. |
+| `always()` | Always. |
+
+`success()` is the default. A step with no `if:` runs only when `success()` holds, and so does a step whose `if:` names none of the three functions — `if: X` means `success() && (X)`. That is what keeps an ordinary step from running after a failure.
+
+| What happened earlier | Plain or `success()` step | `failure()` step | `always()` step |
+|---|---|---|---|
+| Everything it needs succeeded | runs | skipped | runs |
+| A step it needs **failed** (or timed out, or its approval was denied) | skipped | runs | runs |
+| A step it needs was **skipped** by its own `if:` | skipped | skipped — nothing failed | runs |
+| The run was **cancelled** | skipped | skipped | skipped |
+
+A cancel is not something a condition can see: it is checked before the `if:`, and every remaining step is skipped with *Workflow cancelled*, `always()` steps included. A run in which a step failed still ends **failed** and names the first step that failed, even when `failure()` or `always()` steps ran afterwards.
 
 You can combine references and comparisons, e.g. `${{ steps.classify.outputs.title == "Draft" }}`. A malformed or unsupported condition **fails the step loudly** rather than silently passing — there is no "assume true on error" fallback.
-
-::: warning Current limitation: failure() and always() do not yet fire
-The runner skips every remaining step as soon as any step fails — that skip happens **before** the `if:` condition is evaluated. As a result, `success()` works as written, but `failure()` and `always()` conditions are currently latent: a step guarded by them is skipped along with everything else once a failure occurs, so it never gets the chance to run on the failure path. Treat `failure()` / `always()` as reserved syntax for now. Use `success()` (or no condition) for steps you expect to run on the happy path.
-:::
 
 ## Per-step settings
 
@@ -227,7 +234,7 @@ The runner skips every remaining step as soon as any step fails — that skip ha
 
 ### Timeouts
 
-Each step is wrapped in its effective timeout. On expiry the step fails with `Timed out after Xs`: a CLI provider's child process is killed; an in-flight REST request is dropped. Downstream steps that depend on a timed-out step are skipped. There is also a hard 5 MB cap on a single step's collected output — a runaway provider is cancelled with `Provider output exceeded 5 MB cap`.
+Each step is wrapped in its effective timeout. On expiry the step fails with `Timed out after Xs`: a CLI provider's child process is killed; an in-flight REST request is dropped. A timed-out step counts as failed: steps that depend on it are skipped unless their `if:` uses `failure()` or `always()`. There is also a hard 5 MB cap on a single step's collected output — a runaway provider is cancelled with `Provider output exceeded 5 MB cap`.
 
 ## Approvals
 
@@ -251,7 +258,7 @@ Open a workflow `.yml` / `.yaml` file in a workspace (workflows require an open 
 
 As the run proceeds, each node updates live — running, succeeded, skipped, or errored — so you can watch the pipeline advance and see exactly which step failed if one does. When it ends, the toolbar says whether it completed, failed or was cancelled. If the backend refuses to start a run — the engine is off, the YAML does not validate, the snapshot failed — a notification says why.
 
-Only one workflow runs at a time across the whole app, not per window: while one is running, Run is disabled in every other workflow file, and a workflow genie started meanwhile is refused.
+Only one workflow runs at a time across the whole app, not per window. While one is running, Run is disabled in every other workflow file **in the same window**, and the toolbar says *Another workflow is running*. A workflow file in another window still shows Run enabled; clicking it is refused with *A workflow is already running. Wait for it to complete or cancel it.* A workflow genie started meanwhile is refused too.
 
 ### Undoing a run
 
@@ -265,15 +272,18 @@ When the run ends, the toolbar offers **Restore Files**. After you confirm, VMar
 flowchart TD
     A["Click Run on .yml file"] --> B["Topological sort of steps by needs:"]
     B --> C{"Next step"}
-    C --> D{"Dependency failed or workflow failed?"}
+    C --> D{"Run cancelled?"}
     D -->|Yes| E["Skip step"]
-    D -->|No| F{"if: condition present?"}
-    F -->|"Evaluates false"| E
-    F -->|"True or absent"| G{"approval resolves to ask?"}
+    D -->|No| F{"Evaluate if: against the run so far (success() when absent)"}
+    F -->|"False"| E
+    F -->|"Error"| I["Step fails"]
+    F -->|"True"| G{"approval resolves to ask?"}
     G -->|Yes| H["Pause: approval dialog"]
-    H -->|Denied| I["Step fails"]
+    H -->|"Denied or expired"| I
+    H -->|"Cancelled"| E
     H -->|Approved| J["Fill template, call provider"]
     G -->|No| J
+    J -->|"Error or timeout"| I
     J --> K["Store outputs.text and JSON fields"]
     K --> C
     E --> C

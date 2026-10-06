@@ -2,6 +2,8 @@
  * Markdown Format Actions for CodeMirror
  *
  * Provides wrap/unwrap functionality for markdown formatting markers.
+ *
+ * @module plugins/sourceContextDetection/formatActions
  */
 
 import type { EditorView } from "@codemirror/view";

@@ -16,7 +16,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./runMenuAction", () => ({ runEditorMenuItem: mocks.runEditorMenuItem }));
-vi.mock("./clipboardBridge", () => ({
+// The context-menu path is a re-export shim; the module that owns the clipboard
+// boundary (Tauri `invoke` + clipboard plugin) is the one mocked.
+vi.mock("@/services/editor/clipboardBridge", () => ({
   focusEditorSurface: mocks.focusEditorSurface,
   runClipboardCommand: mocks.runClipboardCommand,
 }));

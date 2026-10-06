@@ -70,6 +70,8 @@ Usa iframe del player Vimeo:
 
 Puoi anche incollare direttamente un URL Vimeo (ad esempio `https://vimeo.com/123456789`) e VMark lo convertirà automaticamente in un embed.
 
+Sono supportati anche i video Vimeo non in elenco: incolla il link di condivisione non in elenco (`https://vimeo.com/123456789/abcdef1234` o un URL con `?h=…`) e VMark conserva l'hash di privacy necessario all'embed per la riproduzione.
+
 ### Embed Bilibili
 
 Usa l'iframe del player Bilibili con un BV ID:
@@ -117,6 +119,18 @@ In modalità Sorgente, digita i tag HTML direttamente. I tag media sono evidenzi
 - **Vimeo** — bordo blu
 - **Bilibili** — bordo rosa
 
+### Incolla Intelligente in Modalità Sorgente
+
+Incollare in modalità Sorgente fa ciò che è corretto per il markdown invece di riversare testo grezzo:
+
+- **Un percorso di immagine** — o più d'uno, da una copia di più file nel Finder o in Esplora file — viene validato, copiato nella cartella degli asset del documento e inserito come `![](relative-path)`. Quando un incolla è ambiguo, un piccolo toast di conferma chiede prima
+- **Uno screenshot o un'immagine copiata** (dati immagine binari negli appunti) viene salvato nella cartella degli asset e inserito allo stesso modo
+- **Un URL incollato sopra del testo selezionato** diventa un link: `[selected text](https://…)`
+- **HTML o Markdown copiato da un'altra app** viene convertito e ripulito prima di essere inserito — tranne all'interno di un blocco di codice delimitato, dove il testo incollato resta invariato
+- **I file immagine trascinati dal Finder o da Esplora file** nell'editor sorgente vengono anch'essi copiati e inseriti
+
+La conversione segue **Impostazioni → Markdown → Gestione dell'incolla dagli appunti** (`Intelligente` è il valore predefinito; le altre modalità la escludono), e i file vengono copiati nella cartella degli asset finché **Impostazioni → File e immagini → Copia nella cartella asset** è attivo (il valore predefinito).
+
 ## Modifica dei Media
 
 Fai doppio clic su qualsiasi elemento media in modalità WYSIWYG per aprire il popup media:
@@ -135,13 +149,19 @@ VMark supporta tre tipi di percorsi media:
 | Tipo di Percorso | Esempio | Comportamento |
 |-----------------|---------|--------------|
 | Relativo | `./assets/video.mp4` | Risolto rispetto alla directory del documento |
+| Relativo al genitore | `../images/photo.png` | Risolto rispetto alla directory del documento, risalendo di tanti livelli quanti ne indica il percorso |
 | Assoluto | `/Users/me/video.mp4` | Usato direttamente tramite il protocollo asset Tauri |
 | URL Esterno | `https://example.com/video.mp4` | Caricato direttamente dal web |
 
 I percorsi relativi sono consigliati — mantengono i tuoi documenti portabili tra le macchine.
 
+Una cartella di asset condivisa accanto alle tue note funziona così com'è scritta — `notes/report.md`
+può fare riferimento a `../images/photo.png`. (Prima della 0.9.79 questi venivano mostrati come
+segnaposto non funzionanti.)
+
 ## Sicurezza
 
-- I percorsi relativi vengono validati contro gli attacchi di path traversal
-- Gli iframe di embed video sono limitati ai domini consentiti: `youtube.com`, `youtube-nocookie.com`, `player.vimeo.com` e `player.bilibili.com`
+- Un percorso media non può contenere uno schema URI (`javascript:`, `file:` o uno personalizzato); tali sorgenti vengono rifiutate invece di essere caricate
+- Un percorso che indica una directory anziché un file viene rifiutato
+- Gli embed video vengono caricati solo da tre host: `www.youtube-nocookie.com` (il player di YouTube con privacy avanzata), `player.vimeo.com` e `player.bilibili.com`. Un link di YouTube, o un iframe scritto con `youtube.com`, viene incorporato tramite l'host con privacy avanzata. La content security policy di VMark consente di caricare frame da questi host e da nessun altro sito
 - Le altre sorgenti di iframe vengono rimosse dal sanitizer

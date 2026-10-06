@@ -1,4 +1,4 @@
-//! Content-server runtime availability (WI-FL1.1 — the first step of plan
+//! Content-server runtime availability (the first step of plan
 //! decision D1).
 //!
 //! Probes the two things `content_server_start` needs — `node` on the
@@ -18,7 +18,7 @@
 //! thread. Neither takes a lock or touches the manager: a probe must never be
 //! able to interfere with a server that is already running.
 //!
-//! The startup probe is detached but OBSERVED (#126): its observer's handle
+//! The startup probe is detached but OBSERVED: its observer's handle
 //! is kept in managed state (`RuntimeProbe`) and settled from
 //! `content_server::cleanup` at an orderly quit, so a log with no runtime
 //! line always says why — `app.exit` ends the process through
@@ -78,7 +78,7 @@ impl ContentServerRuntime {
         let mut line = format!("{LOG_PREFIX} node={} cli={}", self.node, self.cli);
         // Debug-quoted, like `detail`: a path with a space is otherwise
         // ambiguous to a reader of the line, and a path with a newline — legal
-        // on Unix — could forge a second log line (#125).
+        // on Unix — could forge a second log line.
         if let Some(p) = &self.node_path {
             line.push_str(&format!(" node_path={p:?}"));
         }
@@ -141,7 +141,7 @@ pub async fn content_server_runtime(app: AppHandle) -> Result<ContentServerRunti
 
 /// Startup probe: log one `content_server runtime: …` line so a packaged app's
 /// log file records whether the Knowledge Base could start on this machine.
-/// Detached — the app never waits on it — but OBSERVED (#126): the blocking
+/// Detached — the app never waits on it — but OBSERVED: the blocking
 /// task's handle is awaited by an observer task, so a probe that panics or is
 /// cancelled leaves a line saying so; and the observer's own handle is kept
 /// (`keep_probe`) so an orderly quit can settle it (`settle_probe`).

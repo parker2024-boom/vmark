@@ -1,8 +1,11 @@
 /**
  * Shared fixtures for the codePreview test suite (split per the test-file
- * size gate, WI-7). State factory + decoration helpers used by every
+ * size gate). State factory + decoration helpers used by every
  * tiptap.*.test.ts sibling.
+ *
+ * @module test/codePreviewTestUtils
  */
+
 import { EditorState } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { Editor, getSchema } from "@tiptap/core";

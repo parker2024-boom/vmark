@@ -48,6 +48,14 @@ Foi escolhida para o VMark porque:
 - **Permissividade** — sem restrições sobre como você usa o software
 - **Compatibilidade** — funciona com praticamente todas as outras licenças de código aberto
 
+## Software de Terceiros
+
+O VMark é construído sobre software de código aberto de muitos autores: crates Rust, pacotes npm e componentes compilados dentro deles, como o Graphviz e o runtime Node.js do servidor MCP. Suas licenças (MIT, Apache-2.0, BSD, ISC, MPL-2.0, EPL-2.0 e outras) pedem que seus avisos acompanhem cada cópia do VMark.
+
+Toda build do VMark inclui o texto completo desses avisos. Para lê-los, abra **Configurações → Sobre** e clique em **Avisos de terceiros** — o arquivo abre no seu visualizador de texto padrão.
+
+Os avisos são gerados a partir das dependências exatas de cada versão, então correspondem à versão que você tem instalada.
+
 ## Saiba Mais
 
 - [Licença ISC na OSI](https://opensource.org/licenses/ISC)

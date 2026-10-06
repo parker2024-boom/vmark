@@ -53,7 +53,7 @@ export function buildXtermThemeForId(themeId: ThemeId): ITheme {
     foreground:          color.text.primary,
     cursor:              terminal.cursor,
     cursorAccent:        terminal.cursorAccent,
-    // DERIVED (WI-UI1.4): the terminal selection IS the app selection, at a
+    // DERIVED: the terminal selection IS the app selection, at a
     // slightly higher alpha because xterm composites on a canvas with no
     // ::selection ink adjustment. A separate catalog field had already
     // drifted (sepia/mint carried a dead blue).
@@ -79,7 +79,7 @@ export function buildXtermThemeForId(themeId: ThemeId): ITheme {
     brightCyan:    ansi.brightCyan,
     brightWhite:   ansi.brightWhite,
 
-    // DERIVED (WI-UI1.4): thumb = text ink at xterm's own .2/.4/.5 alphas, so
+    // DERIVED: thumb = text ink at xterm's own .2/.4/.5 alphas, so
     // the terminal thumb and the app thumb share one source (the app thumb is
     // color-mix on --text-secondary — same family, same ink).
     scrollbarSliderBackground:       withAlpha(color.text.primary, 0.2),

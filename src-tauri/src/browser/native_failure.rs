@@ -39,7 +39,7 @@ pub enum NativeSurfaceError {
     NoWebview(String),
     /// The platform URL type rejected the string.
     InvalidUrl(String),
-    /// The named-profile data-store cap is exhausted (WI-P6.1 H2).
+    /// The named-profile data-store cap is exhausted.
     ProfileStoreLimit(String),
     /// This build has no native browser surface.
     UnsupportedPlatform(String),
@@ -109,7 +109,7 @@ impl NativeSurfaceError {
     ///
     /// Anchored and delimited on purpose: a bare `contains()` would let a URL
     /// carrying a token in its query string reclassify its own failure, which is
-    /// precisely the substring-sniff defect WI-14 exists to remove. Text with no
+    /// precisely the substring-sniff defect the typed classes exist to remove. Text with no
     /// leading token is `Unclassified`, whole.
     pub fn parse(text: &str) -> Self {
         Self::TAGGED

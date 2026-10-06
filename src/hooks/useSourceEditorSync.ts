@@ -131,8 +131,8 @@ export function useSourceEditorLineNumbersSync(
 
 /**
  * Sync show-invisibles setting changes to CodeMirror.
- * Internal — consumed only by `useSourceEditorSync` below (WI-1.3: dropped the
- * redundant `export`; the function is live, knip only flagged the export).
+ * Internal — consumed only by `useSourceEditorSync` below (the
+ * redundant `export` was dropped; the function is live, knip only flagged the export).
  */
 function useSourceEditorShowInvisiblesSync(
   viewRef: MutableRefObject<EditorView | null>,

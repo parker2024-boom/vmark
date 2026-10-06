@@ -1,3 +1,10 @@
+/**
+ * useFinderFileOpen — React hook that opens files sent from Finder into the
+ * right tab or window, including files queued during cold start.
+ *
+ * @module hooks/useFinderFileOpen
+ */
+
 import { useEffect, useRef } from "react";
 // Global listen() is correct here — Rust emits app:open-file via app.emit() (global
 // broadcast), and only global listen() is guaranteed to receive global events.
@@ -6,6 +13,7 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { imeToast as toast } from "@/services/ime/imeToast";
 import i18n from "@/i18n";
+import { openFailureDetail } from "@/services/files/openFailureDetail";
 import { useWindowLabel } from "@/contexts/WindowContext";
 import { loadFileIntoTab } from "@/services/navigation/loadFileIntoTab";
 import { dispatchFinderOpen } from "@/services/navigation/finderOpenDispatch";
@@ -60,9 +68,9 @@ export function useFinderFileOpen(): void {
      * empty tab or a silent no-op.
      */
     const toastOpenFailure = (error: unknown) => {
-      // Two-line toast (WI-UI4.4): message first, the system error as detail.
-      // Raw error — errorDetail owns the normalization (commandErrorMessage).
-      toast.errorDetail(i18n.t("dialog:toast.failedToOpenFile"), error);
+      // Two-line toast: message first, the system error as detail.
+      // A cause VMark diagnosed is translated; any other error goes through raw and errorDetail normalizes it.
+      toast.errorDetail(i18n.t("dialog:toast.failedToOpenFile"), openFailureDetail(error));
     };
 
     const branchCtx: FinderBranchContext = {
@@ -113,8 +121,9 @@ export function useFinderFileOpen(): void {
      * 1. Register the event listener FIRST
      * 2. Wait for hot exit restore to complete (prevents race condition)
      * 3. Process any queued events (arrived during restore)
-     * 4. In main only, call get_pending_file_opens (which flips Rust's
-     *    FRONTEND_READY flag)
+     * 4. In main only, call get_pending_file_opens, which drains Rust's
+     *    cold-start queue and records this window as ready for hot opens
+     *    (mark_ready_and_drain, under one lock)
      *
      * Events that arrive before restore completes are queued and processed
      * after restore finishes, preventing content from being overwritten.

@@ -8,7 +8,7 @@
  * (issue #900) is identifiable from the error string alone, without
  * grepping logs.
  *
- * Origin: MCP pruning plan (2026-05-04, retired) (WI-1.5).
+ * Origin: MCP pruning plan (retired).
  *
  * @coordinates-with utils.ts — respond()
  * @coordinates-with v2/dispatch.ts — dispatchV2
@@ -34,7 +34,7 @@ const READ_ONLY_BLOCKED = new Set<string>([
 export async function handleRequest(event: McpRequestEvent): Promise<void> {
   const { id, type } = event;
 
-  // WI-4: gate on the tab the mutation TARGETS, not the active one. These
+  // Gate on the tab the mutation TARGETS, not the active one. These
   // request types accept a `tabId`, so an active-tab check let writes to
   // read-only background tabs through and refused writes to writable ones.
   // `selection.set` carries no tabId and correctly falls back to the active tab.

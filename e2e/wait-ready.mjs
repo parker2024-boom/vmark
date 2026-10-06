@@ -6,7 +6,7 @@
  * window exists and long before the webview has loaded. CI's readiness probe
  * used a bare `/dev/tcp` connect, so the first run that got that far reported
  * "bridge up after 1s" and then failed all eight journeys in 800ms with
- * `execute_js failed: Window 'main' not found` (run 31298694760, 2026-08-09).
+ * `execute_js failed: Window 'main' not found` (run 31298694760).
  *
  * The socket was a proxy for readiness. This checks the property instead:
  *   1. a WebSocket session can be established, AND
@@ -21,7 +21,7 @@
  *
  * Step 3 USED to be `execute_js "1+1"`, and that was the same mistake a third
  * time: `1+1` evaluates the moment `index.html` parses, long before React
- * mounts. Run 32701401717 (2026-08-24) declared the app ready 6 seconds before
+ * mounts. Run 32701401717 declared the app ready 6 seconds before
  * it logged `Window 'main' is ready`, and the first journey in line fired
  * `vmark.workspace.new` at a listener that did not exist yet — the event was
  * dropped, and the journey then waited out its budget for a tab that was never
@@ -97,7 +97,7 @@ async function attempt() {
     }
     // `windowLabel` is not optional here: without it `execute_js` runs in the
     // DEFAULT window, so `--window doc-1` verified that doc-1 exists and then
-    // reported main's readiness as doc-1's (audit finding #8). The label check
+    // reported main's readiness as doc-1's. The label check
     // above made that look deliberate.
     const reply = await client.send(
       "execute_js",

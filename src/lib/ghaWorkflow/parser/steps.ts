@@ -1,4 +1,10 @@
-// WI-1.3 — step parsing extracted from jobs.ts to keep both ≤300 LOC.
+/**
+ * Steps subparser — translates a job's `steps:` sequence into the IR.
+ *
+ * Step parsing extracted from jobs.ts to keep both ≤300 LOC.
+ *
+ * @module lib/ghaWorkflow/parser/steps
+ */
 
 import type { TemplateToken } from "@actions/workflow-parser/templates/tokens/template-token";
 import type { Diagnostic, StepIR } from "../types";

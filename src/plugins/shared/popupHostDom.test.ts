@@ -1,7 +1,6 @@
 /**
  * Tests for popupHostDom — generic popup host/coordinate helpers.
- * Moved from plugins/sourcePopup/sourcePopupUtils.test.ts with the
- * functions they cover (WI-8).
+ * Split out of sourcePopupUtils.test.ts with the functions they cover.
  */
 
 import { describe, it, expect } from "vitest";

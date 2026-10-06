@@ -37,7 +37,7 @@ export function KnowledgeBaseOverlay() {
     if (open && !available) useContentServerStore.getState().setPanelOpen(false);
   }, [open, available]);
   // The native browser view paints over all React DOM in its rect, so freeze every
-  // mounted browser tab while this overlay is up (WI-SOC.1).
+  // mounted browser tab while this overlay is up.
   useBrowserOccluder(open, "knowledge-base");
   const { start, stop, openInBrowser, previewSlides, exportSlides } = useContentServer();
   if (!open) return null;

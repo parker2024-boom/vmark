@@ -1,8 +1,8 @@
 /**
- * Injected agent act-scripts (WI-2.3 — macOS synthetic interaction tier).
+ * Injected agent act-scripts (macOS synthetic interaction tier).
  *
- * Purpose: generate the self-contained JS the driver evaluates (via `browser_eval`,
- * WI-2.1) in the page's isolated world to *read* (snapshot) and *act* (click/type)
+ * Purpose: generate the self-contained JS the driver evaluates (via `browser_eval`)
+ * in the page's isolated world to *read* (snapshot) and *act* (click/type)
  * by ARIA role + accessible name. On macOS the synthetic tier IS eval-dispatched
  * DOM events (SPIKE-3 found synthesized NSEvents don't deliver; trusted input is
  * Windows/CDP). The scripts must run standalone in the page — no bundler, no
@@ -20,7 +20,7 @@
  * an act that could not be performed reports `{clicked:false, reason}` rather than
  * a false success.
  *
- * Acts verify their EFFECT before reporting it (WI-NB1.1): the target is scrolled
+ * Acts verify their EFFECT before reporting it: the target is scrolled
  * into view, must be visibly rendered (computed styles + a collapsed-ancestor walk
  * stopping before `<body>`), and the click point is hit-tested via
  * `elementFromPoint` with `contains()` relatedness — an occluded target reports
@@ -29,7 +29,7 @@
  * no layout engine exists (jsdom), leaving the attribute tier;
  * `actScript.webkit.test.ts` exercises the rendered tier in real WebKit.
  *
- * The snapshot also stamps each node with a stable `ref` (WI-P2.1); the injected
+ * The snapshot also stamps each node with a stable `ref`; the injected
  * ref store (`LIB_REFS`) mirrors `refs.ts` on the same `document.__vmarkRefStore`,
  * so the two agree and `actScript.test.ts` keeps them from drifting.
  *
@@ -42,7 +42,7 @@
  * `generation` so candidate refs are minted in the tab's store; without one they
  * are minted against the store's live generation, never resetting it. A wait
  * condition is a discriminated union (`{ref}` | `{role, name?}` | `{text}`) and
- * the builder refuses any non-string field rather than embed it (round 2, #93).
+ * the builder refuses any non-string field rather than embed it.
  *
  * @coordinates-with lib/browser/agent/aria.ts — same role/name/state/visibility rules
  * @coordinates-with lib/browser/agent/refs.ts — the mirrored per-node ref store

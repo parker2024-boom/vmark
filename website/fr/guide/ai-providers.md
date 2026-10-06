@@ -51,12 +51,13 @@ Si vous utilisez également ces outils pour le vibe-coding (Claude Code, Codex C
 
 ## Fournisseurs API REST
 
-Les fournisseurs REST se connectent directement aux API cloud. Chacun nécessite un endpoint, une clé API et un nom de modèle.
+Les fournisseurs REST se connectent directement aux API cloud (ou locales). Chacun nécessite un endpoint, une clé API et un nom de modèle. Les réponses arrivent d'un seul bloc lorsque la requête se termine — les fournisseurs REST ne diffusent pas les jetons au fil de l'eau ; les fournisseurs CLI, si.
 
 | Fournisseur | Endpoint par défaut | Variable d'environnement |
 |-------------|---------------------|--------------------------|
 | Anthropic | `https://api.anthropic.com` | `ANTHROPIC_API_KEY` |
 | OpenAI | `https://api.openai.com` | `OPENAI_API_KEY` |
+| Compatible OpenAI | *(à définir vous-même)* | — |
 | Google AI | *(intégré)* | `GOOGLE_API_KEY` ou `GEMINI_API_KEY` |
 | Ollama (API) | `http://localhost:11434` | — |
 
@@ -64,8 +65,8 @@ Les fournisseurs REST se connectent directement aux API cloud. Chacun nécessite
 
 Lorsque vous sélectionnez un fournisseur REST, trois champs apparaissent :
 
-- **Endpoint API** — L'URL de base (masquée pour Google AI, qui utilise un endpoint fixe)
-- **Clé API** — Votre clé secrète (stockée uniquement en mémoire — jamais écrite sur le disque)
+- **Point de terminaison API** — L'URL de base (masquée pour Google AI, qui utilise un endpoint fixe). Un `/v1` final ne pose pas de problème — VMark le normalise afin que le chemin ne soit pas doublé (ex. `https://host/v1` et `https://host` fonctionnent tous les deux)
+- **Clé API** — Votre clé secrète. Elle est conservée dans le magasin d'identifiants de votre système d'exploitation, jamais dans `localStorage` ni dans un fichier de paramètres en clair — voir [Où sont stockées les clés API](#ou-sont-stockees-les-cles-api)
 - **Modèle** — L'identifiant du modèle (ex. `claude-sonnet-4-5-20250929`, `gpt-4o`, `gemini-2.0-flash`)
 
 ### Remplissage automatique par variable d'environnement
@@ -94,6 +95,23 @@ n'atteint VMark que si vous lancez l'application depuis ce shell. Lancé depuis 
 3. Collez votre clé API
 4. Choisissez un modèle (par défaut : `gpt-4o`)
 
+### Configuration : compatible OpenAI (DeepSeek, Groq, OpenRouter, …)
+
+De nombreux fournisseurs parlent le même protocole qu'OpenAI (`/v1/chat/completions`, authentification `Bearer`). L'emplacement **Compatible OpenAI** se connecte à n'importe lequel d'entre eux — DeepSeek, Groq, OpenRouter, Together, Moonshot, une passerelle auto-hébergée, etc. — sans entrée dédiée par fournisseur.
+
+Il ajoute un champ supplémentaire par rapport aux autres fournisseurs REST : un **Nom du fournisseur** modifiable, afin que la ligne affiche « DeepSeek » (ou ce que vous avez défini) au lieu du libellé générique.
+
+Exemple — DeepSeek :
+
+1. Obtenez une clé API sur [platform.deepseek.com](https://platform.deepseek.com)
+2. Dans VMark Paramètres > Intégrations, sélectionnez **Compatible OpenAI**
+3. Définissez **Nom du fournisseur** sur `DeepSeek` (facultatif, purement cosmétique)
+4. Définissez **Point de terminaison API** sur `https://api.deepseek.com` (un `/v1` final ne pose pas de problème — VMark le normalise)
+5. Collez votre clé API
+6. Définissez **Modèle** sur `deepseek-chat` (ou `deepseek-reasoner`). Saisissez-le directement, ou cliquez sur actualiser pour récupérer la liste des modèles de l'endpoint
+
+L'endpoint est obligatoire — il n'y a pas d'hôte par défaut pour cet emplacement. Utilisez les boutons **Tester** (⚡) et **Tester le modèle** (🧪) pour vérifier la connexion avant d'exécuter un génie.
+
 ### Configuration : Google AI (REST)
 
 1. Obtenez une clé API sur [aistudio.google.com](https://aistudio.google.com)
@@ -119,6 +137,7 @@ Utilisez ceci lorsque vous souhaitez un accès de style REST à une instance Oll
 | Codex ou Gemini déjà installé | **Codex / Gemini (CLI)** — utilise votre abonnement |
 | Besoin de confidentialité / hors ligne | Installez Ollama → **Ollama (API)** à `http://localhost:11434` |
 | Modèle personnalisé ou auto-hébergé | **Ollama (API)** avec votre endpoint |
+| DeepSeek / Groq / OpenRouter / toute API compatible OpenAI | **Compatible OpenAI** — définissez l'endpoint, la clé et le modèle |
 | Option cloud la moins chère | **N'importe quel fournisseur CLI** — l'abonnement est nettement moins cher que l'API |
 | Pas d'abonnement, usage léger uniquement | Définissez la variable d'env de clé API → **fournisseur REST** (paiement par jeton) |
 | Besoin de la meilleure qualité de sortie | **Claude (CLI)** ou **Anthropic (REST)** avec `claude-sonnet-4-5-20250929` |
@@ -148,10 +167,16 @@ VMark protège chaque appel au fournisseur afin qu'un CLI bloqué ou une répons
 - **Client HTTP partagé** : les fournisseurs REST partagent un seul client `reqwest` avec pool de connexions, de sorte que les exécutions de génie consécutives ne payent pas à chaque fois le coût de la poignée de main TCP/TLS.
 - **Découverte du PATH sur Windows** : sur Windows, VMark lit le `PATH` complet de l'utilisateur (y compris les entrées uniquement PowerShell) lors de la détection des CLIs, de sorte que les outils installés par l'utilisateur qui fonctionnent dans un terminal fonctionnent également dans VMark.
 
+## Où sont stockées les clés API
+
+Les clés API sont conservées dans le magasin d'identifiants du système d'exploitation — Trousseau macOS, Gestionnaire d'identifiants Windows ou Secret Service sous Linux — sous le nom de service `app.vmark.secrets`, avec une entrée par fournisseur. VMark n'en garde une copie en mémoire que pour la session en cours ; les paramètres de fournisseur enregistrés ne contiennent jamais de clé, et rien n'est écrit dans `localStorage`. Une clé enregistrée par une ancienne version de VMark dans un fichier de paramètres en clair est déplacée dans le trousseau la première fois que la nouvelle version la charge, et la copie en clair n'est supprimée qu'après que l'écriture dans le trousseau a été relue avec succès.
+
+Si le trousseau refuse une écriture, VMark affiche une notification d'erreur au lieu de garder silencieusement la clé en mémoire. Sur macOS, une version de développement signée ad hoc peut redemander l'accès au trousseau après chaque nouvelle signature ; une version publiée ne le demande qu'une fois.
+
 ## Notes de sécurité
 
-- **Les clés API sont éphémères** — stockées uniquement en mémoire, jamais écrites sur le disque ou dans `localStorage`
-- **Les variables d'environnement** sont lues une fois au lancement et mises en cache en mémoire
+- **Les clés API sont stockées dans le trousseau du système** — voir ci-dessus ; elles ne sont jamais écrites dans les fichiers de paramètres de VMark ni dans `localStorage`
+- **Les variables d'environnement** sont lues lorsque vous sélectionnez un fournisseur et ne remplissent qu'un champ de clé vide
 - **Les fournisseurs CLI** utilisent votre authentification CLI existante — VMark ne voit jamais vos identifiants
 - **Toutes les requêtes partent directement** de votre machine vers le fournisseur — aucun serveur VMark n'est intermédiaire
 
@@ -159,7 +184,7 @@ VMark protège chaque appel au fournisseur afin qu'un CLI bloqué ou une répons
 
 **« Aucun fournisseur IA disponible »** — Cliquez sur **Détecter** pour rechercher des CLIs, ou configurez un fournisseur REST avec une clé API.
 
-**Le CLI indique « Non trouvé »** — Le CLI n'est pas dans votre `$PATH`. Installez-le ou vérifiez votre profil shell. Sur macOS, les applications GUI peuvent ne pas hériter du `$PATH` du terminal — essayez d'ajouter le chemin à `/etc/paths.d/`.
+**Le CLI indique « Introuvable »** — Le CLI n'est pas dans votre `$PATH`. Installez-le ou vérifiez votre profil shell. Sur macOS, les applications GUI peuvent ne pas hériter du `$PATH` du terminal — essayez d'ajouter le chemin à `/etc/paths.d/`.
 
 **Le CLI est bloqué / pas de réponse** — Le délai d'attente d'exécution de VMark annulera l'appel automatiquement ; vous verrez une erreur dans la bannière de statut du génie. Si un CLI particulier dépasse systématiquement le délai, exécutez-le d'abord depuis un terminal pour confirmer qu'il fonctionne là, puis vérifiez s'il nécessite une authentification interactive.
 
@@ -167,7 +192,7 @@ VMark protège chaque appel au fournisseur afin qu'un CLI bloqué ou une répons
 
 **Le fournisseur REST renvoie 429** — Vous avez atteint une limite de débit. Attendez un moment et réessayez, ou passez à un autre fournisseur.
 
-**Le fournisseur REST renvoie du JSON tronqué ou inattendu** — VMark renvoie une erreur de parsing typée (ex. « list_models a retourné une réponse de forme inattendue »). Vérifiez l'URL de l'endpoint et que le contrat de l'API correspond au type de fournisseur sélectionné ; certaines passerelles auto-hébergées annoncent des URLs compatibles OpenAI mais livrent un schéma différent.
+**Le fournisseur REST renvoie du JSON tronqué ou inattendu** — VMark renvoie une erreur de parsing typée (ex. « list_models returned an unexpected response shape »). Vérifiez l'URL de l'endpoint et que le contrat de l'API correspond au type de fournisseur sélectionné ; certaines passerelles auto-hébergées annoncent des URLs compatibles OpenAI mais livrent un schéma différent.
 
 **Réponses lentes** — Les fournisseurs CLI ajoutent une surcharge de sous-processus. Pour des réponses plus rapides, utilisez des fournisseurs REST qui se connectent directement. Pour l'option locale la plus rapide, utilisez Ollama avec un petit modèle.
 

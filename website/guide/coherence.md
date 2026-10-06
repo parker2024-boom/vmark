@@ -137,7 +137,7 @@ moment either document moves again — or the claim set changes.
 **Canon claims** are facts you have made explicit ("Elena is
 left-handed"). Select text in a document and run *Extract Claim from
 Selection*: the claim is born a **draft** with provenance (which document,
-which revision). Promote it to **established** when it becomes canon —
+which revision). To see and manage your claims, run **Canon Claims** from the command palette — the panel has no menu item or shortcut, and *Extract Claim from Selection* opens it for you with the new draft. Promote a claim to **established** when it becomes canon —
 only established claims are fed to semantic checks. Correcting or retiring
 a claim appends history; nothing is ever deleted. Hiding a claim in a
 context is reversible visibility, not retirement.

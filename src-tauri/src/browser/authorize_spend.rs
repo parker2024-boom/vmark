@@ -26,7 +26,7 @@ use crate::command_error::CommandError;
 
 /// Spend the authority `decision` requires for `operation`, or refuse without
 /// spending. `target` and `payload_hash` bind a one-shot to the exact element and
-/// script (Security review P5, High #1; audit 20260903 A-05).
+/// script (audit 20260903 A-05).
 pub(super) fn spend(
     state: &BrowserSurface,
     decision: &Decision,
@@ -39,7 +39,7 @@ pub(super) fn spend(
     // For a human tab, hold the attachments lock from the presence check THROUGH
     // the consume, so the single-use attachment cannot be raced away in between —
     // otherwise a lost race after a one-shot was already spent would burn that
-    // one-shot on an action that never runs (Audit round 2). The decision's peek
+    // one-shot on an action that never runs. The decision's peek
     // is re-verified under THIS lock. A non-human tab needs no attachment.
     let mut human_attachment = if decision.mode == AutomationMode::Human {
         let guard = state.attachments.lock().map_err(lock_failure)?;
@@ -69,13 +69,13 @@ pub(super) fn spend(
             // Origin only: the committed URL's query string routinely carries
             // session tokens, and a refusal log is not a place to persist them.
             log::warn!(
-                "[browser] REFUSED {operation} on {} (tab {tab_id}): not granted",
+                "[browser] REFUSED {operation:?} on {} (tab {tab_id:?}): not granted",
                 redact::redact(&decision.committed)
             );
             return Err(not_granted(operation));
         }
         log::info!(
-            "[browser] {operation} on {} (tab {tab_id}): one-shot consumed",
+            "[browser] {operation:?} on {} (tab {tab_id:?}): one-shot consumed",
             redact::redact(&decision.committed)
         );
     }

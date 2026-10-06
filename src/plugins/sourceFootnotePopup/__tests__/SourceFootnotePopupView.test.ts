@@ -7,10 +7,14 @@
  * - Goto button visibility
  * - Keyboard shortcuts
  * - Action buttons
+ *
+ * The real footnote actions run against a real CodeMirror document held by
+ * the test view, so each action is asserted by what it does to the text.
  */
 
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import type { EditorView } from "@codemirror/view";
+import { EditorState, type TransactionSpec } from "@codemirror/state";
 
 // Mock stores and utilities
 const mockClosePopup = vi.fn();
@@ -44,16 +48,12 @@ vi.mock("@/stores/footnotePopupStore", () => ({
   },
 }));
 
-vi.mock("@/utils/imeGuard", () => ({
-  isImeKeyEvent: () => false,
-}));
-
 vi.mock("@/plugins/shared/popupHostDom", () => ({
   getPopupHostForDom: () => null,
   toHostCoordsForDom: (_host: HTMLElement, pos: { top: number; left: number }) => pos,
 }));
 
-vi.mock("@/plugins/sourcePopup/sourcePopupUtils", () => ({
+vi.mock("@/plugins/shared/sourcePopupUtils", () => ({
   getEditorBounds: () => ({
     horizontal: { left: 0, right: 800 },
     vertical: { top: 0, bottom: 600 },
@@ -70,15 +70,15 @@ vi.mock("@/utils/popupComponents", async (importOriginal) => ({
   handlePopupTabNavigation: vi.fn(),
 }));
 
-vi.mock("../sourceFootnoteActions", () => ({
-  saveFootnoteContent: vi.fn(),
-  gotoFootnoteTarget: vi.fn(),
-  removeFootnote: vi.fn(),
-}));
-
 // Import after mocking
 import { SourceFootnotePopupView } from "../SourceFootnotePopupView";
-import { saveFootnoteContent, gotoFootnoteTarget, removeFootnote } from "../sourceFootnoteActions";
+
+/** A reference on line 1 and its definition on line 3. */
+const DOC = "See note[^1] here.\n\n[^1]: Old text";
+/** Inside the `[^1]` reference on line 1. */
+const REFERENCE_POS = 10;
+/** Start of the `[^1]:` definition line. */
+const DEFINITION_POS = DOC.indexOf("[^1]:");
 
 // Helper functions
 const createMockRect = (overrides: Partial<DOMRect> = {}): DOMRect => ({
@@ -104,12 +104,23 @@ function createMockView(): EditorView {
   editorDom.getBoundingClientRect = () => createMockRect();
   document.body.appendChild(editorDom);
 
+  // A real CodeMirror document behind the view, so the footnote actions edit
+  // real text; dispatch applies the transaction the way a live view would.
+  let state = EditorState.create({ doc: DOC });
   return {
     dom: editorDom,
     contentDOM,
     focus: vi.fn(),
+    get state() {
+      return state;
+    },
+    dispatch: vi.fn((spec: TransactionSpec) => {
+      state = state.update(spec).state;
+    }),
   } as unknown as EditorView;
 }
+
+const docText = (view: EditorView) => view.state.doc.toString();
 
 function emitStateChange(newState: Partial<typeof storeState>) {
   storeState = { ...storeState, ...newState };
@@ -339,8 +350,8 @@ describe("SourceFootnotePopupView", () => {
         label: "1",
         content: "Test content",
         anchorRect,
-        definitionPos: 500,
-        referencePos: 10,
+        definitionPos: DEFINITION_POS,
+        referencePos: REFERENCE_POS,
       });
       await new Promise((r) => requestAnimationFrame(r));
     });
@@ -352,8 +363,25 @@ describe("SourceFootnotePopupView", () => {
       const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true });
       textarea.dispatchEvent(event);
 
-      expect(saveFootnoteContent).toHaveBeenCalled();
+      expect(docText(view)).toBe("See note[^1] here.\n\n[^1]: Test content");
       expect(mockClosePopup).toHaveBeenCalled();
+    });
+
+    // WI-RA18.2 — the Enter that confirms an IME composition (CJK input) picks
+    // a candidate; it must not also save and close the popup.
+    it.each([
+      ["isComposing", { isComposing: true }],
+      ["keyCode 229", { keyCode: 229 }],
+    ])("does not save on the Enter that confirms an IME composition (%s)", (_label, ime) => {
+      const field = document.querySelector(".source-footnote-popup-textarea") as HTMLTextAreaElement;
+      field.focus();
+
+      const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...ime });
+      field.dispatchEvent(event);
+
+      expect(docText(view)).toBe(DOC);
+      expect(mockClosePopup).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
     });
 
     it("allows newline with Shift+Enter", () => {
@@ -365,7 +393,7 @@ describe("SourceFootnotePopupView", () => {
 
       // Shift+Enter should NOT prevent default (allows newline)
       expect(prevented).toBe(false);
-      expect(saveFootnoteContent).not.toHaveBeenCalled();
+      expect(docText(view)).toBe(DOC);
     });
 
     it("closes on Escape", () => {
@@ -384,8 +412,8 @@ describe("SourceFootnotePopupView", () => {
         label: "1",
         content: "Test",
         anchorRect,
-        definitionPos: 500,
-        referencePos: 10,
+        definitionPos: DEFINITION_POS,
+        referencePos: REFERENCE_POS,
       });
       await new Promise((r) => requestAnimationFrame(r));
     });
@@ -394,7 +422,7 @@ describe("SourceFootnotePopupView", () => {
       const saveBtn = document.querySelector(".source-footnote-popup-btn-save") as HTMLElement;
       saveBtn.click();
 
-      expect(saveFootnoteContent).toHaveBeenCalledWith(view, mockFootnoteStore);
+      expect(docText(view)).toBe("See note[^1] here.\n\n[^1]: Test");
       expect(mockClosePopup).toHaveBeenCalled();
     });
 
@@ -402,7 +430,8 @@ describe("SourceFootnotePopupView", () => {
       const gotoBtn = document.querySelector(".source-footnote-popup-btn-goto") as HTMLElement;
       gotoBtn.click();
 
-      expect(gotoFootnoteTarget).toHaveBeenCalledWith(view, true, mockFootnoteStore);
+      // Opened on the reference, so it jumps to the definition
+      expect(view.state.selection.main.head).toBe(DEFINITION_POS);
       expect(mockClosePopup).toHaveBeenCalled();
     });
 
@@ -410,7 +439,7 @@ describe("SourceFootnotePopupView", () => {
       const deleteBtn = document.querySelector(".source-footnote-popup-btn-delete") as HTMLElement;
       deleteBtn.click();
 
-      expect(removeFootnote).toHaveBeenCalledWith(view, mockFootnoteStore);
+      expect(docText(view)).toBe("See note here.\n\n");
       expect(mockClosePopup).toHaveBeenCalled();
     });
   });

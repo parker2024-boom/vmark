@@ -8,7 +8,7 @@
  *
  * A tab is either a `DocumentTab` (an editable file — the historical shape, kept
  * bit-for-bit unchanged aside from the added `kind` discriminant) or a
- * `BrowserTab` (an embedded web page — WI-1.1 / R1). The two are discriminated
+ * `BrowserTab` (an embedded web page — R1). The two are discriminated
  * on `kind`. `BrowserTab` has NO `filePath`/`formatId`; consumers that touch
  * those fields must narrow with `isDocumentTab` first — `Editor.tsx` MUST branch
  * on `tab.kind` before calling `dispatchEditor(filePath)`, or a browser tab
@@ -30,21 +30,21 @@ interface BaseTab {
 }
 
 /** A single editor tab backed by a document (file or untitled). Carries the
- *  format adapter id (derived from filePath via dispatchEditor) and the WI-4.3
+ *  format adapter id (derived from filePath via dispatchEditor) and the
  *  per-tab editingEnabled override. This is the historical `Tab` contract. */
 export interface DocumentTab extends BaseTab {
   /** R1 discriminant — a document tab, editable via the format registry. */
   kind: "document";
   filePath: string | null; // null = untitled
-  /** WI-1A.12 — format registry id (e.g. "markdown", "txt"). Derived from filePath
+  /** Format registry id (e.g. "markdown", "txt"). Derived from filePath
    *  on createTab/createTransferredTab/updateTabPath. The Editor surface keys on
    *  this; a kind change triggers remount + undo reset + toast (ADR-10). */
   formatId: string;
-  /** WI-4.3 — per-tab override of `formatConfig.adapters.readOnlyDefault`.
+  /** Per-tab override of `formatConfig.adapters.readOnlyDefault`.
    *  When true, the editor mounts read-write even for kind="viewer"
    *  formats. Persists across tab switches; resets on tab close. */
   editingEnabled?: boolean;
-  /** WI-1A.13 — active schemaRenderer id for formats that ship multiple
+  /** Active schemaRenderer id for formats that ship multiple
    *  (e.g. yaml-gha-workflow vs generic yaml tree). `undefined`/`null` means
    *  "let the schemaDetector decide on each render". Persisted directly
    *  in hot-exit so restore is deterministic and does not re-run pure
@@ -53,11 +53,11 @@ export interface DocumentTab extends BaseTab {
   /** Per-tab Source/Split/Preview view mode for split-pane / viewer formats.
    *  `undefined` means "use the global `formats.defaultViewMode` setting".
    *  Inert for formats without a preview (they always render source-only).
-   *  See dev-docs/plans/20260703-split-pane-view-modes.md. */
+   *  See .claude/adr/plans/20260703-split-pane-view-modes.md. */
   viewMode?: SplitViewMode;
 }
 
-/** A single tab backed by an embedded web page (WI-1.1 / R1). Carries only the
+/** A single tab backed by an embedded web page (R1). Carries only the
  *  minimal session-restorable state; the live native webview and its transient
  *  state (loading, favicon, snapshot) are owned by the browser surface, not the
  *  tab record. Browser tabs do NOT participate in workspace transfer in v1. */
@@ -73,7 +73,7 @@ export interface BrowserTab extends BaseTab {
   /** Last known scroll offset, persisted for restore. */
   scrollY?: number;
   /**
-   * Navigation generation of the currently committed page (WI-2.1 / R4).
+   * Navigation generation of the currently committed page (R4).
    * Driver operations are stamped with it, so one authorized against this page is
    * rejected by the Rust gate once the page navigates away. `0` until the first
    * commit — a value the driver will refuse, which is the correct default.

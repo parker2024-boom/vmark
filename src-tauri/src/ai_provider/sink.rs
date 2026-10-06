@@ -6,7 +6,7 @@
 //!
 //!   - **`WindowSink`** — preserves today's behavior: emits `ai:response`
 //!     events to the frontend window for the editor genie path.
-//!   - **`ChannelSink`** (added in WI-1.2) — pushes chunks into a *bounded*
+//!   - **`ChannelSink`** — pushes chunks into a *bounded*
 //!     tokio mpsc channel so an in-process workflow runner can collect the
 //!     full response. A cumulative byte-gate stops the producer once output
 //!     reaches `MAX_COLLECT_BYTES`, so the channel can never buffer past the
@@ -14,7 +14,7 @@
 //!
 //! ## Why a trait, not duplicated functions
 //!
-//! See ADR-1 in `dev-docs/plans/20260418-genie-in-workflow.md`. Duplicating
+//! See ADR-1 in `.claude/adr/plans/20260418-genie-in-workflow.md`. Duplicating
 //! the provider functions for headless use would double ~500 LOC of provider
 //! code and create perpetual drift. Event loopback (emitting to the window
 //! and listening back in Rust) wakes the entire frontend for every internal
@@ -235,7 +235,7 @@ impl AiSink for ChannelSink {
 #[cfg(test)]
 pub(crate) mod testing {
     //! Test-only sink that records every call. Used across `ai_provider`
-    //! tests in WI-1.2 and the workflow runner tests in WI-2.2.
+    //! tests and the workflow runner tests in WI-2.2.
 
     use super::AiSink;
     use std::sync::Mutex;

@@ -234,8 +234,7 @@ fn write_rc_atomic_concurrent_writes_yield_intact_file() {
 /// Returns combined stdout+stderr. `None` when bash is unavailable.
 #[cfg(unix)]
 fn run_bash_with_script(home: &Path, script: &Path, snippet: &str) -> Option<String> {
-    use std::process::Command;
-    let out = Command::new("bash")
+    let out = crate::ai_provider::build_command("bash", &[])
         .arg("--norc")
         .arg("--noprofile")
         .arg("-c")
@@ -416,8 +415,8 @@ fn bash_script_works_with_no_user_rc_at_all() {
 #[cfg(unix)]
 fn run_interactive_bash(home: &Path, script: &Path, input: &str) -> Option<String> {
     use std::io::Write;
-    use std::process::{Command, Stdio};
-    let mut child = Command::new("bash")
+    use std::process::Stdio;
+    let mut child = crate::ai_provider::build_command("bash", &[])
         .arg("--rcfile")
         .arg(script)
         .arg("-i")

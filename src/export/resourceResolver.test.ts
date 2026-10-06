@@ -59,13 +59,6 @@ vi.mock("@tauri-apps/api/path", () => ({
   }),
 }));
 
-vi.mock("./fontEmbedder", () => ({
-  uint8ArrayToBase64: vi.fn((data: Uint8Array) => {
-    // Simple mock: return a predictable base64 string
-    return Buffer.from(data).toString("base64");
-  }),
-}));
-
 vi.mock("@/utils/debug", () => ({
   exportWarn: vi.fn(),
 }));

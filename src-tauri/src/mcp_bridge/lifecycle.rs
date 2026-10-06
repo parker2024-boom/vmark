@@ -4,9 +4,9 @@
 //! — a running flag, a port slot and a generation counter — and two races
 //! lived in the gaps between them: a stop that ran while a start was still
 //! binding found no shutdown sender, reported "stopped", and the start then
-//! installed its sender and launched a live bridge nobody tracked (#179);
+//! installed its sender and launched a live bridge nobody tracked;
 //! and a poisoned port slot AFTER the listener was up made the command return
-//! an error while the bridge kept running (#180).
+//! an error while the bridge kept running.
 //!
 //! Two mechanisms close them. `serial` is an async mutex held by a start and a
 //! stop for their WHOLE duration, so the two cannot interleave. `inner` is
@@ -19,7 +19,7 @@
 //! start has taken over, so a dying old loop cannot clobber the new bridge's
 //! state or delete its port file.
 //!
-//! @coordinates-with mcp_server.rs — the commands that drive it
+//! @coordinates-with control.rs — the commands that drive it
 //! @coordinates-with managed.rs — where the app holds it
 //! @module mcp_bridge::lifecycle
 
@@ -32,7 +32,7 @@ struct Lifecycle {
     generation: u64,
 }
 
-/// Where the bridge is in its lifecycle, as one value (#178). `Starting` is
+/// Where the bridge is in its lifecycle, as one value. `Starting` is
 /// the window between a start's claim and its bind: it is neither stopped
 /// (a start owns it) nor running (nothing listens yet), and reporting it as
 /// "running with no port" said two things that could not both be true.
@@ -49,7 +49,7 @@ pub enum BridgePhase {
 /// Start/stop state of the bridge server, held by `McpBridgeState`.
 #[derive(Default)]
 pub struct BridgeLifecycle {
-    /// Held across a whole start and a whole stop (#179).
+    /// Held across a whole start and a whole stop.
     serial: tokio::sync::Mutex<()>,
     inner: Mutex<Lifecycle>,
 }
@@ -82,7 +82,7 @@ impl BridgeLifecycle {
     /// caller now owns the start; `None` when a bridge is already running (or
     /// a start already claimed).
     ///
-    /// The claim is a DROP GUARD (audit #392). It used to be a bare
+    /// The claim is a DROP GUARD. It used to be a bare
     /// generation, released by an explicit `abort_start()` on the one path
     /// that returns `Err` — so a start that panicked, or whose future was
     /// dropped, left `running: true` with no port: the phase stuck at
@@ -123,7 +123,7 @@ impl BridgeLifecycle {
 
     /// The listener is up on `port`. Infallible: a poisoned lock is recovered
     /// rather than reported, because by now the bridge IS running and an
-    /// error here would describe a failure that did not happen (#180).
+    /// error here would describe a failure that did not happen.
     ///
     /// Reached only through `StartClaim::commit`, so publishing a port and
     /// committing the claim that produced it are one step.

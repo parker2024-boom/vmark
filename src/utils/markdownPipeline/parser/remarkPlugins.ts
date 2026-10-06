@@ -5,22 +5,17 @@
  */
 
 import type { Plugin } from "unified";
-import type { Root, Parent } from "mdast";
+import type { Content, Parent, Root, Text } from "mdast";
 import type { InlineMath } from "mdast-util-math";
 import { createCodeFenceTracker } from "./opaqueRegions";
 
-/**
- * Plugin to validate inline math and convert invalid ones back to text.
- * Invalid inline math: content with leading or trailing whitespace.
- * This prevents `$100 and $200` from being parsed as math.
- */
 /**
  * Maximum mdast nesting depth the pipeline accepts before flattening.
  *
  * The mdast→ProseMirror converters (and several serializer walks) are
  * mutually recursive; adversarial input can nest emphasis thousands of
  * levels deep and blow the call stack — a parser CRASH found by the
- * OSS-Fuzz corpus soak (WI-5.1). No legitimate document approaches 200
+ * OSS-Fuzz corpus soak. No legitimate document approaches 200
  * levels (ProseMirror marks cannot even represent nested same-type
  * emphasis), so beyond it the subtree flattens to its plain text: defined
  * degradation instead of a RangeError.
@@ -66,6 +61,16 @@ function textOf(node: Parent): string {
   return out;
 }
 
+/**
+ * Plugin to validate inline math and convert invalid ones back to text.
+ * Invalid inline math: content with leading or trailing whitespace.
+ * This prevents `$100 and $200` from being parsed as math.
+ *
+ * The restored text merges with its text neighbours, so the tree is the one a
+ * text parse would have produced: one text node, not three siblings. Split
+ * siblings made a paragraph read back from its own serialization (one text
+ * node) differ from the first read of the same text.
+ */
 export const remarkValidateMath: Plugin<[], Root> = function () {
   return (tree: Root) => {
     visitAndFixMath(tree);
@@ -76,7 +81,7 @@ function visitAndFixMath(root: Root | Parent): void {
   // Iterative, NOT recursive: adversarial input can nest mdast thousands of
   // levels deep (emphasis-in-emphasis chains), and per-child recursion blew
   // the call stack — a parser CRASH on garbage input, found by the OSS-Fuzz
-  // corpus soak (WI-5.1). An explicit stack has no depth limit.
+  // corpus soak. An explicit stack has no depth limit.
   const stack: (Root | Parent)[] = [root];
   while (stack.length > 0) {
     const node = stack.pop()!;
@@ -86,6 +91,9 @@ function visitAndFixMath(root: Root | Parent): void {
     // Type-safe children array using unknown to avoid strict type conflicts
     const newChildren: unknown[] = [];
     let modified = false;
+    // True while the last entry of newChildren holds restored math text, so a
+    // following text sibling joins it. Ordinary text siblings are left alone.
+    let tailIsRestored = false;
 
     for (const child of node.children) {
       if (child.type === "inlineMath") {
@@ -95,14 +103,25 @@ function visitAndFixMath(root: Root | Parent): void {
         // Reject math with leading/trailing whitespace
         if (/^\s/.test(value) || /\s$/.test(value)) {
           // Convert back to text with dollar delimiters
-          newChildren.push({
-            type: "text",
-            value: `$${value}$`,
-          });
+          const restored: Text = { type: "text", value: `$${value}$`, position: child.position };
+          const tail = newChildren[newChildren.length - 1] as Content | undefined;
+          if (tail?.type === "text") {
+            newChildren[newChildren.length - 1] = joinText(tail, restored);
+          } else {
+            newChildren.push(restored);
+          }
+          tailIsRestored = true;
           modified = true;
           continue;
         }
       }
+
+      if (tailIsRestored && child.type === "text") {
+        newChildren[newChildren.length - 1] = joinText(newChildren[newChildren.length - 1] as Text, child);
+        tailIsRestored = false;
+        continue;
+      }
+      tailIsRestored = false;
 
       if ("children" in child && Array.isArray((child as Parent).children)) {
         stack.push(child as Parent);
@@ -115,6 +134,18 @@ function visitAndFixMath(root: Root | Parent): void {
       (node as { children: unknown[] }).children = newChildren;
     }
   }
+}
+
+/**
+ * One text node holding `left` then `right`, spanning both in the source when
+ * both carry a position. A missing position is dropped rather than guessed.
+ */
+function joinText(left: Text, right: Text): Text {
+  const joined: Text = { type: "text", value: left.value + right.value };
+  if (left.position && right.position) {
+    joined.position = { start: left.position.start, end: right.position.end };
+  }
+  return joined;
 }
 
 /**
@@ -192,6 +223,30 @@ function hasAmbiguousListUnderline(markdown: string): boolean {
   return false;
 }
 
+/** A frontmatter fence line: three dashes, then nothing but spaces or tabs. */
+const FRONTMATTER_FENCE = /^---[ \t]*$/;
+
+/**
+ * Whether the document opens with frontmatter: a fence on its first line and
+ * another one closing it further down.
+ *
+ * This has to be exact, not a hint. `---` on the first line is also an
+ * ordinary thematic break, and once the frontmatter extension has looked for a
+ * closing fence and not found one, it reads every list and blockquote in the
+ * rest of the document as a paragraph. So the extension is loaded only when
+ * it will succeed. `frontmatterDetection.test.ts` holds this to the
+ * extension's own reading.
+ */
+function opensWithFrontmatter(markdown: string): boolean {
+  if (!markdown.startsWith("---")) return false;
+  const lines = markdown.split(/\r\n|\r|\n/);
+  if (!FRONTMATTER_FENCE.test(lines[0])) return false;
+  for (let index = 1; index < lines.length; index += 1) {
+    if (FRONTMATTER_FENCE.test(lines[index])) return true;
+  }
+  return false;
+}
+
 /**
  * Analyze markdown content to determine which plugins are needed.
  * This enables lazy loading of plugins for better performance.
@@ -200,8 +255,7 @@ export function analyzeContent(markdown: string): ContentAnalysis {
   return {
     // Math: look for $ or $$ (quick heuristic)
     hasMath: markdown.includes("$"),
-    // Frontmatter: must start with ---
-    hasFrontmatter: markdown.startsWith("---"),
+    hasFrontmatter: opensWithFrontmatter(markdown),
     // Wiki links: look for [[
     hasWikiLinks: markdown.includes("[["),
     // Details block: look for <details pattern

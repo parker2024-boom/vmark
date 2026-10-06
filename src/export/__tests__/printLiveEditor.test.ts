@@ -7,12 +7,13 @@
 // consulted. With the focused pane in Source mode nothing is registered, and
 // the single `.ProseMirror` left in the DOM is the OTHER pane's document; the
 // active document's markdown is rendered instead, which is always right.
+// The markdown fallback is the real off-screen render, and the print document
+// is assembled from the real stylesheet and template modules.
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 
-const { mockInvoke, mockRender } = vi.hoisted(() => ({
+const { mockInvoke } = vi.hoisted(() => ({
   mockInvoke: vi.fn(),
-  mockRender: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -26,21 +27,8 @@ vi.mock("../resourcePaths", () => ({
   getDocumentBaseDir: () => Promise.resolve("/docs"),
   getExportContainmentRoot: () => Promise.resolve("/docs"),
 }));
-vi.mock("../renderMarkdownToHtml", () => ({
-  renderMarkdownToHtml: (...args: unknown[]) => mockRender(...args),
-}));
 vi.mock("@/services/ime/imeToast", () => ({
   imeToast: { error: vi.fn(), errorDetail: vi.fn(), success: vi.fn(), warning: vi.fn() },
-}));
-vi.mock("../themeSnapshot", () => ({ captureThemeCSS: () => "", isDarkTheme: () => false }));
-vi.mock("../htmlExportStyles", () => ({ getEditorContentCSS: () => "" }));
-vi.mock("../pdfHtmlTemplate", () => ({
-  getKatexCSS: () => "",
-  getForceLightThemeCSS: () => "",
-  getSharedContentCSS: () => "",
-  // The print document forces every <details> open in the MARKUP, because the
-  // shared CSS above styles `details[open]` (see printDocument.test.ts).
-  expandDetails: (html: string) => html,
 }));
 vi.mock("@/i18n", () => ({ default: { t: (key: string) => key } }));
 
@@ -80,7 +68,6 @@ beforeEach(() => {
   useEditorStore.getState().clearActiveEditors();
   useTabStore.setState({ tabs: {}, activeTabId: {} } as never);
   mockInvoke.mockResolvedValue({ status: "unknown" });
-  mockRender.mockResolvedValue("<p>rendered-from-markdown</p>");
 });
 
 describe("exportToPdf — which editor is printed live (#346)", () => {
@@ -90,11 +77,11 @@ describe("exportToPdf — which editor is printed live (#346)", () => {
     registerFocusedEditor(right, "tab-right");
     activateTab("tab-right");
 
-    await exportToPdf({ markdown: "right pane", sourceFilePath: "/docs/right.md" });
+    await exportToPdf({ markdown: "# markdown snapshot", sourceFilePath: "/docs/right.md" });
 
     expect(printedHtml()).toContain("<p>right pane</p>");
     expect(printedHtml()).not.toContain("<p>left pane</p>");
-    expect(mockRender).not.toHaveBeenCalled();
+    expect(printedHtml()).not.toContain("markdown snapshot");
   });
 
   it("with two editors and no focused WYSIWYG pane, renders the active document's markdown", async () => {
@@ -104,8 +91,7 @@ describe("exportToPdf — which editor is printed live (#346)", () => {
 
     await exportToPdf({ markdown: "# active doc", sourceFilePath: "/docs/active.md" });
 
-    expect(mockRender).toHaveBeenCalledWith("# active doc", true);
-    expect(printedHtml()).toContain("<p>rendered-from-markdown</p>");
+    expect(printedHtml()).toMatch(/<h1[^>]*>active doc<\/h1>/);
     expect(printedHtml()).not.toContain("<p>left pane</p>");
   });
 
@@ -118,8 +104,7 @@ describe("exportToPdf — which editor is printed live (#346)", () => {
 
     await exportToPdf({ markdown: "# source pane doc", sourceFilePath: "/docs/source.md" });
 
-    expect(mockRender).toHaveBeenCalledWith("# source pane doc", true);
-    expect(printedHtml()).toContain("<p>rendered-from-markdown</p>");
+    expect(printedHtml()).toMatch(/<h1[^>]*>source pane doc<\/h1>/);
     expect(printedHtml()).not.toContain("background wysiwyg pane");
   });
 
@@ -130,7 +115,7 @@ describe("exportToPdf — which editor is printed live (#346)", () => {
 
     await exportToPdf({ markdown: "# active doc", sourceFilePath: "/docs/active.md" });
 
-    expect(mockRender).toHaveBeenCalledWith("# active doc", true);
+    expect(printedHtml()).toMatch(/<h1[^>]*>active doc<\/h1>/);
     expect(printedHtml()).not.toContain("stale pane");
   });
 
@@ -139,9 +124,9 @@ describe("exportToPdf — which editor is printed live (#346)", () => {
     registerFocusedEditor(only, "tab-only");
     activateTab("tab-only");
 
-    await exportToPdf({ markdown: "only pane", sourceFilePath: "/docs/only.md" });
+    await exportToPdf({ markdown: "# markdown snapshot", sourceFilePath: "/docs/only.md" });
 
     expect(printedHtml()).toContain("<p>only pane</p>");
-    expect(mockRender).not.toHaveBeenCalled();
+    expect(printedHtml()).not.toContain("markdown snapshot");
   });
 });

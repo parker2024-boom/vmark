@@ -27,6 +27,9 @@ vi.mock("@/services/workflow/workflowEnginePolicySync", () => ({ startWorkflowEn
 vi.mock("@/services/menu/conditionalMenuItemSync", () => ({
   startConditionalMenuItemSync: service("menu"),
 }));
+vi.mock("@/services/windowClose/tabCleanup", () => ({
+  startTabStateCleanup: service("tabCleanup"),
+}));
 vi.mock("@/utils/debug", () => ({ appError: vi.fn() }));
 
 import { startRuntimeServices } from "./runtimeWiring";
@@ -40,14 +43,25 @@ describe("startRuntimeServices", () => {
     order.length = 0;
     const stop = startRuntimeServices();
     const starts = order.filter((e) => e.startsWith("start:"));
-    expect(starts).toHaveLength(10);
-    expect(new Set(starts).size).toBe(10);
+    expect(starts).toHaveLength(11);
+    expect(new Set(starts).size).toBe(11);
     expect(starts[0]).toBe("start:grants");
     stop();
     const stops = order.filter((e) => e.startsWith("stop:"));
-    expect(stops).toHaveLength(10);
-    expect(stops[0]).toBe("stop:menu");
+    expect(stops).toHaveLength(11);
+    expect(stops[0]).toBe("stop:tabCleanup");
     expect(stops.at(-1)).toBe("stop:grants");
+  });
+
+  // WI-RA1B.1 — per-tab state cleanup is a consequence of tab removal only
+  // while this subscriber runs. A window that does not start it leaves every
+  // closed tab's document behind, silently.
+  it("starts the tab-state cleanup with the window", () => {
+    order.length = 0;
+    const stop = startRuntimeServices();
+    expect(order).toContain("start:tabCleanup");
+    stop();
+    expect(order).toContain("stop:tabCleanup");
   });
 
   // Audit #358 — startup is transactional: a service that throws while
@@ -85,7 +99,7 @@ describe("startRuntimeServices", () => {
     const stop = startRuntimeServices();
     expect(() => stop()).not.toThrow();
     const stops = order.filter((e) => e.startsWith("stop:"));
-    expect(stops).toHaveLength(10);
+    expect(stops).toHaveLength(11);
     expect(stops.at(-1)).toBe("stop:grants");
     expect(vi.mocked(appError)).toHaveBeenCalled();
   });

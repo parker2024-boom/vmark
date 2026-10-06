@@ -76,7 +76,7 @@
   max-width: 140px;
 }
 
-/* `.vm-spinner` (WI-UI3.4); residual = the node's compact size + warning tint. */
+/* Spinner is the canonical `.vm-spinner`; residual = the node's compact size + warning tint. */
 .workflow-node__spinner {
   width: 12px;
   height: 12px;

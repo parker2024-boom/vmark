@@ -3,6 +3,8 @@
  *
  * Adds a PNG export button to SVG code block containers.
  * Converts to 2x PNG and saves via Tauri dialog.
+ *
+ * @module plugins/svg/svgExport
  */
 
 import { save } from "@tauri-apps/plugin-dialog";

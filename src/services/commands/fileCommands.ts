@@ -1,7 +1,7 @@
 /**
  * File commands — CommandBus registration for save/save-as/move-to/save-all-quit/
  * new/open (keybinding Phase 3, migrated from useFileShortcuts; moved to
- * services/commands in the WI-10 hooks→services migration once the save
+ * services/commands in the hooks→services migration once the save
  * handlers landed in services/files/fileSave).
  *
  * Each command calls the EXACT existing handler (behavior-neutral). The

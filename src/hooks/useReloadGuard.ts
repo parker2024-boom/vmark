@@ -17,11 +17,12 @@
  * Tauri's webview does not reload on bare F5 (unlike browsers).
  *
  * @coordinates-with reloadGuard.ts — pure logic for shouldBlockReload (dev mode)
+ * @coordinates-with services/tabs/openDocuments.ts — which tabs hold unsaved changes
  * @module hooks/useReloadGuard
  */
 
 import { useEffect } from "react";
-import { useDocumentStore } from "@/stores/documentStore";
+import { openDirtyTabIds } from "@/services/tabs/openDocuments";
 import { shouldBlockReload, getReloadWarningMessage, isReloadShortcut, isTerminalFocused, isCtrlR } from "@/utils/reloadGuard";
 
 /**
@@ -75,8 +76,7 @@ function useProductionReloadGuard(): void {
 function useDevReloadGuard(): void {
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent): string | undefined => {
-      const dirtyTabIds = useDocumentStore.getState().getAllDirtyDocuments();
-      const result = shouldBlockReload({ dirtyTabIds });
+      const result = shouldBlockReload({ dirtyTabIds: openDirtyTabIds() });
 
       if (result.shouldBlock) {
         event.preventDefault();
@@ -103,10 +103,10 @@ function useDevReloadGuard(): void {
  */
 export function useReloadGuard(): void {
   if (import.meta.env.DEV) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- import.meta.env.DEV is a build-time constant, so each build calls exactly one hook unconditionally
     useDevReloadGuard();
   } else {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- import.meta.env.DEV is a build-time constant, so each build calls exactly one hook unconditionally
     useProductionReloadGuard();
   }
 }

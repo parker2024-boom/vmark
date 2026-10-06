@@ -1,14 +1,15 @@
-//! Tauri commands for opening files/workspaces in new windows, closing
-//! windows, and quitting. Frontend-supplied paths are validated by
-//! `path_validation` before any fs-scope extension or window creation.
+//! Tauri commands for opening files/workspaces in new windows and closing
+//! windows (quitting belongs to `crate::quit`). Frontend-supplied paths are
+//! validated by `path_validation` before any fs-scope extension or window
+//! creation.
 //!
 //! Every command is generic over the runtime (like `close_window` always
-//! was), so `commands.test.rs` drives the real commands on a mock app (#249):
+//! was), so `commands.test.rs` drives the real commands on a mock app:
 //! a refused path opens nothing and extends no scope, an accepted one opens a
 //! `doc-N` window whose URL carries the file, a batch carries every file.
 //!
 //! What validation JUDGED is the only value that flows on — never the raw
-//! string (#250). Tauri's `push_pattern` inserts the pattern as given AND its
+//! string. Tauri's `push_pattern` inserts the pattern as given AND its
 //! canonical form resolved AT GRANT TIME (`tauri/src/scope/fs.rs`,
 //! `canonicalize_parent`), while `is_allowed` canonicalizes each REQUEST before
 //! matching. Granting the raw name therefore put whatever the link pointed at
@@ -23,7 +24,7 @@
 //! Both now carry the canonical target, so a later swap has no name left to
 //! redirect. `validate_then_grant` is the one place that ordering lives.
 
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 use crate::command_error::CommandError;
 
@@ -33,7 +34,7 @@ use super::document_windows::{
 use super::path_validation::{validate_openable_path, validate_workspace_root};
 
 /// Validate every frontend-supplied path, then extend the fs read scope with
-/// the CANONICAL target each validation judged (#250). Returns those targets,
+/// the CANONICAL target each validation judged. Returns those targets,
 /// and they are what the caller passes to the window — the raw strings go no
 /// further than this function.
 ///
@@ -55,7 +56,7 @@ fn validate_then_grant<R: tauri::Runtime>(
     }
     between();
     for canonical in &judged {
-        // Strict here, best-effort elsewhere (#481): this function exists to
+        // Strict here, best-effort elsewhere: this function exists to
         // make these files readable in a window that does not exist yet, so a
         // grant that did not take is a window that would be refused every
         // read — reported now, with nothing opened, rather than as `forbidden
@@ -115,9 +116,14 @@ pub fn open_workspace_with_files_in_new_window<R: tauri::Runtime>(
     create_document_window_with_url(&app, url).map_err(|e| CommandError::internal(e.to_string()))
 }
 
-/// Close a specific window by label.
+/// Close the window that asked.
 ///
-/// Generic over the runtime so a mock app can exercise the not-found branch
+/// The window is the one Tauri says the call came from, never a label in the
+/// arguments: a label is a string any webview can spell, and a command that
+/// took one let a page close every other window by name. Every caller closes
+/// its own window, so nothing needs a target.
+///
+/// Generic over the runtime so a mock app can drive it through the IPC layer
 /// (`commands.test.rs`); the `#[tauri::command]` macro is unaffected.
 ///
 /// Logs at INFO, not debug (#1253). This is the last step of the window-close
@@ -126,38 +132,17 @@ pub fn open_workspace_with_files_in_new_window<R: tauri::Runtime>(
 /// reached, let alone whether `destroy()` returned. The "called" and "destroy
 /// result" pair is what distinguishes a frontend that never got here from a
 /// `destroy()` that never came back.
-///
-/// The label is printed with `{:?}`, not inside quotes of our own (#484). It is
-/// frontend-supplied, and `'{}'` let it carry a NEWLINE — so a caller could
-/// write log lines of its own, in VMark's own format, between the "called" and
-/// "destroy result" pair a reader uses to diagnose a stalled close. `{:?}` on a
-/// `str` escapes the newline and quotes the value, so it can only ever be one
-/// token on one line.
 #[tauri::command]
 pub fn close_window<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
-    label: String,
+    window: tauri::WebviewWindow<R>,
 ) -> Result<(), CommandError> {
+    let label = window.label().to_string();
     log::info!("[Tauri] close_window called for {label:?}");
-
-    if let Some(window) = app.get_webview_window(&label) {
-        let result = window
-            .destroy()
-            .map_err(|e| CommandError::internal(e.to_string()));
-        log::info!("[Tauri] window {label:?} destroy result: {result:?}");
-        result
-    } else {
-        // The label names no live window: absent, not malformed.
-        Err(CommandError::not_found(format!(
-            "Window '{label}' not found"
-        )))
-    }
-}
-
-/// Force quit the entire application
-#[tauri::command]
-pub fn force_quit(app: AppHandle) {
-    app.exit(0);
+    let result = window
+        .destroy()
+        .map_err(|e| CommandError::internal(e.to_string()));
+    log::info!("[Tauri] window {label:?} destroy result: {result:?}");
+    result
 }
 
 #[cfg(test)]

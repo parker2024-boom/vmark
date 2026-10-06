@@ -2,6 +2,8 @@
  * Table Detection for Source Mode
  *
  * Utilities to detect if cursor is inside a markdown table.
+ *
+ * @module plugins/sourceContextDetection/tableDetection
  */
 
 import type { EditorView } from "@codemirror/view";

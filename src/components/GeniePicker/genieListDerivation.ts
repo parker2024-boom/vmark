@@ -1,5 +1,5 @@
 /**
- * The genie picker's list, as pure functions (audit R3 #603/#607/#609/#621).
+ * The genie picker's list, as pure functions.
  *
  * Purpose: the picker derived its own list inline — filter, recents, group,
  * flatten — in four `useMemo`s that could only be exercised by rendering the
@@ -20,9 +20,9 @@
  *   - The query is TRIMMED once, at the source. The picker searched on the raw
  *     value, showed the no-match hint on raw truthiness, and submitted on the
  *     trimmed one — so whitespace alone hid every genie and offered a freeform
- *     hint whose Enter did nothing (#621).
+ *     hint whose Enter did nothing.
  *   - An uncategorised genie's heading is the caller's TRANSLATED string, not a
- *     hardcoded English "Uncategorized" (#609).
+ *     hardcoded English "Uncategorized".
  *   - A genie already in the recents section is not repeated below it — but
  *     ONLY while that section is on screen, which it is not while searching.
  *
@@ -71,7 +71,7 @@ export interface GenieListSections {
  * The recent genies, resolved from their names — the store's `getRecent` as a
  * PURE function of the two values it reads.
  *
- * Taking those two as parameters is what makes the picker's memo honest (#608):
+ * Taking those two as parameters is what makes the picker's memo honest:
  * `addRecent` writes `recentGenieNames` and leaves `genies` alone, so a hook
  * that read the store imperatively went on showing the previous order until
  * something else happened to reload. `genieListDerivation.test.ts` pins this

@@ -42,7 +42,7 @@ async function smokeServerBundle(srv) {
     signal: deadline(),
   });
   const setCookie = boot.headers.get("set-cookie") ?? "";
-  // The name is NAMESPACED per workspace root (audit 20260906, MCP-C05).
+  // The name is NAMESPACED per workspace root.
   const session = /(vmark_cs_session[^=]*)=([^;]+)/.exec(setCookie);
   assert(session, `auth set no session cookie (status ${boot.status})`);
   const cookie = `${session[1]}=${session[2]}`;
@@ -59,7 +59,7 @@ async function smokeServerBundle(srv) {
 }
 
 /**
- * Process-level CLI wrapper smoke (WI-8): cliMain.ts is unit-tested with
+ * Process-level CLI wrapper smoke: cliMain.ts is unit-tested with
  * injected deps; these two spawns prove the THIN WRAPPER (dist/cli.js)
  * actually binds process/env/server.
  */

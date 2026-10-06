@@ -393,7 +393,7 @@ describe("useMcpServer", () => {
     });
 
     // The premise the whole "events beat snapshots" rule rests on, made
-    // explicit (audit #382, round 3). `mcp_server.rs` emits BEFORE each
+    // explicit (audit #382, round 3). `mcp_bridge/control.rs` emits BEFORE each
     // command returns — `announce_started` sits on the last line of
     // `mcp_bridge_start`, `mcp_bridge_stop` emits before its `Ok` — and both
     // go out on ONE ordered channel. So the last event delivered is the
@@ -463,7 +463,7 @@ describe("useMcpServer", () => {
       const { result } = await mount();
       await waitFor(() => expect(result.current.error).toBe("bridge state poisoned"));
 
-      // mcp_server.rs: `app.emit("mcp-server:started", actual_port)`.
+      // mcp_bridge/control.rs: `app.emit("mcp-server:started", actual_port)`.
       act(() => emit("mcp-server:started", 51234));
 
       expect(result.current.running).toBe(true);
@@ -536,7 +536,7 @@ describe("useMcpServer", () => {
       const { result } = await mount();
       await waitFor(() => expect(result.current.running).toBe(true));
 
-      // mcp_server.rs: `app.emit("mcp-server:stopped", ())`.
+      // mcp_bridge/control.rs: `app.emit("mcp-server:stopped", ())`.
       act(() => emit("mcp-server:stopped"));
 
       expect(result.current.running).toBe(false);

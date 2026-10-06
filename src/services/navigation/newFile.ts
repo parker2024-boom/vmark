@@ -3,8 +3,8 @@
  *
  * Untitled tabs are always markdown: `tabStore.createTab` derives the format
  * from the (null) file path. The optional `formatId` override this once took
- * was plumbing for a "New Other Format" menu item that was never built
- * (feature-ledger plan, WI-FL3.10). A non-markdown untitled tab still exists
+ * was plumbing for a "New Other Format" menu item that was never built.
+ * A non-markdown untitled tab still exists
  * — hot-exit restore re-applies the persisted format_id through
  * `setTabFormatId`, because the path cannot recover it.
  *

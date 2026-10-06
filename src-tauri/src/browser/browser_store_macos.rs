@@ -1,5 +1,5 @@
-//! Main-thread-only WebKit data-store ownership for browser postures
-//! (WI-P6.1 / WI-NB10.2). The impure adapter over the pure `store_policy`
+//! Main-thread-only WebKit data-store ownership for browser postures.
+//! The impure adapter over the pure `store_policy`
 //! decision in `browser_store_policy.rs`: it maps each `StorePolicy` arm to an
 //! actual `WKWebsiteDataStore` and owns the caches, the 32-store cap, and the
 //! macOS-version read. Every branch a device could exercise is decided upstream
@@ -11,7 +11,7 @@
 //!   safe path for HttpOnly logins. Opening a named profile is user-approved per
 //!   call (`profile_open.rs`); this module only owns the stores.
 //! - **Human and AiShared** tabs get VMark's own **identified persistent** store
-//!   on macOS 14+ (WI-NB10.2 / D6v2), isolating browsed-page storage from the
+//!   on macOS 14+ (D6v2), isolating browsed-page storage from the
 //!   app's default store; on macOS ≤ 13 they keep the default store (isolation
 //!   goal not met — stated in `store_policy`). This costs existing Human-tab
 //!   logins a one-time migration.
@@ -20,7 +20,7 @@
 //! `tauri.conf.json` `minimumSystemVersion`). Below 14 a
 //! named profile gets a SEPARATE non-persistent store — isolated, just not
 //! persistent — NEVER the shared singleton (a pre-14 collapse into the singleton
-//! would break cross-profile isolation; sec review WI-P6.1 H2).
+//! would break cross-profile isolation).
 //!
 //! The human store's UUID is derived from a namespace (`vmark.browser.human`)
 //! that no AI-profile name can produce, so a sandbox profile literally named
@@ -41,7 +41,7 @@ use std::rc::Rc;
 use std::time::Duration;
 
 /// Cap on distinct named stores held at once — bounds an AI that opens `p1`, `p2`, …
-/// to grow persistent stores without limit (sec review WI-P6.1 Medium).
+/// to grow persistent stores without limit.
 const MAX_NAMED_STORES: usize = 32;
 
 thread_local! {
@@ -103,7 +103,7 @@ fn uuid_for_human() -> Option<Retained<NSUUID>> {
 /// Build (or reuse) a named profile's isolated store. `persistent` comes from the
 /// policy arm, not a re-read of the OS version. Enforces the 32-store cap and
 /// **fails closed** with `PROFILE_STORE_LIMIT` rather than sharing the sandbox
-/// store when the cap is exceeded (sec review WI-P6.1 H2).
+/// store when the cap is exceeded.
 fn named_store(
     name: &str,
     mtm: MainThreadMarker,
@@ -138,9 +138,15 @@ fn build_isolated_store(
 ) -> Retained<WKWebsiteDataStore> {
     if persistent {
         if let Some(uuid) = uuid_for_profile(name) {
+            // SAFETY: `dataStoreForIdentifier:` exists only on macOS 14+, and
+            // `persistent` is true only there: it comes from the
+            // `NamedPersistent` arm, which `store_policy` selects from the OS
+            // version. `uuid` is a live `NSUUID`; `mtm` proves the main thread.
             return unsafe { WKWebsiteDataStore::dataStoreForIdentifier(&uuid, mtm) };
         }
     }
+    // SAFETY: a class method available on every supported macOS, taking nothing
+    // but the main-thread proof `mtm`.
     unsafe { WKWebsiteDataStore::nonPersistentDataStore(mtm) }
 }
 
@@ -148,6 +154,8 @@ fn build_isolated_store(
 fn shared_sandbox_store(mtm: MainThreadMarker) -> Retained<WKWebsiteDataStore> {
     AI_SANDBOX_STORE.with(|slot| {
         let mut slot = slot.borrow_mut();
+        // SAFETY: a class method available on every supported macOS, taking
+        // nothing but the main-thread proof `mtm`.
         slot.get_or_insert_with(|| unsafe { WKWebsiteDataStore::nonPersistentDataStore(mtm) })
             .clone()
     })
@@ -163,6 +171,10 @@ fn human_store(mtm: MainThreadMarker) -> Option<Retained<WKWebsiteDataStore>> {
             return Some(existing.clone());
         }
         let uuid = uuid_for_human()?;
+        // SAFETY: `dataStoreForIdentifier:` exists only on macOS 14+, and this
+        // function is reached only from the `HumanPersistent` arm, which
+        // `store_policy` selects on macOS 14+ alone. `uuid` is a live `NSUUID`;
+        // `mtm` proves the main thread.
         let store = unsafe { WKWebsiteDataStore::dataStoreForIdentifier(&uuid, mtm) };
         *slot = Some(store.clone());
         Some(store)
@@ -178,38 +190,28 @@ pub(super) fn configure(
     mode: AutomationMode,
     profile: Option<&str>,
 ) -> Result<(), NativeSurfaceError> {
-    match store_policy(mode, profile, current_macos_major()) {
+    let store = match store_policy(mode, profile, current_macos_major()) {
         // Human/AiShared on macOS ≤ 13: leave the config's default persistent store.
-        StorePolicy::Default => Ok(()),
-        StorePolicy::SharedSandbox => {
-            let store = shared_sandbox_store(mtm);
-            unsafe { config.setWebsiteDataStore(&store) };
-            Ok(())
-        }
-        StorePolicy::HumanPersistent => {
-            // On the impossible UUID-parse failure, leave the config default
-            // (persistent) store rather than degrade the human to a non-persistent
-            // one that would lose logins on every launch.
-            if let Some(store) = human_store(mtm) {
-                unsafe { config.setWebsiteDataStore(&store) };
-            }
-            Ok(())
-        }
-        StorePolicy::NamedPersistent(name) => {
-            let store = named_store(&name, mtm, true)?;
-            unsafe { config.setWebsiteDataStore(&store) };
-            Ok(())
-        }
-        StorePolicy::NamedEphemeral(name) => {
-            let store = named_store(&name, mtm, false)?;
-            unsafe { config.setWebsiteDataStore(&store) };
-            Ok(())
-        }
+        StorePolicy::Default => None,
+        StorePolicy::SharedSandbox => Some(shared_sandbox_store(mtm)),
+        // On the impossible UUID-parse failure, leave the config default
+        // (persistent) store rather than degrade the human to a non-persistent
+        // one that would lose logins on every launch.
+        StorePolicy::HumanPersistent => human_store(mtm),
+        StorePolicy::NamedPersistent(name) => Some(named_store(&name, mtm, true)?),
+        StorePolicy::NamedEphemeral(name) => Some(named_store(&name, mtm, false)?),
+    };
+    if let Some(store) = store {
+        // SAFETY: `config` and `store` are live main-thread objects and `mtm`
+        // proves this is the main thread. The setter retains the store; it takes
+        // effect because no webview has been built from `config` yet.
+        unsafe { config.setWebsiteDataStore(&store) };
     }
+    Ok(())
 }
 
 /// Delete a named profile's persistent on-disk data and drop its cached store, so
-/// "Remove profile" actually revokes the login (sec review WI-P6.1 Removal). The
+/// "Remove profile" actually revokes the login. The
 /// deletion is **confirmed**: we pump the run loop until the completion handler fires
 /// and return an error on failure/timeout, so the UI never reports a profile gone
 /// while its login survives on disk. Below macOS 14 the per-profile store is
@@ -244,6 +246,10 @@ pub(super) fn forget_profile(name: &str, mtm: MainThreadMarker) -> Result<(), Na
         };
         *sink.borrow_mut() = Some(outcome);
     });
+    // SAFETY: `removeDataStoreForIdentifier:completionHandler:` exists only on
+    // macOS 14+; the version check at the top of this function returned on
+    // anything older. `uuid` is a live `NSUUID`. WebKit copies the block and calls
+    // it once, on the main thread — the thread that owns the `Rc` it captures.
     unsafe {
         WKWebsiteDataStore::removeDataStoreForIdentifier_completionHandler(&uuid, &handler, mtm)
     };

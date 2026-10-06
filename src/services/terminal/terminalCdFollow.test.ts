@@ -5,7 +5,7 @@
 // mode (#16 — the rail-off early return used to say yes). Real stores.
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { useSettingsStore } from "@/stores/settingsStore";
-import { resetTerminalSessionStore, useUIStore } from "@/stores/uiStore";
+import { resetTerminalSessionStore, useTerminalStore } from "@/stores/terminalStore";
 import { shouldFollowWorkspaceCd } from "./terminalCdFollow";
 
 function setRail(enabled: boolean): void {
@@ -15,7 +15,7 @@ function setRail(enabled: boolean): void {
 }
 
 function createSession(owner?: string): string {
-  const created = useUIStore
+  const created = useTerminalStore
     .getState()
     .terminalCreateSession(owner ? { ownerInstanceId: owner } : undefined);
   if (!created) throw new Error("cap hit in test setup");
@@ -61,7 +61,7 @@ describe("shouldFollowWorkspaceCd", () => {
     expect(shouldFollowWorkspaceCd(id)).toBe(true);
     // Adoption stamps the session after the pendingRoot was recorded —
     // the flush must now refuse.
-    useUIStore.getState().terminalAdoptUnscopedSessions("wsi-a");
+    useTerminalStore.getState().terminalAdoptUnscopedSessions("wsi-a");
     expect(shouldFollowWorkspaceCd(id)).toBe(false);
   });
 });

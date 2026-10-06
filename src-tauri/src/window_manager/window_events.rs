@@ -26,6 +26,21 @@ fn intercepts_close(label: &str) -> bool {
     crate::quit::is_document_window_label(label)
 }
 
+/// The window label a frontend's `ready` event carries, sent once that
+/// window's listeners are mounted. `None` for a payload that is not a JSON
+/// string.
+///
+/// The label is whatever the webview chose to send, not a label Tauri
+/// validated, so it is logged as an escaped, bounded token.
+pub(crate) fn ready_window_label(payload: &str) -> Option<String> {
+    let label = serde_json::from_str::<String>(payload).ok()?;
+    log::debug!(
+        "[Tauri] Window {} is ready",
+        crate::peer_text::peer_text(&label)
+    );
+    Some(label)
+}
+
 /// Intercept close requests for document windows so the frontend can run its
 /// save/confirm flow — or, on Windows with close-to-tray on, park the last one
 /// in the tray. Non-document windows (settings) close normally.
@@ -47,7 +62,7 @@ pub(crate) fn handle_document_window_close_event(
         // never finished" is a line here — and release builds filter `debug!`,
         // which is why the first report of a stuck window arrived with a log
         // that said nothing at all.
-        log::info!("[Tauri] WindowEvent::CloseRequested for window '{}'", label);
+        log::info!("[Tauri] WindowEvent::CloseRequested for window {:?}", label);
         // Only intercept close for document windows
         if intercepts_close(label) {
             api.prevent_close();
@@ -56,17 +71,17 @@ pub(crate) fn handle_document_window_close_event(
                 // Nothing is torn down, so there is no save flow to run. Never
                 // true off Windows, and never true during a quit.
                 let _ = window.hide();
-                log::info!("[Tauri] close-to-tray: hid '{}' instead of closing", label);
+                log::info!("[Tauri] close-to-tray: hid {:?} instead of closing", label);
             } else {
                 // Include target label in payload so frontend can filter
                 let _ = window.emit("window:close-requested", label);
-                log::info!("[Tauri] Emitted window:close-requested to '{}'", label);
+                log::info!("[Tauri] Emitted window:close-requested to {:?}", label);
             }
         }
         // Settings and other non-document windows close normally
     }
 
-    // The window is actually gone: tear down any embedded browser it owned (WI-S0.4).
+    // The window is actually gone: tear down any embedded browser it owned.
     //
     // BrowserSurface normally sends `browser_destroy` from a React unmount cleanup, but
     // that cleanup runs in the very webview being destroyed — the IPC races its own
@@ -87,7 +102,7 @@ pub(crate) fn handle_document_window_close_event(
             let revoked = trusted.revoke_window(window.label());
             if revoked > 0 {
                 log::info!(
-                    "[Tauri] revoked {} trusted-HTML grant(s) for window '{}'",
+                    "[Tauri] revoked {} trusted-HTML grant(s) for window {:?}",
                     revoked,
                     window.label()
                 );

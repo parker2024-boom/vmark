@@ -4,15 +4,18 @@
  * Commands that match text occurrences of the current selection or word:
  * - selectNextOccurrence: Add next match (Cmd+D)
  * - selectAllOccurrences: Select all matches (Cmd+Shift+L)
- * - selectAllOccurrencesInBlock: Select all matches in the current block (#1418)
+ * - selectAllOccurrencesInBlock: Select all matches in the current block
  * - skipOccurrence: Skip current match, take the next (Cmd+Shift+D)
  *
  * Extracted from commands.ts, which remains the stable entry point.
+ *
+ * @module plugins/multiCursor/occurrenceCommands
  */
+
 import { TextSelection, SelectionRange } from "@tiptap/pm/state";
 import type { EditorState, Transaction } from "@tiptap/pm/state";
-import { MultiSelection } from "./MultiSelection";
-import { normalizeRangesWithPrimary } from "./rangeUtils";
+import { MultiSelection } from "@/plugins/shared/MultiSelection";
+import { normalizeRangesWithPrimary } from "@/plugins/shared/rangeUtils";
 import { filterRangesToBounds, getCodeBlockBounds } from "./codeBlockBounds";
 import type { CodeBlockBounds } from "./codeBlockBounds";
 import { getTextblockBounds } from "./blockBounds";
@@ -69,9 +72,6 @@ export function selectNextOccurrence(state: EditorState): Transaction | null {
       searchText = word.text;
       currentFrom = word.from;
       currentTo = word.to;
-      if (bounds && (word.from < bounds.from || word.to > bounds.to)) {
-        return null;
-      }
       const $from = state.doc.resolve(word.from);
       const $to = state.doc.resolve(word.to);
       existingRanges.push(new SelectionRange($from, $to));
@@ -168,10 +168,6 @@ function selectAllOccurrencesWithin(
     // Empty selection - get word under cursor
     const word = getWordAtCursor(state);
     if (!word) return null;
-
-    if (bounds && (word.from < bounds.from || word.to > bounds.to)) {
-      return null;
-    }
 
     searchText = word.text;
     initialFrom = word.from;

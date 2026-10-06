@@ -1,42 +1,33 @@
 // @vitest-environment node
 // WI-5.3 — frontend wrapper around the Rust gha_lint command tests.
+// WI-RA11.7 — the webview sends only the YAML: which actionlint binary runs,
+// and the PATH it runs with, are decided in Rust.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const invokeMock = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
 
-import {
-  __resetActionlintPathCacheForTests,
-  lintWithActionlint,
-} from "../actionlint";
+import { lintWithActionlint } from "../actionlint";
 
 describe("lintWithActionlint", () => {
   beforeEach(() => {
     invokeMock.mockReset();
-    __resetActionlintPathCacheForTests();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  // Shorthand: queue the get_login_shell_path response (the wrapper's
-  // first IPC) followed by the gha_lint response in order.
-  function queueLintCall(lintResponse: unknown): void {
-    invokeMock.mockResolvedValueOnce("/usr/local/bin:/usr/bin");
-    invokeMock.mockResolvedValueOnce(lintResponse);
-  }
-
   it("returns empty diagnostics when binary is missing (silent fallback)", async () => {
-    queueLintCall({ kind: "binary_missing" });
+    invokeMock.mockResolvedValueOnce({ kind: "binary_missing" });
     const out = await lintWithActionlint("on: push\njobs: {}");
     expect(out.binaryAvailable).toBe(false);
     expect(out.diagnostics).toEqual([]);
   });
 
   it("forwards diagnostics with GHA-ACTIONLINT- prefix", async () => {
-    queueLintCall({
+    invokeMock.mockResolvedValueOnce({
       kind: "ok",
       diagnostics: [
         {
@@ -63,11 +54,9 @@ describe("lintWithActionlint", () => {
   });
 
   it("falls back to start position when end is missing", async () => {
-    queueLintCall({
+    invokeMock.mockResolvedValueOnce({
       kind: "ok",
-      diagnostics: [
-        { message: "x", kind: "syntax-check", line: 3, column: 1 },
-      ],
+      diagnostics: [{ message: "x", kind: "syntax-check", line: 3, column: 1 }],
     });
     const out = await lintWithActionlint("yaml");
     expect(out.diagnostics[0].position).toEqual({
@@ -79,7 +68,7 @@ describe("lintWithActionlint", () => {
   });
 
   it("returns empty + error when actionlint failed", async () => {
-    queueLintCall({
+    invokeMock.mockResolvedValueOnce({
       kind: "failed",
       message: "panic at /actionlint:42",
     });
@@ -90,38 +79,24 @@ describe("lintWithActionlint", () => {
   });
 
   it("returns empty + error when invoke itself rejects", async () => {
-    invokeMock.mockResolvedValueOnce("/usr/local/bin"); // path lookup
-    invokeMock.mockRejectedValueOnce(
-      new Error("Tauri command not registered"),
-    );
+    invokeMock.mockRejectedValueOnce(new Error("Tauri command not registered"));
     const out = await lintWithActionlint("yaml");
     expect(out.binaryAvailable).toBe(false);
     expect(out.diagnostics).toEqual([]);
     expect(out.error).toMatch(/not registered/);
   });
 
-  it("auto-resolves login-shell PATH and forwards it as extraPath (audit fix)", async () => {
-    queueLintCall({ kind: "binary_missing" });
-    await lintWithActionlint("yaml");
-    // Two invokes: get_login_shell_path then gha_lint.
-    expect(invokeMock).toHaveBeenNthCalledWith(1, "get_login_shell_path");
-    expect(invokeMock).toHaveBeenNthCalledWith(
-      2,
-      "gha_lint",
-      expect.objectContaining({
-        yaml: "yaml",
-        extraPath: "/usr/local/bin:/usr/bin",
-      }),
-    );
+  it("renders a typed command error by its message, not as [object Object]", async () => {
+    invokeMock.mockRejectedValueOnce({ code: "internal", message: "lint task failed" });
+    const out = await lintWithActionlint("yaml");
+    expect(out.binaryAvailable).toBe(false);
+    expect(out.error).toBe("lint task failed");
   });
 
-  it("respects an explicit extraPath option without invoking get_login_shell_path", async () => {
+  it("sends only the YAML: the webview never chooses the PATH actionlint runs with", async () => {
     invokeMock.mockResolvedValueOnce({ kind: "binary_missing" });
-    await lintWithActionlint("yaml", { extraPath: "/custom/path" });
+    await lintWithActionlint("on: push\n# 工作流 🚀\n");
     expect(invokeMock).toHaveBeenCalledTimes(1);
-    expect(invokeMock).toHaveBeenCalledWith(
-      "gha_lint",
-      expect.objectContaining({ extraPath: "/custom/path" }),
-    );
+    expect(invokeMock).toHaveBeenCalledWith("gha_lint", { yaml: "on: push\n# 工作流 🚀\n" });
   });
 });

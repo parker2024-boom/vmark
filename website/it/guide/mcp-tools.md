@@ -4,7 +4,7 @@ VMark espone **nove strumenti MCP compositi** agli assistenti IA: `session`, `wo
 
 Tre dei nove — `session`, `browser_read` e `coherence` — dichiarano `readOnlyHint: true`, quindi un client MCP può auto-approvarli. È per questo che `browser`/`browser_read` e `coherence`/`coherence_resolve` sono strumenti separati: le annotazioni sono **per strumento**, non per azione, quindi uno strumento che raggruppa uno snapshot ARIA con `execute_js` deve segnalare la pericolosità di `execute_js`. Dividere secondo il criterio «questo modifica qualcosa?» permette a ciascuna metà di dire la verità, e mantiene ben visibili nell'elenco degli strumenti le azioni realmente distruttive della superficie.
 
-La precedente superficie di 12 strumenti / 76 azioni è stata ridotta perché gli strumenti di formattazione interni al documento (grassetto, intestazioni, tabelle, ecc.) duplicano un lavoro che gli agenti IA fanno già banalmente tramite il round-trip Markdown. `selection` è stato mantenuto (secondo l'ADR-7 del piano di riduzione) perché il round-trip dell'intero documento è antieconomico sui file grandi — ogni modifica paga l'intero documento in token di input, l'intero documento in token di output (~5× il prezzo dell'input), e una finestra di scrittura più lunga che allarga il ciclo di ripetizione per revisione obsoleta. Vedi [il piano di riduzione MCP](https://github.com/xiaolai/vmark/blob/main/dev-docs/plans/20260504-mcp-pruning.md) per la motivazione completa.
+La precedente superficie di 12 strumenti / 76 azioni è stata ridotta perché gli strumenti di formattazione interni al documento (grassetto, intestazioni, tabelle, ecc.) duplicano un lavoro che gli agenti IA fanno già banalmente tramite il round-trip Markdown. `selection` è stato mantenuto (secondo l'ADR-7 del piano di riduzione) perché il round-trip dell'intero documento è antieconomico sui file grandi — ogni modifica paga l'intero documento in token di input, l'intero documento in token di output (~5× il prezzo dell'input), e una finestra di scrittura più lunga che allarga il ciclo di ripetizione per revisione obsoleta. Vedi [il piano di riduzione MCP](https://github.com/xiaolai/vmark/blob/main/.claude/adr/plans/20260504-mcp-pruning.md) per la motivazione completa.
 
 ::: tip Flusso di Lavoro Consigliato
 1. Chiama `session.get_state` una volta per vedere finestre aperte, schede e per ogni scheda `{filePath, dirty, revision, kind}`.
@@ -15,7 +15,7 @@ La precedente superficie di 12 strumenti / 76 azioni è stata ridotta perché gl
 :::
 
 ::: tip Diagrammi Mermaid
-Quando si usa l'IA per generare diagrammi Mermaid tramite MCP, considera l'installazione del [server MCP mermaid-validator](/guide/mermaid#mermaid-validator-mcp-server-syntax-checking) — rileva gli errori di sintassi usando gli stessi parser Mermaid v11 prima che i diagrammi raggiungano il tuo documento.
+Quando si usa l'IA per generare diagrammi Mermaid tramite MCP, considera l'installazione del [server MCP mermaid-validator](/it/guide/mermaid#mermaid-validator-mcp-server-syntax-checking) — rileva gli errori di sintassi usando gli stessi parser Mermaid v11 prima che i diagrammi raggiungano il tuo documento.
 :::
 
 ---
@@ -178,18 +178,26 @@ di nuovo nel percorso proprio della scheda è sempre permesso.
 
 ### `close`
 
-Chiude una scheda. Rifiuta di scartare lavoro non salvato senza `force`.
+Chiude una scheda di documento. Rifiuta di scartare lavoro non salvato senza `force`, e non chiude mai una scheda fissata.
 
 | Parametro | Tipo | Richiesto |
 |-----------|------|-----------|
 | `tabId` | stringa | Sì |
 | `force` | booleano | No |
 
-Restituisce `{closed: true}` in caso di successo, `{closed: false, reason: "DIRTY"}` se la scheda è modificata e `force` non è stato fornito.
+Restituisce `{closed: true}` in caso di successo. Altrimenti `{closed: false, reason}`:
+
+| `reason` | Significato |
+|----------|-------------|
+| `DIRTY` | La scheda ha modifiche non salvate e `force` non è stato fornito |
+| `DIVERGENT` | Il file è cambiato sul disco e l'utente ha mantenuto la versione della scheda; senza `force` la chiusura la perderebbe |
+| `PINNED` | La scheda è fissata — rifiutato anche con `force`; l'utente deve sbloccarla |
+
+Le battute di tastiera che l'editor non ha ancora trasmesso vengono conteggiate come non salvate prima del controllo. Una scheda del browser viene rifiutata con un errore `INVALID_TAB` — chiudila con l'azione `close` dello strumento `browser`.
 
 ### `switch_tab`
 
-Attiva una scheda e la rende **visibile**. Con la [barra delle aree di lavoro](/guide/workspace-rail)
+Attiva una scheda e la rende **visibile**. Con la [barra delle aree di lavoro](/it/guide/workspace-rail)
 abilitata questo può cambiare il contesto del workspace attivo dell'utente — la risposta
 riporta `workspaceSwitched: true` quando ciò accade, quindi l'assistente dovrebbe
 avvisare l'utente.
@@ -231,16 +239,23 @@ Sostituisce il contenuto completo del documento.
 | `tabId` | stringa | No | Scheda di destinazione (predefinito su quella in primo piano) |
 | `content` | stringa | Sì | Nuovo contenuto completo |
 | `expected_revision` | stringa | No | Token di revisione dalla lettura più recente |
+| `save` | booleano | No | Salva anche su disco (predefinito `true`); `false` modifica solo la scheda |
+
+Per impostazione predefinita la scrittura viene salvata: la risposta riporta `saved: true`, oppure `saved: false` con `save_skipped` (`"untitled"` — la scheda non ha ancora un file, usa `save_as`; `"opt_out"` — hai passato `save: false`) o `save_error` (la scrittura su disco non è riuscita). Quando la destinazione è la scheda WYSIWYG attiva di un documento Markdown, il testo viene caricato nell'editor attivo (come un unico passo annullabile), e ciò che viene salvato è la serializzazione dell'editor — lo stesso Markdown, eventualmente normalizzato, non necessariamente gli stessi identici caratteri inviati. Le altre schede salvano il testo così come inviato, con i fine riga normalizzati.
+
+Ogni salvataggio fatto da un client IA — tramite `write`, `workspace.save` o `workspace.save_as` — viene archiviato nella cronologia del documento come snapshot `mcp` (etichettato *(mcp)* nella barra laterale Cronologia), così le versioni scritte da un'IA si distinguono dalle tue. Come un salvataggio manuale, non viene mai unito a un salvataggio automatico vicino né saltato per le sue dimensioni.
 
 Se viene fornito `expected_revision` e il documento è cambiato dopo quella lettura, la risposta è una busta di errore strutturato `STALE` con la revisione corrente; rileggi e riprova.
 
 ```json
 // successo
-{ "revision": "rev-newAfterWrite" }
+{ "revision": "rev-newAfterWrite", "saved": true }
 
 // stale
 { "error": "STALE", "message": "Document has changed since the last read", "current_revision": "rev-currentNow" }
 ```
+
+Mentre l'utente compone testo con un metodo di input (IME) nell'editor WYSIWYG che mostra la scheda, la scrittura viene rifiutata con `BUSY` e non cambia nulla: il testo in composizione appartiene al metodo di input finché non viene confermato. Riprova a breve. In modalità Sorgente la scrittura viene accettata, e l'editor la mostra appena la composizione termina.
 
 ### `transform`
 
@@ -254,7 +269,7 @@ Applica una riscrittura deterministica. Attualmente supporta trasformazioni spec
 
 `cjk-format` applica le impostazioni di formattazione CJK dell'utente end-to-end. `cjk-spacing` inserisce singoli spazi tra caratteri CJK e Latini/cifre adiacenti. `cjk-punctuation` converte la punteggiatura ASCII che si trova accanto ai caratteri CJK nella sua forma a larghezza intera.
 
-Restituisce `{revision}`.
+Restituisce `{revision}`. Come `write`, viene rifiutato con `BUSY`, senza cambiare nulla, mentre l'utente compone con un metodo di input nell'editor WYSIWYG che mostra la scheda.
 
 ---
 
@@ -348,6 +363,8 @@ Restituisce `{revision, replaced_chars}` in caso di successo. `replaced_chars` �
 
 `STALE` restituisce `{error: "STALE", message, current_revision}` esattamente come `document.write`. La revisione a livello di documento intercetta le battiture tra `get` e `set`. Il puro spostamento del cursore (senza una battitura) non è arbitrato dal server — se l'utente ha spostato il cursore tra `get` e `set`, la modifica finisce nella nuova posizione.
 
+`set` restituisce `BUSY`, senza cambiare nulla, mentre l'utente compone testo con un metodo di input nell'editor attivo, in modalità WYSIWYG o Sorgente; riprova a breve. `get` non viene mai rifiutato per questo motivo.
+
 ---
 
 ## `browser`
@@ -364,6 +381,16 @@ dallo stato della sessione del browser dell'app.
 
 Annotato `readOnlyHint: false, destructiveHint: true` — accurato piuttosto che semplicemente
 conservativo, perché ogni azione qui modifica qualcosa.
+
+**Gli errori sono tipizzati.** Un rifiuto arriva come `TOKEN: message` (`STALE_COMMAND`,
+`NOT_GRANTED`, `EVAL_TIMEOUT`, `TAB_LIMIT`, …) con lo stesso token — e gli eventuali dati
+strutturati che l'app ha allegato (un ticket di navigazione, il `reason` di un act, il verbo per
+riprovare) — in `structuredContent`. Basati sul token, non sul testo.
+
+Un `EVAL_TIMEOUT` è **indeterminato**, non un fallimento pulito: lo script inviato potrebbe essere
+stato comunque eseguito fino in fondo dopo che il driver ha smesso di attendere, quindi riporta
+`data.detail.indeterminate: true` e non deve essere ripetuto come se non fosse successo nulla —
+leggi la pagina (`browser_read`) per sapere in che stato si trova prima di agire di nuovo.
 
 ### `act`
 
@@ -382,41 +409,64 @@ operazione:
 quindi un sito che si basa su `event.isTrusted` potrebbe ignorarli. Le operazioni mutanti richiedono
 un'approvazione con ambito all'origine; i caricamenti scelti dall'IA non sono mai permessi.
 
-**Un click verifica il proprio effetto prima di segnalare il successo.** La destinazione viene
-portata in vista, deve essere renderizzata in modo visibile (vengono controllati gli stili calcolati
-e gli antenati collassati, così un pulsante duplicato dentro uno step di accordion chiuso viene
-saltato, non cliccato), e il punto del click viene sottoposto a hit-test — una destinazione coperta
-da un overlay viene rifiutata nominando l'elemento occludente (`covered by div.cmp-overlay`) invece
-di cliccarci attraverso. I risultati role + name riportano i conteggi `matchedTotal` /
-`matchedVisible` così l'ambiguità è visibile, e ogni risposta act include l'`url` e la `generation`
-correnti della scheda. `type` gestisce campi di testo, controlli `<select>` (passa l'etichetta o il
-valore dell'opzione; un'opzione mancante viene rifiutata come `no-such-option`) e regioni
-`contenteditable`.
+**Un click verifica il proprio effetto prima di segnalare il successo, e rifiuta invece di
+tirare a indovinare.** La destinazione viene portata in vista, deve essere renderizzata in modo
+visibile (vengono controllati gli stili calcolati e gli antenati collassati o trasparenti, così un
+pulsante duplicato dentro uno step di accordion chiuso viene saltato, non cliccato), e il punto del
+click viene sottoposto a hit-test — una destinazione coperta da un overlay viene rifiutata nominando
+l'elemento occludente (`covered by div.cmp-overlay`, dati della pagina) invece di cliccarci
+attraverso. Quando più elementi visibili condividono role e name, l'act viene rifiutato come
+`ambiguous` e `candidates` elenca i loro ref — non ne sceglie mai uno in base all'ordine nel
+documento. Altri motivi di rifiuto: `hidden`, `offscreen` (non può essere portato nel viewport con lo
+scorrimento), `disabled` (compresi `pointer-events: none` e i sottoalberi inerti), `upload` (gli
+input di file non vengono mai automatizzati) e `rejected-value` (il campo ha ripulito il testo).
+Vengono attraversate le shadow root aperte; la risposta include i conteggi `matchedTotal` /
+`matchedVisible`, l'`url` e la `generation` correnti della scheda sia in caso di successo **sia** di
+fallimento, e `popup: {url}` quando la pagina ha tentato di aprire una finestra durante l'act (VMark
+blocca i popup; l'URL è quello che la pagina voleva aprire). `type` gestisce campi di testo, controlli
+`<select>` (passa l'etichetta o il valore dell'opzione; un'opzione mancante viene rifiutata come
+`no-such-option`) e regioni `contenteditable`. `key` emula le azioni predefinite che mancano agli
+eventi sintetici — Invio all'interno di un modulo lo invia, Tab sposta il focus — e riporta
+`defaultAction`.
+
+**Cosa vincola un'approvazione.** Un'approvazione `click` vincola l'elemento (role + name).
+Un'approvazione `type`, `key` o `scroll` vincola anche il testo, il tasto (con i modificatori) o il
+delta esatti che hai richiesto — il prompt li mostra — così un nuovo tentativo con un contenuto
+diverso chiede di nuovo.
 
 ### `workflow_run` / `workflow_cancel`
 
 `workflow_run` esegue un workflow che fornisci come testo `source` su una scheda di proprietà
 dell'IA. Argomenti: `tabId?`, `source` (il testo del workflow — una piccola grammatica orientata
-alle righe; lo scrivi tu, lo fa l'IA, o [`workflow_record`](#workflow-record) lo cattura dalle tue stesse azioni), `inputs?` (una mappa `{name: value}` sostituita nei
-riferimenti `{name}`), `allowRepeat?`. Restituisce `{runId, steps}` **immediatamente** —
+alle righe; lo scrivi tu, lo fa l'IA, o [`workflow_record`](#workflow-record) lo cattura dalle tue
+stesse azioni), `inputs?` (una mappa `{name: value}` sostituita nei riferimenti `{name}`; ogni input
+dichiarato deve essere fornito e quelli non dichiarati vengono rifiutati), `allowRepeat?` e
+`resumeRunId?` (vedi sotto). Restituisce `{runId, steps, firstStep}` **immediatamente** —
 l'esecuzione avviene in modo **asincrono**, perché un'esecuzione multi-step può sopravvivere a una
-singola richiesta. Interroga il `workflow_status` di [`browser_read`](#browser-read) per il progresso.
+singola richiesta. Interroga il `workflow_status` di [`browser_read`](#browser-read) per il
+progresso; mentre l'esecuzione attende te, riporta `pendingApproval`.
 
 Gli step deterministici — `click` / `type` / `navigate` in quella grammatica, ed `extract`
 — vengono eseguiti dentro VMark e sono **soggetti ad approvazione individualmente**, esattamente
 come un `act` emesso a mano: l'esecuzione autorizza ciascuno per conto proprio, quindi un workflow
 non è un modo per aggirare i prompt di approvazione. `goal`, `confirm`, `api` e qualsiasi step in
-prosa libera **mettono in pausa** l'esecuzione affinché l'IA la gestisca a mano. Una nuova
-esecuzione **salta gli step di scrittura già riusciti** in questa sessione (il registro delle
-scritture completate), a meno che `allowRepeat` non sia impostato — così rieseguire dopo una pausa
-non invia due volte.
+prosa libera **mettono in pausa** l'esecuzione affinché l'IA la gestisca a mano. **Riprendere dopo
+una pausa:** esegui lo step in pausa (o fatti aiutare dall'IA), poi avvia una nuova esecuzione con
+`resumeRunId` impostato sull'esecuzione in pausa — eredita gli step completati e considera fatto lo
+step in pausa, così nulla viene inviato due volte. Anche una nuova esecuzione con **lo stesso source e
+gli stessi input** salta gli step di scrittura già riusciti in questa sessione (il registro delle
+scritture completate; gli step saltati vengono riportati come `skipped`), a meno che `allowRepeat` non
+sia impostato. Input diversi sono un lavoro diverso e vengono eseguiti per intero.
 
 `workflow_cancel {tabId?, runId}` interrompe un'esecuzione. **Non è mai soggetta ad approvazione** —
-fermare è sempre permesso — e ritira i prompt in sospeso dell'esecuzione e ti restituisce la scheda.
-L'esecuzione si ferma anche nel momento in cui prendi il controllo del browser (qualsiasi interazione
-con la pagina o la sua interfaccia riprende il controllo).
+fermare è sempre permesso — e ritira i prompt in sospeso dell'esecuzione, interrompe uno step che
+attende la tua approvazione e ti restituisce la scheda. Un'esecuzione già terminata riporta
+`already-terminal` e resta com'era; un `runId` sconosciuto dà `RUN_NOT_FOUND`. L'esecuzione si ferma
+anche nel momento in cui prendi il controllo del browser (qualsiasi interazione con la pagina o la sua
+interfaccia riprende il controllo) — anche mentre è in attesa di un prompt.
 
-Le esecuzioni sono limitate (≤ 25 step, ≤ 120 s, source ≤ 64 KiB) e una alla volta per scheda.
+Le esecuzioni sono limitate (≤ 25 step, source ≤ 64 KiB e 120 s di tempo di **esecuzione** — il
+tempo trascorso ad attendere te non conta) e una alla volta per scheda.
 
 ### `workflow_record`
 
@@ -444,15 +494,32 @@ La registrazione ti segue attraverso le navigazioni tra pagine ed è limitata (2
 
 ### `open`
 
-Argomenti: `url` e `timeoutMs` opzionale (1–12.000 ms). Crea una scheda di proprietà dell'IA usando
-la postura Sandbox o Condivisa corrente e restituisce il suo `tabId`, `navigationId`, URL, titolo e
-generation dopo il completamento del caricamento.
+Argomenti: `url`, `timeoutMs` opzionale (1–9.000 ms) e `profile` opzionale
+(`[A-Za-z0-9._-]`, macOS 14+, postura sandbox): un **contesto persistente con nome**, così un accesso
+può essere riutilizzato per nome — aprirne uno richiede ogni volta una nuova approvazione, e l'IA non
+vede mai le credenziali. Crea una scheda di proprietà dell'IA usando la postura Sandbox o Condivisa
+corrente, la porta in primo piano e restituisce il suo `tabId`, `navigationId`, URL, titolo e
+generation dopo il completamento del caricamento. Possono essere aperte al massimo **8 schede di
+proprietà dell'IA** (`TAB_LIMIT`); l'IA chiude quelle che non le servono più. In postura Condivisa, un
+`open` che richiede la tua approvazione della destinazione mantiene la sua scheda e dice all'IA di
+riprovare con `navigate` su quel `tabId` (`data.retry`) — un nuovo `open` creerebbe una scheda che
+l'approvazione non può coprire.
 
 ### `navigate`
 
-Argomenti: `tabId?`, `url` e `timeoutMs` opzionale. Naviga una scheda di proprietà dell'IA e
-restituisce il risultato del ticket di navigazione. Un timeout restituisce comunque il ticket così
-che un successivo `wait` possa recuperare il risultato finale.
+Argomenti: `tabId?`, `url` e `timeoutMs` opzionale. Naviga una scheda di proprietà dell'IA
+(portandola in primo piano) e restituisce il risultato del ticket di navigazione. Un `TIMEOUT`
+contiene comunque il ticket, così che un successivo `wait` possa recuperare il risultato finale.
+
+### `close`
+
+Argomenti: `tabId`. Chiude una scheda di proprietà dell'IA aperta dall'IA. **Non è mai soggetta ad
+approvazione** — fermare è sempre permesso. Una scheda umana viene rifiutata (`TAB_NOT_AI_OWNED`). Il
+risultato è `{tabId, closed: true, destroyed: true}` una volta confermato che la vista nativa non
+esiste più; uno smantellamento che il driver non è riuscito a confermare dopo i suoi tentativi viene
+riportato come `TAB_TEARDOWN_FAILED` con `data.destroyed: false` — il record della scheda è già stato
+rimosso, quindi non ripetere la chiusura; avvisa l'utente che una vista nativa potrebbe essere ancora
+in esecuzione.
 
 **Rilevamento dei gate.** Un risultato di `open` / `navigate` / `wait` caricato può contenere
 `gate: {kind, hint}` quando la pagina raggiunta si presenta come un **muro di login**, un
@@ -472,13 +539,15 @@ ecc. **Classe act** (soggetta ad approvazione, op `style`). Mondo di contenuto i
 
 ### `execute_js`
 
-Argomenti: `tabId?`, `script` (deve fare `return` di un valore serializzabile in JSON). La via di
-fuga per ciò che i verbi strutturati non possono esprimere. Viene eseguito nel **mondo di contenuto
-isolato** — condivide il DOM (quindi `querySelector`, `element.style` funzionano) ma **non può**
-vedere l'heap/le globali JS proprie della pagina. È approvato **solo per ogni chiamata** (mai una
-concessione permanente, imposto nel driver Rust), l'approvazione mostra lo script, e il valore
-restituito è contrassegnato come **non attendibile** e non viene mai inoltrato automaticamente a un
-`act` successivo. Preferisci prima `query`/`style`.
+Argomenti: `tabId?`, `script` — il corpo di una funzione async che fa `return` (o `await`) di un
+valore serializzabile in JSON. La via di fuga per ciò che i verbi strutturati non possono esprimere.
+Viene eseguito nel **mondo di contenuto isolato** — condivide il DOM (quindi `querySelector`,
+`element.style` funzionano) ma **non può** vedere l'heap/le globali JS proprie della pagina. Il valore
+torna come `result` (`undefined` diventa `null`); un'eccezione, o un valore che JSON non può
+codificare, è un **fallimento che nomina l'errore**, mai un risultato. È approvato **solo per ogni
+chiamata** (mai una concessione permanente, imposto nel driver Rust), l'approvazione mostra lo
+script, e il valore restituito è contrassegnato come **non attendibile** e non viene mai inoltrato
+automaticamente a un `act` successivo. Preferisci prima `query`/`style`.
 
 ### `session_save` / `session_load`
 
@@ -490,8 +559,9 @@ alcun valore. Un `session_load` si applica solo a una pagina con la **stessa ori
 sessione è stata salvata. Questa è una credenziale **per riferimento** (ADR-A7): l'IA nomina una
 sessione salvata e non riceve mai valori di cookie/token, che non vengono mai registrati. Entrambe
 usano il permesso `session` — **mai una concessione permanente** (approvata per ogni chiamata), e
-un'approvazione per un handle non può essere spesa per un altro. *Oggi questo copre `localStorage`;
-la cattura dei cookie è un'attività di follow-up in fase di test dal vivo.*
+un'approvazione per un handle non può essere spesa per un altro. Una sessione salvata copre
+`localStorage` **e i cookie**, entrambi limitati all'origine su cui la pagina era stabilita al
+momento del salvataggio.
 
 ### `console_clear`
 
@@ -521,9 +591,13 @@ possono essere considerati attendibili. Tutto ciò che viene restituito è contr
 
 ### `read`
 
-Restituisce `{url, snapshot}` per la scheda del browser in primo piano, o per la scheda indicata da
-`tabId`. `snapshot` è un elenco orientato ad ARIA di `{role, name, ref}` — ogni `ref` (ad es. `"e5"`)
-è un handle stabile per quell'elemento, valido per la durata della vista corrente.
+Restituisce `{url, snapshot, truncated?, unreachable?}` per la scheda del browser in primo piano, o
+per la scheda indicata da `tabId`. `snapshot` è un elenco orientato ad ARIA di nodi `{role, name, ref}`
+— più `level` per le intestazioni, `checked`, `disabled` e `upload: true` per un input di file che
+l'IA non può mai azionare — e ogni `ref` (ad es. `"e5"`) è un handle stabile per quell'elemento,
+valido per la durata della vista corrente. La visita entra nelle shadow root aperte; `unreachable`
+conta le shadow root chiuse e i frame in cui non è potuta entrare, e `truncated: true` significa che è
+scattato il limite di nodi (2.000) o il limite del nome (200 caratteri).
 
 ### `screenshot`
 
@@ -532,14 +606,16 @@ limitata) del rendering corrente della scheda, più una riga di testo che nomina
 visivo sul layout e sullo stato renderizzato che lo snapshot ARIA non può descrivere. Viene catturato
 nativamente (`takeSnapshot`) e non legge alcun DOM o JavaScript della pagina. Classe read: autorizzato
 esattamente come `read` (permesso su una scheda di proprietà dell'IA; una scheda umana richiede un
-collegamento, consumato alla cattura).
+collegamento, consumato alla cattura). Una scheda che non è la pagina visibile può risultare vuota —
+`open` e `navigate` portano una scheda in primo piano.
 
 ### `query`
 
 Argomenti: `tabId?`, `selector` (CSS) e `fields: {attributes, box, styles:[...]}` opzionale.
-Restituisce `{count, elements: [{ref, tag, text, …}]}` — dati DOM strutturati che lo snapshot ARIA
-non può nominare (tabelle, valori calcolati). **Classe read.** Viene eseguito nel mondo di contenuto
-isolato.
+Restituisce `{count, elements: [{ref, tag, text, …}], truncated?}` — dati DOM strutturati che lo
+snapshot ARIA non può nominare (tabelle, valori calcolati) — limitati a 50 elementi e a 500 caratteri
+di testo ciascuno (`truncated: true` quando il selettore ha trovato più corrispondenze). **Classe
+read.** Viene eseguito nel mondo di contenuto isolato.
 
 ### `extract`
 
@@ -554,21 +630,25 @@ Tutto ciò che viene restituito deriva dalla pagina e non è attendibile.
 
 ### `workflow_status`
 
-Argomenti: `tabId?`, `runId` (da `workflow_run`). Restituisce `{status, completedSteps, stepCount,
-pausedAt?, reasonCode?, reason?, stepResults}` dove `status` è uno tra `running` / `paused` /
-`completed` / `failed` / `cancelled`. Uno stato `paused` nomina in `pausedAt` lo step che ha bisogno
-di te. **Classe read** — interrogalo liberamente.
+Argomenti: `tabId?`, `runId` (da `workflow_run`). Restituisce `{status, completedSteps,
+skippedSteps, stepCount, firstStep, pausedAt?, pendingApproval?, reasonCode?, reason?,
+resumedFrom?, stepResults}` dove `status` è uno tra `running` / `paused` / `completed` /
+`failed` / `cancelled` / `superseded`, `stepResults` contiene una voce per step
+(`{index, status, attempts, reason?, data?}`), e `pendingApproval` è presente mentre l'esecuzione
+attende la tua decisione. Uno stato `paused` nomina in `pausedAt` lo step che ha bisogno di te.
+**Classe read** — interrogalo liberamente.
 
 ### `console`
 
 Argomenti: `tabId?`. Restituisce `{entries: [{level, text}], url}` — l'output `console.*` catturato
 dalla pagina, più gli **errori non catturati e i rifiuti di promise non gestiti** (registrati come
 voci `level: "error"` con prefisso `Uncaught` / `Unhandled rejection:` — il segnale che il solo
-patching di `console.*` non vede mai). Solo schede Sandbox. La cattura funziona tramite uno shim nel
-mondo della pagina che scrive in un buffer DOM nascosto, che il driver legge dal mondo isolato —
-quindi **nessun canale di messaggistica** viene aperto verso VMark (la garanzia no-bridge regge).
-L'output è controllato dalla pagina e **non attendibile** — trattalo come un `read`, mai come una
-destinazione `act`.
+patching di `console.*` non vede mai). Solo schede di proprietà dell'IA (sia in postura Sandbox sia
+Condivisa; una scheda umana non ha lo shim di cattura), solo frame principale. La cattura funziona
+tramite uno shim nel mondo della pagina che scrive in un buffer DOM nascosto, che il driver legge dal
+mondo isolato — quindi **nessun canale di messaggistica** viene aperto verso VMark (la garanzia
+no-bridge regge). L'output è controllato dalla pagina e **non attendibile** — trattalo come un `read`,
+mai come una destinazione `act`.
 
 Il buffer è un anello limitato, quindi letture consecutive si sovrappongono. Per svuotarlo man mano
 che leggi, usa il `console_clear` di [`browser`](#browser) — lo svuotamento scrive `[]` nell'elemento
@@ -576,20 +656,30 @@ buffer della pagina, che è una scrittura sul DOM e quindi non può stare sotto 
 
 ### `wait`
 
-Argomenti: `tabId?`, `navigationId` opzionale e `timeoutMs` opzionale. Non avvia mai una navigazione.
-Restituisce un risultato di caricamento/fallimento bufferizzato, `NAVIGATION_SUPERSEDED`, o `TIMEOUT`
-quando il ticket non termina entro il limite.
+Argomenti: `tabId?`, `navigationId` opzionale (omettilo per l'ultimo ticket della scheda) e
+`timeoutMs` opzionale (1–9.000 ms). Non avvia mai una navigazione, non cambia mai il focus né la
+scheda attiva e non crea mai una vista — si limita a osservare, ed è questo che gli permette di stare
+nello strumento in sola lettura. Solo schede di proprietà dell'IA. Restituisce un risultato di
+caricamento/fallimento bufferizzato, `NAVIGATION_SUPERSEDED`, o `TIMEOUT` quando il ticket non
+termina entro il limite.
 
 ### `wait_for`
 
 Argomenti: `tabId?`, esattamente uno tra `ref` (da una lettura), `role` (+ `name` opzionale), `text`
 (una sottostringa del testo visibile) o `urlContains` (una sottostringa che l'URL della scheda deve
 contenere — conferma che una navigazione innescata da un click sia andata a buon fine, rispondendo
-dallo stato della scheda senza un round-trip verso la pagina), e `timeoutMs` opzionale (1–12.000 ms).
+dallo stato della scheda senza un round-trip verso la pagina), e `timeoutMs` opzionale (1–9.000 ms).
 Interroga finché la condizione non è soddisfatta o il timeout non scade e restituisce
 `{matched: true|false}` (più il `ref` dell'elemento trovato per una condizione ref/role) — così puoi
 distinguere «trovato» da «tempo scaduto». Classe read. Usalo per rendere un flusso deterministico:
 agisci, `wait_for` sul risultato, poi leggi.
+
+Due regole derivano da ciò che può vedere. `urlContains` confronta l'URL **oscurato** — la stringa di
+query e il frammento vengono rimossi, perché un token piazzato lì da un reindirizzamento non deve
+poter essere sondato — quindi un ago che contiene `?` o `#` viene rifiutato in partenza. E su una
+scheda umana collegata con **Consenti una volta** viene rifiutato (`ATTACHMENT_ONCE_INSUFFICIENT`):
+interrogare significa molte letture, e un collegamento valido per una sola lettura non può coprirle —
+chiedi **Consenti fino alla navigazione**.
 
 ---
 
@@ -716,7 +806,7 @@ Compaiono due forme di errore:
 | `INVALID_TAB` | busta | `tabId` non poteva essere risolto |
 | `INVALID_PATH` | busta | Un `filePath` non poteva essere letto, o è al di fuori dell'ambito del workspace aperto / del documento |
 | `APPROVAL_REQUIRED` | busta | `save_as` verso una nuova posizione mentre **Approva automaticamente i salvataggi in una nuova posizione e i risultati dei geni** è disattivato; oppure `open_workspace` attende l'approvazione dell'utente, o che scelga la cartella nel selettore di cartelle di VMark |
-| `BUSY` | busta | `open_workspace` non ha potuto procedere: è aperta un'altra finestra di selezione cartelle, o nella finestra è in corso un cambio di spazio di lavoro; l'approvazione resta valida — riprova |
+| `BUSY` | busta | `open_workspace` non ha potuto procedere: è aperta un'altra finestra di selezione cartelle, o nella finestra è in corso un cambio di spazio di lavoro; l'approvazione resta valida — riprova. Oppure `document.write`, `document.transform` o `selection.set` è arrivato mentre l'utente componeva testo con un metodo di input; non è stato cambiato nulla — riprova a breve |
 | `NOT_WORKFLOW` | busta | `workflow.*` è stato chiamato su una scheda non YAML-workflow |
 | `READ_ONLY` | busta | È stata tentata una mutazione su un documento di sola lettura |
 | `NO_EDITOR` | busta | `selection.*` è stato chiamato ma la scheda in primo piano non ha un editor attivo |

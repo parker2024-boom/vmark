@@ -95,3 +95,75 @@ async fn unknown_request_is_ignored() {
     assert!(!complete);
     assert!(refs.is_empty());
 }
+
+// -- WI-RA7C.5: answers count for the window they came from ------------------
+
+#[cfg(not(target_os = "windows"))]
+mod caller_identity {
+    use super::{register_request, take_result};
+    use crate::ipc_caller::{app_with, invoke_from, window};
+    use serde_json::json;
+
+    fn app() -> tauri::App<tauri::test::MockRuntime> {
+        app_with(tauri::generate_handler![
+            super::super::live_docs_response,
+            super::super::collect_live_document_refs,
+        ])
+    }
+
+    /// A window that could answer FOR another, with no references, made the
+    /// request read as complete — and an image the other window's unsaved
+    /// buffer still uses was deleted.
+    #[test]
+    fn a_window_cannot_answer_for_another() {
+        let app = app();
+        let impostor = window(&app, "doc-1");
+        let _silent = window(&app, "doc-2");
+        let _rx = register_request("req-impostor", ["doc-2".to_string()].into_iter().collect());
+
+        let answer = invoke_from(
+            &impostor,
+            "live_docs_response",
+            json!({ "requestId": "req-impostor", "label": "doc-2", "refs": [] }),
+        );
+
+        assert!(answer.is_ok(), "{answer:?}");
+        let (complete, _) = take_result("req-impostor");
+        assert!(!complete, "doc-1 answered as doc-2");
+    }
+
+    #[test]
+    fn a_window_answers_for_itself() {
+        let app = app();
+        let responder = window(&app, "doc-3");
+        let _rx = register_request("req-honest", ["doc-3".to_string()].into_iter().collect());
+
+        let answer = invoke_from(
+            &responder,
+            "live_docs_response",
+            json!({ "requestId": "req-honest", "refs": ["a.png"] }),
+        );
+
+        assert!(answer.is_ok(), "{answer:?}");
+        assert_eq!(take_result("req-honest"), (true, vec!["a.png".to_string()]));
+    }
+
+    /// The requester is never asked to answer its own request: it is the window
+    /// the call came from, whatever label the page sent.
+    #[test]
+    fn the_requester_is_the_calling_window() {
+        let app = app();
+        let requester = window(&app, "doc-4");
+
+        let answer = invoke_from(
+            &requester,
+            "collect_live_document_refs",
+            json!({ "requestingLabel": "doc-elsewhere" }),
+        )
+        .expect("answered");
+
+        // No other document window exists, so nobody is asked and the answer is
+        // complete at once — not after waiting out the deadline for itself.
+        assert_eq!(answer["complete"], json!(true), "{answer}");
+    }
+}

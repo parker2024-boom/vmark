@@ -1,6 +1,6 @@
 /**
- * Console capture (WI-P7.1 / WI-NB3.1) — Option C from the Phase 7 design review
- * (`dev-docs/grills/browser-automation/phase7-console-design.md`).
+ * Console capture — the option the Phase 7 design review chose: a page-world
+ * shim feeding a DOM ring buffer, with no message bridge.
  *
  * A page-world shim overrides `console.*` — and captures uncaught errors and
  * unhandled promise rejections — appending each entry to a **capped ring buffer**

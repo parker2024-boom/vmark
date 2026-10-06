@@ -102,7 +102,7 @@ export function tabBelongsToWorkspace(
   instance: WorkspaceInstanceRecord,
   activeInstanceId: string | null,
 ): boolean {
-  // Thin store-reading wrapper over the pure ownership kernel (WI-1R) — the
+  // Thin store-reading wrapper over the pure ownership kernel — the
   // partition rule (explicit-claim-wins across all instances, then path
   // classification) lives in ONE place.
   const instances = orderedWindowInstances(instance.ownerWindowLabel);

@@ -1,3 +1,10 @@
+/**
+ * highContrast.spike — a high-contrast set of theme tokens kept as a
+ * verification artifact, not a shipping theme.
+ *
+ * @module theme/themes/__acceptance__/highContrast.spike
+ */
+
 import type { ThemeTokens } from "../../tokens";
 import { sharedPrimitives, lightShadows, subtleLight, hoverLight } from "../../tokens";
 

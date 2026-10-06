@@ -192,7 +192,11 @@ describe("withCurrentNumericOption (audit-fix — generalizes WI-1.3)", () => {
   it("covers scrollback beyond its preset range (clamp allows 200000)", () => {
     const opts = [{ value: "1000", label: "1,000" }];
     const out = withCurrentNumericOption(opts, 200000, (v) => v.toLocaleString());
-    expect(out.map((o) => o.value)).toContain("200000");
+    // The app tier pins the en-US locale, so the grouped label is exact.
+    expect(out).toEqual([
+      { value: "1000", label: "1,000" },
+      { value: "200000", label: "200,000" },
+    ]);
   });
 });
 

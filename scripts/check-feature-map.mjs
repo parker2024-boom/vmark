@@ -17,9 +17,9 @@
  *      names a spine feature, every spine feature has a block, every path a
  *      block cites in `code`/`rust`/`docs`/`tests` exists (a glob matches a
  *      file), and every area records the commit it was verified against — one
- *      that is an ancestor of HEAD. It lived in the gitignored `dev-docs/`
- *      until 2026-09-27, where CI could not see it; a missing ledger now fails. The first ledger was accurate on 2026-09-07 and
- *      nineteen releases stale by 2026-09-27, with no signal.
+ *      that is an ancestor of HEAD. It used to live in the gitignored `dev-docs/`,
+ *      where CI could not see it; a missing ledger now fails. The first ledger
+ *      went from accurate to nineteen releases stale there, with no signal.
  *
  * A spine of the wrong SHAPE is reported alone: every later check would be
  * reasoning about a guess, and `null` used to crash the ownership pass with a

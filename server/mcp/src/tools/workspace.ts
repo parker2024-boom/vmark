@@ -6,7 +6,8 @@
  * The pruned MCP surface depends on these because the AI cannot
  * derive them from text round-trip alone.
  *
- * Origin: MCP pruning plan (2026-05-04, retired) WI-1.2.
+ * Origin: the MCP pruning plan, whose decisions are recorded in
+ * `.claude/adr/plans/20260504-mcp-pruning.md`.
  */
 
 import { z } from 'zod';
@@ -77,11 +78,11 @@ export function registerWorkspaceTool(server: VMarkMcpServer): void {
         // bridge answers with internally; the tool renders it as an ERROR whose
         // text asks for approval (deliberately — Codex M11), so a client
         // branching on the documented field found nothing and had to parse
-        // prose it was never told to expect (audit R3 #241).
+        // prose it was never told to expect.
         '- open_workspace: Open a FOLDER as the active workspace (grants access to its file tree). Args: {folderPath}. NOTE: windowLabel is ignored here — the folder opens in the window the request arrives on, so the approval prompt and the open cannot land in different windows. REQUIRES USER APPROVAL: the first call FAILS with an error beginning "approval required to open workspace" and naming the folder; ask the user to approve it in VMark, then retry the SAME call to proceed. Do not retry before they have approved — a retry only re-raises the same request. A denied request keeps failing until re-approved.\n' +
         '- save: Save a tab to its existing path. Args: {tabId?}. Returns {filePath, revision}.\n' +
         '- save_as: Save a tab to a new path. Args: {tabId?, filePath}. Returns {revision}.\n' +
-        '- close: Close a tab. Args: {tabId, force?}. Refuses to close a dirty tab unless `force: true`; returns {closed: false, reason: "DIRTY"} in that case.\n' +
+        '- close: Close a document tab. Args: {tabId, force?}. Without `force: true` it refuses a tab holding local content, returning {closed: false, reason: "DIRTY"} for unsaved changes or {closed: false, reason: "DIVERGENT"} for a clean document whose content the user kept over a change on disk — save first (save clears both) or pass force to discard. A pinned tab is never closed, force or not: {closed: false, reason: "PINNED"}; the user must unpin it. A browser tab is refused as INVALID_TAB — close it with the browser tool.\n' +
         '- switch_tab: Activate a tab and make it VISIBLE — this may switch the user\'s active workspace context (disclosed via workspaceSwitched: true in the result; tell the user when it happens). Args: {tabId}. Returns {activated, workspaceSwitched, workspaceInstanceId, activeTabId}.\n' +
         '- focus_window: Focus a specific window. Args: {windowLabel}.',
       inputSchema: {
@@ -104,7 +105,7 @@ export function registerWorkspaceTool(server: VMarkMcpServer): void {
         force: z
           .boolean()
           .optional()
-          .describe('`close` only — discard a dirty tab without saving.'),
+          .describe('`close` only — discard a dirty or divergent tab without saving.'),
       },
     },
     async (args) => {
@@ -124,8 +125,7 @@ export function registerWorkspaceTool(server: VMarkMcpServer): void {
       // means "use the default", so `new` silently created a Markdown tab for a
       // caller who asked for something else. `VMarkMcpServer.callTool` runs no
       // schema validation, so the guard, not the enum, is what holds — the same
-      // rule `readOptionalRevision`/`readOptionalBoolean` already carry
-      // (audit R2 #226/#227, R3 #240).
+      // rule `readOptionalRevision`/`readOptionalBoolean` already carry.
       if (args.kind !== undefined && !(WORKSPACE_TAB_KINDS as readonly unknown[]).includes(args.kind)) {
         return VMarkMcpServer.errorResult(
           `kind must be one of ${WORKSPACE_TAB_KINDS.join(', ')} when provided (got ${JSON.stringify(args.kind)}) — omit it for the default`,

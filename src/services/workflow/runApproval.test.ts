@@ -23,7 +23,8 @@ import { awaitAuthorization, type ApprovalWaitContext } from "./runApproval";
 import type { PendingApprovalInfo } from "./runRegistry";
 import type { RunClock } from "./runClock";
 import { useBrowserApprovalStore, MAX_PENDING_APPROVALS } from "@/stores/browserApprovalStore";
-import { useBrowserLeaseStore } from "@/services/browser/lease";
+import { browserLease } from "@/services/browser/lease";
+import { useBrowserLeaseStore } from "@/stores/browserLeaseStore";
 import { WorkflowPause } from "@/lib/browser/workflow/engine";
 
 const URL = "https://blog.example.com/post";
@@ -253,11 +254,11 @@ describe("awaitAuthorization — cancel and takeover interrupt the wait (W-01)",
   });
 
   it("a moved lease epoch (human takeover) ends the wait as lease-lost", async () => {
-    useBrowserLeaseStore.getState().acquireForAi(TAB);
-    const { ctx } = harness({ leaseEpoch: useBrowserLeaseStore.getState().epochOf(TAB) });
+    browserLease.acquireForAi(TAB);
+    const { ctx } = harness({ leaseEpoch: browserLease.epochOf(TAB) });
     const wait = awaitAuthorization(ctx, { url: URL, operation: "click", target: TARGET });
     await sleep(5);
-    useBrowserLeaseStore.getState().reclaimForHuman(TAB);
+    browserLease.reclaimForHuman(TAB);
     await expect(wait).rejects.toMatchObject({ reasonCode: "lease-lost" });
     expect(mint).not.toHaveBeenCalled();
   });

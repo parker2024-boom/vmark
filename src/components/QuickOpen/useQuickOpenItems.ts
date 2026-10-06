@@ -1,6 +1,7 @@
 /**
  * Purpose: Build and rank Quick Open file items from recent, open, and workspace sources.
  * @coordinates-with fuzzyMatch.ts, quickOpenStore.ts, recentFilesStore, tabStore, workspaceStore
+ * @module components/QuickOpen/useQuickOpenItems
  */
 
 import { useRecentFilesStore } from "@/stores/workspaceStore";
@@ -32,7 +33,7 @@ export interface RankedItem {
   match: FuzzyMatchResult | null;
 }
 
-// WI-TNAV2.4: `open` outranks `recent`. Ordering the open tier by MRU is a
+// `open` outranks `recent`. Ordering the open tier by MRU is a
 // NO-OP without this, and the reason is subtle: recents were emitted first and
 // won dedup (`addItem` lets the first tier claim a path), while ordinary file
 // opening ADDS the path to recents (`loadFileIntoTab.ts:20`) — so almost every
@@ -98,9 +99,9 @@ export function buildQuickOpenItems(
 ): QuickOpenItem[] {
   const rootPath = getActiveWorkspaceScope(windowLabel).rootPath;
   const recentFiles = useRecentFilesStore.getState().files;
-  // WI-12.1: the open-tab tier lists only the VISIBLE projection (active
+  // The open-tab tier lists only the VISIBLE projection (active
   // instance + browser); selecting a global recent still switches context
-  // through ownership-aware activation (WI-12.2).
+  // through ownership-aware activation.
   const windowTabs = visibleWindowTabs(windowLabel);
   const openPathSet = new Set(
     windowTabs

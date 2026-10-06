@@ -15,87 +15,89 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const {
-  mockCreateTab,
-  mockDetachTab,
-  mockRestoreTabMetadata,
-  mockRestoreDocumentState,
-  mockClearExisting,
-  mockHotExitWarn,
-} = vi.hoisted(() => ({
-  mockCreateTab: vi.fn(),
-  mockDetachTab: vi.fn(),
-  mockRestoreTabMetadata: vi.fn(),
-  mockRestoreDocumentState: vi.fn(),
-  mockClearExisting: vi.fn(),
-  mockHotExitWarn: vi.fn(),
-}));
+// Everything below `restoreTabs` runs real: the tab, document and UI stores,
+// `restoreTabMetadata` and `restoreDocumentState`. A failure is injected the
+// way it arrives in practice — as a session payload the restore cannot read.
+const { mockHotExitWarn } = vi.hoisted(() => ({ mockHotExitWarn: vi.fn() }));
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
-vi.mock("@/stores/tabStore", () => ({
-  useTabStore: {
-    getState: () => ({ tabs: {}, activeTabId: {}, createTab: mockCreateTab, detachTab: mockDetachTab }),
-  },
-}));
-vi.mock("@/stores/documentStore", () => ({
-  useDocumentStore: { getState: () => ({}) },
-}));
-vi.mock("@/stores/uiStore", () => ({
-  useUIStore: { getState: () => ({}) },
-  TERMINAL_MAX_RATIO: 0.5,
-  SIDEBAR_MIN_WIDTH: 180,
-  SIDEBAR_MAX_WIDTH: 480,
-  SIDEBAR_DEFAULT_WIDTH: 260,
-}));
-vi.mock("./restoreDocumentState", () => ({
-  restoreDocumentState: (...a: unknown[]) => mockRestoreDocumentState(...a),
-}));
-vi.mock("./restoreTabsHelpers", () => ({
-  clearExistingWindowTabs: (...a: unknown[]) => mockClearExisting(...a),
-  deduplicateTabs: (tabs: unknown[]) => ({ kept: tabs, duplicateToRetained: new Map() }),
-  filterMeaningfulTabs: (tabs: unknown[]) => tabs,
-  restoreActiveTab: vi.fn(),
-  restoreTabMetadata: (...a: unknown[]) => mockRestoreTabMetadata(...a),
-}));
-vi.mock("@/utils/debug", () => ({
+vi.mock("@/utils/debug", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/utils/debug")>()),
   hotExitLog: vi.fn(),
   hotExitWarn: (...a: unknown[]) => mockHotExitWarn(...a),
 }));
 
 import { restoreTabs } from "./restoreHelpers";
+import { useTabStore } from "@/stores/tabStore";
+import { useDocumentStore } from "@/stores/documentStore";
+
+const WINDOW = "main";
 
 const tab = (id: string, path: string | null) =>
-  ({ id, file_path: path, document: { saved_content: "", content: "" } }) as never;
+  ({
+    id,
+    file_path: path,
+    title: path ? path.slice(1) : "Untitled",
+    is_pinned: false,
+    format_id: "markdown",
+    editing_enabled: true,
+    document: { saved_content: `saved ${id}`, content: `saved ${id}`, is_dirty: false },
+  }) as never;
+
+/** A tab whose document payload is corrupt: reading it throws mid-restore. */
+const corruptDocument = (id: string, path: string) => {
+  const t = tab(id, path) as Record<string, unknown>;
+  Object.defineProperty(t, "document", {
+    get() {
+      throw new Error("corrupt document payload");
+    },
+  });
+  return t as never;
+};
+
+/** A tab whose METADATA cannot be read: the throw comes from restoreTabMetadata. */
+const corruptMetadata = (id: string, path: string) => {
+  const t = tab(id, path) as Record<string, unknown>;
+  Object.defineProperty(t, "editing_enabled", {
+    get() {
+      throw new Error("bad metadata");
+    },
+  });
+  return t as never;
+};
 
 const windowState = (tabs: unknown[]) =>
   ({ tabs, ui_state: {}, active_tab_id: null }) as never;
 
+/** The file paths of the window's tabs, in order. */
+const windowPaths = () =>
+  useTabStore
+    .getState()
+    .getTabsByWindow(WINDOW)
+    .map((t) => (t.kind === "document" ? t.filePath : null));
+
 beforeEach(() => {
   vi.clearAllMocks();
-  let n = 0;
-  mockCreateTab.mockImplementation(() => `new-${++n}`);
-  mockRestoreDocumentState.mockResolvedValue(undefined);
+  useTabStore.getState().removeWindow(WINDOW);
+  const docs = useDocumentStore.getState();
+  for (const id of Object.keys(docs.documents)) docs.removeDocument(id);
 });
 
 describe("a tab that fails to restore", () => {
   it("does not abort the tabs after it", async () => {
-    mockRestoreDocumentState.mockImplementation(async (tabId: string) => {
-      if (tabId === "new-2") throw new Error("corrupt document payload");
-    });
-
     const map = await restoreTabs(
       "main",
-      windowState([tab("a", "/a.md"), tab("b", "/b.md"), tab("c", "/c.md")])
+      windowState([tab("a", "/a.md"), corruptDocument("b", "/b.md"), tab("c", "/c.md")])
     );
 
     // a and c survived; only b was lost.
     expect([...map.keys()]).toEqual(["a", "c"]);
+    expect(windowPaths()).toEqual(["/a.md", "/c.md"]);
+    expect(useDocumentStore.getState().getDocument(map.get("c")!)?.content).toBe("saved c");
   });
 
   it("is left out of the id map, so nothing later points at a broken tab", async () => {
-    mockRestoreDocumentState.mockRejectedValueOnce(new Error("boom"));
-
-    const map = await restoreTabs("main", windowState([tab("a", "/a.md")]));
+    const map = await restoreTabs("main", windowState([corruptDocument("a", "/a.md")]));
 
     expect(map.has("a")).toBe(false);
   });
@@ -103,17 +105,13 @@ describe("a tab that fails to restore", () => {
   it("is detached, not left as an empty tab claiming a real file path", async () => {
     // An empty document showing "/a.md" invites the user to save over the file
     // whose content failed to load.
-    mockRestoreDocumentState.mockRejectedValueOnce(new Error("boom"));
+    await restoreTabs("main", windowState([corruptDocument("a", "/a.md")]));
 
-    await restoreTabs("main", windowState([tab("a", "/a.md")]));
-
-    expect(mockDetachTab).toHaveBeenCalledWith("main", "new-1");
+    expect(windowPaths()).toEqual([]);
   });
 
   it("reports the shortfall rather than restoring silently", async () => {
-    mockRestoreDocumentState.mockRejectedValueOnce(new Error("boom"));
-
-    await restoreTabs("main", windowState([tab("a", "/a.md"), tab("b", "/b.md")]));
+    await restoreTabs("main", windowState([corruptDocument("a", "/a.md"), tab("b", "/b.md")]));
 
     expect(mockHotExitWarn).toHaveBeenCalledWith(
       expect.stringContaining("1/2"),
@@ -121,34 +119,31 @@ describe("a tab that fails to restore", () => {
   });
 
   it("survives a throw from tab METADATA restoration too, not just the document", async () => {
-    mockRestoreTabMetadata.mockImplementationOnce(() => {
-      throw new Error("bad metadata");
-    });
-
     const map = await restoreTabs(
       "main",
-      windowState([tab("a", "/a.md"), tab("b", "/b.md")])
+      windowState([corruptMetadata("a", "/a.md"), tab("b", "/b.md")])
     );
 
     expect([...map.keys()]).toEqual(["b"]);
+    expect(windowPaths()).toEqual(["/b.md"]);
   });
 });
 
 describe("the happy path is unchanged", () => {
   it("maps every session tab id to its new tab id", async () => {
-    const map = await restoreTabs(
-      "main",
-      windowState([tab("a", "/a.md"), tab("b", null)])
-    );
+    const draft = { ...(tab("b", null) as object), title: "Draft" } as never;
+    const map = await restoreTabs("main", windowState([tab("a", "/a.md"), draft]));
 
-    expect(map.get("a")).toBe("new-1");
-    expect(map.get("b")).toBe("new-2");
-    expect(mockDetachTab).not.toHaveBeenCalled();
+    const tabs = useTabStore.getState().getTabsByWindow(WINDOW);
+    expect(tabs.map((t) => t.id)).toEqual([map.get("a"), map.get("b")]);
+    expect(windowPaths()).toEqual(["/a.md", null]);
+    expect(useDocumentStore.getState().getDocument(map.get("b")!)?.content).toBe("saved b");
     expect(mockHotExitWarn).not.toHaveBeenCalled();
   });
 
   it("still clears the window first — the rebuild needs a clean slate", async () => {
+    useTabStore.getState().createTab(WINDOW, "/stale.md");
     await restoreTabs("main", windowState([tab("a", "/a.md")]));
-    expect(mockClearExisting).toHaveBeenCalledWith("main");
+    expect(windowPaths()).toEqual(["/a.md"]);
   });
 });

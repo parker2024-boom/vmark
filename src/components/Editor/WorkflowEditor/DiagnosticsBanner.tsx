@@ -25,7 +25,7 @@
  *   workflow is actively in progress (many synthesized-id warnings,
  *   for example).
  *
- * Origin: GitHub Actions workflow viewer plan (2026-05-04, retired) §6
+ * Origin: GitHub Actions workflow viewer plan (retired) §6
  *   Phase 9 follow-up.
  *
  * @coordinates-with src/lib/ghaWorkflow/types.ts — Diagnostic shape
@@ -123,8 +123,7 @@ export function DiagnosticsBanner({
   // collapse state survives re-renders that reorder the array (e.g.
   // a new lint pass with one extra diagnostic). Duplicates within the
   // same code+message+position+jobId tuple get a stable occurrence
-  // counter so distinct rows still get distinct keys (Codex audit
-  // LOW-2 finding).
+  // counter so distinct rows still get distinct keys.
   const occurrenceCounts = new Map<string, number>();
   const rowKeys: string[] = sorted.map((d) => {
     const sig =

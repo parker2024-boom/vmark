@@ -1,7 +1,7 @@
 /**
  * Activate a tab in the window's FOCUSED pane (#1081).
  *
- * Since WI-2, `tabStore.setActiveTab` is pane-aware by itself: every
+ * `tabStore.setActiveTab` is pane-aware by itself: every
  * activation is announced on the tabActivationBus and paneStore converges an
  * enabled split (decision D2 — focus follows a paned tab; an unpaned document
  * lands in the focused pane). This service is now a plain delegation kept for

@@ -1,21 +1,23 @@
-// WI-3.1 — Standalone Mermaid (.mmd) adapter.
-//
-// CodeMirror language pack: codemirror-lang-mermaid 0.5.0 (Phase 0
-// WI-0.6 picked exact-pin; SUFFICIENT-FALLBACK verdict — stale upstream
-// but no CVEs, no functional risk for stable mermaid grammars).
-//
-// Validator: lightweight diagram-type pre-flight. Mermaid's own
-// parser (Langium) is heavyweight and async-only via the renderer.
-// We surface obvious "missing diagram type" failures synchronously
-// so the gutter is responsive on every keystroke; the renderer
-// supplies the deeper parse errors at render time.
-//
-// Preview: re-uses the existing renderMermaid() helper. The plan
-// (Background table) flagged renderMermaid as environment-coupled
-// (depends on document.documentElement.classList for theme +
-// getComputedStyle for fonts + transient DOM). The wrapper here
-// owns theme + font-size synchronization explicitly so the registry
-// dispatch can mount it for any tab without those couplings biting.
+/**
+ * Standalone Mermaid (.mmd) adapter — source editing, validation and diagram preview.
+ *
+ * CodeMirror language pack: codemirror-lang-mermaid 0.5.0 (exact-pinned;
+ * stale upstream but no CVEs, no functional risk for stable mermaid grammars).
+ *
+ * Validator: lightweight diagram-type pre-flight. Mermaid's own
+ * parser (Langium) is heavyweight and async-only via the renderer.
+ * We surface obvious "missing diagram type" failures synchronously
+ * so the gutter is responsive on every keystroke; the renderer
+ * supplies the deeper parse errors at render time.
+ *
+ * Preview: re-uses the existing renderMermaid() helper, which is
+ * environment-coupled (depends on document.documentElement.classList for theme +
+ * getComputedStyle for fonts + transient DOM). The wrapper here
+ * owns theme + font-size synchronization explicitly so the registry
+ * dispatch can mount it for any tab without those couplings biting.
+ *
+ * @module lib/formats/adapters/mermaid
+ */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -23,6 +25,7 @@ import type { Extension } from "@codemirror/state";
 import { renderMermaid } from "@/plugins/mermaid";
 import { sanitizeSvg } from "@/utils/sanitize";
 import { registerFormat } from "../registry";
+import { usePreviewLinkGuard } from "./usePreviewLinkGuard";
 import "./mermaid-preview.css";
 import type {
   FormatConfig,
@@ -101,17 +104,17 @@ export const mermaidValidator: Validator = (content) => {
   return [];
 };
 
-function MermaidPreview({ content, diagnostics }: PreviewRendererProps) {
+function MermaidPreview({ content, diagnostics, path }: PreviewRendererProps) {
   const { t } = useTranslation("editor");
   const [svg, setSvg] = useState<string | null>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const linkGuard = usePreviewLinkGuard(path);
   const renderToken = useRef(0);
 
   // Legitimate setState-in-effect: clears then fills from an async Mermaid render
   // (token-guarded against rapid edits) — driven by I/O keyed on content, not
   // derivable during render (#1063).
-  /* eslint-disable react-hooks/set-state-in-effect */
+  /* eslint-disable react-hooks/set-state-in-effect -- clears then fills from a token-guarded async Mermaid render keyed on content */
   useEffect(() => {
     if (!content.trim()) {
       setSvg(null);
@@ -177,11 +180,12 @@ function MermaidPreview({ content, diagnostics }: PreviewRendererProps) {
 
   return (
     <div
-      ref={containerRef}
+      // A diagram's `click` links are the document's; they must not
+      // navigate the app's page.
+      ref={linkGuard}
       className="mermaid-preview"
-      // SVG comes from Mermaid (trusted source library); no user
-      // strings injected. Same pattern the existing markdown
-      // mermaid plugin already uses.
+      // Mermaid draws the SVG, but its labels and links are the
+      // document's text — it is sanitized where the render resolves.
       dangerouslySetInnerHTML={{ __html: svg ?? "" }}
     />
   );

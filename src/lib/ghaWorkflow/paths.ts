@@ -2,9 +2,9 @@
  * Purpose: Resolve a `uses:` reference that points at a workspace-local
  *   action or reusable workflow, against the workflow file's location
  *   and the workspace root. Used by:
- *     - WI-B.1 (local action discovery): registry calls this before
+ *     - local action discovery: registry calls this before
  *       reading action.yml off disk
- *     - WI-B.2 (go-to-def): Cmd-Click on a local uses opens the target
+ *     - go-to-def: Cmd-Click on a local uses opens the target
  *
  *   Cross-platform: accepts both POSIX `/` and Windows `\` separators
  *   in the input; emits POSIX absolute paths for the rest of the
@@ -66,7 +66,7 @@ function classifyRoot(absPath: string): {
  *
  * Preserves the workspace root's prefix form (`C:/`, `//server/share/`,
  * or `/`) so Windows callers don't see pseudo-POSIX paths like
- * `/C:/repo/...` (Codex audit MED-7 fix).
+ * `/C:/repo/...`.
  *
  * `workflowFile` is accepted for API symmetry but currently unused.
  */

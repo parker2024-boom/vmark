@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { clickFileLink } from "./__tests__/clickFileLink";
+import { fileBytes } from "@/test/fileBytes";
 
 // --- Hoisted mocks (available before vi.mock factories execute) ---
 
@@ -52,7 +54,7 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
 }));
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: (...args: unknown[]) => mockReadTextFile(...(args as [string])),
+  readFile: (...args: unknown[]) => fileBytes(mockReadTextFile(...(args as [string]))),
   stat: (...args: unknown[]) => mockStat(...(args as [string])),
 }));
 
@@ -105,7 +107,6 @@ vi.mock("@xterm/addon-search", () => ({
   SearchAddon: class { findNext = vi.fn(); findPrevious = vi.fn(); clearDecorations = vi.fn(); dispose = vi.fn(); },
 }));
 
-
 vi.mock("@xterm/addon-unicode11", () => ({
   Unicode11Addon: class { dispose = vi.fn(); },
 }));
@@ -134,15 +135,6 @@ vi.mock("@/stores/documentStore", () => ({
 
 vi.mock("@/services/persistence/workspaceStorage", () => ({
   getCurrentWindowLabel: () => "main",
-}));
-
-const mockCreateFileLinkProvider = vi.fn(() => ({ provideLinks: vi.fn() }));
-vi.mock("./fileLinkProvider", () => ({
-  createFileLinkProvider: (...args: unknown[]) => mockCreateFileLinkProvider(...args),
-}));
-
-vi.mock("./terminalKeyHandler", () => ({
-  createTerminalKeyHandler: vi.fn(() => () => true),
 }));
 
 // --- Imports ---
@@ -925,8 +917,9 @@ describe("createTerminalInstance — file link callback", () => {
 
     termInst = makeInstance();
 
-    // Capture the file link callback passed to createFileLinkProvider
-    fileLinkCallback = mockCreateFileLinkProvider.mock.calls[0][1];
+    // "Click" a path the way a user does: put it on a terminal line and
+    // activate the link the real file-link provider detects there.
+    fileLinkCallback = (filePath: string) => clickFileLink(termInst.term, filePath);
   });
 
   it("reads file and creates tab on file link click", async () => {

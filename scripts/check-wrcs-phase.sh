@@ -61,10 +61,10 @@ assert_not_grep() {
 phase_1() {
   echo "Phase 1 — Identity & ownership foundation"
 
-  # WI-0 — this script
+  # This script
   assert_file "scripts/check-wrcs-phase.sh" "WI-0 phase checker"
 
-  # WI-17.1 — platform-aware comparison identity (leaf-pure utils)
+  # Platform-aware comparison identity (leaf-pure utils)
   assert_file "src/utils/paths/pathComparison.ts"       "WI-17.1 comparison normalizer"
   assert_file "src/utils/paths/pathComparison.test.ts"  "WI-17.1 tests"
   assert_grep "normalizePathForCompare" "src/utils/paths/pathComparison.ts" "WI-17.1 normalizePathForCompare exported"
@@ -73,19 +73,19 @@ phase_1() {
   assert_grep "pathComparison\|normalizePathForCompare\|isWithinRootForCompare" \
     "src/services/workspaces/workspaceContextOwnership.ts" "WI-17.1 ownership classification wired"
 
-  # WI-17.2 — stable root use (asserted in Phase 5 where session writes land;
+  # Stable root use (asserted in Phase 5 where session writes land;
   # Phase 1 requires the resolver primitive)
   assert_grep "resolveStableRootPath\|stableRootPath" \
     "src/services/workspaces/workspaceInstanceActions.ts" "WI-17.2 stable-root resolver present"
 
-  # WI-17.3 — Rust parity marker (containment normalization test)
+  # Rust parity marker (containment normalization test)
   if grep -rq "wrcs_windows_containment\|windows_path_case_containment" src-tauri/src 2>/dev/null; then
     ok "WI-17.3 Rust containment parity test present"
   else
     fail "WI-17.3 Rust containment parity test missing (marker not found in src-tauri/src)"
   fi
 
-  # WI-1R — pure ownership kernel
+  # Pure ownership kernel
   assert_file "src/services/workspaces/workspaceOwnershipKernel.ts"      "WI-1R kernel"
   assert_file "src/services/workspaces/workspaceOwnershipKernel.test.ts" "WI-1R kernel tests"
   assert_grep "partitionWindowTabs"      "src/services/workspaces/workspaceOwnershipKernel.ts" "WI-1R partitionWindowTabs exported"
@@ -107,37 +107,37 @@ phase_1() {
 phase_2() {
   echo "Phase 2 — Per-instance state primitives"
 
-  # WI-9.1
+  # Per-instance UI-state store
   assert_file "src/stores/workspaceInstanceUiStore.ts"      "WI-9.1 UI-state store"
   assert_file "src/stores/workspaceInstanceUiStore.test.ts" "WI-9.1 tests"
   for action in copyInstanceUiState rekeyInstanceUiState removeInstanceUiState; do
     assert_grep "$action" "src/stores/workspaceInstanceUiStore.ts" "WI-9.1 lifecycle action $action"
   done
 
-  # WI-9.2
+  # File tree keyed by instance, with scroll restoration
   assert_grep "workspaceInstanceId" "src/components/Sidebar/FileExplorer/FileExplorer.tsx" \
     "WI-9.2 tree keyed by instance"
   assert_grep "fileTreeScrollOffset\|scrollToOffset" "src/components/Sidebar/FileExplorer/useFileExplorerOpenState.ts" \
     "WI-9.2 scroll restoration wired"
 
-  # WI-9.3
+  # Per-instance outline state
   assert_grep "outlineByTabId" "src/stores/workspaceInstanceUiStore.ts" "WI-9.3 outline state shape"
   assert_grep "useOutlineInstanceState" "src/components/Sidebar/OutlineView.tsx" \
     "WI-9.3 OutlineView reads per-instance state"
 
-  # WI-10.1
+  # Atomic pane replacement
   assert_grep "replaceWindowSplit" "src/stores/paneStore.ts" "WI-10.1 atomic pane replacement"
 
-  # WI-10.2
+  # Pane snapshots store
   assert_file "src/stores/workspacePaneLayoutsStore.ts"      "WI-10.2 pane snapshots store"
   assert_file "src/stores/workspacePaneLayoutsStore.test.ts" "WI-10.2 tests"
 
-  # WI-11.1
+  # Scoped closed-tab history
   assert_grep "scopeKey\|closedScope" "src/stores/tabStoreClosedScopes.ts" "WI-11.1 scoped closed-tab history"
   assert_file "src/stores/tabStoreClosedScopes.test.ts" "WI-11.1 tests"
   assert_grep "reason" "src/stores/tabRemovalBus.ts" "WI-11.1 removal bus carries reason"
 
-  # WI-11.2
+  # Context-aware reopen service
   assert_file "src/services/workspaces/reopenClosedTab.ts" "WI-11.2 context-aware reopen service"
   assert_grep "reopenClosedTabForActiveContext" "src/services/workspaces/reopenClosedTab.ts" \
     "WI-11.2 reopenClosedTabForActiveContext exported"
@@ -168,7 +168,7 @@ phase_3() {
     fail "activateTabWithWorkspaceContext missing"
   fi
 
-  # WI-14 — MCP surface
+  # MCP surface
   if grep -rq "switch_tab" server/mcp/src 2>/dev/null; then
     ok "WI-14 workspace.switch_tab in MCP server"
   else
@@ -180,7 +180,7 @@ phase_3() {
     fail "WI-14 bridge workspaceSwitched payload missing"
   fi
 
-  # WI-3R — rail click wired
+  # Rail click wired
   assert_grep "switchWorkspaceInstance" "src/components/WorkspaceRail/WorkspaceRail.tsx" "WI-3R rail click wired"
 
   echo "  ⓘ gate: pnpm check:all"

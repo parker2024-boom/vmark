@@ -12,15 +12,14 @@
  */
 import { useMemo } from "react";
 import { useSettingsStore } from "@/stores/settingsStore";
-import { useUIStore } from "@/stores/uiStore";
 import { useWorkspaceInstancesStore } from "@/stores/workspaceInstancesStore";
 import { getCurrentWindowLabel } from "@/services/persistence/workspaceStorage";
-import { selectVisibleTerminalSessions } from "@/stores/uiStore/terminalScopeSelectors";
-import type { TerminalSession } from "@/stores/uiStore/types";
+import { selectVisibleTerminalSessions } from "@/stores/terminalStore/scopeSelectors";
+import { useTerminalStore, type TerminalSession } from "@/stores/terminalStore";
 
 /** The window's currently-visible terminal sessions, as reactive state. */
 export function useVisibleTerminalSessions(): TerminalSession[] {
-  const sessions = useUIStore((s) => s.terminal.sessions);
+  const sessions = useTerminalStore((s) => s.sessions);
   const railEnabled = useSettingsStore(
     (s) => s.general?.workspaceRailMode ?? false,
   );

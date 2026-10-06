@@ -51,7 +51,7 @@ Los clientes de IA que abren documentos mediante MCP nunca te arrebatan el espac
 | Reordenar | Arrastra un glifo sobre otro |
 | Mover a su propia ventana | Arrastra un glifo fuera de la ventana |
 | Duplicar en una ventana nueva | El botón **⧉** al pasar el puntero |
-| Cerrar un espacio de trabajo | Clic derecho → Cerrar (pregunta por cada pestaña con cambios sin guardar) |
+| Cerrar un espacio de trabajo | Clic derecho → Cerrar. Todas sus pestañas se cierran con él, también las fijadas; cada pestaña con cambios sin guardar pregunta primero, y si cancelas, el espacio de trabajo se mantiene |
 
 ## Sesiones de terminal
 

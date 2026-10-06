@@ -14,7 +14,7 @@
  *   — a palette projection over one action *operation*, NOT six actions. The
  *   ActionId stays `"setHeading"`; the level is an invocation parameter, and each
  *   row's `run` calls `runEditorAction("setHeading", { level })`. No plain,
- *   un-runnable `editor.setHeading` is ever produced (WI-3.1).
+ *   un-runnable `editor.setHeading` is ever produced.
  *
  * @coordinates-with CommandBus.ts — registered as a batch via registerCommands
  * @coordinates-with actionAvailability.ts — each spec's `when`
@@ -91,7 +91,7 @@ export function buildEditorCommandSpecs(): CommandDefinition[] {
 /**
  * Register the whole editor-command batch in the CommandBus under the bridge's
  * owner token, returning a disposer. HMR-safe (replace-own) via registerCommands.
- * Called once from the command bootstrap (WI-3.4).
+ * Called once from the command bootstrap.
  */
 export function registerEditorCommands(): () => void {
   return registerCommands(EDITOR_COMMANDS_OWNER, buildEditorCommandSpecs());

@@ -8,11 +8,11 @@ use serde::Serialize;
 
 /// A discovered genie file with name, path, source, and optional category.
 ///
-/// Returned by `list_genies` and consumed by the frontend `geniesStore`.
+/// Returned inside `load_genies` and consumed by the frontend `geniesStore`.
 /// `kind` distinguishes one-shot markdown genies (`"markdown"`) from YAML
 /// workflow genies (`"workflow"`), which the picker dispatches differently:
 /// markdown genies invoke `run_ai_prompt` directly, workflow genies run
-/// through `run_workflow` (WI-7.1).
+/// through `run_workflow`.
 #[derive(Debug, Serialize, Clone)]
 pub struct GenieEntry {
     /// Filename stem (e.g. `improve` for `improve.md`). Stable across reloads

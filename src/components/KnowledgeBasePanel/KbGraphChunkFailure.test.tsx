@@ -8,72 +8,57 @@
  * lazy object was module-level, so its memoized rejection outlived every
  * remount — there was no recovery short of restarting.
  *
- * Mock boundary: the graph MODULE (the chunk under test) plus the Tauri-backed
- * graph fetch it would call. The panel, the boundary and the retry are real.
- * Kept in its own file so `KnowledgeBasePanel.test.tsx` can keep loading the
- * REAL `./KbGraphView` — mocking it there would erase the lazy boundary that
- * file exists to exercise.
+ * Nothing is mocked. The chunk fetch is the boundary, and a module registry
+ * cannot be made to re-fail a module that resolved once, so the running view's
+ * real boundary and retry are driven through its `loadGraph` parameter. The
+ * load of the REAL chunk through the default loader is covered by
+ * `KnowledgeBasePanel.test.tsx`.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { KnowledgeBaseRunning, type KbGraphLoader } from "./KnowledgeBasePanelViews";
 
-const chunk = vi.hoisted(() => ({ failures: 0, loads: 0 }));
+function Graph() {
+  return <div data-testid="kb-graph" />;
+}
 
-vi.mock("./KbGraphView", () => {
-  chunk.loads += 1;
-  if (chunk.failures > 0) {
-    chunk.failures -= 1;
-    throw new Error("Failed to fetch dynamically imported module");
-  }
-  return { KbGraphView: () => <div data-testid="kb-graph" /> };
-});
-vi.mock("@/services/contentServer", () => ({
-  getKbGraph: () => Promise.resolve({ nodes: [], edges: [] }),
-  // The panel probes the runtime on open (WI-FL1.1); this file is about the
-  // graph chunk, so the runtime is simply ready.
-  getContentServerRuntime: () =>
-    Promise.resolve({
-      node: "ready",
-      nodePath: "/usr/local/bin/node",
-      cli: "ready",
-      cliSource: "provisioned",
-      detail: null,
-    }),
-}));
+/** A chunk loader that rejects `failures` times, then resolves. */
+function flakyChunk(failures: number) {
+  const state = { failures, loads: 0 };
+  const load: KbGraphLoader = async () => {
+    state.loads += 1;
+    if (state.failures > 0) {
+      state.failures -= 1;
+      throw new Error("Failed to fetch dynamically imported module");
+    }
+    return { default: Graph };
+  };
+  return { state, load };
+}
 
-import { KnowledgeBasePanel } from "./KnowledgeBasePanel";
-import { useContentServerStore } from "@/stores/contentServerStore";
-import { useWorkspaceStore } from "@/stores/workspaceStore";
-
-beforeEach(() => {
-  useContentServerStore.getState().reset();
-  useWorkspaceStore.setState({ rootPath: "/ws" });
-  useContentServerStore.setState({ status: "running", url: "http://127.0.0.1:4321" });
-  useContentServerStore.getState().setViewMode("graph");
-});
-
-function renderPanel() {
+function renderRunning(load: KbGraphLoader) {
   render(
-    <KnowledgeBasePanel
-      onStart={vi.fn()}
+    <KnowledgeBaseRunning
+      url="http://127.0.0.1:4321"
+      iframeUrl={null}
+      viewMode="graph"
       onStop={vi.fn()}
       onOpenInBrowser={vi.fn()}
       onPreviewSlides={vi.fn()}
       onExportSlides={vi.fn()}
+      loadGraph={load}
     />,
   );
 }
 
-// Failure cases run first on purpose: vitest caches a module once it resolves,
-// while a factory that threw is re-invoked on the next import.
 describe("KB graph chunk failure stays inside the panel", () => {
   it("renders the graph error in place, with the panel chrome intact", async () => {
-    chunk.failures = 1;
-    renderPanel();
+    renderRunning(flakyChunk(1).load);
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(/couldn't load the graph/i);
+    expect(screen.queryByTestId("kb-graph")).toBeNull();
     // Containment, stated as an assertion: the surrounding panel — the thing a
     // root-boundary escape would have taken with it — is still on screen.
     expect(screen.getByRole("button", { name: /stop/i })).toBeTruthy();
@@ -81,21 +66,36 @@ describe("KB graph chunk failure stays inside the panel", () => {
   });
 
   it("loads the graph when the user retries", async () => {
-    chunk.failures = 1;
-    const before = chunk.loads;
-    renderPanel();
+    const chunk = flakyChunk(1);
+    renderRunning(chunk.load);
     await screen.findByRole("alert");
 
     await userEvent.click(screen.getByRole("button", { name: /^retry$/i }));
 
     expect(await screen.findByTestId("kb-graph")).toBeTruthy();
-    // The retry re-imported rather than replaying a memoized rejection.
-    expect(chunk.loads).toBe(before + 2);
+    expect(screen.queryByRole("alert")).toBeNull();
+    // The retry loaded again rather than replaying a memoized rejection.
+    expect(chunk.state.loads).toBe(2);
+  });
+
+  it("keeps offering retry while the chunk keeps failing", async () => {
+    const chunk = flakyChunk(2);
+    renderRunning(chunk.load);
+    await screen.findByRole("alert");
+
+    await userEvent.click(screen.getByRole("button", { name: /^retry$/i }));
+    await vi.waitFor(() => expect(chunk.state.loads).toBe(2));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't load the graph/i);
+
+    await userEvent.click(screen.getByRole("button", { name: /^retry$/i }));
+    expect(await screen.findByTestId("kb-graph")).toBeTruthy();
+    expect(chunk.state.loads).toBe(3);
   });
 
   it("renders the graph normally when the chunk loads", async () => {
-    chunk.failures = 0;
-    renderPanel();
+    const chunk = flakyChunk(0);
+    renderRunning(chunk.load);
     expect(await screen.findByTestId("kb-graph")).toBeTruthy();
+    expect(chunk.state.loads).toBe(1);
   });
 });

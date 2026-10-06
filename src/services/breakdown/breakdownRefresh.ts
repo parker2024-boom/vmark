@@ -32,7 +32,7 @@ let refreshGeneration = 0;
 export async function refreshBreakdown(workspaceRoot: string): Promise<void> {
   // Never refresh a workspace the user has already left: a stale caller
   // (e.g. a mutation completing after a switch) must not consume a ticket
-  // and thereby starve the active workspace's refresh (audit #4/#5).
+  // and thereby starve the active workspace's refresh.
   if (!isActiveWorkspace(workspaceRoot)) return;
   const generation = ++refreshGeneration;
   const store = useBreakdownStore.getState();
@@ -45,7 +45,7 @@ export async function refreshBreakdown(workspaceRoot: string): Promise<void> {
       context,
     });
     if (generation !== refreshGeneration || !isActiveWorkspace(workspaceRoot))
-      return; // superseded (audit T12) or workspace changed (D1)
+      return; // superseded or workspace changed (D1)
     useBreakdownStore.getState().setRows(rows);
   } catch (error) {
     if (generation !== refreshGeneration || !isActiveWorkspace(workspaceRoot))

@@ -1,10 +1,10 @@
 /**
- * Which pill shows "visible in the other pane" (WI-DSPL1.1).
+ * Which pill shows "visible in the other pane".
  *
  * F4: with a split open, `activeTabId` is the ADR-1 alias of the FOCUSED pane,
  * so the other pane's document is neither `.active` nor `aria-selected` — one
  * of two visible documents has no representation in the strip at all. That was
- * a deliberate v1 trade (audit finding M2), and this pays the bill.
+ * a deliberate v1 trade, and this pays the bill.
  *
  * D8 — computed from `focusedPane`, NEVER from `secondaryTabId`. `openSplit`
  * focuses the secondary, so marking by position marks the pill that IS focused,

@@ -15,10 +15,10 @@
  *      COMPLETENESS is then signalled to `menuCommandsReady` — the barrier the
  *      window-ready handshake waits on — only from a setup that is still live:
  *      a StrictMode-cancelled first pass must never trip it (pinned by test).
- *      A binding that cannot listen costs its own menu item and nothing else
- *      (audit #359): the rest stay mounted, and readiness says `false` rather
+ *      A binding that cannot listen costs its own menu item and nothing else:
+ *      the rest stay mounted, and readiness says `false` rather
  *      than announcing a menu that routes nowhere. A Pandoc expansion that
- *      failed counts the same way (audit #712) — its menu items exist and
+ *      failed counts the same way — its menu items exist and
  *      route to commands that were never registered.
  *
  * @module hooks/useCommandBootstrap
@@ -60,13 +60,11 @@ const MISC_BINDINGS: MenuCommandBinding[] = [
   { menuEvent: "menu:save", commandId: "file.save" },
   { menuEvent: "menu:save-as", commandId: "file.saveAs" },
   { menuEvent: "menu:move-to", commandId: "file.moveTo" },
-  { menuEvent: "menu:save-all-quit", commandId: "file.saveAllQuit" },
   { menuEvent: "menu:quick-open", commandId: "app.quickOpen" },
   { menuEvent: "menu:new-browser-tab", commandId: "browser.newTab" },
   { menuEvent: "menu:reopen-closed-tab", commandId: "tab.reopenClosed" },
-  // macOS Window menu (WI-FL3.10): this id used to be emitted to nothing.
+  // macOS Window menu: this id used to be emitted to nothing.
   { menuEvent: "menu:bring-all-to-front", commandId: "window.bringAllToFront" },
-  { menuEvent: "menu:preferences", commandId: "app.preferences" },
   { menuEvent: "menu:clear-history", commandId: "history.clearAll" },
   { menuEvent: "menu:clear-workspace-history", commandId: "history.clearWorkspace" },
   { menuEvent: "menu:cleanup-images", commandId: "image.cleanupOrphans" },
@@ -129,7 +127,7 @@ const WORKSPACE_BINDINGS: MenuCommandBinding[] = [
 // Editor formatting/CJK/line-op menu events (86) — dispatched through the editor
 // executor (runEditorAction), NOT executeCommand. Folded in from the former
 // useUnifiedMenuCommands hook so ONE dispatcher owns the whole menu:{id} space
-// with a single mount-time duplicate-rejection pass (Phase 2, WI-2.2).
+// with a single mount-time duplicate-rejection pass.
 const EDITOR_ACTION_BINDINGS: MenuCommandBinding[] = Object.entries(MENU_TO_ACTION).map(
   ([menuEvent, mapping]) => ({ kind: "editorAction", menuEvent, mapping }),
 );
@@ -138,7 +136,7 @@ const EDITOR_ACTION_BINDINGS: MenuCommandBinding[] = Object.entries(MENU_TO_ACTI
  * Every menu binding known before the Pandoc formats load.
  *
  * Exported so a test can assert the property `mountMenuCommands`' preflight now
- * DEPENDS on (audit #916): each command binding must name a command
+ * DEPENDS on: each command binding must name a command
  * `registerAllCommands` registers. An unresolvable one is dropped from the
  * mount and makes readiness report `false`, which is right — and would be
  * silent without an assertion that it never happens.
@@ -157,7 +155,7 @@ export function useCommandBootstrap(): void {
   useEffect(() => {
     const disposeEditorCommands = registerAllCommands();
 
-    // DEV-only harness seam (WI-4.0). The E2E journeys have no other way to
+    // DEV-only harness seam. The E2E journeys have no other way to
     // invoke a command: the debug bridge offers only execute_js, a Tauri event
     // emitted inside the webview never reaches the app's own listeners (verified
     // with a non-browser control event), and synthetic key events do not reach
@@ -195,11 +193,14 @@ export function useCommandBootstrap(): void {
     });
 
     // The window-lifetime services (grant/policy mirrors, tab events and
-    // lifecycle, recorder, coherence, workspace sync, menu mirror) — one list,
-    // one disposer (services/runtimeWiring.ts). If they fail to start, this
-    // effect never returns its cleanup, so the editor batch — the one
-    // registration that owns resources — is disposed here before the error
-    // propagates (audit #358); the services themselves roll back inside
+    // lifecycle, recorder, coherence, workspace sync, menu mirror, per-tab
+    // state cleanup) — one list, one disposer (services/runtimeWiring.ts).
+    // They start HERE, synchronously with the window's first effects, which is
+    // what lets every later tab removal — a session restore included — rely on
+    // the cleanup instead of freeing a tab's state itself. If they fail to
+    // start, this effect never returns its cleanup, so the editor batch — the
+    // one registration that owns resources — is disposed here before the error
+    // propagates; the services themselves roll back inside
     // startRuntimeServices.
     let stopRuntimeServices: () => void;
     try {
@@ -214,7 +215,7 @@ export function useCommandBootstrap(): void {
 
     void (async () => {
       const bindings: MenuCommandBinding[] = [...STATIC_MENU_BINDINGS];
-      // Part of the readiness VERDICT, not just a log line (audit #712). A
+      // Part of the readiness VERDICT, not just a log line. A
       // failed expansion means every Pandoc export item in the native menu
       // routes nowhere — the same defect as a binding that could not listen,
       // which readiness already reports — and reporting `true` over it is the
@@ -238,15 +239,15 @@ export function useCommandBootstrap(): void {
       // is critical: every native menu item, accelerator, and palette entry
       // stops routing. Without this catch a rejection becomes an
       // unhandled-promise warning and the user sees no error — just
-      // silently dead menus. (Audit finding H6.)
+      // silently dead menus.
       //
-      // The mount is best-effort and REPORTS its completeness (audit #359), and
+      // The mount is best-effort and REPORTS its completeness, and
       // the readiness signal carries that verdict. Two shapes were wrong before:
       // signalling from a `finally` announced a fully-dead menu as ready, and
       // an all-or-nothing mount turned one refused listener into a window with
       // no menu at all. A partial mount is kept — every item that bound still
       // works — and the incompleteness is logged and signalled, never hidden.
-      // Nothing to mount for a setup that is already gone (audit #711). The
+      // Nothing to mount for a setup that is already gone. The
       // Pandoc await above is the long one, so this is where a StrictMode
       // cancellation almost always lands; `shouldAbort` covers the rest of the
       // window, polled between each listener registration inside the mount.

@@ -1,8 +1,12 @@
-// WI-1.3 — ergonomic helpers over @actions/workflow-parser tokens.
-//
-// The parser exposes TemplateToken, MappingToken, SequenceToken,
-// StringToken, etc. Walking workflow shapes via raw `.get(i).key.assertString`
-// is verbose and error-prone. This module wraps the common access patterns.
+/**
+ * Ergonomic helpers over @actions/workflow-parser tokens.
+ *
+ * The parser exposes TemplateToken, MappingToken, SequenceToken,
+ * StringToken, etc. Walking workflow shapes via raw `.get(i).key.assertString`
+ * is verbose and error-prone. This module wraps the common access patterns.
+ *
+ * @module lib/ghaWorkflow/parser/tokens
+ */
 
 // Token classes are exported from sub-paths of the parser package via its
 // `exports` field's `./*` pattern.

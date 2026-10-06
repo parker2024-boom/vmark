@@ -4,8 +4,7 @@
  *
  *   `hooks/useSearchCommands.ts` relays the native menu event as the DOM
  *   CustomEvent `use-selection-for-find`; `FindBar` listens and calls this. The
- *   binding was a no-op for months because nothing listened (feature-ledger
- *   plan, WI-FL3.4).
+ *   binding was a no-op for months because nothing listened.
  *
  * Key decisions:
  *   - Only the FIRST LINE of the selection becomes the query: the bar matches

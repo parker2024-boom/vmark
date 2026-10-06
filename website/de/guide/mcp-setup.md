@@ -24,8 +24,8 @@ VMark macht es einfach, KI-Assistenten mit einem Klick zu verbinden.
 </div>
 
 - **MCP-Server aktivieren** - Einschalten, um KI-Verbindungen zu erlauben
-- **Beim Start starten** - Automatisch starten, wenn VMark geöffnet wird
-- **Bearbeitungen automatisch genehmigen** - KI-Änderungen ohne Vorschau anwenden (siehe unten)
+- **Beim Start beginnen** - Automatisch starten, wenn VMark geöffnet wird
+- **Speichern an neuem Ort und Genie-Ergebnisse automatisch genehmigen** - Standardmäßig aus. Erlaubt einer KI, ein Dokument ohne Rückfrage unter einem *neuen* Pfad zu speichern, und lässt einen Genie sein Ergebnis direkt anwenden statt als Vorschlag. Gewöhnliche KI-Schreibvorgänge hängen nie davon ab — ihr Sicherheitsnetz ist der [Verlauf der Bearbeitungs-Prüfpunkte](#bearbeitungs-prufpunkte) (siehe [Wie Bearbeitungen funktionieren](#wie-bearbeitungen-funktionieren))
 
 ### 2. Konfiguration installieren
 
@@ -39,11 +39,26 @@ Unterstützte KI-Assistenten:
 - **Claude Desktop** - Anthropic's Desktop-App
 - **Claude Code** - CLI für Entwickler
 - **Codex CLI** - OpenAI's Coding-Assistent
-- **Gemini CLI** - Google's KI-Assistent
+- **Antigravity CLI** - Googles `agy`, der Nachfolger von Gemini CLI
+- **Grok CLI** - der Coding-Agent von xAI
+- **opencode** - der quelloffene, anbieterunabhängige Terminal-Agent
+
+**Installieren schreibt ein Zugangsdatum pro Client.** Neben dem Pfad zu VMarks MCP-Server legt Installieren ein geheimes Token in der eigenen Konfigurationsdatei des Clients ab, unter `env.VMARK_MCP_TOKEN` (`environment.VMARK_MCP_TOKEN` bei opencode). Jeder Client erhält sein eigenes Token, und es wird nirgendwo sonst gespeichert. Es teilt VMark mit, welcher Client sich verbindet, statt dem Namen zu vertrauen, den der Client angibt. Derzeit benötigen es nur delegierte Aktionen — das Beantworten einer Kohärenzfrage in Ihrem Namen mit `coherence_resolve`; jedes andere Tool funktioniert ohne. Installieren und **Reparieren** behalten ein noch gültiges Token; um ein neues auszustellen, deinstallieren Sie und installieren erneut. Starten Sie den KI-Client danach jeweils neu. Behandeln Sie das Token wie ein Passwort: Fügen Sie die Konfigurationsdatei nicht in ein Issue oder einen Chat ein.
+
+::: info Gemini CLI wird nicht mehr unterstützt
+Google hat Gemini CLI durch Antigravity ersetzt. Hat eine frühere VMark-Installation
+einen `vmark`-Eintrag in `~/.gemini/settings.json` hinterlassen, zeigt der Bereich
+Integrationen dafür eine Zeile **Eingestellt** mit einer Schaltfläche **Entfernen**;
+neue Installationen zielen stattdessen auf Antigravity.
+:::
 
 ::: info Andere MCP-kompatible Clients
 Andere MCP-kompatible Clients wie Cursor, Windsurf und ähnliche Tools können sich ebenfalls mit dem MCP-Server von VMark verbinden. Konfigurieren Sie sie manuell, indem Sie auf den Pfad des MCP-Server-Binaries verweisen (siehe [Manuelle Konfiguration](#manuelle-konfiguration) unten).
 :::
+
+#### CC-Switch
+
+Wenn Sie Ihre KI-CLIs mit CC-Switch verwalten, zeigt das Installationsprogramm auch eine Zeile **CC-Switch**. **Zu CC-Switch hinzufügen** öffnet einen `ccswitch://v1/import`-Link, der VMarks MCP-Server — seinen Binärpfad — an CC-Switch übergibt, das daraufhin den `vmark`-Eintrag in alle dort verwalteten CLIs schreibt; eine Kopierschaltfläche liefert Ihnen den Link selbst, falls Sie ihn lieber einfügen. Die Zeile ist deaktiviert, bis VMark seine eigene MCP-Binärdatei ermittelt hat.
 
 #### Statussymbole
 
@@ -54,10 +69,11 @@ Jeder Anbieter zeigt einen Status-Indikator:
 | ✓ Grün | Gültig | Konfiguration ist korrekt und funktioniert |
 | ⚠ Amber | Pfad-Diskrepanz | VMark wurde verschoben — klicken Sie auf **Reparieren** |
 | ✗ Rot | Binary fehlt | MCP-Binary nicht gefunden — VMark neu installieren |
+| 🗎 Rot | Konfiguration nicht lesbar | VMark kann die Konfigurationsdatei nicht lesen oder parsen, daher ist unbekannt, ob sie einen VMark-Eintrag enthält. Die Meldung nennt die Datei und den Grund. Reparieren oder verschieben Sie sie und klicken Sie dann auf **Erneut prüfen** — Installieren und Reparieren sind gesperrt, bis sie sich parsen lässt, denn das Schreiben in eine Datei, die VMark nicht lesen kann, könnte ihren Inhalt zerstören |
 | ○ Grau | Nicht konfiguriert | Nicht installiert — klicken Sie auf **Installieren** |
 
 ::: tip VMark verschoben?
-Wenn Sie VMark.app an einen anderen Ort verschoben haben, zeigt der Status amber "Pfad-Diskrepanz". Klicken Sie einfach auf die Schaltfläche **Reparieren**, um die Konfiguration mit dem neuen Pfad zu aktualisieren.
+Wenn Sie VMark.app an einen anderen Ort verschoben haben, zeigt der Status amber „Pfad-Diskrepanz“. Klicken Sie einfach auf die Schaltfläche **Reparieren**, um die Konfiguration mit dem neuen Pfad zu aktualisieren.
 :::
 
 ### 3. KI-Assistenten neu starten
@@ -67,9 +83,9 @@ Nach der Installation oder Reparatur **starten Sie Ihren KI-Assistenten vollstä
 ### 4. Ausprobieren
 
 Versuchen Sie in Ihrem KI-Assistenten Befehle wie:
-- *"Was steht in meinem VMark-Dokument?"*
-- *"Schreibe eine Zusammenfassung zu Quantencomputing in VMark"*
-- *"Füge ein Inhaltsverzeichnis zu meinem Dokument hinzu"*
+- *„Was steht in meinem VMark-Dokument?“*
+- *„Schreibe eine Zusammenfassung zu Quantencomputing in VMark“*
+- *„Füge ein Inhaltsverzeichnis zu meinem Dokument hinzu“*
 
 ## In Aktion sehen
 
@@ -128,9 +144,9 @@ Bearbeiten Sie `~/.codex/config.toml`:
 command = "/Applications/VMark.app/Contents/MacOS/vmark-mcp-server"
 ```
 
-### Gemini CLI
+### Antigravity CLI
 
-Bearbeiten Sie `~/.gemini/settings.json`:
+Bearbeiten Sie `~/.gemini/config/mcp_config.json`:
 
 ```json
 {
@@ -141,6 +157,47 @@ Bearbeiten Sie `~/.gemini/settings.json`:
   }
 }
 ```
+
+### Grok CLI
+
+Bearbeiten Sie `~/.grok/config.toml`:
+
+```toml
+[mcp_servers.vmark]
+command = "/Applications/VMark.app/Contents/MacOS/vmark-mcp-server"
+```
+
+### opencode
+
+Bearbeiten Sie `~/.config/opencode/opencode.json`. Das Schema von opencode weicht vom
+`mcpServers`-Schema ab: Der Schlüssel ist `mcp`, und `command` ist ein einzelnes Array,
+das das Programm und seine Argumente enthält:
+
+```json
+{
+  "mcp": {
+    "vmark": {
+      "type": "local",
+      "command": ["/Applications/VMark.app/Contents/MacOS/vmark-mcp-server"],
+      "enabled": true
+    }
+  }
+}
+```
+
+Wenn Ihre eigenen Einstellungen in `opencode.jsonc` liegen, lassen Sie sie dort — opencode
+führt beide Dateien zusammen, sodass VMarks Eintrag in `opencode.json` additiv ist. VMark
+schreibt die reine JSON-Datei, weil es die Kommentare einer `.jsonc`-Datei nicht verlustfrei
+zurückschreiben kann.
+
+::: warning Ein vorhandener `vmark`-Eintrag in `opencode.jsonc` hat Vorrang
+opencode führt `config.json`, dann `opencode.json`, dann `opencode.jsonc` zusammen, und
+die zuletzt gelesene Datei hat Vorrang. Wenn Sie also früher von Hand einen `vmark`-Eintrag
+in `opencode.jsonc` angelegt haben, überschreibt er den von VMark verwalteten — VMark meldet
+den Anbieter als gültig, während opencode weiter Ihren älteren Eintrag (und dessen veralteten
+Binärpfad) verwendet. Löschen Sie den handgeschriebenen `mcp.vmark`-Block aus
+`opencode.jsonc` und überlassen Sie ihn dem Bereich Integrationen.
+:::
 
 ::: tip Binary-Pfad finden
 Auf macOS befindet sich der MCP-Server-Binary innerhalb von VMark.app:
@@ -162,7 +219,7 @@ Das MCP-Server-Binary unterstützt einige Flags für Diagnose und ältere Setups
 | Flag | Funktion |
 |---|---|
 | `--version` (oder `-v`) | Gibt die Version aus (muss mit dem laufenden VMark übereinstimmen) und beendet sich. |
-| `--health-check` | Führt einen Selbsttest gegen die laufende VMark-Brücke durch und beendet sich. Verwenden Sie dieses Flag, um Ihre Installation zu überprüfen, bevor Sie einen KI-Assistenten anbinden. |
+| `--health-check` | Führt einen Selbsttest der Binärdatei durch und beendet sich: Es startet den MCP-Server gegen eine eingebaute Mock-Brücke, gibt seine Version und die Anzahl der Tools als JSON aus und endet mit einem Exit-Code ungleich null, wenn die Anzahl der Tools nicht der von diesem Build erwarteten entspricht. Es kontaktiert **kein** laufendes VMark — verwenden Sie es, um zu bestätigen, dass die Binärdatei läuft; verwenden Sie **Einstellungen → Integrationen**, um die laufende Brücke zu prüfen. |
 | `--port <number>` | Manuelles Port-Override. Überspringt den Auto-Discovery-Handshake und verbindet sich auf dem angegebenen Port. Nur für ältere Setups nützlich, bei denen der Brücken-Port extern fest vorgegeben ist; der Auto-Discovery-Pfad ist bevorzugt. |
 
 Beispiel:
@@ -187,18 +244,19 @@ KI-Assistent <--stdio--> MCP-Server <--WebSocket--> VMark-Editor
 
 ## Verfügbare Fähigkeiten
 
-Wenn verbunden, kann Ihr KI-Assistent:
+Wenn verbunden, verfügt Ihr KI-Assistent über neun Tools:
 
-| Kategorie | Fähigkeiten |
-|-----------|------------|
-| **Dokument** | Inhalt lesen/schreiben, suchen, ersetzen |
-| **Auswahl** | Auswahl abrufen/setzen, ausgewählten Text ersetzen |
-| **Formatierung** | Fett, kursiv, Code, Links und mehr |
-| **Blöcke** | Überschriften, Absätze, Code-Blöcke, Zitate |
-| **Listen** | Aufzählungs-, geordnete und Aufgabenlisten |
-| **Tabellen** | Zeilen/Spalten einfügen, ändern |
-| **Spezial** | Mathematikgleichungen, Mermaid-Diagramme, Wiki-Links |
-| **Arbeitsbereich** | Dokumente öffnen/speichern, Fenster verwalten |
+| Tool | Was es abdeckt |
+|------|----------------|
+| `session` | Fenster, Tabs, das aktive Dokument und Browser-Tabs (nur lesend) |
+| `workspace` | Neu, Öffnen, Speichern, Speichern unter, Schließen, Tabs wechseln, ein Fenster fokussieren, einen Arbeitsbereich öffnen |
+| `document` | Das ganze Dokument als Markdown lesen und schreiben; CJK-Formatierungstransformationen |
+| `selection` | Den ausgewählten Text lesen und ersetzen |
+| `workflow` | CST-sichere Patches und Validierung für GitHub-Actions-YAML |
+| `browser` / `browser_read` | Automatisierung des eingebetteten Browsers unter macOS — die ändernde und die nur lesende Hälfte |
+| `coherence` / `coherence_resolve` | Die Kohärenzschicht lesen; veraltete Kanten im Rahmen einer von Ihnen erteilten Delegation auflösen |
+
+Formatierung ist kein eigenes Tool: Der Assistent schreibt Markdown, also sind Überschriften, Tabellen, Mathematik und Diagramme genau das, was er schreibt.
 
 Sehen Sie die [MCP-Werkzeuge-Referenz](/de/guide/mcp-tools) für vollständige Dokumentation.
 
@@ -208,50 +266,38 @@ VMark bietet mehrere Möglichkeiten, den MCP-Server-Status zu überprüfen:
 
 ### Statusleisten-Indikator
 
-Die Statusleiste zeigt einen **MCP**-Indikator auf der rechten Seite:
+Die Statusleiste zeigt einen **MCP**-Indikator auf der rechten Seite. Wenn etwas Ihre
+Aufmerksamkeit erfordert, erscheint neben dem Satellitensymbol ein kurzes Zustandswort;
+eine funktionierende Verbindung ist einfach das grüne Symbol. Beim Darüberfahren werden
+die aktuell verbundenen KI-Clients mit Name und Version aufgelistet:
 
-| Farbe | Status |
-|-------|--------|
-| Grün | Verbunden und läuft |
-| Grau | Getrennt oder gestoppt |
-| Pulsierend (animiert) | Startet |
+| Farbe | Wort | Status |
+|-------|------|--------|
+| Grün | — | Verbunden und läuft |
+| Grau | `aus` | Getrennt oder gestoppt |
+| Pulsierend (animiert) | `…` | Startet |
+| Rot | `Fehler` | Server ausgefallen — für den Grund darüberfahren |
 
 Der Start wird normalerweise innerhalb von 1-2 Sekunden abgeschlossen.
 
-Klicken Sie auf den Indikator, um den detaillierten Statusdialog zu öffnen.
-
-### Status-Dialog
-
-Zugriff über **Hilfe → MCP-Server-Status** oder Klick auf den Statusleisten-Indikator.
-
-Der Dialog zeigt:
-- Verbindungszustand (Gesund / Fehler / Gestoppt)
-- Brücken-Laufzustand und Port
-- Server-Version
-- Verfügbare Tools (12) und Ressourcen (4)
-- Zeit der letzten Zustandsprüfung
-- Vollständige Liste der verfügbaren Tools mit Kopierschaltfläche
+Klicken Sie auf den Indikator, um **Einstellungen → Integrationen** zu öffnen.
 
 ### Einstellungspanel
 
-In **Einstellungen → Integrationen**, wenn der Server läuft, sehen Sie:
-- Versionsnummer
-- Tool- und Ressourcenanzahl
-- **Verbindung testen**-Schaltfläche — führt eine Zustandsprüfung durch
-- **Details anzeigen**-Schaltfläche — öffnet den Statusdialog
+**Einstellungen → Integrationen** ist die andere Statusoberfläche — es gibt keinen separaten Statusdialog. Solange die Brücke läuft, zeigt sie die Adresse, auf der sie lauscht (`localhost:<port>`, mit Kopierschaltfläche), und wie viele KI-Clients verbunden sind, alle paar Sekunden aktualisiert. Die Schaltfläche **Verbindung testen** (mit **Sidecar prüfen** beschriftet, solange die Brücke gestoppt ist) führt den eigenen `--health-check` des Sidecars aus und meldet die Sidecar-Version, die Anzahl seiner Tools und den Zeitpunkt der letzten Prüfung — sie bestätigt, dass die installierte Binärdatei funktioniert, nicht, dass ein Client verbunden ist.
 
 ## Fehlerbehebung
 
-### "Verbindung abgelehnt" oder "Kein aktiver Editor"
+### „Verbindung abgelehnt“ oder „Kein aktiver Editor“
 
 - Sicherstellen, dass VMark läuft und ein Dokument geöffnet ist
 - Überprüfen, ob der MCP-Server in Einstellungen → Integrationen aktiviert ist
-- Prüfen, ob die MCP-Brücke den Status "Läuft" anzeigt
+- Prüfen, ob die MCP-Brücke den Status „Läuft“ anzeigt
 - VMark neu starten, wenn die Verbindung unterbrochen wurde
 
 ### Pfad-Diskrepanz nach dem Verschieben von VMark
 
-Wenn Sie VMark.app an einen anderen Ort verschoben haben (z.B. von Downloads zu Programme), verweist die Konfiguration auf den alten Pfad:
+Wenn Sie VMark.app an einen anderen Ort verschoben haben (z. B. von Downloads zu Programme), verweist die Konfiguration auf den alten Pfad:
 
 1. Öffnen Sie **Einstellungen → Integrationen**
 2. Achten Sie auf das amber ⚠ Warnsymbol neben betroffenen Anbietern
@@ -264,45 +310,34 @@ Wenn Sie VMark.app an einen anderen Ort verschoben haben (z.B. von Downloads zu 
 - Überprüfen Sie, ob die Konfiguration installiert wurde (grünes Häkchen in Einstellungen prüfen)
 - Überprüfen Sie die Protokolle Ihres KI-Assistenten auf MCP-Verbindungsfehler
 
-### Befehle scheitern mit "Kein aktiver Editor"
+### Befehle scheitern mit „Kein aktiver Editor“
 
 - Sicherstellen, dass ein Dokument-Tab in VMark aktiv ist
 - In den Editor-Bereich klicken, um ihn zu fokussieren
 - Einige Befehle erfordern, dass Text zuerst ausgewählt wird
 
-## Vorschlagssystem & Automatische Genehmigung
+## Wie Bearbeitungen funktionieren
 
-Standardmäßig erstellt VMark **Vorschläge**, die Ihre Genehmigung erfordern, wenn KI-Assistenten Ihr Dokument ändern (Inhalt einfügen, ersetzen oder löschen):
+Die reduzierte MCP-Oberfläche folgt dem Lese-Schreib-Rückgrat: KI-Assistenten rufen `document.read` auf, um den aktuellen Inhalt und ein Revisionstoken zu erhalten, denken darüber nach und rufen dann `document.write` mit dem neuen vollständigen Inhalt auf. Das Revisionstoken schützt vor stillem Überschreiben: Wenn Sie in VMark getippt haben, während die KI nachgedacht hat, liefert der Schreibvorgang `STALE`, und die KI liest erneut.
 
-- **Einfügen** - Neuer Text erscheint als Ghost-Text-Vorschau
-- **Ersetzen** - Originaltext hat Durchstreichung, neuer Text als Ghost-Text
-- **Löschen** - Zu entfernender Text erscheint mit Durchstreichung
+Für YAML-Dateien von GitHub-Actions-Workflows verwendet die KI stattdessen `workflow.apply_patch` — VMarks CST-bewusste Mutatoren bewahren Kommentare, Anker und Schlüsselreihenfolge, die beim Umschreiben des Rohtexts verloren gingen.
 
-Drücken Sie **Eingabe**, um anzunehmen, oder **Escape**, um abzulehnen. Dies bewahrt Ihren Rückgängig/Wiederholen-Verlauf und gibt Ihnen die volle Kontrolle.
+Für `document.write`, `selection.set` oder `workflow.apply_patch` gibt es keinen Vorschauschritt — die Änderung landet im Editor, sobald die Revisionsprüfung besteht. Das Sicherheitsnetz ist der [Verlauf der Bearbeitungs-Prüfpunkte](#bearbeitungs-prufpunkte) unten; wenn Sie vor dem Übernehmen prüfen möchten, halten Sie das Dokument unter Versionskontrolle mit git und sehen Sie sich den Diff an. Die einzige Genehmigungsschranke ist **Speichern an neuem Ort und Genie-Ergebnisse automatisch genehmigen**: Ist sie aus (Standard), kann eine KI ein Dokument nicht unter einem neuen Pfad speichern — `workspace.save_as` liefert `APPROVAL_REQUIRED`, und VMark zeigt einen Toast mit dem Dateinamen. Selbst wenn sie an ist, weigert sich `save_as`, eine andere vorhandene Datei zu überschreiben.
 
-### Automatischer Genehmigungsmodus
+## Bearbeitungs-Prüfpunkte
 
-::: warning Mit Vorsicht verwenden
-Das Aktivieren von **Bearbeitungen automatisch genehmigen** umgeht die Vorschauvorschau und wendet KI-Änderungen sofort an. Aktivieren Sie dies nur, wenn Sie Ihrem KI-Assistenten vertrauen und schnellere Bearbeitung wünschen.
-:::
+Jede KI-Änderung an einem Dokument — `document.write`, `document.transform`, `selection.set` und `workflow.apply_patch` — sichert zuerst den Inhalt, den sie gleich ersetzt. Die Schaltfläche **Verlauf** in der Statusleiste öffnet ein Popover, das für den fokussierten Tab auflistet, wann jeder KI-Schreibvorgang stattfand und welches Tool ihn ausführte, mit einem Ein-Klick-**Auf den Stand vor diesem Schreibvorgang zurücksetzen** in jeder Zeile und einer Aktion **Verlauf für diesen Tab löschen**. Das Zurücksetzen stellt den früheren Inhalt wieder her und erhöht die Revision des Dokuments, sodass ein KI-Client, der noch die alte Revision hält, beim nächsten Schreiben `STALE` erhält, statt Ihre Wiederherstellung zu überschreiben.
 
-Wenn die automatische Genehmigung aktiviert ist:
-- Änderungen werden direkt ohne Vorschau angewendet
-- Rückgängig (Mod+Z) funktioniert weiterhin, um Änderungen rückgängig zu machen
-- Antwortnachrichten enthalten "(automatisch genehmigt)" für Transparenz
-
-Diese Einstellung ist nützlich für:
-- Schnelle KI-gestützte Schreibabläufe
-- Vertrauenswürdige KI-Assistenten mit klar definierten Aufgaben
-- Batch-Operationen, bei denen das Vorschauen jeder Änderung unpraktisch ist
+Prüfpunkte werden pro Datei aufbewahrt — 50 pro Datei und insgesamt 5 MiB — und in `mcp-checkpoints.jsonl` im App-Datenverzeichnis von VMark gespeichert, sodass sie einen Neustart überstehen. Unbenannte Dokumente werden pro Tab gesichert.
 
 ## Sicherheitshinweise
 
 - Der MCP-Server akzeptiert nur lokale Verbindungen (localhost)
 - Es werden keine Daten an externe Server gesendet
+- KI-Dateioperationen sind auf den Stamm des geöffneten Arbeitsbereichs und die Ordner geöffneter Dokumente beschränkt — siehe [Datenschutz](/de/guide/privacy#was-ein-ki-assistent-erreichen-kann)
 - Die gesamte Verarbeitung findet auf Ihrem Rechner statt
 - Die WebSocket-Brücke ist nur lokal zugänglich
-- Die automatische Genehmigung ist standardmäßig deaktiviert, um unbeabsichtigte Änderungen zu verhindern
+- Jeder installierte Client trägt sein eigenes `VMARK_MCP_TOKEN`. Ein Client ohne Token, mit einem unbekannten oder mit einem mit einem anderen Client geteilten Token verbindet sich trotzdem, aber seine delegierten Aktionen werden abgelehnt, mit einer Meldung, die Sie auffordert, für ihn unter **Einstellungen → Integrationen** Installieren auszuführen und ihn neu zu starten
 
 ## Nächste Schritte
 

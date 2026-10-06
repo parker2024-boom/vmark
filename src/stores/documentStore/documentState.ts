@@ -1,7 +1,7 @@
 /**
  * Per-tab document state shape and its pure state helpers.
  *
- * Split out of `document.ts` (WI-1) so the store file stays under the
+ * Split out of `document.ts` so the store file stays under the
  * 300-line gate. Everything here is leaf-pure — a shape, a constructor, and
  * two reducers. No store access, no side effects.
  *
@@ -12,7 +12,7 @@
  * three are NOT interchangeable, and comparing across them is the bug class the
  * contract exists to prevent: a strict compare of `content` against
  * `lastDiskContent` never matches for a CRLF document — the defect that kept a
- * saved tab dirty forever until the dual-snapshot contract (WI-1.4) put each
+ * saved tab dirty forever until the dual-snapshot contract put each
  * snapshot in its own domain.
  *
  *   - `content`         — `canonicalEditorText`: LF-only, BOM-free. What every
@@ -79,8 +79,8 @@ export interface DocumentState {
  * Canonicalised through the SAME boundary as every other door
  * (`ingestExternalText`): line endings to LF, a leading BOM stripped into
  * `hasBom`. Writing the argument verbatim is what let a CRLF file reach the
- * editor with literal carriage returns in its text nodes — and, once WI-1.2
- * armed the editor-domain assertion, made the first keystroke on such a file
+ * editor with literal carriage returns in its text nodes — and, once the
+ * editor-domain assertion was armed, made the first keystroke on such a file
  * throw. The BOM strip became safe once `saveToPath` re-emits the mark
  * (decision D1); before that, stripping here would have LOST it on save.
  *
@@ -254,7 +254,7 @@ export function assertCanonicalEditorText(text: string, action: string): void {
   );
 }
 
-/** What a successful write produced, one snapshot per text domain (WI-1.4). */
+/** What a successful write produced, one snapshot per text domain. */
 export interface SaveSnapshots {
   /** The canonical editor text handed to the writer — same domain as `content`. */
   editorSnapshot: string;

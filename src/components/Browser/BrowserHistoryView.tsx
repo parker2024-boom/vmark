@@ -1,5 +1,5 @@
 /**
- * BrowserHistoryView — this window's browsing, in the sidebar (WI-S2.2).
+ * BrowserHistoryView — this window's browsing, in the sidebar.
  *
  * Shown when the active tab is a browser (ADR-2): the sidebar follows what you are
  * looking at rather than making you switch it by hand.

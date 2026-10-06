@@ -1,5 +1,5 @@
 import { defineConfig } from "vitest/config";
-import { sourceAliases, suffixGlob } from "./vitest.shared.ts";
+import { TEST_DEFINES, sourceAliases, suffixGlob } from "./vitest.shared.ts";
 
 /**
  * Soak tier (WI-5.1, plan ADR-6) — a NAMED tier, not an env-var mode:
@@ -13,6 +13,8 @@ import { sourceAliases, suffixGlob } from "./vitest.shared.ts";
  * out scheduled job, which is exactly the failure surface ADR-6 asks for.
  */
 export default defineConfig({
+  // The build-time constants the app reads (see TEST_DEFINES).
+  define: TEST_DEFINES,
   test: {
     globals: true,
     environment: "node",

@@ -1,5 +1,5 @@
 /**
- * Diagnostic message translation (audit 20260612 H18).
+ * Diagnostic message translation.
  *
  * Purpose: Resolve a workflow Diagnostic to a localized message via its
  *   stable code (`workflowEditor:diagnostics.<code>`), interpolating the

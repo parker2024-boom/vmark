@@ -1,3 +1,5 @@
+/** Inline math node view — renders KaTeX, and an editable input with a floating preview while edited.
+ * @module plugins/latex/MathInlineNodeView */
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { Selection } from "@tiptap/pm/state";
 import type { NodeView, EditorView } from "@tiptap/pm/view";
@@ -15,10 +17,8 @@ import type { InlineMathEditingRegistry } from "./inlineMathEditingRegistry";
  * Two modes:
  * 1. Preview mode: Shows rendered KaTeX
  * 2. Edit mode: Shows editable input with floating preview
- *
  * The `.editing` class is added by the inlineNodeEditing plugin
  * when cursor is at the node.
- *
  * When KaTeX runs, and what the preview shows until then, is
  * scheduleInlineMathRender's call: near the viewport in a scrolling editor
  * (showing the source), on idle elsewhere.

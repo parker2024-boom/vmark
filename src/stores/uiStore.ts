@@ -1,20 +1,21 @@
 /**
  * UI Store — T09 consolidation.
  *
- * Owns transient UI state for the document window. Three legacy stores
- * (searchStore, contentSearchStore, terminalSessionStore) are merged in
- * as namespaced slices (s.search / s.contentSearch / s.terminal). The
- * original UI fields stay at root for consumer-side compatibility.
+ * Owns transient UI state for the document window. Two legacy stores
+ * (searchStore, contentSearchStore) are merged in as namespaced slices
+ * (s.search / s.contentSearch). The original UI fields stay at root for
+ * consumer-side compatibility. Terminal SESSION state is not UI chrome and
+ * lives in `terminalStore`; the terminal panel's chrome (visibility, size,
+ * docked position) stays here with the rest of the window layout.
  *
  * Action names that would have collided across the source stores
  * (open/close/setQuery between search and contentSearch) are domain-
- * prefixed: searchOpen, contentSearchOpen, terminalCreateSession, …
+ * prefixed: searchOpen, contentSearchOpen, …
  *
  * All type declarations live in `./uiStore/types.ts` (the leaf of the
  * import graph — no cycles); initial values and action implementations
- * live in the slice files (searchSlice.ts, contentSearchSlice.ts,
- * terminalSlice.ts) so this composition root stays under the ~300 LOC
- * guideline. Slice action creators receive this factory's `set`/`get`,
+ * live in the slice files (searchSlice.ts, contentSearchSlice.ts) so this
+ * composition root stays under the ~300 LOC guideline. Slice action creators receive this factory's `set`/`get`,
  * so subscribe/update semantics are identical to the single-file version.
  * Public types are re-exported here — consumers keep importing from
  * "@/stores/uiStore".
@@ -29,15 +30,8 @@ import {
   createContentSearchActions,
   initialContentSearch,
 } from "./uiStore/contentSearchSlice";
-import {
-  createTerminalActions,
-  initialTerminal,
-  resetTerminalIdCounter,
-} from "./uiStore/terminalSlice";
-import { createTerminalScopeActions } from "./uiStore/terminalScopeActions";
 
 export type { SidebarViewMode, UIStore, FileSearchResult, EffectiveTerminalPosition, LineMatch } from "./uiStore/types";
-export { MAX_TERMINAL_SESSIONS } from "./uiStore/terminalSlice";
 
 /**
  * Sidebar width bounds — the ONE definition.
@@ -105,7 +99,6 @@ export const useUIStore = create<UIStore>((set, get) => ({
 
   search: initialSearch,
   contentSearch: initialContentSearch,
-  terminal: initialTerminal,
 
   toggleFocusMode: () => set((s) => ({ focusModeEnabled: !s.focusModeEnabled })),
   toggleTypewriterMode: () => set((s) => ({ typewriterModeEnabled: !s.typewriterModeEnabled })),
@@ -138,7 +131,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
     }),
   setSidebarViewMode: (mode) => set({ sidebarViewMode: mode }),
   // Each kind remembers its own sub-view, so switching between a document tab and a
-  // browser tab does not clobber the other's (WI-S2.3).
+  // browser tab does not clobber the other's.
   setSidebarBrowserViewMode: (mode) => set({ sidebarBrowserViewMode: mode }),
   showSidebarWithView: (mode) =>
     set({ sidebarVisible: true, sidebarViewMode: mode }),
@@ -218,12 +211,4 @@ export const useUIStore = create<UIStore>((set, get) => ({
 
   ...createSearchActions(set, get),
   ...createContentSearchActions(set, get),
-  ...createTerminalActions(set, get),
-  ...createTerminalScopeActions(set, get),
 }));
-
-/** Reset terminal slice + ID counter — for tests only. */
-export function resetTerminalSessionStore(): void {
-  resetTerminalIdCounter();
-  useUIStore.setState({ terminal: initialTerminal });
-}

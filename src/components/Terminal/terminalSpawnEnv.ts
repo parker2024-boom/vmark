@@ -6,7 +6,7 @@
  * shell-integration config. Extracted to keep spawnPty.ts focused on the spawn
  * lifecycle.
  *
- * Integration contributes ENV AND ARGS, not env alone (WI-3.3): zsh is hooked
+ * Integration contributes ENV AND ARGS, not env alone: zsh is hooked
  * through ZDOTDIR, but bash has no environment hook that applies to
  * interactive shells and must be spawned as `bash --rcfile <path>`.
  *
@@ -36,6 +36,10 @@ export async function resolveLoginShellPath(): Promise<string> {
     : "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
 }
 
+/** A real WezTerm release id (`YYYYMMDD-HHMMSS-<commit>`), so version parsers
+ *  written against the genuine terminal read it the way they expect to. */
+const WEZTERM_VERSION = "20240203-110809-5046fc22";
+
 /**
  * The environment every terminal session starts from, before shell integration
  * layers its own overrides on top. `CommandBuilder` on the Rust side sets these
@@ -50,10 +54,18 @@ export async function resolveLoginShellPath(): Promise<string> {
  *     allowlists (Claude Code's `/terminal-setup`, etc.) recognize the host as
  *     a CSI-u-capable terminal. WezTerm has the lowest side-effect risk of the
  *     four recognized values. See
- *     dev-docs/decisions/ADR-006-terminal-program-identity.md. Do NOT change
+ *     .claude/adr/ADR-006-terminal-program-identity.md. Do NOT change
  *     this to "vmark" — third-party tools fall through to a degraded "unknown
  *     terminal" path. terminalKeyHandler.ts keeps the impersonation honest by
  *     translating Shift+Enter into the CSI-u sequence real WezTerm sends.
+ *   - `TERM_PROGRAM_VERSION` — the other half of the impersonation. The
+ *     `supports-hyperlinks` check many CLI tools share (Claude Code included)
+ *     accepts WezTerm only from a minimum release on, read from this variable;
+ *     with it absent the tool decides the host has no OSC 8 support and prints
+ *     links as plain text. A plain-text URL the tool hard-wraps over two rows
+ *     is then linkified one row at a time, so a click opens a truncated
+ *     address. xterm.js renders OSC 8 natively and setupWebLinks.ts routes
+ *     its activation, so the capability being claimed is real.
  *   - `COLORTERM=truecolor` — xterm.js renders SGR 38;2;r;g;b, but with
  *     COLORTERM empty a CLI tool has no way to know that and downgrades to the
  *     256-colour palette (#1334).
@@ -89,6 +101,7 @@ export function buildBaseTerminalEnv(
   const env: Record<string, string> = {
     TERM: "xterm-256color",
     TERM_PROGRAM: "WezTerm",
+    TERM_PROGRAM_VERSION: WEZTERM_VERSION,
     COLORTERM: "truecolor",
     PATH: loginPath,
   };
@@ -105,7 +118,7 @@ export interface ShellSpawnConfig {
   args: string[];
 }
 
-/** The Rust `ShellIntegration` payload (WI-3.3). */
+/** The Rust `ShellIntegration` payload. */
 interface ShellIntegrationPayload {
   env?: Record<string, string>;
   args?: string[];
@@ -113,7 +126,7 @@ interface ShellIntegrationPayload {
 
 /**
  * Build the env AND args for a specific shell, applying shell-integration
- * config to a FRESH copy of the base env (WI-3.1, extended by WI-3.3).
+ * config to a FRESH copy of the base env.
  *
  * The config is shell-specific: zsh gets a `ZDOTDIR` pointing at its rc, bash
  * gets `--rcfile <path>` because it has no environment hook that applies to

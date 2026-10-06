@@ -2,6 +2,8 @@
  * Source Peek Header
  *
  * Creates the header widget for inline Source Peek with block type label and action buttons.
+ *
+ * @module plugins/sourcePeekInline/sourcePeekHeader
  */
 
 import i18n from "@/i18n";

@@ -1,5 +1,5 @@
 /**
- * browserOcclusion — the single freeze/thaw authority for every browser tab (WI-S0.8).
+ * browserOcclusion — the single freeze/thaw authority for every browser tab.
  *
  * Purpose: the native `WKWebView` is added as a subview ABOVE the Tauri webview, so
  * it paints over all React DOM inside its rect — z-index cannot reach it. Any overlay
@@ -42,11 +42,11 @@ const tauriDriver: OcclusionDriver = {
  * they are named here rather than spelled inline at each call site.
  */
 export const OCCLUDER = {
-  /** The page-crashed recovery overlay (WI-1.8). */
+  /** The page-crashed recovery overlay. */
   crash: "crash-overlay",
-  /** A page `alert()` / `confirm()` (WI-1.7). */
+  /** A page `alert()` / `confirm()`. */
   dialog: "page-dialog",
-  /** The AI-action approval prompt (WI-S0.8). */
+  /** The AI-action approval prompt. */
   approval: "approval-dialog",
   /** The open_workspace consent prompt. */
   workspaceApproval: "workspace-approval-dialog",
@@ -75,7 +75,7 @@ const controller = new OcclusionController(tauriDriver, (tabId, error) => {
 
 /**
  * Mirror the controller's *intent* into `browserUiStore` so React can paint an opaque
- * placeholder over the rect while the native view is hidden (WI-SOC.1b).
+ * placeholder over the rect while the native view is hidden.
  *
  * The intent, not the driver's confirmation: the placeholder must be up BEFORE the
  * view goes away, never a frame after it. A freeze that fails still keeps the intent
@@ -102,7 +102,7 @@ export const browserOcclusion = {
   /** The tab's native view now exists: re-drive any freeze the driver could not apply
    *  before it did. `BrowserSurface` calls this once `browser_create` resolves —
    *  without it, an overlay raised before the view existed stayed unenforced and the
-   *  new view came up live on top of it. (Audit verification, #4.) */
+   *  new view came up live on top of it. */
   resync(tabId: string): void {
     controller.resync(tabId);
     syncFrozen(tabId);

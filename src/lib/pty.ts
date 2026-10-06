@@ -6,12 +6,15 @@
  * flow control. Two-phase startup eliminates data-loss race conditions.
  *
  * Key decisions:
- *   - Constructor returns immediately; the actual spawn is async via `_ready`.
- *   - Output flows over a binary `tauri::ipc::Channel` (WI-1.1, ADR-T1): the
+ *   - Constructor returns immediately; the spawn is async. `ready` settles
+ *     once the shell is running and REJECTS, with a readable `Error`, when the
+ *     backend refuses or fails it — a caller's only way to fall back or tell
+ *     the user.
+ *   - Output flows over a binary `tauri::ipc::Channel` (ADR-T1): the
  *     reader thread sends `InvokeResponseBody::Raw(bytes)`, which the webview
  *     receives as an `ArrayBuffer` — NOT a JSON number array. This is ~3.66x
  *     less wire data and orders of magnitude less encode/decode CPU than the
- *     old `pty:data:` event path (see dev-docs/grills/terminal/). The Channel
+ *     old `pty:data:` event path. The Channel
  *     is point-to-point, so output is no longer broadcast to every window.
  *   - The data Channel's `onmessage` is wired BEFORE `pty_start` is invoked, so
  *     the reader cannot emit before we are listening — no data-loss race
@@ -36,6 +39,7 @@ import { invoke, Channel } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { ptyWarn, terminalLog } from "@/utils/debug";
 import { commandErrorMessage } from "@/services/commands/commandError";
+import { createPtyInputQueue } from "./ptyInputQueue";
 
 // ---------------------------------------------------------------------------
 // Public types — match the tauri-pty interface that spawnPty.ts expects
@@ -61,6 +65,8 @@ export interface IPtySpawnOptions {
 
 export interface IPty {
   readonly pid: number;
+  /** Resolves once the shell runs; rejects when it could not be spawned. */
+  readonly ready: Promise<void>;
   cols: number;
   rows: number;
   readonly onData: IEvent<Uint8Array>;
@@ -109,10 +115,14 @@ class VMarkPty implements IPty {
 
   private _onData = new EventEmitter<Uint8Array>();
   private _onExit = new EventEmitter<IPtyExitEvent>();
-  private _ready: Promise<void>;
+  readonly ready: Promise<void>;
   private _dataChannel: Channel<ArrayBuffer | Uint8Array | number[]> | null = null;
   private _unlistenExit: UnlistenFn | null = null;
   private _destroyed = false;
+  private _input = createPtyInputQueue(async (data) => {
+    await this.ready;
+    if (!this._destroyed) await invoke("pty_write", { pid: this._pid, data });
+  }, (error) => ptyWarn("pty_write failed:", commandErrorMessage(error)));
   /** Guards _freeRustSession so racing teardown paths can't double kill/close. */
   private _freed = false;
 
@@ -123,7 +133,10 @@ class VMarkPty implements IPty {
   constructor(file: string, args: string[], opts?: IPtySpawnOptions) {
     this.cols = opts?.cols ?? 80;
     this.rows = opts?.rows ?? 24;
-    this._ready = this._setup(file, args, opts);
+    // A typed command rejection is a plain object; callers get an Error.
+    this.ready = this._setup(file, args, opts).catch((err: unknown) => {
+      throw new Error(commandErrorMessage(err), { cause: err });
+    });
   }
 
   get onData(): IEvent<Uint8Array> {
@@ -133,11 +146,7 @@ class VMarkPty implements IPty {
     return this._onExit.event;
   }
 
-  private async _setup(
-    file: string,
-    args: string[],
-    opts?: IPtySpawnOptions,
-  ): Promise<void> {
+  private async _setup(file: string, args: string[], opts?: IPtySpawnOptions): Promise<void> {
     // Phase 1: create PTY + spawn child (reader NOT started yet)
     this._pid = await invoke<number>("pty_spawn", {
       file,
@@ -173,7 +182,7 @@ class VMarkPty implements IPty {
       }
 
       // Binary output Channel. Wiring onmessage before pty_start means the
-      // reader cannot send before we are listening — no data-loss race (WI-1.1).
+      // reader cannot send before we are listening — no data-loss race.
       const channel = new Channel<ArrayBuffer | Uint8Array | number[]>();
       channel.onmessage = (msg) => {
         this._onData.fire(toUint8Array(msg));
@@ -205,26 +214,14 @@ class VMarkPty implements IPty {
   }
 
   write(data: string): void {
-    // Destroy-guard (WI-1.3): once killed, drop writes. Without this, a
-    // dispose-time IME flush (or any late write) resolves `_ready` and calls
-    // pty_write on a freed session — the failure was previously swallowed by
-    // ptyWarn. This matches the guard `_setup` already applies at line ~168.
-    if (this._destroyed) return;
-    // Recheck _destroyed in the .then — kill() may set it while _ready pends (TOCTOU).
-    this._ready
-      .then(() => (this._destroyed ? undefined : invoke("pty_write", { pid: this._pid, data })))
-      .catch((err) => {
-        ptyWarn("pty_write failed:", commandErrorMessage(err));
-      });
+    this._input.write(data);
   }
 
   resize(columns: number, rows: number): void {
     this.cols = columns;
     this.rows = rows;
-    this._ready
-      .then(() =>
-        invoke("pty_resize", { pid: this._pid, cols: columns, rows }),
-      )
+    this.ready
+      .then(() => invoke("pty_resize", { pid: this._pid, cols: columns, rows }))
       .catch((err) => {
         ptyWarn("pty_resize failed:", commandErrorMessage(err));
       });
@@ -234,12 +231,10 @@ class VMarkPty implements IPty {
     this._destroyed = true;
     this._cleanup();
     // _cleanup() removed the pty:exit listener, so the natural exit handler that
-    // calls pty_close never runs (#974). Free the Rust session explicitly. The
-    // _freed guard inside _freeRustSession makes this idempotent: if setup was
-    // racing and its destroyed-guard already freed the session, this is a no-op
-    // (no double pty_kill/pty_close). If _ready rejected (setup failed), _setup
-    // already freed it, so swallow the rejection.
-    this._ready
+    // calls pty_close never runs (#974): free the Rust session explicitly. The
+    // _freed guard makes this a no-op when setup's own destroyed-guard got
+    // there first; a rejected `ready` means setup already freed whatever existed.
+    this.ready
       .then(() => this._freeRustSession())
       .catch((err) => {
         terminalLog("kill after setup failure:", commandErrorMessage(err));
@@ -247,7 +242,7 @@ class VMarkPty implements IPty {
   }
 
   pause(): void {
-    this._ready
+    this.ready
       .then(() => invoke("pty_pause", { pid: this._pid }))
       .catch((err) => {
         terminalLog("pty_pause failed:", commandErrorMessage(err));
@@ -255,7 +250,7 @@ class VMarkPty implements IPty {
   }
 
   resume(): void {
-    this._ready
+    this.ready
       .then(() => invoke("pty_resume", { pid: this._pid }))
       .catch((err) => {
         terminalLog("pty_resume failed:", commandErrorMessage(err));
@@ -263,6 +258,7 @@ class VMarkPty implements IPty {
   }
 
   private _cleanup(): void {
+    this._input.close();
     // The Channel has no "unlisten"; drop its onmessage so no further bytes
     // reach the (disposed) consumer, and release the reference.
     if (this._dataChannel) {

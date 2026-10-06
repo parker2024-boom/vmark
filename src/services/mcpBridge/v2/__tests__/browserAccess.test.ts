@@ -18,6 +18,11 @@ import {
   resolveBrowserTarget,
 } from "@/services/mcpBridge/v2/browserAccess";
 import type { BrowserTarget } from "@/services/mcpBridge/v2/browserHelpers";
+import { readOperationArgsChecked } from "@/services/mcpBridge/v2/readOperationArgs";
+
+/** Resolve as a handler does: from the request's checked payload read. */
+const resolveTarget = (id: string, args: Record<string, unknown>) =>
+  resolveBrowserTarget(id, readOperationArgsChecked("vmark.browser.read", args));
 
 const human: BrowserTarget = { tabId: "t1", url: "https://a.com/x", generation: 2, automationMode: "human", windowLabel: "main" };
 const ai: BrowserTarget = { ...human, automationMode: "ai-sandbox" };
@@ -180,14 +185,14 @@ describe("resolveBrowserTarget", () => {
 
   it("refuses at the gate first, before reading the request", async () => {
     useSettingsStore.setState((s) => ({ browser: { ...s.browser, enabled: false } }));
-    expect(await resolveBrowserTarget("g", { tabId: "" })).toBeNull();
+    expect(await resolveTarget("g", { tabId: "" })).toBeNull();
     expect(lastResponse()).toEqual({ id: "g", success: false, error: "BROWSER_DISABLED" });
   });
 
   it("resolves the tab the request names, with the fields every handler stamps", async () => {
     const id = useTabStore.getState().createBrowserTab("main", SITE, "X", "ai-sandbox");
     useTabStore.getState().updateBrowserTab(id, { generation: 4 });
-    expect(await resolveBrowserTarget("r", { tabId: id })).toEqual({
+    expect(await resolveTarget("r", { tabId: id })).toEqual({
       tabId: id,
       url: SITE,
       generation: 4,
@@ -199,9 +204,9 @@ describe("resolveBrowserTarget", () => {
 
   it("falls back to this window's active browser tab only when tabId is ABSENT", async () => {
     const id = useTabStore.getState().createBrowserTab("main", SITE, "X", "human");
-    expect((await resolveBrowserTarget("a", {}))?.tabId).toBe(id);
-    for (const tabId of ["", "   ", 42]) {
-      expect(await resolveBrowserTarget("bad", { tabId })).toBeNull();
+    expect((await resolveTarget("a", {}))?.tabId).toBe(id);
+    for (const tabId of ["", "   ", 42, null, { id }]) {
+      expect(await resolveTarget("bad", { tabId })).toBeNull();
       expect(lastResponse()).toEqual({
         id: "bad",
         success: false,
@@ -215,7 +220,7 @@ describe("resolveBrowserTarget", () => {
     // window has closed must learn the tab is gone, not that nothing is active here.
     const docId = useTabStore.getState().createTab("main", "/a.md");
     for (const args of [{ tabId: "nope" }, { tabId: docId }]) {
-      expect(await resolveBrowserTarget("none", args)).toBeNull();
+      expect(await resolveTarget("none", args)).toBeNull();
       expect(lastResponse()).toEqual({
         id: "none",
         success: false,
@@ -227,7 +232,7 @@ describe("resolveBrowserTarget", () => {
 
   it("refuses with 'no active browser tab' only when no tab was named and none is active", async () => {
     useTabStore.getState().createTab("main", "/a.md");
-    expect(await resolveBrowserTarget("none", {})).toBeNull();
+    expect(await resolveTarget("none", {})).toBeNull();
     expect(lastResponse()).toEqual({ id: "none", success: false, error: "no active browser tab" });
   });
 });

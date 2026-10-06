@@ -1,6 +1,10 @@
-// WI-1.3 — matrix parsing + expansion.
-//
-// Plan §4.3 — deterministic Cartesian × include × exclude with a 256-cap.
+/**
+ * Matrix parsing + expansion for GHA workflow jobs.
+ *
+ * Deterministic Cartesian × include × exclude with a 256-cap.
+ *
+ * @module lib/ghaWorkflow/parser/matrix
+ */
 
 import type {
   Diagnostic,

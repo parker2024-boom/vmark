@@ -87,7 +87,7 @@ pub(super) fn is_fully_initialized(vmark: &Path) -> bool {
 }
 
 /// Are `.vmark/.gitignore`'s runtime-file rules complete? Separate from
-/// `is_fully_initialized` ON PURPOSE (found by dogfooding, 2026-07-20): folding
+/// `is_fully_initialized` ON PURPOSE (found by dogfooding): folding
 /// this into the initialized test made a real 119-entry workspace — whose
 /// `.gitignore` predated the `group.lock` rule — report `initialized: false`, so
 /// `perform_status` skipped the breakdown and showed `open_items: 0` while
@@ -104,7 +104,7 @@ pub(super) fn ignore_rules_complete(vmark: &Path) -> bool {
 }
 
 /// Append `line` to `path` when absent, preserving existing content
-/// (audit R22 — a pre-existing file must still gain the required rules).
+/// (a pre-existing file must still gain the required rules).
 /// The write is ATOMIC (7th-review 6R-4): a crash mid-write must never leave a
 /// truncated `.gitattributes` that a later `open` would trust as initialized, so
 /// the new content is staged in a temp file, fsync'd, then renamed into place.
@@ -206,7 +206,7 @@ pub fn load_or_create_writer_id(app_data_dir: &Path) -> Result<WriterId, String>
     }
     let id = Uuid::now_v7();
     fs::create_dir_all(app_data_dir).map_err(|e| format!("writer-id dir: {e}"))?;
-    // Write-then-link (audit A17): the file becomes visible ONLY with its
+    // Write-then-link: the file becomes visible ONLY with its
     // full content — no window where another process reads it empty. A
     // link collision means we lost the race: adopt THEIR id.
     let tmp = app_data_dir.join(format!(".writer-id-{id}"));
@@ -219,15 +219,48 @@ pub fn load_or_create_writer_id(app_data_dir: &Path) -> Result<WriterId, String>
             let existing = fs::read_to_string(&path).map_err(|e| format!("writer-id read: {e}"))?;
             match Uuid::parse_str(existing.trim()) {
                 Ok(other) => Ok(WriterId(other)), // lost the race — adopt theirs
-                Err(_) => {
-                    // Corrupt file, not a race: replace it (no healthy
-                    // writer can be relying on unparseable identity).
-                    fs::write(&path, id.to_string())
-                        .map_err(|e| format!("writer-id rewrite: {e}"))?;
-                    Ok(WriterId(id))
-                }
+                // Corrupt file, not a race: replace it (no healthy writer
+                // can be relying on unparseable identity).
+                Err(_) => repair_writer_id(app_data_dir, &path, id),
             }
         }
         Err(e) => Err(format!("writer-id create: {e}")),
     }
 }
+
+/// Replace a corrupt writer-id file so that concurrent repairs CONVERGE.
+///
+/// Every process starting against the corrupt file repairs it. Writing it in
+/// place let each repairer return its own id while only the last write
+/// survived, so the others stamped entries with an identity no later run
+/// loads. Here the repair holds an exclusive lock and re-reads first: the
+/// first repairer writes, every later one adopts its id. The new id arrives
+/// by rename, so a reader outside the lock sees the corrupt file or the
+/// repaired one, never a partial write. The lock file stays in app data.
+fn repair_writer_id(dir: &Path, path: &Path, id: Uuid) -> Result<WriterId, String> {
+    let lock = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(dir.join("coherence-writer-id.lock"))
+        .and_then(|lock| lock.lock().map(|()| lock))
+        .map_err(|e| format!("writer-id lock: {e}"))?;
+    if let Some(other) = fs::read_to_string(path)
+        .ok()
+        .and_then(|existing| Uuid::parse_str(existing.trim()).ok())
+    {
+        return Ok(WriterId(other)); // another repairer got here first
+    }
+    let tmp = dir.join(format!(".writer-id-{id}"));
+    let written = fs::write(&tmp, id.to_string()).and_then(|()| fs::rename(&tmp, path));
+    if written.is_err() {
+        let _ = fs::remove_file(&tmp); // never leave a stray temp behind
+    }
+    drop(lock);
+    written.map_err(|e| format!("writer-id rewrite: {e}"))?;
+    Ok(WriterId(id))
+}
+
+#[cfg(test)]
+#[path = "workspace_files.test.rs"]
+mod tests;

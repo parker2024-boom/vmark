@@ -2,7 +2,7 @@
  * useRunSnapshot — "Restore Files" for the run this panel just finished.
  *
  * Purpose: a run with `action/save-file` steps is REFUSED unless its targets
- * are snapshotted first (`prepare.rs`, #266), and until WI-LX2.3 nothing could
+ * are snapshotted first (`prepare.rs`), and until WI-LX2.3 nothing could
  * put a snapshot back. Once this tab's run has ended, look up the snapshot it
  * took; if there is one, offer it, confirm, restore, and say what happened.
  *
