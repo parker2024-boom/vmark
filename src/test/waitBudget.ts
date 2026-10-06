@@ -61,3 +61,19 @@ export const ASYNC_IMPORT_WAIT = { timeout: 5000 } as const;
  * below it.
  */
 export const SURFACE_IMPORT_WAIT = { timeout: 45_000 } as const;
+
+/**
+ * The budget for waiting on the WHOLE App module graph — `import("./App")`
+ * via the real `main.tsx` entry.
+ *
+ * A third class, because it costs about twice the editor surface: the App
+ * graph contains that surface and every store, service and shell around it.
+ * `main.test.tsx` and `main.bootFailure.test.tsx` measured ~21s each, run
+ * together, at a load average of ~30. Borrowing `SURFACE_IMPORT_WAIT` left
+ * them ~2x headroom, and both failed together in a `vitest related` run on a
+ * saturated machine while passing alone — the descheduled-worker failure this
+ * file exists to absorb.
+ *
+ * Same contract as above: a LIVENESS bound, below `LIVENESS_TIMEOUT_MS`.
+ */
+export const APP_GRAPH_IMPORT_WAIT = { timeout: 120_000 } as const;

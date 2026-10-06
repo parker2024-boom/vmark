@@ -4,7 +4,7 @@
 // the two cannot share a file.
 import { describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
-import { SURFACE_IMPORT_WAIT } from "@/test/waitBudget";
+import { APP_GRAPH_IMPORT_WAIT } from "@/test/waitBudget";
 
 const entry = vi.hoisted(() => ({
   rendered: [] as ReactNode[],
@@ -37,7 +37,7 @@ describe("main entry, failing bootstrap", () => {
           "App bootstrap failed:",
           expect.objectContaining({ message: "Root element not found" }),
         ),
-      SURFACE_IMPORT_WAIT,
+      APP_GRAPH_IMPORT_WAIT,
     );
     expect(entry.rendered).toHaveLength(0);
   });

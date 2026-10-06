@@ -448,7 +448,7 @@ Konfigurieren Sie das integrierte Terminal-Panel. Öffnen Sie das Terminal mit `
 | Cursor blinken | Ob der Terminal-Cursor blinkt | Ein | Ein / Aus |
 | Bei Auswahl kopieren | Ausgewählten Terminaltext automatisch in die Zwischenablage kopieren | Aus | Ein / Aus |
 | Gesprächsprotokolle automatisch darstellen | Claude/Codex-Markdown, Tabellen und Mermaid-Diagramme neben der Terminal-CLI darstellen. Fügt der Konfiguration von Claude Code und Codex einen lokalen SessionStart-Hook hinzu; laufende CLI-Sitzungen nach dem Aktivieren neu starten | Aus | Ein / Aus |
-| WebGL-Renderer | GPU-beschleunigtes Rendering für das Terminal verwenden. Deaktivieren bei IME-Eingabeproblemen. Erfordert Terminal-Neustart | Ein | Ein / Aus |
+| WebGL-Renderer | GPU-beschleunigtes Rendering für das Terminal verwenden. Deaktivieren bei IME-Eingabeproblemen. Erfordert Terminal-Neustart. Nur macOS und Windows — Linux verwendet immer den DOM-Renderer | Ein | Ein / Aus |
 | Zwischenablage aus der Ferne (OSC 52) | Programmen im Terminal — über ssh, in tmux — erlauben, in Ihre Systemzwischenablage zu kopieren. Der Kanal ist nur schreibend: Das Lesen der Zwischenablage wird immer verweigert, da jede im Terminal ausgegebene Ausgabe es anfordern könnte | Ein | Ein / Aus |
 | Scrollback-Puffer | Anzahl der Ausgabezeilen, die jede Sitzung in ihrem Scrollverlauf behält. Höhere Werte benötigen mehr Speicher | 5.000 | 1.000 / 5.000 / 10.000 / 50.000 |
 | Screenreader-Modus | Terminalausgabe für assistive Technologien (VoiceOver) zugänglich machen. Aus Leistungsgründen standardmäßig deaktiviert | Aus | Ein / Aus |

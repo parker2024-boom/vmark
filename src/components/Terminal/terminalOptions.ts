@@ -10,6 +10,7 @@
  * @module components/Terminal/terminalOptions
  */
 import { buildXtermThemeForId, drawBoldTextInBrightColorsForId } from "@/theme";
+import { getRuntimePlatform, type RuntimePlatform } from "@/utils/platform";
 
 /** User-configurable settings for creating a terminal instance. */
 export interface TerminalInstanceSettings {
@@ -61,6 +62,19 @@ export function clampScrollback(value: number): number {
  */
 export function clampContrastRatio(value: number): number {
   return Math.min(Math.max(Number.isFinite(value) ? value : 4.5, 1), 21);
+}
+
+/**
+ * Whether to load xterm's WebGL renderer. Never on Linux: WebKitGTK presents a
+ * WebGL canvas frame only on the next unrelated repaint, so a keystroke's echo
+ * stayed invisible until the following key (#1511). The DOM renderer paints at
+ * once.
+ */
+export function shouldUseWebglRenderer(
+  useWebGL: boolean,
+  platform: RuntimePlatform = getRuntimePlatform(),
+): boolean {
+  return useWebGL && platform !== "linux";
 }
 
 /** Build the xterm options for a set of user settings. */

@@ -336,12 +336,12 @@ CJK 괄호, 중괄호 따옴표, 설정을 포함한 전체 가이드는 [스마
 | 동작 | 단축키 |
 |------|--------|
 | 터미널 토글 | `` Ctrl + ` `` |
-| 터미널 또는 에디터에 포커스 | `` Ctrl + Shift + ` `` |
-| 복사 | `Mod + C` (선택 시) |
-| 붙여넣기 | `Mod + V` |
-| 모두 선택 (터미널 출력만) | `Mod + A` |
-| 지우기 | `Mod + K` |
-| 검색 | `Mod + F` |
+| 터미널 또는 에디터에 포커스 | `` Ctrl + Shift + ` `` (Windows/Linux에서는 `` Alt + Shift + ` ``) |
+| 복사 | `Mod + C` (선택 시). Linux에서는 `Ctrl + Shift + C` 또는 `Ctrl + Insert`도 가능 |
+| 붙여넣기 | `Mod + V`. Linux에서는 `Ctrl + Shift + V` 또는 `Shift + Insert`도 가능 |
+| 모두 선택 (터미널 출력만) | `Mod + A` (Linux에서는 `Ctrl + Shift + A`) |
+| 지우기 | `Mod + K` (Linux에서는 `Ctrl + Shift + K`) |
+| 검색 | `Mod + F` (Linux에서는 `Ctrl + Shift + F`) |
 | 세션 1–5로 전환 | `Mod + 1` ~ `Mod + 5` |
 | 터미널 글꼴 크게 | `Mod + =` |
 | 터미널 글꼴 작게 | `Mod + -` |
@@ -363,6 +363,8 @@ macOS에서는 터미널이 일반적인 텍스트 편집 키 조합을 셸에 �
 | 입력 줄 삭제 (`Ctrl + U` 전송) | `Cmd + Backspace` |
 
 macOS에서 `Ctrl + A`, `Ctrl + R`, `Ctrl + W` 같은 `Ctrl` 조합은 셸로 바로 전달됩니다.
+
+Linux에서는 터미널이 일반적인 Linux 터미널 관례를 따릅니다. 단순한 `Ctrl` + 문자 조합은 셸로 전달되므로 `Ctrl + A`, `Ctrl + E`, `Ctrl + K`, `Ctrl + F`, `Ctrl + U`, `Ctrl + W` 같은 readline 키가 다른 Linux 터미널과 똑같이 동작하고, 터미널 자체 동작은 `Ctrl + Shift`로 옮겨집니다. `Ctrl + Shift + A`는 모두 선택, `Ctrl + Shift + K`는 지우기, `Ctrl + Shift + F`는 검색, `Ctrl + Shift + C` / `Ctrl + Shift + V`는 복사와 붙여넣기입니다. `Ctrl + Insert`와 `Shift + Insert`로도 복사하고 붙여넣을 수 있습니다. 단순 `Ctrl` 조합 중 두 가지는 터미널이 처리합니다. `Ctrl + C`는 선택 영역을 복사하고(선택이 없으면 SIGINT 전송), `Ctrl + V`는 붙여넣습니다. `Ctrl + 1` ~ `Ctrl + 5`는 여전히 세션을 전환합니다.
 
 터미널 검색 바가 열려 있을 때:
 

@@ -25,6 +25,10 @@
       "module": "esbuild",
       "reason": "Windows-only file read through esbuild's own development server (servedir). esbuild 0.27.7 is reached only through build and test tooling: Vitest's browser mode (.>@vitest/coverage-v8>@vitest/browser>@vitest/mocker>vite>esbuild, the path pnpm audit reports), plus server__content's tsup bundler and Slidev's Vite. None of them starts esbuild's server: Vite serves with its own, tsup only bundles, and the shipped app contains no esbuild."
     },
+    "GHSA-hp3w-g68c-fv3c": {
+      "module": "sprintf-js",
+      "reason": "No patched version exists (affected <=1.1.3, the latest; advisory lists <0.0.0). Reached only via server__content>@slidev/cli>...>gray-matter>js-yaml@3>argparse@1>sprintf-js, and js-yaml@3 requires argparse only from its own CLI (bin/js-yaml.js); gray-matter uses the library entry, which never loads argparse. Re-check when sprintf-js ships a fix or Slidev drops js-yaml@3."
+    },
     "GHSA-v6wh-96g9-6wx3": {
       "module": "vite",
       "reason": "launch-editor UNC handling reachable only from Vite's dev-server error overlay in the website toolchain. Not shipped."

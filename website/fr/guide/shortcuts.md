@@ -350,12 +350,12 @@ Quand le terminal intégré est focalisé :
 | Action | Raccourci |
 |--------|----------|
 | Basculer le terminal | `` Ctrl + ` `` |
-| Activer le terminal ou l'éditeur | `` Ctrl + Shift + ` `` |
-| Copier | `Mod + C` (avec sélection) |
-| Coller | `Mod + V` |
-| Tout sélectionner (sortie du terminal uniquement) | `Mod + A` |
-| Effacer | `Mod + K` |
-| Rechercher | `Mod + F` |
+| Activer le terminal ou l'éditeur | `` Ctrl + Shift + ` `` (`` Alt + Shift + ` `` sous Windows/Linux) |
+| Copier | `Mod + C` (avec sélection) ; sous Linux aussi `Ctrl + Shift + C` ou `Ctrl + Insert` |
+| Coller | `Mod + V` ; sous Linux aussi `Ctrl + Shift + V` ou `Shift + Insert` |
+| Tout sélectionner (sortie du terminal uniquement) | `Mod + A` (`Ctrl + Shift + A` sous Linux) |
+| Effacer | `Mod + K` (`Ctrl + Shift + K` sous Linux) |
+| Rechercher | `Mod + F` (`Ctrl + Shift + F` sous Linux) |
 | Passer à la session 1–5 | `Mod + 1` à `Mod + 5` |
 | Agrandir la police du terminal | `Mod + =` |
 | Réduire la police du terminal | `Mod + -` |
@@ -377,6 +377,8 @@ Sur macOS, le terminal traduit aussi pour le shell les combinaisons habituelles 
 | Supprimer la ligne de saisie (envoie `Ctrl + U`) | `Cmd + Backspace` |
 
 Sur macOS, les combinaisons `Ctrl` comme `Ctrl + A`, `Ctrl + R` et `Ctrl + W` sont transmises directement au shell.
+
+Sous Linux, le terminal suit la convention habituelle des terminaux Linux : les combinaisons simples `Ctrl` + lettre vont au shell, si bien que les touches readline comme `Ctrl + A`, `Ctrl + E`, `Ctrl + K`, `Ctrl + F`, `Ctrl + U` et `Ctrl + W` fonctionnent comme dans tout autre terminal Linux, et les actions propres au terminal passent sur `Ctrl + Shift` : `Ctrl + Shift + A` sélectionne tout, `Ctrl + Shift + K` efface, `Ctrl + Shift + F` recherche, et `Ctrl + Shift + C` / `Ctrl + Shift + V` copient et collent. `Ctrl + Insert` et `Shift + Insert` copient et collent aussi. Le terminal garde deux combinaisons `Ctrl` simples : `Ctrl + C` copie une sélection (et envoie SIGINT quand rien n'est sélectionné), et `Ctrl + V` colle. `Ctrl + 1` à `Ctrl + 5` changent toujours de session.
 
 Quand la barre de recherche du terminal est ouverte :
 

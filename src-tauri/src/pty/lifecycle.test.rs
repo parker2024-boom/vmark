@@ -110,10 +110,17 @@ async fn hold_slave_open(app: &tauri::App<MockRuntime>, id: u32) -> std::fs::Fil
 /// The kernel hangs the slave up only when EVERY master descriptor is closed
 /// (the session's, the writer's and the reader's): a read then reports EOF
 /// (macOS) or EIO (Linux) instead of "no data yet".
+///
+/// Bytes are "not yet": dropping portable-pty's master writer writes `\n`
+/// and VEOF into the master (`UnixMasterWriter::drop`), so a read that lands
+/// between the writer's drop and the last master close returns that newline.
+/// Linux CI saw exactly that (`Ok(1)`); the next poll drains it and then sees
+/// the hangup.
 fn master_fully_closed(mut slave: &std::fs::File) -> bool {
     let mut byte = [0u8; 1];
     match slave.read(&mut byte) {
         Ok(0) => true,
+        Ok(_) => false,
         Err(e) if e.raw_os_error() == Some(libc::EIO) => true,
         Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => false,
         other => panic!("unexpected slave read result: {other:?}"),
@@ -158,6 +165,31 @@ async fn closing_kills_a_shell_that_ignores_sighup() {
     })
     .await;
     eventually("the reader thread to end", || started.released()).await;
+}
+
+/// The race the probe must survive, made deterministic: the writer is gone
+/// (its drop wrote `\n` + VEOF) but the master is still open, so the slave
+/// has a byte to read. That is "not closed yet", not a malformed result.
+#[test]
+fn the_writers_parting_newline_reads_as_not_yet_closed() {
+    let pair = portable_pty::native_pty_system()
+        .openpty(portable_pty::PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .expect("openpty");
+    let name = pair.master.tty_name().expect("slave tty name");
+    let slave = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(libc::O_NOCTTY | libc::O_NONBLOCK)
+        .open(name)
+        .expect("open slave");
+    drop(pair.master.take_writer().expect("writer"));
+
+    assert!(!master_fully_closed(&slave), "the master is still open");
 }
 
 #[tokio::test(flavor = "multi_thread")]

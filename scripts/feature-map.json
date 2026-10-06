@@ -814,6 +814,7 @@
         "src-tauri/src/terminal_transcript",
         "src/utils/terminalTranscript.ts",
         "src/lib/pty.ts",
+        "src/lib/ptyInputQueue.ts",
         "src/services/terminalAttention.ts",
         "src/pages/settings/TerminalSettings.tsx",
         "src/pages/settings/terminalSettingsHelpers.ts",

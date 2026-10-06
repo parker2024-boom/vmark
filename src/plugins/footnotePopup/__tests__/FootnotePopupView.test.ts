@@ -380,12 +380,7 @@ describe("FootnotePopupView", () => {
       saveBtn.click();
       expect(mockClosePopup).toHaveBeenCalled();
     });
-
-    it("goto navigates to definition position", () => {
-      const gotoBtn = dom.container.querySelector(".footnote-popup-btn-goto") as HTMLElement;
-      gotoBtn.click();
-      expect(mockClosePopup).toHaveBeenCalled();
-    });
+    // Goto against a live document: ../FootnotePopupView.goto.test.ts
   });
 
   describe("Delete logic", () => {

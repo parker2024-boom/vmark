@@ -1,7 +1,7 @@
 // @vitest-environment node
 // WI-UI1.4 — the per-theme bold repaint flag reaches the xterm options.
 import { describe, it, expect } from "vitest";
-import { buildTerminalOptions, clampScrollback, clampContrastRatio } from "./terminalOptions";
+import { buildTerminalOptions, clampScrollback, clampContrastRatio, shouldUseWebglRenderer } from "./terminalOptions";
 
 const base = {
   fontSize: 13,
@@ -34,5 +34,18 @@ describe("clamps (pre-existing rules, pinned here since the file gained a test)"
     expect(clampContrastRatio(Number.NaN)).toBe(4.5);
     expect(clampContrastRatio(0)).toBe(1);
     expect(clampContrastRatio(50)).toBe(21);
+  });
+});
+
+describe("shouldUseWebglRenderer", () => {
+  // WebKitGTK presents a WebGL canvas frame only on the next unrelated repaint,
+  // so a keystroke's echo stayed invisible until the following key (#1511).
+  it("never loads the WebGL renderer on Linux, even when the setting is on", () => {
+    expect(shouldUseWebglRenderer(true, "linux")).toBe(false);
+    expect(shouldUseWebglRenderer(false, "linux")).toBe(false);
+  });
+  it.each(["macos", "windows"] as const)("follows the setting on %s", (platform) => {
+    expect(shouldUseWebglRenderer(true, platform)).toBe(true);
+    expect(shouldUseWebglRenderer(false, platform)).toBe(false);
   });
 });

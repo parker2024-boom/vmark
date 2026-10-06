@@ -28,7 +28,7 @@ import type { AnchorRect } from "@/utils/popupPosition";
 import { parseMarkdown } from "@/utils/markdownPipeline";
 import { isImeKeyEvent } from "@/utils/imeGuard";
 import type { EditorView } from "@tiptap/pm/view";
-import { scrollToPosition } from "./tiptapDomUtils";
+import { jumpToFootnoteDefinition } from "./tiptapDomUtils";
 import {
   buildDeleteFootnoteTransaction,
   collectVerifiedFootnoteDeletions,
@@ -236,12 +236,14 @@ export class FootnotePopupView extends WysiwygPopupView<FootnotePopupState> {
     }
   }
 
+  /** Caret, focus and scroll are ordered inside jumpToFootnoteDefinition (#1506). */
   private handleGoto(): void {
-    const { definitionPos } = this.store.getState();
-    if (definitionPos !== null) {
-      scrollToPosition(this.view, definitionPos);
-      this.closeAndFocus();
-    }
+    const { definitionPos, label } = this.store.getState();
+    if (definitionPos === null) return;
+    this.closePopup();
+    if (jumpToFootnoteDefinition(this.view, label, definitionPos)) return;
+    footnotePopupWarn("Definition not found; nothing to go to");
+    this.focusEditor();
   }
 
   private handleDelete(): void {

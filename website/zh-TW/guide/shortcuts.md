@@ -336,12 +336,12 @@ Tab 和 Shift+Tab 具有情境感知功能——可在括號、引號、格式�
 | 操作 | 快捷鍵 |
 |------|--------|
 | 切換終端機 | `` Ctrl + ` `` |
-| 聚焦終端機或編輯器 | `` Ctrl + Shift + ` `` |
-| 複製 | `Mod + C`（有選取範圍時） |
-| 貼上 | `Mod + V` |
-| 全選（僅限終端機輸出） | `Mod + A` |
-| 清除 | `Mod + K` |
-| 搜尋 | `Mod + F` |
+| 聚焦終端機或編輯器 | `` Ctrl + Shift + ` ``（Windows/Linux 上為 `` Alt + Shift + ` ``） |
+| 複製 | `Mod + C`（有選取範圍時）；Linux 上也可用 `Ctrl + Shift + C` 或 `Ctrl + Insert` |
+| 貼上 | `Mod + V`；Linux 上也可用 `Ctrl + Shift + V` 或 `Shift + Insert` |
+| 全選（僅限終端機輸出） | `Mod + A`（Linux 上為 `Ctrl + Shift + A`） |
+| 清除 | `Mod + K`（Linux 上為 `Ctrl + Shift + K`） |
+| 搜尋 | `Mod + F`（Linux 上為 `Ctrl + Shift + F`） |
 | 切換至工作階段 1–5 | `Mod + 1` 至 `Mod + 5` |
 | 放大終端機字型 | `Mod + =` |
 | 縮小終端機字型 | `Mod + -` |
@@ -363,6 +363,8 @@ Tab 和 Shift+Tab 具有情境感知功能——可在括號、引號、格式�
 | 刪除輸入列（傳送 `Ctrl + U`） | `Cmd + Backspace` |
 
 在 macOS 上，`Ctrl + A`、`Ctrl + R` 和 `Ctrl + W` 等 `Ctrl` 組合鍵會直接傳送給 Shell。
+
+在 Linux 上，終端機遵循 Linux 終端機的慣例：單純的 `Ctrl` + 字母組合鍵交給 Shell，因此 `Ctrl + A`、`Ctrl + E`、`Ctrl + K`、`Ctrl + F`、`Ctrl + U`、`Ctrl + W` 等 readline 按鍵與其他 Linux 終端機中一樣可用；終端機本身的操作改用 `Ctrl + Shift`：`Ctrl + Shift + A` 全選，`Ctrl + Shift + K` 清除，`Ctrl + Shift + F` 搜尋，`Ctrl + Shift + C` / `Ctrl + Shift + V` 複製和貼上。`Ctrl + Insert` 和 `Shift + Insert` 也能複製和貼上。有兩個單純的 `Ctrl` 組合鍵仍由終端機處理：`Ctrl + C` 複製選取內容（沒有選取範圍時傳送 SIGINT），`Ctrl + V` 貼上。`Ctrl + 1` 至 `Ctrl + 5` 仍用於切換工作階段。
 
 當終端機搜尋列開啟時：
 

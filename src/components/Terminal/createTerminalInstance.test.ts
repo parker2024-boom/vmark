@@ -137,10 +137,6 @@ vi.mock("@/services/persistence/workspaceStorage", () => ({
   getCurrentWindowLabel: () => "main",
 }));
 
-vi.mock("./terminalKeyHandler", () => ({
-  createTerminalKeyHandler: vi.fn(() => () => true),
-}));
-
 // --- Imports ---
 
 import { createTerminalInstance } from "./createTerminalInstance";

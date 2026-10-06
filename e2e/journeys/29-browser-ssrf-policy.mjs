@@ -57,6 +57,7 @@
 import { startVmarkMcp, bridgeReady } from "../lib/vmarkMcp.mjs";
 import { withBrowserEnabled } from "../lib/browser.mjs";
 import { startFixtureServer } from "../lib/fixtureServer.mjs";
+import { refusalLayer } from "../lib/browserRefusal.mjs";
 
 /**
  * Destinations the AI navigation policy must refuse before issuing a request.
@@ -72,22 +73,30 @@ import { startFixtureServer } from "../lib/fixtureServer.mjs";
  * (RFC 5737 TEST-NET blocks, RFC 3927 link-local), so a policy failure cannot reach
  * anything real. `ai_policy.rs` blocks TEST-NET as part of its special-purpose
  * ranges, so these exercise genuine policy branches rather than being placeholders.
+ *
+ * EACH CASE NAMES THE LAYER THAT MUST REFUSE IT (`e2e/lib/browserRefusal.mjs`).
+ * Every http(s) destination must reach the app and be refused by `ai_policy.rs`
+ * ("policy"). A non-HTTP(S) scheme never gets that far: the sidecar's input
+ * schema refuses it first ("schema"), and `ai_policy.test.rs` covers the Rust
+ * refusal of the same schemes with zero network. A refusal from the wrong layer
+ * fails the case, so neither layer can stand in for the other.
  */
-const BLOCKED = [
+export const BLOCKED = [
   // Loopback — the observable class. Every spelling the policy must normalise.
-  ["loopback by name", "http://localhost:9/"],
-  ["loopback literal", "http://127.0.0.1:9/"],
-  ["loopback shorthand", "http://127.1:9/"],
-  ["loopback as integer", "http://2130706433:9/"],
-  ["loopback as hex", "http://0x7f000001:9/"],
+  ["loopback by name", "http://localhost:9/", "policy"],
+  ["loopback literal", "http://127.0.0.1:9/", "policy"],
+  ["loopback shorthand", "http://127.1:9/", "policy"],
+  ["loopback as integer", "http://2130706433:9/", "policy"],
+  ["loopback as hex", "http://0x7f000001:9/", "policy"],
   // RFC 5737 documentation ranges — reserved, and route nowhere by definition.
-  ["TEST-NET-1 (RFC 5737)", "http://192.0.2.1/"],
-  ["TEST-NET-2 (RFC 5737)", "http://198.51.100.1/"],
-  ["TEST-NET-3 (RFC 5737)", "http://203.0.113.1/"],
-  ["userinfo in authority", "http://user:pass@192.0.2.2/"],
-  // Schemes the policy refuses outright — no network involved either way.
-  ["file scheme", "file:///etc/passwd"],
-  ["data scheme", "data:text/html,<h1>x</h1>"],
+  ["TEST-NET-1 (RFC 5737)", "http://192.0.2.1/", "policy"],
+  ["TEST-NET-2 (RFC 5737)", "http://198.51.100.1/", "policy"],
+  ["TEST-NET-3 (RFC 5737)", "http://203.0.113.1/", "policy"],
+  ["userinfo in authority", "http://user:pass@192.0.2.2/", "policy"],
+  // Non-HTTP(S) schemes — the sidecar schema refuses them before the app sees
+  // them (Rust refuses them too; ai_policy.test.rs). No network either way.
+  ["file scheme", "file:///etc/passwd", "schema"],
+  ["data scheme", "data:text/html,<h1>x</h1>", "schema"],
 ];
 
 export default {
@@ -143,22 +152,21 @@ export default {
           );
         }
         ctx.log("packet oracle: blocked loopback destination received zero requests");
-        for (const [label, url] of BLOCKED) {
+        for (const [label, url, expected] of BLOCKED) {
           const res = await mcp.callTool("browser", { action: "open", url });
           if (!res.isError) {
             throw new Error(`${label} (${url}) was NOT refused — the AI reached it`);
           }
           // A refusal for the wrong reason (bad args, disabled browser, crash) is
-          // not evidence that the SSRF policy did anything.
-          if (/BROWSER_DISABLED/.test(res.text)) {
+          // not evidence that the SSRF policy did anything — and a refusal by the
+          // wrong LAYER is a different contract from the one this case pins.
+          const layer = refusalLayer(res.text);
+          if (layer === "disabled") {
             throw new Error(`${label}: refused because the browser was disabled, not by policy`);
           }
-          // Narrow: the policy's own vocabulary, not any error that mentions
-          // "invalid". A malformed-URL rejection is a DIFFERENT bug class and must
-          // not be able to stand in for an SSRF block.
-          if (!/SSRF_BLOCKED|blocked|not permitted|refused by policy/i.test(res.text)) {
+          if (layer !== expected) {
             throw new Error(
-              `${label} refused for an unrecognised reason — expected a policy block, got: ${res.text.slice(0, 200)}`
+              `${label} refused by the wrong layer — expected ${expected}, got ${layer}: ${res.text.slice(0, 200)}`
             );
           }
         }

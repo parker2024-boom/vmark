@@ -66,6 +66,8 @@ When the terminal is focused, `Mod + =` / `-` / `0` zoom the **terminal** font (
 
 Prompt navigation (`Mod + ↑` / `Mod + ↓`) requires shell integration — see [Shell integration](#shell-integration) below.
 
+**Linux:** `Ctrl` + a letter goes to the shell, so readline keys such as `Ctrl + A`, `Ctrl + E`, `Ctrl + K`, `Ctrl + F`, `Ctrl + U` and `Ctrl + W` work as in any Linux terminal. The terminal's own letter shortcuts move to `Ctrl + Shift`: `Ctrl + Shift + F` searches, `Ctrl + Shift + K` clears, `Ctrl + Shift + A` selects all, and `Ctrl + Shift + C` / `Ctrl + Shift + V` copy and paste. `Ctrl + C` still copies a selection (otherwise it sends SIGINT) and `Ctrl + V` still pastes; `Ctrl + Insert` / `Shift + Insert` also copy and paste.
+
 ::: tip
 `Mod + C` without a text selection sends SIGINT to the running process — the same as pressing Ctrl+C in a regular terminal.
 :::
@@ -149,6 +151,7 @@ VMark sets these environment variables in every terminal session:
 |----------|-------|
 | `TERM` | `xterm-256color` |
 | `TERM_PROGRAM` | `WezTerm` |
+| `TERM_PROGRAM_VERSION` | `20240203-110809-5046fc22` |
 | `VMARK_WORKSPACE` | Workspace root path (when a folder is open) |
 | `PATH` | Full login shell PATH (same as your system terminal) |
 | `COLORTERM` | `truecolor` |
@@ -244,7 +247,7 @@ Each terminal follows its exact session rather than whichever transcript was mod
 | Terminal bell | Off / Visual / Audible | Visual |
 | Minimum contrast | Off / WCAG AA (4.5:1) / WCAG AAA (7:1) / Maximum | WCAG AA (4.5:1) |
 
-Most changes apply immediately to every open session — panel size and position, font size, line height, cursor, Copy on Select, Mac Option as Meta, Scrollback, Screen Reader Mode, Terminal bell and Minimum contrast. **Shell**, the **WebGL renderer**, **Remote Clipboard** and **Shell Integration** are fixed when a session starts, so they apply to sessions opened afterwards. **Panel Size** goes up to 80 % of the available space. The editor keeps a minimum size in pixels, so it never disappears entirely no matter how large the terminal gets. Double-click the resize handle to jump straight to the maximum and back again without changing the stored size. **Mac Option as Meta** routes the macOS Option key as Meta in the integrated terminal so emacs, tmux, and similar tools see Alt-prefixed shortcuts (macOS only); it is on by default, so Option+Arrow does word movement rather than inserting accented characters. **Shell Integration** is available on macOS and Linux (hidden on Windows). **Remote Clipboard** is write-only (reads are always refused) and is described below. **Scrollback** controls how many lines of output each session retains in its scroll history — higher values use more memory. **Screen Reader Mode** exposes terminal output to assistive technology such as VoiceOver; it is off by default for performance. **Terminal bell** chooses how a bell (BEL) is signalled — a visual background-activity mark on the session tab, a soft audible beep (which also flags a background session's tab so you can find it), or nothing. **Minimum contrast** lifts faint terminal text to a readable contrast ratio against its background; raise it for accessibility or set it to Off to disable the lift.
+Most changes apply immediately to every open session — panel size and position, font size, line height, cursor, Copy on Select, Mac Option as Meta, Scrollback, Screen Reader Mode, Terminal bell and Minimum contrast. **Shell**, the **WebGL renderer** (not available on Linux), **Remote Clipboard** and **Shell Integration** are fixed when a session starts, so they apply to sessions opened afterwards. **Panel Size** goes up to 80 % of the available space. The editor keeps a minimum size in pixels, so it never disappears entirely no matter how large the terminal gets. Double-click the resize handle to jump straight to the maximum and back again without changing the stored size. **Mac Option as Meta** routes the macOS Option key as Meta in the integrated terminal so emacs, tmux, and similar tools see Alt-prefixed shortcuts (macOS only); it is on by default, so Option+Arrow does word movement rather than inserting accented characters. **Shell Integration** is available on macOS and Linux (hidden on Windows). **Remote Clipboard** is write-only (reads are always refused) and is described below. **Scrollback** controls how many lines of output each session retains in its scroll history — higher values use more memory. **Screen Reader Mode** exposes terminal output to assistive technology such as VoiceOver; it is off by default for performance. **Terminal bell** chooses how a bell (BEL) is signalled — a visual background-activity mark on the session tab, a soft audible beep (which also flags a background session's tab so you can find it), or nothing. **Minimum contrast** lifts faint terminal text to a readable contrast ratio against its background; raise it for accessibility or set it to Off to disable the lift.
 
 ::: tip Terminal font family
 The terminal uses the **Mono Font** from **Settings → Editor**, not a font of

@@ -39,6 +39,10 @@ import { sanitizeExportHtml } from "./htmlSanitizer";
 import { captureThemeCSS } from "./themeSnapshot";
 import { warnMissingResources } from "./exportResourceWarnings";
 import { contentHasMath } from "./fontEmbedder";
+// Static: htmlExport already pulls both into the same lazy export chunk, so
+// dynamic imports here deferred nothing (Rolldown INEFFECTIVE_DYNAMIC_IMPORT).
+import { resolveResources } from "./resourceResolver";
+import { getDocumentBaseDir, getExportContainmentRoot } from "./resourcePaths";
 
 /**
  * Turn editor HTML into an export BODY: editor artifacts out, local images in
@@ -53,8 +57,6 @@ import { contentHasMath } from "./fontEmbedder";
  * about, on its way to being deleted.
  */
 export async function prepareExportBody(html: string, sourceFilePath: string | null): Promise<string> {
-  const { resolveResources } = await import("./resourceResolver");
-  const { getDocumentBaseDir, getExportContainmentRoot } = await import("./resourcePaths");
   const baseDir = await getDocumentBaseDir(sourceFilePath);
   // Relative paths resolve from the document's folder; the WORKSPACE bounds
   // how far they may reach, so a shared assets folder beside the notes folder

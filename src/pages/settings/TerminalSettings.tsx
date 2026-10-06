@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { useSettingsStore, type TerminalPosition, type TerminalCursorStyle, type TerminalBellMode } from "@/stores/settingsStore";
 import { SettingRow, SettingsGroup, Select, Toggle } from "./components";
 import { terminalSettingsWarn } from "@/utils/debug";
-import { isMacPlatform, isWindowsPlatform } from "@/utils/platform";
+import { getRuntimePlatform, isMacPlatform, isWindowsPlatform } from "@/utils/platform";
 import {
   panelSizeOptions,
   scrollbackOptions,
@@ -187,12 +187,15 @@ export function TerminalSettings() {
           />
         </SettingRow>
 
-        <SettingRow label={t("terminal.webgl.label")} description={t("terminal.webgl.description")}>
-          <Toggle
-            checked={terminal.useWebGL}
-            onChange={(v) => updateTerminalSetting("useWebGL", v)}
-          />
-        </SettingRow>
+        {/* Linux never loads the WebGL renderer (see shouldUseWebglRenderer). */}
+        {getRuntimePlatform() !== "linux" && (
+          <SettingRow label={t("terminal.webgl.label")} description={t("terminal.webgl.description")}>
+            <Toggle
+              checked={terminal.useWebGL}
+              onChange={(v) => updateTerminalSetting("useWebGL", v)}
+            />
+          </SettingRow>
+        )}
 
         {isMac && (
           <SettingRow label={t("terminal.macOptionIsMeta.label")} description={t("terminal.macOptionIsMeta.description")}>

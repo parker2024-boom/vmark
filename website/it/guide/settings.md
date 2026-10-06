@@ -449,7 +449,7 @@ Configura il pannello terminale integrato. Apri il terminale con `` Ctrl + ` ``.
 | Cursore Lampeggiante | Se il cursore del terminale lampeggia | Attivo | Attivo / Off |
 | Copia alla Selezione | Copia automaticamente il testo selezionato nel terminale negli appunti | Off | Attivo / Off |
 | Visualizza automaticamente le trascrizioni | Mostra Markdown, tabelle e diagrammi Mermaid di Claude/Codex accanto alla CLI del terminale. Aggiunge un hook SessionStart locale alla configurazione di Claude Code e Codex; riavvia le sessioni CLI attive dopo l'attivazione | Off | Attivo / Off |
-| Renderer WebGL | Usa il rendering con accelerazione GPU per il terminale. Disabilita se si verificano problemi di input IME. Richiede il riavvio del terminale | Attivo | Attivo / Off |
+| Renderer WebGL | Usa il rendering con accelerazione GPU per il terminale. Disabilita se si verificano problemi di input IME. Richiede il riavvio del terminale. Solo macOS e Windows — Linux usa sempre il renderer DOM | Attivo | Attivo / Off |
 | Appunti remoti (OSC 52) | Consente ai programmi in esecuzione nel terminale — via ssh, dentro tmux — di copiare negli appunti di sistema. Il canale è di sola scrittura: la lettura degli appunti è sempre rifiutata, poiché qualsiasi output stampato nel terminale potrebbe richiederla | Attivo | Attivo / Off |
 | Cronologia di scorrimento | Numero di righe di output che ogni sessione conserva nella cronologia di scorrimento. Valori più alti usano più memoria | 5.000 | 1.000 / 5.000 / 10.000 / 50.000 |
 | Modalità screen reader | Rende l'output del terminale accessibile alle tecnologie assistive (VoiceOver). Disattivata per impostazione predefinita per motivi di prestazioni | Off | Attivo / Off |
