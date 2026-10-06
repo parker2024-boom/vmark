@@ -155,6 +155,7 @@ VMark setzt diese Umgebungsvariablen in jeder Terminal-Sitzung:
 |----------|------|
 | `TERM` | `xterm-256color` |
 | `TERM_PROGRAM` | `WezTerm` |
+| `TERM_PROGRAM_VERSION` | `20240203-110809-5046fc22` |
 | `VMARK_WORKSPACE` | Arbeitsbereichsstammverzeichnis (wenn ein Ordner geöffnet ist) |
 | `PATH` | Vollständiger Login-Shell-PATH (wie in Ihrem System-Terminal) |
 | `COLORTERM` | `truecolor` |

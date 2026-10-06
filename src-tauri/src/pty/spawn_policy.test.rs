@@ -143,6 +143,7 @@ fn every_key_the_frontend_sets_is_accepted() {
     let keys = [
         "TERM",
         "TERM_PROGRAM",
+        "TERM_PROGRAM_VERSION",
         "COLORTERM",
         "PATH",
         "LC_CTYPE",

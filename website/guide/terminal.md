@@ -151,6 +151,7 @@ VMark sets these environment variables in every terminal session:
 |----------|-------|
 | `TERM` | `xterm-256color` |
 | `TERM_PROGRAM` | `WezTerm` |
+| `TERM_PROGRAM_VERSION` | `20240203-110809-5046fc22` |
 | `VMARK_WORKSPACE` | Workspace root path (when a folder is open) |
 | `PATH` | Full login shell PATH (same as your system terminal) |
 | `COLORTERM` | `truecolor` |

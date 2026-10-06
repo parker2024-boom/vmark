@@ -138,6 +138,7 @@ VMark はすべてのターミナルセッションでこれらの環境変数�
 |-----|-----|
 | `TERM` | `xterm-256color` |
 | `TERM_PROGRAM` | `WezTerm` |
+| `TERM_PROGRAM_VERSION` | `20240203-110809-5046fc22` |
 | `VMARK_WORKSPACE` | ワークスペースのルートパス（フォルダーが開いている場合） |
 | `PATH` | フルのログインシェル PATH（システムターミナルと同じ） |
 | `COLORTERM` | `truecolor` |

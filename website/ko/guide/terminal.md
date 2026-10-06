@@ -149,6 +149,7 @@ VMark는 모든 터미널 세션에서 다음 환경 변수를 설정합니다:
 |------|-----|
 | `TERM` | `xterm-256color` |
 | `TERM_PROGRAM` | `WezTerm` |
+| `TERM_PROGRAM_VERSION` | `20240203-110809-5046fc22` |
 | `VMARK_WORKSPACE` | 워크스페이스 루트 경로 (폴더가 열려 있을 때) |
 | `PATH` | 전체 로그인 셸 PATH (시스템 터미널과 동일) |
 | `COLORTERM` | `truecolor` |

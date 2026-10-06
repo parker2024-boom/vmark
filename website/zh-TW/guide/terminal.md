@@ -138,6 +138,7 @@ VMark 在每個終端機工作階段中設定以下環境變數：
 |------|----|
 | `TERM` | `xterm-256color` |
 | `TERM_PROGRAM` | `WezTerm` |
+| `TERM_PROGRAM_VERSION` | `20240203-110809-5046fc22` |
 | `VMARK_WORKSPACE` | 工作區根目錄路徑（開啟資料夾時） |
 | `PATH` | 完整登入 shell PATH（與系統終端機相同） |
 | `COLORTERM` | `truecolor` |

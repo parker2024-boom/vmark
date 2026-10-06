@@ -138,6 +138,7 @@ VMark 在每个终端会话中设置以下环境变量：
 |------|-----|
 | `TERM` | `xterm-256color` |
 | `TERM_PROGRAM` | `WezTerm` |
+| `TERM_PROGRAM_VERSION` | `20240203-110809-5046fc22` |
 | `VMARK_WORKSPACE` | 工作区根路径（打开文件夹时） |
 | `PATH` | 完整的登录 Shell PATH（与系统终端相同） |
 | `COLORTERM` | `truecolor` |

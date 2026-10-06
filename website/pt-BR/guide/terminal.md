@@ -153,6 +153,7 @@ O VMark define estas variáveis de ambiente em cada sessão do terminal:
 |----------|-------|
 | `TERM` | `xterm-256color` |
 | `TERM_PROGRAM` | `WezTerm` |
+| `TERM_PROGRAM_VERSION` | `20240203-110809-5046fc22` |
 | `VMARK_WORKSPACE` | Caminho raiz da área de trabalho (quando uma pasta está aberta) |
 | `PATH` | PATH completo do shell de login (igual ao seu terminal do sistema) |
 | `COLORTERM` | `truecolor` |
