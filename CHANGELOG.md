@@ -11,6 +11,35 @@ section as part of the version bump (`.claude/rules/40-version-bump.md`).
 
 ## [Unreleased]
 
+## [0.9.93] - 2026-10-06
+
+### Changed
+
+- Linux: the terminal follows the usual Linux terminal convention. Plain
+  Ctrl+letter goes to the shell, so readline and editors such as nano and vim
+  get Ctrl+A, Ctrl+K, Ctrl+F and the rest. Ctrl+C copies a selection and
+  otherwise interrupts, and Ctrl+V pastes. Terminal actions use Ctrl+Shift
+  (C, V, A, K, F), plus Ctrl+Insert and Shift+Insert
+  ([#1508](https://github.com/xiaolai/vmark/issues/1508)).
+- Command-line tools in the terminal now print clickable links where they
+  support them.
+
+### Fixed
+
+- The ↓ button in a footnote preview jumps to the footnote text again
+  ([#1506](https://github.com/xiaolai/vmark/issues/1506)).
+- Fast typing in the terminal no longer reaches the shell out of order
+  ([#1507](https://github.com/xiaolai/vmark/issues/1507)).
+- Linux: typed characters in the terminal appear right away instead of one
+  keystroke late. The terminal now always uses its DOM renderer there, and the
+  WebGL option is hidden ([#1511](https://github.com/xiaolai/vmark/issues/1511)).
+- Ctrl+K (Cmd+K on macOS) in the terminal clears it without also reaching the
+  editor's Insert Link shortcut.
+
+### Security
+
+- Updated `source-map-js`, a build-time dependency, for GHSA-68fv-2mgg-jv7q.
+
 ## [0.9.92] - 2026-10-04
 
 ### Added
@@ -144,7 +173,8 @@ section as part of the version bump (`.claude/rules/40-version-bump.md`).
 
 - Raised the `markdown-it` version floor past GHSA-253c-mchw-3w2r.
 
-[Unreleased]: https://github.com/xiaolai/vmark/compare/v0.9.92...HEAD
+[Unreleased]: https://github.com/xiaolai/vmark/compare/v0.9.93...HEAD
+[0.9.93]: https://github.com/xiaolai/vmark/releases/tag/v0.9.93
 [0.9.92]: https://github.com/xiaolai/vmark/releases/tag/v0.9.92
 [0.9.91]: https://github.com/xiaolai/vmark/releases/tag/v0.9.91
 [0.9.90]: https://github.com/xiaolai/vmark/releases/tag/v0.9.90
