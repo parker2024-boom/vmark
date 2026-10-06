@@ -1,4 +1,24 @@
-/** Standalone .mmd styles must not collapse Markdown's diagram previews. */
+/**
+ * Real-WebKit tier — the standalone `.mmd` pane's layout rules must not reach
+ * Markdown's Mermaid widgets (#1200, #1215, #1505).
+ *
+ * Both surfaces carry `.mermaid-preview`. The `.mmd` adapter's stylesheet is
+ * loaded eagerly with the format registry, so its bare `.mermaid-preview`
+ * rules gave every Markdown `.code-block-preview.mermaid-preview` widget
+ * `height: 100%` and its SVG `width: auto; max-height: 100%`. On the macOS 13
+ * WebKit the reporters run, that SVG collapsed to 0 x 0 outside edit mode
+ * (edit mode uses `.mermaid-live-preview`, which is why editing "fixed" it).
+ *
+ * Playwright's WebKit lays the leaked SVG out correctly, so geometry alone
+ * cannot catch the SVG half of the leak there. The cases therefore assert
+ * both: geometry (visible, inside the host, not stretched to a tall parent)
+ * and the two SVG declarations that collapse on the old engine, read through
+ * CSS Typed OM, which reports the computed `auto`/`100%` rather than pixels.
+ *
+ * It lives in codePreview, not mermaid: the widget classes it switches are
+ * codePreview's, and codePreview is the hub licensed to import the mermaid
+ * plugin. The last two cases pin that the standalone pane keeps its layout.
+ */
 import { afterEach, describe, expect, it } from "vitest";
 import "@/styles/index.css";
 import "@/plugins/codePreview/code-preview.css";
@@ -54,6 +74,10 @@ describe("Mermaid preview sizing with both stylesheets loaded", () => {
     preview.className = "code-block-preview mermaid-preview";
     await frame();
     expectVisible(svg, host);
+    // Mermaid's width="100%" must survive; the standalone `width: auto` and
+    // `max-height: 100%` are what collapse the SVG on the macOS 13 engine.
+    expect(String(svg.computedStyleMap().get("width"))).toBe("100%");
+    expect(getComputedStyle(svg).maxHeight).toBe("none");
     // A short inline diagram must not inherit the standalone pane's 100% height.
     host.style.height = "900px";
     expect(preview.getBoundingClientRect().height).toBeLessThan(900);
