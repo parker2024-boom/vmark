@@ -36,6 +36,10 @@ export async function resolveLoginShellPath(): Promise<string> {
     : "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
 }
 
+/** A real WezTerm release id (`YYYYMMDD-HHMMSS-<commit>`), so version parsers
+ *  written against the genuine terminal read it the way they expect to. */
+const WEZTERM_VERSION = "20240203-110809-5046fc22";
+
 /**
  * The environment every terminal session starts from, before shell integration
  * layers its own overrides on top. `CommandBuilder` on the Rust side sets these
@@ -54,6 +58,14 @@ export async function resolveLoginShellPath(): Promise<string> {
  *     this to "vmark" — third-party tools fall through to a degraded "unknown
  *     terminal" path. terminalKeyHandler.ts keeps the impersonation honest by
  *     translating Shift+Enter into the CSI-u sequence real WezTerm sends.
+ *   - `TERM_PROGRAM_VERSION` — the other half of the impersonation. The
+ *     `supports-hyperlinks` check many CLI tools share (Claude Code included)
+ *     accepts WezTerm only from a minimum release on, read from this variable;
+ *     with it absent the tool decides the host has no OSC 8 support and prints
+ *     links as plain text. A plain-text URL the tool hard-wraps over two rows
+ *     is then linkified one row at a time, so a click opens a truncated
+ *     address. xterm.js renders OSC 8 natively and setupWebLinks.ts routes
+ *     its activation, so the capability being claimed is real.
  *   - `COLORTERM=truecolor` — xterm.js renders SGR 38;2;r;g;b, but with
  *     COLORTERM empty a CLI tool has no way to know that and downgrades to the
  *     256-colour palette (#1334).
@@ -89,6 +101,7 @@ export function buildBaseTerminalEnv(
   const env: Record<string, string> = {
     TERM: "xterm-256color",
     TERM_PROGRAM: "WezTerm",
+    TERM_PROGRAM_VERSION: WEZTERM_VERSION,
     COLORTERM: "truecolor",
     PATH: loginPath,
   };

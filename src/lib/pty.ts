@@ -39,6 +39,7 @@ import { invoke, Channel } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { ptyWarn, terminalLog } from "@/utils/debug";
 import { commandErrorMessage } from "@/services/commands/commandError";
+import { createPtyInputQueue } from "./ptyInputQueue";
 
 // ---------------------------------------------------------------------------
 // Public types — match the tauri-pty interface that spawnPty.ts expects
@@ -118,6 +119,10 @@ class VMarkPty implements IPty {
   private _dataChannel: Channel<ArrayBuffer | Uint8Array | number[]> | null = null;
   private _unlistenExit: UnlistenFn | null = null;
   private _destroyed = false;
+  private _input = createPtyInputQueue(async (data) => {
+    await this.ready;
+    if (!this._destroyed) await invoke("pty_write", { pid: this._pid, data });
+  }, (error) => ptyWarn("pty_write failed:", commandErrorMessage(error)));
   /** Guards _freeRustSession so racing teardown paths can't double kill/close. */
   private _freed = false;
 
@@ -209,15 +214,7 @@ class VMarkPty implements IPty {
   }
 
   write(data: string): void {
-    // Destroy-guard: once killed, drop writes — a dispose-time IME
-    // flush (or any late write) would otherwise reach a freed session. Checked
-    // again in the continuation: kill() may land while `ready` is pending.
-    if (this._destroyed) return;
-    this.ready
-      .then(() => (this._destroyed ? undefined : invoke("pty_write", { pid: this._pid, data })))
-      .catch((err) => {
-        ptyWarn("pty_write failed:", commandErrorMessage(err));
-      });
+    this._input.write(data);
   }
 
   resize(columns: number, rows: number): void {
@@ -261,6 +258,7 @@ class VMarkPty implements IPty {
   }
 
   private _cleanup(): void {
+    this._input.close();
     // The Channel has no "unlisten"; drop its onmessage so no further bytes
     // reach the (disposed) consumer, and release the reference.
     if (this._dataChannel) {

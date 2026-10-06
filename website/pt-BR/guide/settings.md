@@ -444,7 +444,7 @@ Configure o painel de terminal integrado. Abra o terminal com `` Ctrl + ` ``.
 | Cursor Piscante | Se o cursor do terminal pisca | Ligado | Ligado / Desligado |
 | Copiar ao Selecionar | Copiar automaticamente o texto do terminal selecionado para a área de transferência | Desligado | Ligado / Desligado |
 | Renderizar transcrições automaticamente | Exibir Markdown, tabelas e diagramas Mermaid do Claude/Codex ao lado da CLI do terminal. Adiciona um hook SessionStart local à configuração do Claude Code e do Codex; reinicie as sessões CLI em execução após ativar | Desligado | Ligado / Desligado |
-| Renderizador WebGL | Usar renderização acelerada por GPU para o terminal. Desabilite se tiver problemas de entrada IME. Requer reinício do terminal | Ligado | Ligado / Desligado |
+| Renderizador WebGL | Usar renderização acelerada por GPU para o terminal. Desabilite se tiver problemas de entrada IME. Requer reinício do terminal. Apenas macOS e Windows — o Linux sempre usa o renderizador DOM | Ligado | Ligado / Desligado |
 | Área de transferência remota (OSC 52) | Permitir que programas em execução no terminal — por ssh, dentro do tmux — copiem para a área de transferência do sistema. O canal é somente de escrita: a leitura da área de transferência é sempre recusada, pois qualquer saída impressa no terminal poderia solicitá-la | Ligado | Ligado / Desligado |
 | Histórico de rolagem | Número de linhas de saída que cada sessão mantém no histórico de rolagem. Valores maiores usam mais memória | 5.000 | 1.000 / 5.000 / 10.000 / 50.000 |
 | Modo leitor de tela | Expor a saída do terminal a tecnologias assistivas (VoiceOver). Desativado por padrão por questões de desempenho | Desligado | Ligado / Desligado |

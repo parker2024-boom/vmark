@@ -9,6 +9,7 @@ import {
   type FlowControlPty,
   type PtyPayload,
 } from "./spawnPty";
+import { buildBaseTerminalEnv } from "./terminalSpawnEnv";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
@@ -437,14 +438,8 @@ describe("spawnPty shell selection", () => {
     await spawnPty({ term: mockTerm, workspaceRoot: "/my/workspace", onExit: vi.fn(), disposed: () => false });
 
     const spawnCallEnv = vi.mocked(spawn).mock.calls[0][2] as { env: Record<string, string> };
-    expect(spawnCallEnv.env).toEqual({
-      TERM: "xterm-256color",
-      TERM_PROGRAM: "WezTerm",
-      COLORTERM: "truecolor",
-      LC_CTYPE: "UTF-8",
-      PATH: "/usr/local/bin:/bin",
-      VMARK_WORKSPACE: "/my/workspace",
-    });
+    expect(spawnCallEnv.env).toEqual(buildBaseTerminalEnv("/usr/local/bin:/bin", "/my/workspace"));
+    expect(spawnCallEnv.env.TERM_PROGRAM_VERSION).toBeTruthy();
   });
 
   it("forwards integration args to spawn (WI-3.3)", async () => {

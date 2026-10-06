@@ -120,8 +120,25 @@ export default {
           (await listWindows(client)).some((w) => w.label === secondary && !before.has(w.label)),
         );
         ctx.log(`secondary window ${secondary}`);
-        // Give the new webview its bootstrap: the DEV seam is installed by the app shell.
-        await new Promise((r) => setTimeout(r, 1500));
+        // Wait for the new webview's bootstrap to publish the DEV seam. A fixed
+        // sleep here raced the bootstrap: on a slow macOS CI runner the seam was
+        // not there yet and the journey failed with NO_SEAM (issue #1513). The
+        // seam's own presence is the precondition, so poll for exactly that.
+        await pollUntil(
+          `the DEV runCommand seam in ${secondary}`,
+          async () => {
+            const r = await client.send(
+              "execute_js",
+              {
+                windowLabel: secondary,
+                script: `(typeof (window.__VMARK_DEBUG__ && window.__VMARK_DEBUG__.runCommand) === "function" ? "SEAM" : "NO_SEAM")`,
+              },
+              15000,
+            );
+            return r?.success === true && r.data === "SEAM";
+          },
+          30_000,
+        );
 
         // --- a browser tab created BY the secondary window --------------------
         const nativeBefore = new Set(await nativeBrowserTabIds(client));

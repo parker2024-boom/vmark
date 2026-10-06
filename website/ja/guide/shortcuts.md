@@ -336,12 +336,12 @@ CJK 括弧、カーリー引用符、設定を含む完全なガイドは[スマ
 | アクション | ショートカット |
 |-----------|--------------|
 | ターミナルの切り替え | `` Ctrl + ` `` |
-| ターミナルまたはエディタにフォーカス | `` Ctrl + Shift + ` `` |
-| コピー | `Mod + C`（セレクションあり） |
-| 貼り付け | `Mod + V` |
-| すべて選択（ターミナル出力のみ） | `Mod + A` |
-| クリア | `Mod + K` |
-| 検索 | `Mod + F` |
+| ターミナルまたはエディタにフォーカス | `` Ctrl + Shift + ` ``（Windows/Linux では `` Alt + Shift + ` ``） |
+| コピー | `Mod + C`（セレクションあり）。Linux では `Ctrl + Shift + C` または `Ctrl + Insert` も可 |
+| 貼り付け | `Mod + V`。Linux では `Ctrl + Shift + V` または `Shift + Insert` も可 |
+| すべて選択（ターミナル出力のみ） | `Mod + A`（Linux では `Ctrl + Shift + A`） |
+| クリア | `Mod + K`（Linux では `Ctrl + Shift + K`） |
+| 検索 | `Mod + F`（Linux では `Ctrl + Shift + F`） |
 | セッション 1〜5 に切り替え | `Mod + 1` から `Mod + 5` |
 | ターミナルのフォントを大きく | `Mod + =` |
 | ターミナルのフォントを小さく | `Mod + -` |
@@ -363,6 +363,8 @@ macOS では、ターミナルは通常のテキスト編集用のキー操作�
 | 入力行を削除（`Ctrl + U` を送信） | `Cmd + Backspace` |
 
 macOS では、`Ctrl + A`、`Ctrl + R`、`Ctrl + W` などの `Ctrl` キー操作はそのままシェルに送られます。
+
+Linux では、ターミナルは Linux ターミナルの一般的な慣習に従います。単独の `Ctrl` + 英字キーはシェルに渡されるため、`Ctrl + A`、`Ctrl + E`、`Ctrl + K`、`Ctrl + F`、`Ctrl + U`、`Ctrl + W` などの readline キーは他の Linux ターミナルと同じように使えます。ターミナル自身の操作は `Ctrl + Shift` に移ります：`Ctrl + Shift + A` で全選択、`Ctrl + Shift + K` でクリア、`Ctrl + Shift + F` で検索、`Ctrl + Shift + C` / `Ctrl + Shift + V` でコピーと貼り付け。`Ctrl + Insert` と `Shift + Insert` でもコピーと貼り付けができます。例外として 2 つの `Ctrl` キー操作はターミナルが扱います：`Ctrl + C` は選択があればコピーし（選択がなければ SIGINT を送信）、`Ctrl + V` は貼り付けます。`Ctrl + 1` から `Ctrl + 5` は引き続きセッションを切り替えます。
 
 ターミナル検索バーが開いている場合：
 

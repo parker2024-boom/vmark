@@ -158,10 +158,6 @@ vi.mock("@/services/persistence/workspaceStorage", () => ({
   getCurrentWindowLabel: () => "main",
 }));
 
-vi.mock("./terminalKeyHandler", () => ({
-  createTerminalKeyHandler: vi.fn(() => () => true),
-}));
-
 vi.mock("@/theme", () => ({
   buildXtermThemeForId: () => ({ background: "#fff" }),
   drawBoldTextInBrightColorsForId: () => true,
@@ -535,5 +531,39 @@ describe("createTerminalInstance — resetDisplay (#856)", () => {
     inst.resetDisplay();
 
     expect(inst.term.refresh).toHaveBeenCalledWith(0, 0);
+  });
+});
+
+describe("createTerminalInstance — platform gate on the WebGL renderer (#1511)", () => {
+  const originalPlatform = navigator.platform;
+  function setPlatform(value: string) {
+    Object.defineProperty(navigator, "platform", { value, configurable: true });
+  }
+
+  beforeEach(() => {
+    webglState.instances = [];
+    webglState.failConstruction = false;
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => setPlatform(originalPlatform));
+
+  // WebKitGTK presents a WebGL canvas frame only on the next unrelated
+  // repaint, so a keystroke's echo stayed invisible until the following key.
+  // This pins the call site: the setting alone must not load the addon.
+  it("never constructs WebglAddon on Linux, even with useWebGL on", () => {
+    setPlatform("Linux x86_64");
+
+    makeInstance(/* useWebGL */ true);
+
+    expect(webglState.instances).toHaveLength(0);
+  });
+
+  it("constructs WebglAddon on macOS when useWebGL is on", () => {
+    setPlatform("MacIntel");
+
+    makeInstance(/* useWebGL */ true);
+
+    expect(webglState.instances).toHaveLength(1);
   });
 });

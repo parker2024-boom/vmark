@@ -354,12 +354,12 @@ Cuando el terminal integrado está enfocado:
 | Acción | Atajo |
 |--------|-------|
 | Alternar Terminal | `` Ctrl + ` `` |
-| Enfocar la terminal o el editor | `` Ctrl + Shift + ` `` |
-| Copiar | `Mod + C` (con selección) |
-| Pegar | `Mod + V` |
-| Seleccionar Todo (solo la salida del terminal) | `Mod + A` |
-| Limpiar | `Mod + K` |
-| Buscar | `Mod + F` |
+| Enfocar la terminal o el editor | `` Ctrl + Shift + ` `` (`` Alt + Shift + ` `` en Windows/Linux) |
+| Copiar | `Mod + C` (con selección); en Linux también `Ctrl + Shift + C` o `Ctrl + Insert` |
+| Pegar | `Mod + V`; en Linux también `Ctrl + Shift + V` o `Shift + Insert` |
+| Seleccionar Todo (solo la salida del terminal) | `Mod + A` (`Ctrl + Shift + A` en Linux) |
+| Limpiar | `Mod + K` (`Ctrl + Shift + K` en Linux) |
+| Buscar | `Mod + F` (`Ctrl + Shift + F` en Linux) |
 | Cambiar a la sesión 1–5 | `Mod + 1` hasta `Mod + 5` |
 | Aumentar la fuente del terminal | `Mod + =` |
 | Reducir la fuente del terminal | `Mod + -` |
@@ -381,6 +381,8 @@ En macOS, el terminal también traduce para el shell las combinaciones habituale
 | Borrar la línea de entrada (envía `Ctrl + U`) | `Cmd + Backspace` |
 
 En macOS, las combinaciones con `Ctrl` como `Ctrl + A`, `Ctrl + R` y `Ctrl + W` van directamente al shell.
+
+En Linux, el terminal sigue la convención habitual de los terminales de Linux: las combinaciones simples de `Ctrl` + letra van al shell, de modo que teclas de readline como `Ctrl + A`, `Ctrl + E`, `Ctrl + K`, `Ctrl + F`, `Ctrl + U` y `Ctrl + W` funcionan como en cualquier otro terminal de Linux, y las acciones propias del terminal pasan a `Ctrl + Shift`: `Ctrl + Shift + A` selecciona todo, `Ctrl + Shift + K` limpia, `Ctrl + Shift + F` busca, y `Ctrl + Shift + C` / `Ctrl + Shift + V` copian y pegan. `Ctrl + Insert` y `Shift + Insert` también copian y pegan. El terminal conserva dos combinaciones simples de `Ctrl`: `Ctrl + C` copia una selección (y envía SIGINT si no hay nada seleccionado), y `Ctrl + V` pega. `Ctrl + 1` hasta `Ctrl + 5` siguen cambiando de sesión.
 
 Cuando la barra de búsqueda del terminal está abierta:
 

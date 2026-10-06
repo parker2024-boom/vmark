@@ -2285,14 +2285,14 @@ The panel is lazy-imported in `src/App.tsx` behind a `FeatureErrorBoundary`; `sr
 - id: pty-backend
 - feature: Integrated terminal
 - summary: Rust-side pseudo-terminal management with a dedicated reader thread per session, binary output over a Tauri Channel, real pause/resume flow control, and cleanup on window close and quit.
-- capabilities: two-phase startup (`pty_spawn` then `pty_start`) so no output or exit signal is lost; 64 KB read buffer; output as `InvokeResponseBody::Raw` → ArrayBuffer, point-to-point; `pty:exit:{pid}` event; Condvar-based pause/resume (zero CPU while paused); frontend watermark flow control (`CALLBACK_BYTE_LIMIT` 100 000, `HIGH_WATERMARK` 5, `LOW_WATERMARK` 2); write/resize/kill/close; EINTR retry; `catch_unwind` around the read loop with reaping outside it; each session records the window that spawned it and that window's `Destroyed` event kills and reaps whatever it left (unstarted sessions reaped directly, started ones by their reader); quit-path `kill_all` plus a `Drop` fallback on `PtyState`; absolute-path shell validation in Rust; commands return `CommandError`
+- capabilities: two-phase startup (`pty_spawn` then `pty_start`) so no output or exit signal is lost; 64 KB read buffer; output as `InvokeResponseBody::Raw` → ArrayBuffer, point-to-point; `pty:exit:{pid}` event; Condvar-based pause/resume (zero CPU while paused); frontend watermark flow control (`CALLBACK_BYTE_LIMIT` 100 000, `HIGH_WATERMARK` 5, `LOW_WATERMARK` 2); ordered input — one `pty_write` in flight per session, later input batched behind it; write/resize/kill/close; EINTR retry; `catch_unwind` around the read loop with reaping outside it; each session records the window that spawned it and that window's `Destroyed` event kills and reaps whatever it left (unstarted sessions reaped directly, started ones by their reader); quit-path `kill_all` plus a `Drop` fallback on `PtyState`; absolute-path shell validation in Rust; commands return `CommandError`
 - status: shipped-on
 - gate: always on
 - surfaces: automatic
-- code: `src-tauri/src/pty.rs`, `src-tauri/src/pty/reader.rs`, `src-tauri/src/pty/session.rs`, `src-tauri/src/pty/window_sessions.rs`, `src-tauri/src/app_setup.rs`, `src-tauri/src/quit.rs`, `src/lib/pty.ts`, `src/components/Terminal/spawnPty.ts`, `src/components/Terminal/fitAndResizePty.ts`
+- code: `src-tauri/src/pty.rs`, `src-tauri/src/pty/reader.rs`, `src-tauri/src/pty/session.rs`, `src-tauri/src/pty/window_sessions.rs`, `src-tauri/src/app_setup.rs`, `src-tauri/src/quit.rs`, `src/lib/pty.ts`, `src/lib/ptyInputQueue.ts`, `src/components/Terminal/spawnPty.ts`, `src/components/Terminal/fitAndResizePty.ts`
 - rust: `pty_spawn`, `pty::reader::pty_start`, `pty_write`, `pty_resize`, `pty_kill`, `pty_close`, `pty_pause`, `pty_resume` (registered in `src-tauri/src/command_registry.rs`); `pty::close_window_sessions`, `pty::kill_all`
 - docs: `website/guide/terminal.md` §"Not yet implemented" (pause/resume is internal flow control only), §"Sessions" (closing a session: SIGHUP to the process group, then SIGKILL)
-- tests: `src/lib/pty.test.ts`, `src/lib/__tests__/pty.test.ts`, `src/components/Terminal/spawnPty.test.ts`, `src/components/Terminal/fitAndResizePty.test.ts`; Rust `src-tauri/src/pty/session.test.rs` (7 fns, real `/bin/sleep` children under a PTY for kill/reap), `src-tauri/src/pty/window_sessions.test.rs` (8 fns). Gap: nothing exercises the reader thread / Channel streaming path (`pty_start`) against a real PTY.
+- tests: `src/lib/pty.test.ts`, `src/lib/pty.input.test.ts`, `src/lib/ptyInputQueue.test.ts`, `src/lib/__tests__/pty.test.ts`, `src/components/Terminal/spawnPty.test.ts`, `src/components/Terminal/fitAndResizePty.test.ts`; Rust `src-tauri/src/pty/session.test.rs` (7 fns, real `/bin/sleep` children under a PTY for kill/reap), `src-tauri/src/pty/window_sessions.test.rs` (8 fns). Gap: nothing exercises the reader thread / Channel streaming path (`pty_start`) against a real PTY.
 - notes: `pty_pause`/`pty_resume` are wired only to internal backpressure — no user-facing control, as terminal.md says. ConPTY vs unix pty is delegated entirely to `portable_pty::native_pty_system()`; there is no `#[cfg(target_os)]` in `src-tauri/src/pty.rs` or `src-tauri/src/pty/`.
 
 ### Shell resolution and spawn environment
@@ -2373,24 +2373,24 @@ The panel is lazy-imported in `src/App.tsx` behind a `FeatureErrorBoundary`; `sr
 - status: shipped-on
 - gate: `terminal.osc52Clipboard = true` (read at creation → new sessions only); `terminal.copyOnSelect = false`
 - surfaces: settings pane toggles; keyboard; context menu; automatic (OSC 52)
-- code: `src/components/Terminal/setupOsc52.ts`, `src/components/Terminal/setupCopyOnSelect.ts`, `src/components/Terminal/terminalKeyHandler.ts`
+- code: `src/components/Terminal/setupOsc52.ts`, `src/components/Terminal/setupCopyOnSelect.ts`, `src/components/Terminal/terminalKeyHandler.ts`, `src/components/Terminal/terminalClipboard.ts`
 - rust: none (tauri-plugin-clipboard-manager)
 - docs: `website/guide/terminal.md` §"Remote clipboard (OSC 52)"; `website/guide/settings.md` §"Terminal" (Remote Clipboard row)
-- tests: `src/components/Terminal/setupOsc52.test.ts`, `src/components/Terminal/setupCopyOnSelect.test.ts`, `src/components/Terminal/terminalKeyHandler.test.ts`, `src/pages/settings/__tests__/terminalDocRanges.test.ts` (OSC 52 default and persist sanitiser)
+- tests: `src/components/Terminal/setupOsc52.test.ts`, `src/components/Terminal/setupCopyOnSelect.test.ts`, `src/components/Terminal/terminalKeyHandler.test.ts`, `src/components/Terminal/terminalKeyHandler.linux.test.ts`, `src/pages/settings/__tests__/terminalDocRanges.test.ts` (OSC 52 default and persist sanitiser)
 - notes: Read denial matches the iTerm2/VS Code posture and is asserted directly.
 
 ### Terminal keyboard handling
 - id: terminal-keys
 - feature: Integrated terminal
 - summary: A custom xterm key handler that owns host shortcuts inside the terminal without stealing shell keys.
-- capabilities: the configured Toggle Terminal and Focus Terminal chords acted on and fully consumed; `Mod+C/V/K/A`; `Mod+1..5` switches within the visible session population; `Mod+F` search; `Mod+=`/`-`/`0` zoom the terminal font in 2 px steps (Alt variants fall through); `Shift+Enter` emits CSI-u `\x1b[13;2u`; macOS readline chords Option+←/→ → `\x1bb`/`\x1bf`, Cmd+←/→ → `^A`/`^E`, Cmd+Backspace → `^U`; on macOS Ctrl-only combos pass straight through; keyCode-229 IME keydowns consumed; `Mod+↑/↓` prompt navigation
+- capabilities: the configured Toggle Terminal and Focus Terminal chords acted on and fully consumed; `Mod+C/V/K/A`; on Linux plain `Ctrl`+letter goes to the shell except `Ctrl+C` (copy with a selection, else SIGINT) and `Ctrl+V` (paste), the letter shortcuts move to `Ctrl+Shift` (C/V/F/K/A), and `Ctrl+Insert`/`Shift+Insert` copy/paste; `Mod+1..5` switches within the visible session population; `Mod+F` search; `Mod+=`/`-`/`0` zoom the terminal font in 2 px steps (Alt variants fall through); `Shift+Enter` emits CSI-u `\x1b[13;2u`; macOS readline chords Option+←/→ → `\x1bb`/`\x1bf`, Cmd+←/→ → `^A`/`^E`, Cmd+Backspace → `^U`; on macOS Ctrl-only combos pass straight through; keyCode-229 IME keydowns consumed; `Mod+↑/↓` prompt navigation
 - status: shipped-on
 - gate: always on; `toggleTerminal` and `focusTerminal` are user-rebindable
 - surfaces: keyboard inside terminal focus; keybinding scope `terminal` (resolved from `TERMINAL_SURFACE_SELECTOR`)
 - code: `src/components/Terminal/terminalKeyHandler.ts`, `src/components/Terminal/terminalReadlineKeys.ts`, `src/services/keybinding/bindingContext.ts`, `src/utils/terminalSurface.ts`, `src/stores/settingsStore/shortcutDefinitions.ts`, `src/services/keybinding/keybindingDefinitions.ts`
 - rust: none
 - docs: `website/guide/terminal.md` §"Keyboard Shortcuts"; `website/guide/shortcuts.md` §"Terminal" (every chord, including zoom, `Shift+Enter` and the macOS readline table)
-- tests: `src/components/Terminal/terminalKeyHandler.test.ts`, `src/components/Terminal/terminalKeyHandler.ime.test.ts`, `src/components/Terminal/terminalKeyHandler.scope.test.ts`, `src/components/Terminal/terminalKeyHandler.focus.test.ts`, `src/components/Terminal/terminalReadlineKeys.test.ts`, `src/services/keybinding/keybindingDefinitions.test.ts`
+- tests: `src/components/Terminal/terminalKeyHandler.test.ts`, `src/components/Terminal/terminalKeyHandler.linux.test.ts`, `src/components/Terminal/terminalKeyHandler.ime.test.ts`, `src/components/Terminal/terminalKeyHandler.scope.test.ts`, `src/components/Terminal/terminalKeyHandler.focus.test.ts`, `src/components/Terminal/terminalReadlineKeys.test.ts`, `src/services/keybinding/keybindingDefinitions.test.ts`
 - notes: The readline chords are macOS-only. `toggleTerminal` is the one binding with `suppressInInput: false`. Option+Backspace is deliberately unhandled (zsh already binds `\e^?`).
 
 ### IME composition gate (Channel Ownership)
@@ -2427,12 +2427,12 @@ The panel is lazy-imported in `src/App.tsx` behind a `FeatureErrorBoundary`; `sr
 - summary: GPU-accelerated rendering with dual-layer context-loss recovery and a "Reset Display" action that repaints every terminal sharing the window's glyph atlas.
 - capabilities: `WebglAddon` when enabled; nothing clears the shared texture atlas unprompted; Reset Display clears the atlas and broadcasts to every other live WebGL renderer so siblings drop their model instead of drawing substituted glyphs (disposed and DOM-renderer terminals skipped, a throwing sibling tolerated); pnpm patch `patches/@xterm__addon-webgl@0.19.0.patch` backports a globally monotonic atlas page version so a merged page is re-uploaded; context loss detected via `addon.onContextLoss` and DOM `webglcontextlost` on every canvas, with a MutationObserver rebinding to replaced canvases; on loss the addon is disposed and xterm's DOM renderer takes over; `resetDisplay()` safe when WebGL is off or disposed
 - status: shipped-on
-- gate: `terminal.useWebGL = true` (read at creation — requires a terminal restart)
+- gate: `terminal.useWebGL = true` (read at creation — requires a terminal restart); never on Linux (`shouldUseWebglRenderer`), where WebKitGTK presented WebGL frames only on the next repaint (#1511), and the toggle is hidden there
 - surfaces: settings pane toggle; context-menu "Reset Display"
-- code: `src/components/Terminal/setupWebglRenderer.ts`, `src/components/Terminal/createTerminalInstance.ts`, `src/components/Terminal/resourceStack.ts`, `patches/@xterm__addon-webgl@0.19.0.patch`
+- code: `src/components/Terminal/setupWebglRenderer.ts`, `src/components/Terminal/createTerminalInstance.ts`, `src/components/Terminal/terminalOptions.ts`, `src/components/Terminal/resourceStack.ts`, `patches/@xterm__addon-webgl@0.19.0.patch`
 - rust: none
 - docs: `website/guide/settings.md` §"Terminal" (WebGL Renderer row); `website/guide/terminal.md` §"Context Menu" (Reset Display)
-- tests: `src/components/Terminal/createTerminalInstance.webgl.test.ts`, `src/components/Terminal/createTerminalInstance.test.ts`, `src/components/Terminal/createTerminalInstance.rollback.test.ts`, `src/components/Terminal/webglAtlasPageUpload.webkit.test.ts`, `src/components/Terminal/browserTier.smoke.webkit.test.ts`
+- tests: `src/components/Terminal/terminalOptions.test.ts`, `src/pages/settings/TerminalSettings.test.tsx`, `src/components/Terminal/createTerminalInstance.webgl.test.ts`, `src/components/Terminal/createTerminalInstance.test.ts`, `src/components/Terminal/createTerminalInstance.rollback.test.ts`, `src/components/Terminal/webglAtlasPageUpload.webkit.test.ts`, `src/components/Terminal/browserTier.smoke.webkit.test.ts`
 - notes: The broadcast is redundant once a stable `@xterm/addon-webgl` carries upstream `0b1c0b5c`; the patch is keyed to 0.19.0 so an addon bump fails `pnpm install` until it is re-evaluated. WebGL constructor failure is `v8 ignore`d. Construction is transactional via `resourceStack.ts`.
 
 ### Terminal theming and mono font

@@ -8,8 +8,9 @@
  *   - Extends WysiwygPopupView for lifecycle (mount, position, dismiss, Tab cycling)
  *   - Hover popup: never steals focus on show (getFirstFocusable returns null);
  *     the textarea is focused only when the store requests autoFocus
- *   - Re-shows while open when the hovered label changes or autoFocus turns on
- *     (shouldReshow hook)
+ *   - Re-shows while open when the hovered footnote or reference changes, or
+ *     autoFocus turns on (shouldReshow hook)
+ *   - Sizes the textarea before measuring, and re-positions on input (#1494)
  *   - Input is borderless with caret-only focus indicator (matching popup design system)
  *   - Save parses textarea content as markdown via parseMarkdown to preserve formatting
  *     (bold, italic, links, etc.) instead of creating plain text nodes
@@ -27,7 +28,7 @@ import type { AnchorRect } from "@/utils/popupPosition";
 import { parseMarkdown } from "@/utils/markdownPipeline";
 import { isImeKeyEvent } from "@/utils/imeGuard";
 import type { EditorView } from "@tiptap/pm/view";
-import { scrollToPosition } from "./tiptapDomUtils";
+import { jumpToFootnoteDefinition } from "./tiptapDomUtils";
 import {
   buildDeleteFootnoteTransaction,
   collectVerifiedFootnoteDeletions,
@@ -81,9 +82,10 @@ export class FootnotePopupView extends WysiwygPopupView<FootnotePopupState> {
   }
 
   protected override shouldReshow(prev: FootnotePopupState, state: FootnotePopupState): boolean {
-    // Re-show on label change (hover moved to another footnote) or when
-    // autoFocus turns on (click on the reference while hover popup is open)
-    return state.label !== prev.label || (state.autoFocus && !prev.autoFocus);
+    // Hover moved to another footnote or reference, or a click turned on autoFocus
+    return state.label !== prev.label
+      || state.referencePos !== prev.referencePos
+      || (state.autoFocus && !prev.autoFocus);
   }
 
   /** Hover popup must not steal focus on show; autoFocus is handled in onShow. */
@@ -101,9 +103,10 @@ export class FootnotePopupView extends WysiwygPopupView<FootnotePopupState> {
     };
   }
 
+  /** Size the textarea BEFORE measuring: it still carries the last footnote's height (#1494). */
   protected override updatePosition(anchorRect: AnchorRect): void {
-    super.updatePosition(anchorRect);
     this.autoResizeTextarea();
+    super.updatePosition(anchorRect);
   }
 
   protected onShow(state: FootnotePopupState): void {
@@ -155,7 +158,8 @@ export class FootnotePopupView extends WysiwygPopupView<FootnotePopupState> {
 
   private handleInputChange(): void {
     this.store.getState().setContent(this.textarea.value);
-    this.autoResizeTextarea();
+    // Typing can change the height; re-anchor so the popup keeps its gap.
+    this.update();
   }
 
   private handleInputKeydown(e: KeyboardEvent): void {
@@ -232,12 +236,14 @@ export class FootnotePopupView extends WysiwygPopupView<FootnotePopupState> {
     }
   }
 
+  /** Caret, focus and scroll are ordered inside jumpToFootnoteDefinition (#1506). */
   private handleGoto(): void {
-    const { definitionPos } = this.store.getState();
-    if (definitionPos !== null) {
-      scrollToPosition(this.view, definitionPos);
-      this.closeAndFocus();
-    }
+    const { definitionPos, label } = this.store.getState();
+    if (definitionPos === null) return;
+    this.closePopup();
+    if (jumpToFootnoteDefinition(this.view, label, definitionPos)) return;
+    footnotePopupWarn("Definition not found; nothing to go to");
+    this.focusEditor();
   }
 
   private handleDelete(): void {

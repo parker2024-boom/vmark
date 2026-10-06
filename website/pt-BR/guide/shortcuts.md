@@ -350,12 +350,12 @@ Quando o terminal integrado estiver focado:
 | Ação | Atalho |
 |------|--------|
 | Alternar Terminal | `` Ctrl + ` `` |
-| Focar Terminal ou Editor | `` Ctrl + Shift + ` `` |
-| Copiar | `Mod + C` (com seleção) |
-| Colar | `Mod + V` |
-| Selecionar Tudo (somente a saída do terminal) | `Mod + A` |
-| Limpar | `Mod + K` |
-| Pesquisar | `Mod + F` |
+| Focar Terminal ou Editor | `` Ctrl + Shift + ` `` (`` Alt + Shift + ` `` no Windows/Linux) |
+| Copiar | `Mod + C` (com seleção); no Linux também `Ctrl + Shift + C` ou `Ctrl + Insert` |
+| Colar | `Mod + V`; no Linux também `Ctrl + Shift + V` ou `Shift + Insert` |
+| Selecionar Tudo (somente a saída do terminal) | `Mod + A` (`Ctrl + Shift + A` no Linux) |
+| Limpar | `Mod + K` (`Ctrl + Shift + K` no Linux) |
+| Pesquisar | `Mod + F` (`Ctrl + Shift + F` no Linux) |
 | Alternar para a sessão 1–5 | `Mod + 1` até `Mod + 5` |
 | Aumentar fonte do terminal | `Mod + =` |
 | Diminuir fonte do terminal | `Mod + -` |
@@ -377,6 +377,8 @@ No macOS, o terminal também traduz os atalhos habituais de edição de texto pa
 | Apagar a linha de entrada (envia `Ctrl + U`) | `Cmd + Backspace` |
 
 Combinações com `Ctrl`, como `Ctrl + A`, `Ctrl + R` e `Ctrl + W`, vão direto para o shell no macOS.
+
+No Linux, o terminal segue a convenção habitual dos terminais Linux: combinações simples de `Ctrl` + letra vão para o shell, então teclas do readline como `Ctrl + A`, `Ctrl + E`, `Ctrl + K`, `Ctrl + F`, `Ctrl + U` e `Ctrl + W` funcionam como em qualquer outro terminal Linux, e as ações próprias do terminal passam para `Ctrl + Shift`: `Ctrl + Shift + A` seleciona tudo, `Ctrl + Shift + K` limpa, `Ctrl + Shift + F` pesquisa, e `Ctrl + Shift + C` / `Ctrl + Shift + V` copiam e colam. `Ctrl + Insert` e `Shift + Insert` também copiam e colam. O terminal mantém duas combinações simples de `Ctrl`: `Ctrl + C` copia uma seleção (e envia SIGINT quando nada está selecionado), e `Ctrl + V` cola. `Ctrl + 1` até `Ctrl + 5` continuam alternando entre sessões.
 
 Quando a barra de pesquisa do terminal estiver aberta:
 

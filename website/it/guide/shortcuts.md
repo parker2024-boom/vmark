@@ -351,12 +351,12 @@ Quando il terminale integrato è attivo:
 | Azione | Scorciatoia |
 |--------|-------------|
 | Attiva/disattiva terminale | `` Ctrl + ` `` |
-| Sposta il focus sul terminale o sull'editor | `` Ctrl + Shift + ` `` |
-| Copia | `Mod + C` (con selezione) |
-| Incolla | `Mod + V` |
-| Seleziona tutto (solo l'output del terminale) | `Mod + A` |
-| Cancella | `Mod + K` |
-| Cerca | `Mod + F` |
+| Sposta il focus sul terminale o sull'editor | `` Ctrl + Shift + ` `` (`` Alt + Shift + ` `` su Windows/Linux) |
+| Copia | `Mod + C` (con selezione); su Linux anche `Ctrl + Shift + C` o `Ctrl + Insert` |
+| Incolla | `Mod + V`; su Linux anche `Ctrl + Shift + V` o `Shift + Insert` |
+| Seleziona tutto (solo l'output del terminale) | `Mod + A` (`Ctrl + Shift + A` su Linux) |
+| Cancella | `Mod + K` (`Ctrl + Shift + K` su Linux) |
+| Cerca | `Mod + F` (`Ctrl + Shift + F` su Linux) |
 | Passa alla sessione 1–5 | `Mod + 1` fino a `Mod + 5` |
 | Ingrandisci il font del terminale | `Mod + =` |
 | Riduci il font del terminale | `Mod + -` |
@@ -378,6 +378,8 @@ Su macOS il terminale traduce anche le consuete combinazioni di modifica del tes
 | Elimina la riga di input (invia `Ctrl + U`) | `Cmd + Backspace` |
 
 Le combinazioni con `Ctrl` come `Ctrl + A`, `Ctrl + R` e `Ctrl + W` vanno direttamente alla shell su macOS.
+
+Su Linux il terminale segue la consueta convenzione dei terminali Linux: le semplici combinazioni `Ctrl` + lettera vanno alla shell, quindi i tasti di readline come `Ctrl + A`, `Ctrl + E`, `Ctrl + K`, `Ctrl + F`, `Ctrl + U` e `Ctrl + W` funzionano come in qualsiasi altro terminale Linux, e le azioni proprie del terminale passano a `Ctrl + Shift`: `Ctrl + Shift + A` seleziona tutto, `Ctrl + Shift + K` cancella, `Ctrl + Shift + F` cerca, e `Ctrl + Shift + C` / `Ctrl + Shift + V` copiano e incollano. Anche `Ctrl + Insert` e `Shift + Insert` copiano e incollano. Il terminale mantiene due semplici combinazioni `Ctrl`: `Ctrl + C` copia una selezione (e invia SIGINT quando non c'è nulla di selezionato), e `Ctrl + V` incolla. `Ctrl + 1` fino a `Ctrl + 5` continuano a cambiare sessione.
 
 Quando la barra di ricerca del terminale è aperta:
 

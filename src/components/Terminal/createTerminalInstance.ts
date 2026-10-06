@@ -71,6 +71,7 @@ import { maybeInstallDevInputTrace } from "./terminalInputTrace";
 import { createResourceStack } from "./resourceStack";
 import {
   buildTerminalOptions,
+  shouldUseWebglRenderer,
   type TerminalInstanceSettings,
 } from "./terminalOptions";
 
@@ -215,7 +216,7 @@ export function createTerminalInstance(
     const webgl = setupWebglRenderer({
       term,
       container,
-      enabled: !!settings.useWebGL,
+      enabled: shouldUseWebglRenderer(!!settings.useWebGL),
     });
     resources.acquire(() => webgl.cleanup());
 

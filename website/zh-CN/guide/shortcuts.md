@@ -336,12 +336,12 @@ Tab 和 Shift+Tab 具有上下文感知能力——可以跳出括号、引号�
 | 操作 | 快捷键 |
 |------|--------|
 | 切换终端 | `` Ctrl + ` `` |
-| 聚焦终端或编辑器 | `` Ctrl + Shift + ` `` |
-| 复制 | `Mod + C`（有选中文本时） |
-| 粘贴 | `Mod + V` |
-| 全选（仅终端输出） | `Mod + A` |
-| 清除 | `Mod + K` |
-| 搜索 | `Mod + F` |
+| 聚焦终端或编辑器 | `` Ctrl + Shift + ` ``（Windows/Linux 上为 `` Alt + Shift + ` ``） |
+| 复制 | `Mod + C`（有选中文本时）；Linux 上也可用 `Ctrl + Shift + C` 或 `Ctrl + Insert` |
+| 粘贴 | `Mod + V`；Linux 上也可用 `Ctrl + Shift + V` 或 `Shift + Insert` |
+| 全选（仅终端输出） | `Mod + A`（Linux 上为 `Ctrl + Shift + A`） |
+| 清除 | `Mod + K`（Linux 上为 `Ctrl + Shift + K`） |
+| 搜索 | `Mod + F`（Linux 上为 `Ctrl + Shift + F`） |
 | 切换到会话 1–5 | `Mod + 1` 至 `Mod + 5` |
 | 增大终端字号 | `Mod + =` |
 | 减小终端字号 | `Mod + -` |
@@ -363,6 +363,8 @@ Tab 和 Shift+Tab 具有上下文感知能力——可以跳出括号、引号�
 | 删除输入行（发送 `Ctrl + U`） | `Cmd + Backspace` |
 
 在 macOS 上，`Ctrl + A`、`Ctrl + R`、`Ctrl + W` 等 `Ctrl` 组合键会直接发送给 Shell。
+
+在 Linux 上，终端遵循 Linux 终端的通行惯例：单纯的 `Ctrl` + 字母组合键交给 Shell，因此 `Ctrl + A`、`Ctrl + E`、`Ctrl + K`、`Ctrl + F`、`Ctrl + U`、`Ctrl + W` 等 readline 按键与其他 Linux 终端中一样可用；终端自身的操作改用 `Ctrl + Shift`：`Ctrl + Shift + A` 全选，`Ctrl + Shift + K` 清除，`Ctrl + Shift + F` 搜索，`Ctrl + Shift + C` / `Ctrl + Shift + V` 复制和粘贴。`Ctrl + Insert` 和 `Shift + Insert` 同样可以复制和粘贴。有两个单纯的 `Ctrl` 组合键仍由终端处理：`Ctrl + C` 复制选中内容（无选中内容时发送 SIGINT），`Ctrl + V` 粘贴。`Ctrl + 1` 至 `Ctrl + 5` 仍用于切换会话。
 
 终端搜索栏打开时：
 

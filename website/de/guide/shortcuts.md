@@ -350,12 +350,12 @@ Wenn das integrierte Terminal fokussiert ist:
 | Aktion | Tastenkürzel |
 |--------|--------------|
 | Terminal umschalten | `` Strg + ` `` |
-| Terminal oder Editor fokussieren | `` Strg + Umschalt + ` `` |
-| Kopieren | `Mod + C` (mit Auswahl) |
-| Einfügen | `Mod + V` |
-| Alles auswählen (nur Terminalausgabe) | `Mod + A` |
-| Löschen | `Mod + K` |
-| Suchen | `Mod + F` |
+| Terminal oder Editor fokussieren | `` Strg + Umschalt + ` `` (`` Alt + Umschalt + ` `` unter Windows/Linux) |
+| Kopieren | `Mod + C` (mit Auswahl); unter Linux auch `Strg + Umschalt + C` oder `Strg + Einfg` |
+| Einfügen | `Mod + V`; unter Linux auch `Strg + Umschalt + V` oder `Umschalt + Einfg` |
+| Alles auswählen (nur Terminalausgabe) | `Mod + A` (`Strg + Umschalt + A` unter Linux) |
+| Löschen | `Mod + K` (`Strg + Umschalt + K` unter Linux) |
+| Suchen | `Mod + F` (`Strg + Umschalt + F` unter Linux) |
 | Zu Sitzung 1–5 wechseln | `Mod + 1` bis `Mod + 5` |
 | Terminal-Schrift vergrößern | `Mod + =` |
 | Terminal-Schrift verkleinern | `Mod + -` |
@@ -377,6 +377,8 @@ Unter macOS übersetzt das Terminal außerdem die üblichen Textbearbeitungs-Tas
 | Eingabezeile löschen (sendet `Strg + U`) | `Cmd + Rücktaste` |
 
 `Strg`-Kombinationen wie `Strg + A`, `Strg + R` und `Strg + W` gehen unter macOS direkt an die Shell.
+
+Unter Linux folgt das Terminal der dort üblichen Terminal-Konvention: Einfache `Strg`-Buchstaben-Kombinationen gehen an die Shell, sodass Readline-Tasten wie `Strg + A`, `Strg + E`, `Strg + K`, `Strg + F`, `Strg + U` und `Strg + W` wie in jedem anderen Linux-Terminal funktionieren. Die eigenen Aktionen des Terminals liegen auf `Strg + Umschalt`: `Strg + Umschalt + A` wählt alles aus, `Strg + Umschalt + K` leert, `Strg + Umschalt + F` sucht, und `Strg + Umschalt + C` / `Strg + Umschalt + V` kopieren und fügen ein. Auch `Strg + Einfg` und `Umschalt + Einfg` kopieren und fügen ein. Zwei einfache `Strg`-Kombinationen behält das Terminal: `Strg + C` kopiert eine Auswahl (ohne Auswahl sendet es SIGINT), und `Strg + V` fügt ein. `Strg + 1` bis `Strg + 5` wechseln weiterhin die Sitzung.
 
 Wenn die Terminal-Suchleiste geöffnet ist:
 

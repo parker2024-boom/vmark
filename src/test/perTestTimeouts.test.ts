@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import soakConfig from "../../vitest.soak.config";
 import { LIVENESS_TIMEOUT_MS } from "../../vitest.shared";
-import { ASYNC_IMPORT_WAIT, SURFACE_IMPORT_WAIT } from "./waitBudget";
+import { APP_GRAPH_IMPORT_WAIT, ASYNC_IMPORT_WAIT, SURFACE_IMPORT_WAIT } from "./waitBudget";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const ROOTS = ["src", "website/.vitepress", "scripts", ".claude/hooks", "server/mcp/__tests__", "server/content/src"];
@@ -190,7 +190,7 @@ describe("per-test timeouts", () => {
   it("every wait budget sits below the bound of the test that encloses it", () => {
     // Otherwise the test is killed first and reports a bare timeout instead of
     // the waitFor message naming what never appeared (src/test/waitBudget.ts).
-    for (const budget of [ASYNC_IMPORT_WAIT, SURFACE_IMPORT_WAIT]) {
+    for (const budget of [ASYNC_IMPORT_WAIT, SURFACE_IMPORT_WAIT, APP_GRAPH_IMPORT_WAIT]) {
       expect(budget.timeout).toBeLessThan(LIVENESS_TIMEOUT_MS);
     }
   });

@@ -420,7 +420,9 @@ see. After a reload, go through the persisted store instead: edit
   approval prompts that leaked into the next journeys.
 - **"Not connected to VMark" and "open failed: …" are different layers.** The first is the sidecar's
   transport: wrong profile or a dead port. The second is a typed refusal from the app, carrying
-  `TOKEN: message` and `data.detail`.
+  `TOKEN: message` and `data.detail`. `startVmarkMcp()` waits up to 30s for the sidecar's bridge to
+  connect before returning (`e2e/lib/sidecarBridge.mjs`), so a journey never sees the first one;
+  a sidecar that never connects fails the journey at start-up with that reason.
 
 ## Environment variables
 

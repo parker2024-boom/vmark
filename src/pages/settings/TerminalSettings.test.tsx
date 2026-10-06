@@ -26,6 +26,7 @@ describe("TerminalSettings platform gating (D1)", () => {
     render(<TerminalSettings />);
     expect(screen.getByText("Option as Meta Key")).toBeInTheDocument();
     expect(screen.getByText("Shell Integration")).toBeInTheDocument();
+    expect(screen.getByText("WebGL Renderer")).toBeInTheDocument();
   });
 
   it("hides macOptionIsMeta but keeps shellIntegration on Linux", () => {
@@ -35,11 +36,18 @@ describe("TerminalSettings platform gating (D1)", () => {
     expect(screen.getByText("Shell Integration")).toBeInTheDocument();
   });
 
+  it("hides the WebGL renderer toggle on Linux, where it is never used (#1511)", () => {
+    setPlatform("Linux x86_64");
+    render(<TerminalSettings />);
+    expect(screen.queryByText("WebGL Renderer")).not.toBeInTheDocument();
+  });
+
   it("hides both macOptionIsMeta and shellIntegration on Windows", () => {
     setPlatform("Win32");
     render(<TerminalSettings />);
     expect(screen.queryByText("Option as Meta Key")).not.toBeInTheDocument();
     expect(screen.queryByText("Shell Integration")).not.toBeInTheDocument();
+    expect(screen.getByText("WebGL Renderer")).toBeInTheDocument();
   });
 });
 

@@ -35,15 +35,18 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 /// Every environment key a terminal spawn may set. The base environment is
-/// `buildBaseTerminalEnv` (`TERM`, `TERM_PROGRAM`, `COLORTERM`, `PATH`,
-/// `LC_CTYPE`, `VMARK_WORKSPACE`); `spawnPty` adds the transcript token; zsh
-/// shell integration adds the two `ZDOTDIR` keys.
-const ALLOWED_ENV_KEYS: [&str; 9] = [
+/// `buildBaseTerminalEnv` (`TERM`, `TERM_PROGRAM`, `TERM_PROGRAM_VERSION`,
+/// `COLORTERM`, `PATH`, `LC_CTYPE`, `VMARK_WORKSPACE`); `spawnPty` adds the
+/// transcript token; zsh shell integration adds the two `ZDOTDIR` keys.
+/// `scripts/pty-spawn-env-keys.test.mjs` holds this list equal to the keys
+/// the frontend and shell integration actually set.
+const ALLOWED_ENV_KEYS: [&str; 10] = [
     "COLORTERM",
     "LC_CTYPE",
     "PATH",
     "TERM",
     "TERM_PROGRAM",
+    "TERM_PROGRAM_VERSION",
     "USER_ZDOTDIR",
     "VMARK_TRANSCRIPT_TOKEN",
     "VMARK_WORKSPACE",
